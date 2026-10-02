@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import {Logger} from '@app/features/platform/utils/AppLogger';
+import {createNativeDisplayMediaStream} from '@app/features/voice/utils/NativeDisplayMediaCapture';
 import {getElectronAPI} from '@app/features/ui/utils/NativeUtils';
 import type {VoiceEngineV2AppSourceLifecycleBridge} from '@app/features/voice/engine/v2/VoiceEngineV2AppSourceLifecycleBridge';
 import {getNativeAudioErrorDetail} from '@app/features/voice/utils/NativeAudioFailureUtils';
@@ -719,7 +720,7 @@ function installPatchIfNeeded(): void {
 		const pendingCapture = armedCapture;
 		let stream: MediaStream;
 		try {
-			stream = await originalGetDisplayMedia!(constraints);
+			stream = (await createNativeDisplayMediaStream()) ?? (await originalGetDisplayMedia!(constraints));
 		} catch (error) {
 			if (pendingCapture && armedCapture === pendingCapture) {
 				armedCapture = null;
@@ -815,6 +816,10 @@ function installPatchIfNeeded(): void {
 		return stream;
 	};
 	patched = true;
+}
+
+export function installDesktopDisplayMediaCapture(): void {
+	installPatchIfNeeded();
 }
 
 export async function getNativeAudioAvailabilityCached(): Promise<NativeAudioAvailability> {

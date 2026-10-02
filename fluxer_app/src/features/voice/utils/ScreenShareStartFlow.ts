@@ -24,6 +24,7 @@ import {
 	disarmPendingNativeAudio,
 	getLastNativeAudioArmFailure,
 	getNativeAudioAvailabilityCached,
+	installDesktopDisplayMediaCapture,
 } from '@app/features/voice/utils/NativeAudioCaptureBridge';
 import {
 	type ScreenShareAudioCaptureDebugInfo,
@@ -450,6 +451,7 @@ async function runConfiguredDisplayScreenShare(
 		includeAudio: options?.includeAudio,
 	});
 	if (electronApi) {
+		if (electronApi.platform === 'win32') installDesktopDisplayMediaCapture();
 		let nativeAudioArmed = false;
 		const isOwnWindowShare = options?.isOwnWindow === true && sourceId?.startsWith('window:');
 		if (isOwnWindowShare && requestedAudio) {

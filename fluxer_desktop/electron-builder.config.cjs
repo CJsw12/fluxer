@@ -1485,6 +1485,7 @@ module.exports = {
 		'dist/**/*',
 		'package.json',
 		...nativeRuntimeFilePatterns,
+		'node_modules/electron-log/**/*',
 		'node_modules/hunspell-asm/**/*',
 		...nativeBuildArtifactExcludes,
 		...packagedRuntimeArtifactExcludes,

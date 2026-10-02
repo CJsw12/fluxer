@@ -716,6 +716,23 @@ export interface NativeScreenCaptureStartResult {
 	pixelFormat: 'nv12' | 'bgra';
 }
 
+export interface NativeScreenCaptureCpuFrame {
+	width: number;
+	height: number;
+	pixelFormat: 'nv12';
+	timestampUs: number;
+	data: Uint8Array;
+}
+
+export interface NativeScreenCaptureCpuStartOptions {
+	sourceId: string;
+	sourceKind: 'screen' | 'window';
+	width: number;
+	height: number;
+	frameRate: number;
+	outputFrameRate?: number;
+}
+
 export type NativeScreenCaptureEndReason = 'stopped' | 'source-vanished' | 'addon-error';
 
 export interface NativeScreenCaptureEndMessage {
@@ -737,7 +754,48 @@ export interface NativeScreenCaptureLifecycleMessage {
 
 export type NativeScreenCaptureStrategy = 'wgc' | 'dxgi-duplication' | 'window-gdi' | string;
 
+export interface NativeScreenCaptureCpuPipelineDiagnostics {
+	framesAcquired: number;
+	framesCoalesced: number;
+	permitRejectedFrames: number;
+	conversionCount: number;
+	conversionTotalMs: number;
+	conversionMaxMs: number;
+	readbackMapCount: number;
+	readbackMapTotalMs: number;
+	readbackMapMaxMs: number;
+	cpuPackCount: number;
+	cpuPackTotalMs: number;
+	cpuPackMaxMs: number;
+	inputWidth: number;
+	inputHeight: number;
+	hdrToneMapEnabled: boolean;
+	/** Approximate last five seconds, using bounded 100ms buckets. */
+	recent5Seconds?: {
+		windowMs: number;
+		bucketMs: number;
+		framesAcquired: number;
+		framesCoalesced: number;
+		permitRejectedFrames: number;
+		conversionCount: number;
+		conversionTotalMs: number;
+		conversionMaxMs: number;
+		readbackMapMaxMs: number;
+		cpuPackMaxMs: number;
+		/** Periodic refresh queries only; startup/pipeline creation is excluded. */
+		hdrWhiteQueryCount: number;
+		hdrWhiteQueryMaxMs: number;
+	};
+}
+
 export interface NativeScreenCaptureDiagnostics {
+	cpuPipeline?: NativeScreenCaptureCpuPipelineDiagnostics;
+	cpuFrameDispatch?: {
+		received: number;
+		forwarded: number;
+		rateDropped: number;
+		maxDispatchDurationMs: number;
+	};
 	state?: number;
 	apiType?: number;
 	transport?: number;
@@ -779,9 +837,16 @@ export interface NativeScreenCaptureDiagnostics {
 }
 
 export interface NativeScreenCaptureApi {
+	cpuFrameRateFiltering?: boolean;
 	getAvailability(): Promise<NativeScreenCaptureAvailability>;
 	listSources(): Promise<Array<NativeScreenCaptureSource>>;
 	start(options: NativeScreenCaptureStartOptions): Promise<NativeScreenCaptureStartResult>;
+	startCpu(
+		options: NativeScreenCaptureCpuStartOptions,
+		onFrame: (frame: NativeScreenCaptureCpuFrame) => void,
+		onEnd: (reason: string) => void,
+	): Promise<NativeScreenCaptureStartResult>;
+	stopCpu(captureId: string): Promise<void>;
 	getDiagnostics(captureId: string): Promise<NativeScreenCaptureDiagnostics | null>;
 	stop(captureId: string): Promise<void>;
 	onEnd(callback: (message: NativeScreenCaptureEndMessage) => void): () => void;

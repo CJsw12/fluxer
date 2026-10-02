@@ -62,8 +62,6 @@ impl SourceFormat {
     }
 }
 
-const SDR_WHITE_NITS: f32 = 80.0;
-
 pub fn r10g10b10a2_row_to_bgra(src_row: &[u8], width: usize, dst_row: &mut [u8], hdr: bool) {
     for x in 0..width {
         let so = x * 4;
@@ -105,11 +103,8 @@ pub fn rgba16f_row_to_bgra(src_row: &[u8], width: usize, dst_row: &mut [u8], hdr
         let b = f16_to_f32(u16::from_le_bytes([src_row[so + 4], src_row[so + 5]]));
         let a = f16_to_f32(u16::from_le_bytes([src_row[so + 6], src_row[so + 7]]));
         let (lr, lg, lb) = if hdr {
-            (
-                reinhard(r.max(0.0)),
-                reinhard(g.max(0.0)),
-                reinhard(b.max(0.0)),
-            )
+            let [r, g, b] = tone_map_scrgb_to_sdr([r, g, b], 1.0);
+            (r, g, b)
         } else {
             (r.clamp(0.0, 1.0), g.clamp(0.0, 1.0), b.clamp(0.0, 1.0))
         };
@@ -124,22 +119,78 @@ fn scale10_to_8(v10: u16) -> u8 {
     ((v10 as u32 * 255 + 511) / 1023) as u8
 }
 
-fn reinhard(linear: f32) -> f32 {
-    let v = linear.max(0.0);
-    (v / (1.0 + v)).clamp(0.0, 1.0)
+pub fn tone_map_scrgb_to_sdr(rgb: [f32; 3], source_white: f32) -> [f32; 3] {
+    tone_map_scrgb_to_sdr_with_highlights(rgb, source_white, 0.0)
+}
+
+pub fn tone_map_scrgb_to_sdr_with_highlights(
+    rgb: [f32; 3],
+    source_white: f32,
+    highlight_strength: f32,
+) -> [f32; 3] {
+    let source_white = if source_white.is_finite() && source_white > 0.0 {
+        source_white
+    } else {
+        1.0
+    };
+    let rgb = rgb.map(|channel| if channel.is_finite() { channel } else { 0.0 });
+    let peak = rgb[0].max(rgb[1]).max(rgb[2]).max(0.0);
+    if peak <= 0.0 {
+        return [0.0; 3];
+    }
+
+    // Only HDR-containing frames need headroom. SDR-only reshares retain identity.
+    // ponytail: fixed 0.75 linear knee; content-aware exposure is deferred until
+    // scene brightness changes show this shoulder needs temporal adaptation.
+    let base_scale = 1.0 / source_white.max(peak);
+    let strength = if highlight_strength.is_finite() {
+        highlight_strength.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let scale = if strength > 0.0 && peak > 0.75 * source_white {
+        let mapped_peak = 0.75 + 0.25 * (peak - 0.75 * source_white) / (peak - 0.5 * source_white);
+        base_scale + (mapped_peak / peak - base_scale) * strength
+    } else {
+        base_scale
+    };
+    compress_rec709_to_sdr_gamut(rgb.map(|channel| channel * scale))
+}
+
+fn compress_rec709_to_sdr_gamut(rgb: [f32; 3]) -> [f32; 3] {
+    if rgb.iter().all(|channel| (0.0..=1.0).contains(channel)) {
+        return rgb;
+    }
+
+    let luma = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]).clamp(0.0, 1.0);
+    let chroma = rgb.map(|channel| channel - luma);
+    let bound = |delta: f32| {
+        if delta < 0.0 {
+            luma / -delta
+        } else if delta > 0.0 {
+            (1.0 - luma) / delta
+        } else {
+            1.0
+        }
+    };
+    let amount = bound(chroma[0])
+        .min(bound(chroma[1]))
+        .min(bound(chroma[2]))
+        .clamp(0.0, 1.0);
+    chroma.map(|channel| (luma + channel * amount).clamp(0.0, 1.0))
 }
 
 fn tonemap_rec2020_pq_to_srgb8(r10: u16, g10: u16, b10: u16) -> (u8, u8, u8) {
-    let lr = pq_eotf(r10 as f32 / 1023.0);
-    let lg = pq_eotf(g10 as f32 / 1023.0);
-    let lb = pq_eotf(b10 as f32 / 1023.0);
-    let scale = 10000.0 / SDR_WHITE_NITS;
-    let map = |v: f32| reinhard((v * scale).max(0.0));
-    (
-        linear_to_srgb8(map(lr)),
-        linear_to_srgb8(map(lg)),
-        linear_to_srgb8(map(lb)),
-    )
+    let r = pq_eotf(r10 as f32 / 1023.0) * (10000.0 / 80.0);
+    let g = pq_eotf(g10 as f32 / 1023.0) * (10000.0 / 80.0);
+    let b = pq_eotf(b10 as f32 / 1023.0) * (10000.0 / 80.0);
+    let (r, g, b) = (
+        1.660_491_0 * r - 0.587_641_1 * g - 0.072_849_9 * b,
+        -0.124_550_5 * r + 1.132_899_9 * g - 0.008_349_4 * b,
+        -0.018_150_8 * r - 0.100_578_9 * g + 1.118_729_7 * b,
+    );
+    let [r, g, b] = tone_map_scrgb_to_sdr([r, g, b], 1.0);
+    (linear_to_srgb8(r), linear_to_srgb8(g), linear_to_srgb8(b))
 }
 
 fn pq_eotf(e: f32) -> f32 {
@@ -407,6 +458,84 @@ mod tests {
         r10g10b10a2_row_to_bgra(&pack(0x3FF), 1, &mut high, true);
         assert!(low[2] <= mid[2] && mid[2] <= high[2]);
         assert_eq!(high[3], 255);
+    }
+
+    #[test]
+    fn hdr_frame_keeps_shadow_values_and_separates_neutral_highlights() {
+        let shadow = tone_map_scrgb_to_sdr_with_highlights([0.3; 3], 3.0, 1.0);
+        assert!((shadow[0] - 0.1).abs() < 1e-6);
+        let values = [3.0, 4.0, 6.0, 12.0]
+            .map(|x| tone_map_scrgb_to_sdr_with_highlights([x; 3], 3.0, 1.0)[0]);
+        assert!(values.windows(2).all(|p| p[0] < p[1]));
+        assert!(values[0] < 1.0 && values[3] < 1.0);
+        let halfway_white = tone_map_scrgb_to_sdr_with_highlights([3.0; 3], 3.0, 0.5);
+        assert!((halfway_white[0] - 0.9375).abs() < 1e-6);
+        for peak in [0.8, 1.0] {
+            let result = tone_map_scrgb_to_sdr_with_highlights([peak * 3.0; 3], 3.0, 0.0);
+            assert!(result.iter().all(|value| (value - peak).abs() < 1e-6));
+        }
+        let color = tone_map_scrgb_to_sdr_with_highlights([12.0, 6.0, 3.0], 3.0, 1.0);
+        assert!((color[0] / color[1] - 2.0).abs() < 1e-6);
+        assert!((color[1] / color[2] - 2.0).abs() < 1e-6);
+        let reshared = tone_map_scrgb_to_sdr(color.map(|x| x * 3.0), 3.0);
+        for (actual, expected) in reshared.into_iter().zip(color) {
+            assert!((actual - expected).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn sdr_content_on_hdr_preserves_its_linear_values_across_reshares() {
+        let original = [0.01_f32, 0.18, 0.7];
+        let mut current = original;
+        for source_white in [1.0, 3.0, 4.0, 3.0, 1.0] {
+            current =
+                tone_map_scrgb_to_sdr(current.map(|channel| channel * source_white), source_white);
+            for (actual, expected) in current.into_iter().zip(original) {
+                assert!(
+                    (actual - expected).abs() < 1e-6,
+                    "SDR content must retain its value after HDR composition and resharing: {actual} != {expected}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn scrgb_tonemap_keeps_reference_white_and_compresses_highlights() {
+        let white = tone_map_scrgb_to_sdr([1.0; 3], 1.0);
+        let highlight = tone_map_scrgb_to_sdr([12.5; 3], 1.0);
+        let extreme = tone_map_scrgb_to_sdr([125.0; 3], 1.0);
+        assert!(white.iter().all(|channel| (*channel - 1.0).abs() < 1e-6));
+        assert_eq!(highlight, white);
+        assert_eq!(extreme, white);
+    }
+
+    #[test]
+    fn scrgb_sdr_white_at_three_reference_units_maps_to_sdr_white() {
+        let white = tone_map_scrgb_to_sdr([3.0; 3], 3.0);
+        assert!(white.iter().all(|channel| (*channel - 1.0).abs() < 1e-6));
+        let color = tone_map_scrgb_to_sdr([1.5, 0.75, 0.375], 3.0);
+        let expected = tone_map_scrgb_to_sdr([0.5, 0.25, 0.125], 1.0);
+        for (actual, expected) in color.into_iter().zip(expected) {
+            assert!((actual - expected).abs() < 1e-6);
+        }
+    }
+
+    #[test]
+    fn scrgb_tonemap_preserves_highlight_chroma() {
+        let mapped = tone_map_scrgb_to_sdr([12.5, 6.25, 3.125], 1.0);
+        assert!(mapped[0] <= 1.0);
+        assert!((mapped[0] / mapped[1] - 2.0).abs() < 1e-6);
+        assert!((mapped[1] / mapped[2] - 2.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn scrgb_tonemap_compresses_negative_gamut_without_changing_luma() {
+        let source = [-0.5_f32, 1.0, 0.0];
+        let mapped = tone_map_scrgb_to_sdr(source, 1.0);
+        let luma = |rgb: [f32; 3]| 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+        let expected_luma = luma(source);
+        assert!(mapped.iter().all(|channel| (0.0..=1.0).contains(channel)));
+        assert!((luma(mapped) - expected_luma).abs() < 1e-6);
     }
 
     #[test]

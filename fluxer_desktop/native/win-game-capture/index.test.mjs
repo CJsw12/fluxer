@@ -84,6 +84,10 @@ function makeFakeBinding() {
 			frameSinkHandleCalls.push(handle);
 		}
 
+		setCpuFrameCallback(callback) {
+			this.cpuFrameCallback = callback;
+		}
+
 		start(sourceId, sourceKind, width, height, frameRate, captureId, captureOptions) {
 			calls.push({
 				sourceId,
@@ -398,6 +402,18 @@ describe('win-game-capture loader wrapper -- injected fake binding', () => {
 
 		assert.deepEqual(frameSinkHandleCalls, [frameSinkHandle]);
 		assert.equal(calls.length, 1);
+	});
+
+	test('sets and clears the native CPU frame callback', {skip: injectionSkip}, () => {
+		const {binding, natives} = makeFakeBinding();
+		winGameCapture.__setBindingForTests(binding);
+		const capture = new winGameCapture.ScreenCapture({sourceId: '42', sourceKind: 'window'});
+		const callback = () => {};
+
+		capture.setCpuFrameCallback(callback);
+		assert.equal(natives[0].cpuFrameCallback, callback);
+		capture.setCpuFrameCallback(null);
+		assert.equal(natives[0].cpuFrameCallback, null);
 	});
 
 	test('fails before native start when a native frame sink is required but missing', {

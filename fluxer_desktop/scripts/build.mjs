@@ -30,6 +30,7 @@ const electronExternals = [
 	'update-electron-app',
 	'velopack',
 	'@fluxer/hardware-encoder',
+	'@fluxer/win-game-capture',
 	'@fluxer/webauthn',
 	'hunspell-asm',
 ];

@@ -33,6 +33,14 @@ export interface ScreenCaptureStartResult {
 	pixelFormat: 'nv12' | 'bgra';
 }
 
+export interface CpuFrame {
+	width: number;
+	height: number;
+	pixelFormat: 'nv12';
+	timestampUs: number;
+	data: Buffer;
+}
+
 export interface ScreenCaptureSourceDescriptor {
 	kind: 'screen' | 'window' | 'game';
 	id: string;
@@ -69,6 +77,41 @@ export interface CaptureDiagnostics {
 	frameSinkRejected: number;
 	mediaFramesDroppedWithoutSink: number;
 	cpuFallbackFramesDropped: number;
+	cpuPipeline?: CpuPipelineDiagnostics;
+}
+
+export interface CpuPipelineDiagnostics {
+	framesAcquired: number;
+	framesCoalesced: number;
+	permitRejectedFrames: number;
+	conversionCount: number;
+	conversionTotalMs: number;
+	conversionMaxMs: number;
+	readbackMapCount: number;
+	readbackMapTotalMs: number;
+	readbackMapMaxMs: number;
+	cpuPackCount: number;
+	cpuPackTotalMs: number;
+	cpuPackMaxMs: number;
+	inputWidth: number;
+	inputHeight: number;
+	hdrToneMapEnabled: boolean;
+	/** Approximate last five seconds, using bounded 100ms buckets. */
+	recent5Seconds?: {
+		windowMs: number;
+		bucketMs: number;
+		framesAcquired: number;
+		framesCoalesced: number;
+		permitRejectedFrames: number;
+		conversionCount: number;
+		conversionTotalMs: number;
+		conversionMaxMs: number;
+		readbackMapMaxMs: number;
+		cpuPackMaxMs: number;
+		/** Periodic refresh queries only; startup/pipeline creation is excluded. */
+		hdrWhiteQueryCount: number;
+		hdrWhiteQueryMaxMs: number;
+	};
 }
 
 export interface ScreenCaptureStartOptionsDiagnostics {
@@ -122,6 +165,8 @@ export declare class ScreenCapture extends EventEmitter {
 	start(): Promise<ScreenCaptureStartResult | undefined>;
 	stop(): Promise<void>;
 	getDiagnostics(): CaptureDiagnostics | null;
+	/** Register before start(); callback receives packed NV12 bytes on the JS thread. */
+	setCpuFrameCallback(callback: ((frame: CpuFrame) => void) | null): void;
 	attachEncoder(width: number, height: number, frameRate?: number): void;
 	detachEncoder(): void;
 	isEncoderAttached(): boolean;

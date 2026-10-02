@@ -175,6 +175,13 @@ class ScreenCapture extends EventEmitter {
 		}
 	}
 
+	setCpuFrameCallback(callback) {
+		if (typeof this.native.setCpuFrameCallback !== 'function') {
+			throw new Error(`${MODULE_NAME} native binding does not support CPU frame callbacks`);
+		}
+		this.native.setCpuFrameCallback(callback ?? null);
+	}
+
 	attachEncoder(width, height) {
 		if (!this.native || typeof this.native.attachEncoder !== 'function') {
 			throw new Error(`${MODULE_NAME} native binding does not support encoder attachment`);

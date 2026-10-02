@@ -6,6 +6,7 @@ import {createRequire} from 'node:module';
 import {createChildLogger} from '@electron/common/Logger';
 import type {
 	NativeScreenCaptureAvailability,
+	NativeScreenCaptureCpuStartOptions,
 	NativeScreenCaptureDiagnostics,
 	NativeScreenCaptureEndReason,
 	NativeScreenCaptureLifecycleEventKind,
@@ -777,6 +778,46 @@ function getCaptureDiagnosticsForSender(
 	};
 }
 
+function isValidWindowsCpuStartOptions(options: unknown): options is NativeScreenCaptureCpuStartOptions {
+	if (process.platform !== 'win32' || !options || typeof options !== 'object' || Array.isArray(options)) return false;
+	const candidate = options as Record<string, unknown>;
+	if (candidate.sourceKind !== 'screen' && candidate.sourceKind !== 'window') return false;
+	if (
+		typeof candidate.sourceId !== 'string' ||
+		typeof candidate.width !== 'number' ||
+		!Number.isSafeInteger(candidate.width) ||
+		candidate.width < 16 ||
+		candidate.width > 8192 ||
+		typeof candidate.height !== 'number' ||
+		!Number.isSafeInteger(candidate.height) ||
+		candidate.height < 16 ||
+		candidate.height > 8192 ||
+		typeof candidate.frameRate !== 'number' ||
+		!Number.isInteger(candidate.frameRate) ||
+		candidate.frameRate < 1 ||
+		candidate.frameRate > 144
+	) {
+		return false;
+	}
+	if (
+		candidate.outputFrameRate !== undefined &&
+		(typeof candidate.outputFrameRate !== 'number' ||
+			!Number.isInteger(candidate.outputFrameRate) ||
+			candidate.outputFrameRate < 1 ||
+			candidate.outputFrameRate > candidate.frameRate)
+	) {
+		return false;
+	}
+	return isValidStartOptions({
+		sourceId: candidate.sourceId,
+		sourceKind: candidate.sourceKind,
+		width: candidate.width,
+		height: candidate.height,
+		frameRate: candidate.frameRate,
+		nativeFrameSinkRequired: true,
+	});
+}
+
 async function makeRoomForSenderSession(senderId: number): Promise<void> {
 	const senderSessions = activeSessionIdsBySenderId.get(senderId);
 	if (!senderSessions) return;
@@ -950,6 +991,13 @@ export function registerNativeScreenCaptureHandlers(): void {
 		return listNativeScreenCaptureSources();
 	});
 	ipcMain.handle(
+		'native-screen-capture:authorize-cpu-start',
+		(event, options: unknown): boolean => {
+			requirePrivilegedRendererDocumentSender(event, 'native-screen-capture:authorize-cpu-start');
+			return isValidWindowsCpuStartOptions(options);
+		},
+	);
+	ipcMain.handle(
 		'native-screen-capture:start',
 		(event, options: NativeScreenCaptureStartOptions): Promise<NativeScreenCaptureStartResult> => {
 			requirePrivilegedRendererDocumentSender(event, 'native-screen-capture:start');
@@ -972,6 +1020,7 @@ export function cleanupNativeScreenCapture(): void {
 	if (!handlersRegistered) return;
 	ipcMain.removeHandler('native-screen-capture:get-availability');
 	ipcMain.removeHandler('native-screen-capture:list-sources');
+	ipcMain.removeHandler('native-screen-capture:authorize-cpu-start');
 	ipcMain.removeHandler('native-screen-capture:start');
 	ipcMain.removeHandler('native-screen-capture:get-diagnostics');
 	ipcMain.removeHandler('native-screen-capture:stop');

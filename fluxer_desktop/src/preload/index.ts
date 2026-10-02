@@ -70,6 +70,7 @@ import type {
 	RegistrationResponseJSON,
 } from '@simplewebauthn/browser';
 import {contextBridge, ipcRenderer, webFrame} from 'electron';
+import {getNativeScreenCpuDiagnostics, nativeScreenCpuApi} from './NativeScreenCpu';
 
 const ACCESSIBILITY_STORE_STORAGE_KEY = 'AccessibilityStore';
 const ACCESSIBILITY_ZOOM_STORAGE_KEY = 'AccessibilityStore:zoomLevel';
@@ -707,7 +708,9 @@ const api: ElectronAPI = {
 			ipcRenderer.invoke('native-screen-capture:list-sources'),
 		start: (options: NativeScreenCaptureStartOptions): Promise<NativeScreenCaptureStartResult> =>
 			ipcRenderer.invoke('native-screen-capture:start', options),
-		getDiagnostics: (captureId: string): Promise<NativeScreenCaptureDiagnostics | null> =>
+		...nativeScreenCpuApi,
+		getDiagnostics: async (captureId: string): Promise<NativeScreenCaptureDiagnostics | null> =>
+			getNativeScreenCpuDiagnostics(captureId) ??
 			ipcRenderer.invoke('native-screen-capture:get-diagnostics', captureId),
 		stop: (captureId: string): Promise<void> => ipcRenderer.invoke('native-screen-capture:stop', captureId),
 		onEnd: (callback: (message: NativeScreenCaptureEndMessage) => void): (() => void) => {

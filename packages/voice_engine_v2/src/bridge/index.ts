@@ -6,6 +6,8 @@ import {
 } from '@fluxer/voice_engine_v2/src/bridge/ffi_assertions';
 import type {VoiceEngineV2HardwareEncoderCapabilities} from '@fluxer/voice_engine_v2/src/protocol';
 
+export {createCpuFrameRateFilter} from './CpuFrameRateFilter';
+
 export const VOICE_ENGINE_V2_HARDWARE_ENCODER_IPC_CHANNEL = 'voice-engine-v2:get-hardware-encoder-capabilities';
 
 export type VoiceEngineV2BridgeHardwareEncoderCapabilities = VoiceEngineV2HardwareEncoderCapabilities;

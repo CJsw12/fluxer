@@ -17,6 +17,12 @@ export function setDesktopSourceIntent(intent: DesktopSourceIntent): void {
 	pendingIntent = {...intent, expiresAt: Date.now() + INTENT_TTL_MS};
 }
 
+export function peekDesktopSourceIntent(): DesktopSourceIntent | null {
+	if (!pendingIntent || pendingIntent.expiresAt < Date.now()) return null;
+	const {expiresAt: _expiresAt, ...intent} = pendingIntent;
+	return intent;
+}
+
 export function consumeDesktopSourceIntent(): DesktopSourceIntent | null {
 	if (!pendingIntent) return null;
 	const now = Date.now();

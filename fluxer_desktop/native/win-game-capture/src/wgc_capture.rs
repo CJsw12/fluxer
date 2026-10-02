@@ -2,12 +2,19 @@
 
 use std::sync::{Arc, atomic::Ordering};
 
+use windows::Foundation::TimeSpan;
 use windows::Graphics::Capture::{
     Direct3D11CaptureFrame, Direct3D11CaptureFramePool, GraphicsCaptureItem, GraphicsCaptureSession,
 };
 use windows::Graphics::DirectX::Direct3D11::IDirect3DDevice;
 use windows::Graphics::DirectX::DirectXPixelFormat;
 use windows::Graphics::SizeInt32;
+use windows::Win32::Devices::Display::{
+    DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL, DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME,
+    DISPLAYCONFIG_DEVICE_INFO_HEADER, DISPLAYCONFIG_PATH_INFO, DISPLAYCONFIG_SDR_WHITE_LEVEL,
+    DISPLAYCONFIG_SOURCE_DEVICE_NAME, DisplayConfigGetDeviceInfo, GetDisplayConfigBufferSizes,
+    QDC_ONLY_ACTIVE_PATHS, QueryDisplayConfig,
+};
 use windows::Win32::Foundation::{HWND, LPARAM, RECT, RPC_E_CHANGED_MODE};
 use windows::Win32::Graphics::Direct3D11::{
     D3D11_BIND_SHADER_RESOURCE, D3D11_BOX, D3D11_TEXTURE2D_DESC, D3D11_USAGE_DEFAULT, ID3D11Device,
@@ -17,7 +24,10 @@ use windows::Win32::Graphics::Dxgi::Common::{
     DXGI_FORMAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_SAMPLE_DESC,
 };
 use windows::Win32::Graphics::Dxgi::IDXGIDevice;
-use windows::Win32::Graphics::Gdi::{EnumDisplayMonitors, HDC, HMONITOR};
+use windows::Win32::Graphics::Gdi::{
+    EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITOR_DEFAULTTONEAREST, MONITORINFOEXW,
+    MonitorFromWindow,
+};
 use windows::Win32::System::WinRT::Direct3D11::{
     CreateDirect3D11DeviceFromDXGIDevice, IDirect3DDxgiInterfaceAccess,
 };
@@ -41,6 +51,7 @@ const WGC_FRAME_POOL_BUFFERS: i32 = 2;
 const WGC_FRAME_DRAIN_LIMIT: u32 = 4;
 const WGC_MONITOR_ENUM_LIMIT: usize = 16;
 const WGC_STALL_THRESHOLD: std::time::Duration = std::time::Duration::from_millis(3000);
+const SDR_WHITE_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
 
 fn ensure_winrt_initialized() {
     let result = unsafe { RoInitialize(RO_INIT_MULTITHREADED) };
@@ -263,11 +274,14 @@ struct WgcState {
     frame_pool: Direct3D11CaptureFramePool,
     session: GraphicsCaptureSession,
     output_pipeline: Option<WgcOutputPipeline>,
+    capture_monitor: HMONITOR,
     pixel_format: DirectXPixelFormat,
     content_width: u32,
     content_height: u32,
     out_w: u32,
     out_h: u32,
+    last_sdr_white_query: std::time::Instant,
+    timestamp_origin: Option<(i64, i64)>,
 }
 
 impl WgcState {
@@ -280,6 +294,7 @@ impl WgcState {
 struct WgcNv12Pipeline {
     input_resource: ID3D11Resource,
     converter: Nv12GpuConverter,
+    scrgb_sdr_white: f32,
 }
 
 enum WgcOutputPipeline {
@@ -307,6 +322,7 @@ struct WgcLoopContext {
     target: WgcCaptureTarget,
     requested_width: Option<u32>,
     requested_height: Option<u32>,
+    cpu_frame_callback: bool,
 }
 
 fn wgc_loop_context(inner: &Arc<CaptureInner>) -> Option<WgcLoopContext> {
@@ -320,6 +336,7 @@ fn wgc_loop_context(inner: &Arc<CaptureInner>) -> Option<WgcLoopContext> {
         target: session.target,
         requested_width: session.requested_width,
         requested_height: session.requested_height,
+        cpu_frame_callback: inner.cpu_frame_tsfn.lock().is_some(),
     })
 }
 
@@ -342,6 +359,24 @@ fn sleep_with_backoff(backoff: &mut std::time::Duration) {
     *backoff = (*backoff * 2).min(std::time::Duration::from_secs(2));
 }
 
+fn sleep_until_deadline_precise(inner: &CaptureInner, duration: std::time::Duration) {
+    // ponytail: spends up to 1ms CPU per frame; replace with a high-resolution waitable timer if this path becomes a power issue.
+    let deadline = std::time::Instant::now() + duration;
+    loop {
+        if !inner.running.load(Ordering::Acquire) {
+            return;
+        }
+        let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+        if remaining <= std::time::Duration::from_millis(1) {
+            while inner.running.load(Ordering::Acquire) && std::time::Instant::now() < deadline {
+                std::hint::spin_loop();
+            }
+            return;
+        }
+        std::thread::sleep(remaining - std::time::Duration::from_millis(1));
+    }
+}
+
 pub fn capture_loop(inner: &Arc<CaptureInner>, frame_interval: std::time::Duration) {
     ensure_winrt_initialized();
     let Some(ctx) = wgc_loop_context(inner) else {
@@ -354,7 +389,6 @@ pub fn capture_loop(inner: &Arc<CaptureInner>, frame_interval: std::time::Durati
     let mut recreate_backoff = std::time::Duration::from_millis(100);
     let capture_start = std::time::Instant::now();
     let mut next_frame_deadline = capture_start + frame_interval;
-    let mut frames_dropped_coalesced: u64 = 0;
     let mut stall_tracker = NoFrameStallTracker::new(WGC_STALL_THRESHOLD, capture_start);
 
     while inner.running.load(Ordering::Acquire) {
@@ -386,14 +420,8 @@ pub fn capture_loop(inner: &Arc<CaptureInner>, frame_interval: std::time::Durati
         let Some(state) = wgc_state.as_mut() else {
             continue;
         };
-        let result = poll_and_emit_frame(
-            inner,
-            &ctx.context,
-            state,
-            capture_id.as_deref(),
-            capture_start,
-            &mut frames_dropped_coalesced,
-        );
+        refresh_sdr_white_if_due(inner, &ctx, state);
+        let result = poll_and_emit_frame(inner, &ctx, state, capture_id.as_deref(), capture_start);
         let signal = stall_tracker.observe(
             std::time::Instant::now(),
             matches!(result, WgcFrameResult::Ok),
@@ -410,7 +438,11 @@ pub fn capture_loop(inner: &Arc<CaptureInner>, frame_interval: std::time::Durati
             pacing_sleep_and_next_deadline(now, next_frame_deadline, frame_interval);
         next_frame_deadline = deadline;
         if sleep_duration > std::time::Duration::ZERO {
-            std::thread::sleep(sleep_duration);
+            if ctx.cpu_frame_callback {
+                sleep_until_deadline_precise(inner, sleep_duration);
+            } else {
+                std::thread::sleep(sleep_duration);
+            }
         }
     }
 
@@ -546,6 +578,7 @@ fn create_wgc_state_for_format(
     out_w: u32,
     out_h: u32,
 ) -> Result<WgcState, String> {
+    let capture_monitor = capture_monitor_for_target(ctx.target);
     let output_pipeline = create_wgc_output_pipeline(
         ctx,
         pixel_format,
@@ -553,6 +586,7 @@ fn create_wgc_state_for_format(
         content_height,
         out_w,
         out_h,
+        capture_monitor,
     )?;
     let frame_pool = Direct3D11CaptureFramePool::CreateFreeThreaded(
         &ctx.d3d_device,
@@ -567,6 +601,11 @@ fn create_wgc_state_for_format(
     let session = frame_pool
         .CreateCaptureSession(&ctx.item)
         .map_err(|e| format!("Direct3D11CaptureFramePool.CreateCaptureSession: {e}"))?;
+    // Windows 11 24H2+ otherwise commonly delivers only ~60 capture frames/s.
+    if let Err(error) = session.SetMinUpdateInterval(TimeSpan { Duration: 10_000 }) {
+        // Older Windows versions do not implement IGraphicsCaptureSession5.
+        eprintln!("GraphicsCaptureSession.SetMinUpdateInterval unavailable: {error}");
+    }
     session
         .StartCapture()
         .map_err(|e| format!("GraphicsCaptureSession.StartCapture: {e}"))?;
@@ -574,11 +613,14 @@ fn create_wgc_state_for_format(
         frame_pool,
         session,
         output_pipeline,
+        capture_monitor,
         pixel_format,
         content_width,
         content_height,
         out_w,
         out_h,
+        last_sdr_white_query: std::time::Instant::now(),
+        timestamp_origin: None,
     })
 }
 
@@ -623,8 +665,16 @@ fn resize_wgc_state_for_format(
     out_w: u32,
     out_h: u32,
 ) -> Result<(), String> {
-    let output_pipeline =
-        create_wgc_output_pipeline(ctx, pixel_format, width, height, out_w, out_h)?;
+    let capture_monitor = capture_monitor_for_target(ctx.target);
+    let output_pipeline = create_wgc_output_pipeline(
+        ctx,
+        pixel_format,
+        width,
+        height,
+        out_w,
+        out_h,
+        capture_monitor,
+    )?;
     state
         .frame_pool
         .Recreate(
@@ -643,7 +693,69 @@ fn resize_wgc_state_for_format(
     state.out_h = out_h;
     state.pixel_format = pixel_format;
     state.output_pipeline = output_pipeline;
+    state.capture_monitor = capture_monitor;
+    state.last_sdr_white_query = std::time::Instant::now();
     Ok(())
+}
+
+fn refresh_wgc_output_pipeline(ctx: &WgcLoopContext, state: &mut WgcState) -> Result<(), String> {
+    let capture_monitor = capture_monitor_for_target(ctx.target);
+    let output_pipeline = create_wgc_output_pipeline(
+        ctx,
+        state.pixel_format,
+        state.content_width,
+        state.content_height,
+        state.out_w,
+        state.out_h,
+        capture_monitor,
+    )?;
+    state.output_pipeline = output_pipeline;
+    state.capture_monitor = capture_monitor;
+    state.last_sdr_white_query = std::time::Instant::now();
+    Ok(())
+}
+
+fn refresh_sdr_white_if_due(inner: &Arc<CaptureInner>, ctx: &WgcLoopContext, state: &mut WgcState) {
+    if state.pixel_format != DirectXPixelFormat::R16G16B16A16Float {
+        return;
+    }
+    let now = std::time::Instant::now();
+    let Some(capture_monitor) = sdr_white_refresh_monitor(
+        state.last_sdr_white_query,
+        now,
+        capture_monitor_for_target(ctx.target),
+    ) else {
+        return;
+    };
+    state.last_sdr_white_query = now;
+
+    let query_started = std::time::Instant::now();
+    let source_white_result = query_scrgb_sdr_white(capture_monitor);
+    inner
+        .cpu_pipeline
+        .record_hdr_white_query(query_started.elapsed());
+    let source_white = match source_white_result {
+        Ok(source_white) => source_white,
+        Err(error) => {
+            eprintln!("WGC HDR capture could not refresh monitor SDR white: {error}");
+            return;
+        }
+    };
+    let Some(WgcOutputPipeline::Nv12(pipeline)) = state.output_pipeline.as_mut() else {
+        return;
+    };
+    if source_white_changed(pipeline.scrgb_sdr_white, source_white) {
+        if !pipeline.converter.update_scrgb_sdr_white(source_white) {
+            eprintln!("WGC HDR capture failed to update tone-map SDR white");
+            return;
+        }
+        pipeline.scrgb_sdr_white = source_white;
+        eprintln!(
+            "WGC HDR capture refreshed monitor SDR white to {source_white:.3} scRGB units ({:.0} nits)",
+            source_white * 80.0
+        );
+    }
+    state.capture_monitor = capture_monitor;
 }
 
 fn create_wgc_output_pipeline(
@@ -653,6 +765,7 @@ fn create_wgc_output_pipeline(
     content_height: u32,
     out_w: u32,
     out_h: u32,
+    capture_monitor: HMONITOR,
 ) -> Result<Option<WgcOutputPipeline>, String> {
     if pixel_format == DirectXPixelFormat::R16G16B16A16Float {
         return create_wgc_nv12_pipeline(
@@ -663,6 +776,7 @@ fn create_wgc_output_pipeline(
             out_w,
             out_h,
             crate::hdr::SourceFormat::Rgba16Float { hdr: true },
+            capture_monitor,
         )
         .map(WgcOutputPipeline::Nv12)
         .map(Some);
@@ -676,6 +790,21 @@ fn create_wgc_output_pipeline(
             out_w,
             out_h,
             crate::hdr::SourceFormat::Bgra8,
+            capture_monitor,
+        )
+        .map(WgcOutputPipeline::Nv12)
+        .map(Some);
+    }
+    if ctx.cpu_frame_callback {
+        return create_wgc_nv12_pipeline(
+            ctx,
+            DXGI_FORMAT_B8G8R8A8_UNORM,
+            content_width,
+            content_height,
+            out_w,
+            out_h,
+            crate::hdr::SourceFormat::Bgra8,
+            capture_monitor,
         )
         .map(WgcOutputPipeline::Nv12)
         .map(Some);
@@ -695,6 +824,7 @@ fn create_wgc_nv12_pipeline(
     out_w: u32,
     out_h: u32,
     source_format: crate::hdr::SourceFormat,
+    capture_monitor: HMONITOR,
 ) -> Result<WgcNv12Pipeline, String> {
     assert!(content_width > 0, "WGC NV12 input width positive");
     assert!(content_height > 0, "WGC NV12 input height positive");
@@ -709,7 +839,14 @@ fn create_wgc_nv12_pipeline(
             Quality: 0,
         },
         Usage: D3D11_USAGE_DEFAULT,
-        BindFlags: D3D11_BIND_SHADER_RESOURCE.0 as u32,
+        BindFlags: if matches!(
+            source_format,
+            crate::hdr::SourceFormat::Rgba16Float { hdr: true }
+        ) {
+            D3D11_BIND_SHADER_RESOURCE.0 as u32
+        } else {
+            0
+        },
         CPUAccessFlags: 0,
         MiscFlags: 0,
     };
@@ -724,6 +861,28 @@ fn create_wgc_nv12_pipeline(
     let input_resource: ID3D11Resource = input_texture
         .cast()
         .map_err(|e| format!("ID3D11Resource WGC NV12 input cast: {e}"))?;
+    let scrgb_sdr_white = if matches!(
+        source_format,
+        crate::hdr::SourceFormat::Rgba16Float { hdr: true }
+    ) {
+        match query_scrgb_sdr_white(capture_monitor) {
+            Ok(source_white) => {
+                eprintln!(
+                    "WGC HDR capture mapped monitor SDR white to {source_white:.3} scRGB units ({:.0} nits)",
+                    source_white * 80.0
+                );
+                source_white
+            }
+            Err(error) => {
+                eprintln!(
+                    "WGC HDR capture could not query monitor SDR white ({error}); using the 80-nit scRGB reference white"
+                );
+                1.0
+            }
+        }
+    } else {
+        1.0
+    };
     let converter = Nv12GpuConverter::new(
         &ctx.device,
         &ctx.context,
@@ -733,21 +892,168 @@ fn create_wgc_nv12_pipeline(
         out_w,
         out_h,
         source_format,
+        scrgb_sdr_white,
     )
     .ok_or_else(|| "WGC NV12 converter unavailable".to_string())?;
     Ok(WgcNv12Pipeline {
         input_resource,
         converter,
+        scrgb_sdr_white,
     })
+}
+
+fn query_scrgb_sdr_white(monitor: HMONITOR) -> Result<f32, String> {
+    if monitor.is_invalid() {
+        return Err("capture target has no monitor".into());
+    }
+
+    let mut monitor_info = MONITORINFOEXW::default();
+    monitor_info.monitorInfo.cbSize = std::mem::size_of::<MONITORINFOEXW>() as u32;
+    if !unsafe { GetMonitorInfoW(monitor, &mut monitor_info.monitorInfo) }.as_bool() {
+        return Err("GetMonitorInfoW failed for capture monitor".into());
+    }
+    let name_end = monitor_info
+        .szDevice
+        .iter()
+        .position(|character| *character == 0)
+        .unwrap_or(monitor_info.szDevice.len());
+    let gdi_device_name = String::from_utf16_lossy(&monitor_info.szDevice[..name_end]);
+
+    let mut path_count = 0;
+    let mut mode_count = 0;
+    let buffer_status = unsafe {
+        GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &mut path_count, &mut mode_count)
+    };
+    if buffer_status.0 != 0 {
+        return Err(format!(
+            "GetDisplayConfigBufferSizes returned {}",
+            buffer_status.0
+        ));
+    }
+    let mut paths = vec![DISPLAYCONFIG_PATH_INFO::default(); path_count as usize];
+    let mut modes = vec![
+        windows::Win32::Devices::Display::DISPLAYCONFIG_MODE_INFO::default();
+        mode_count as usize
+    ];
+    let query_status = unsafe {
+        QueryDisplayConfig(
+            QDC_ONLY_ACTIVE_PATHS,
+            &mut path_count,
+            paths.as_mut_ptr(),
+            &mut mode_count,
+            modes.as_mut_ptr(),
+            None,
+        )
+    };
+    if query_status.0 != 0 {
+        return Err(format!("QueryDisplayConfig returned {}", query_status.0));
+    }
+
+    let mut white_levels = Vec::new();
+    for path in paths.into_iter().take(path_count as usize) {
+        let mut source_name = DISPLAYCONFIG_SOURCE_DEVICE_NAME {
+            header: DISPLAYCONFIG_DEVICE_INFO_HEADER {
+                r#type: DISPLAYCONFIG_DEVICE_INFO_GET_SOURCE_NAME,
+                size: std::mem::size_of::<DISPLAYCONFIG_SOURCE_DEVICE_NAME>() as u32,
+                adapterId: path.sourceInfo.adapterId,
+                id: path.sourceInfo.id,
+            },
+            ..Default::default()
+        };
+        if unsafe { DisplayConfigGetDeviceInfo(&mut source_name.header) } != 0 {
+            continue;
+        }
+        let source_name_end = source_name
+            .viewGdiDeviceName
+            .iter()
+            .position(|character| *character == 0)
+            .unwrap_or(source_name.viewGdiDeviceName.len());
+        let source_gdi_name =
+            String::from_utf16_lossy(&source_name.viewGdiDeviceName[..source_name_end]);
+        if !source_gdi_name.eq_ignore_ascii_case(&gdi_device_name) {
+            continue;
+        }
+
+        let mut white_level = DISPLAYCONFIG_SDR_WHITE_LEVEL {
+            header: DISPLAYCONFIG_DEVICE_INFO_HEADER {
+                r#type: DISPLAYCONFIG_DEVICE_INFO_GET_SDR_WHITE_LEVEL,
+                size: std::mem::size_of::<DISPLAYCONFIG_SDR_WHITE_LEVEL>() as u32,
+                adapterId: path.targetInfo.adapterId,
+                id: path.targetInfo.id,
+            },
+            ..Default::default()
+        };
+        if unsafe { DisplayConfigGetDeviceInfo(&mut white_level.header) } != 0 {
+            return Err(format!(
+                "DisplayConfigGetDeviceInfo SDR white failed for {gdi_device_name}"
+            ));
+        }
+        if white_level.SDRWhiteLevel == 0 {
+            return Err(format!("SDR white level was zero for {gdi_device_name}"));
+        }
+        white_levels.push(white_level.SDRWhiteLevel);
+    }
+
+    let Some(first) = white_levels.first().copied() else {
+        return Err(format!(
+            "no active DisplayConfig path matched {gdi_device_name}"
+        ));
+    };
+    if white_levels.iter().any(|level| *level != first) {
+        return Err(format!(
+            "clone paths for {gdi_device_name} report different SDR white levels"
+        ));
+    }
+    Ok(first as f32 / 1000.0)
+}
+
+fn capture_monitor_for_target(target: WgcCaptureTarget) -> HMONITOR {
+    match target {
+        WgcCaptureTarget::Window(hwnd) => unsafe {
+            MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST)
+        },
+        WgcCaptureTarget::Monitor(monitor) => monitor,
+    }
+}
+
+fn output_pipeline_needs_refresh(
+    previous_monitor: HMONITOR,
+    current_monitor: HMONITOR,
+    previous_size: (u32, u32),
+    current_size: (u32, u32),
+) -> bool {
+    previous_monitor != current_monitor || previous_size != current_size
+}
+
+fn sdr_white_query_due(last_query: std::time::Instant, now: std::time::Instant) -> bool {
+    now.saturating_duration_since(last_query) >= SDR_WHITE_REFRESH_INTERVAL
+}
+
+fn sdr_white_refresh_monitor(
+    last_query: std::time::Instant,
+    now: std::time::Instant,
+    current_monitor: HMONITOR,
+) -> Option<HMONITOR> {
+    (sdr_white_query_due(last_query, now) && !current_monitor.0.is_null())
+        .then_some(current_monitor)
+}
+
+fn source_white_changed(previous: f32, current: f32) -> bool {
+    previous.to_bits() != current.to_bits()
+}
+
+fn wgc_timestamp_us(origin: &mut Option<(i64, i64)>, source_100ns: i64, elapsed_us: i64) -> i64 {
+    // Anchor once; polling/GPU delays must not change compositor frame intervals.
+    let (source_origin, elapsed_origin) = *origin.get_or_insert((source_100ns, elapsed_us));
+    elapsed_origin + (source_100ns - source_origin) / 10
 }
 
 fn poll_and_emit_frame(
     inner: &Arc<CaptureInner>,
-    context: &ID3D11DeviceContext,
+    ctx: &WgcLoopContext,
     state: &mut WgcState,
     capture_id: Option<&str>,
     capture_start: std::time::Instant,
-    frames_dropped_coalesced: &mut u64,
 ) -> WgcFrameResult {
     let mut newest: Option<Direct3D11CaptureFrame> = None;
     let mut drained: u32 = 0;
@@ -755,8 +1061,9 @@ fn poll_and_emit_frame(
         let Ok(frame) = state.frame_pool.TryGetNextFrame() else {
             break;
         };
+        inner.cpu_pipeline.record_acquired();
         if let Some(previous) = newest.replace(frame) {
-            *frames_dropped_coalesced += 1;
+            inner.cpu_pipeline.record_coalesced();
             let _ = previous.Close();
         }
         drained += 1;
@@ -765,7 +1072,7 @@ fn poll_and_emit_frame(
     let Some(frame) = newest else {
         return WgcFrameResult::NoFrame;
     };
-    let result = emit_wgc_frame(inner, context, state, capture_id, &frame, capture_start);
+    let result = emit_wgc_frame(inner, ctx, state, capture_id, &frame, capture_start);
     let _ = frame.Close();
     result
 }
@@ -786,7 +1093,7 @@ fn wgc_frame_source_resource(frame: &Direct3D11CaptureFrame) -> Result<ID3D11Res
 
 fn emit_wgc_frame(
     inner: &Arc<CaptureInner>,
-    context: &ID3D11DeviceContext,
+    ctx: &WgcLoopContext,
     state: &mut WgcState,
     capture_id: Option<&str>,
     frame: &Direct3D11CaptureFrame,
@@ -800,13 +1107,37 @@ fn emit_wgc_frame(
     };
     let content_width = content.Width.max(1) as u32;
     let content_height = content.Height.max(1) as u32;
-    if content_width != state.content_width || content_height != state.content_height {
-        return WgcFrameResult::Resized {
-            width: content_width,
-            height: content_height,
-        };
+    if ctx.cpu_frame_callback {
+        inner.cpu_pipeline.configure(
+            content_width,
+            content_height,
+            state.pixel_format == DirectXPixelFormat::R16G16B16A16Float,
+        );
     }
-    let Some(frame_sink) = resolve_frame_sink(inner, capture_id) else {
+    let current_monitor = capture_monitor_for_target(ctx.target);
+    let current_size = (content_width, content_height);
+    let previous_size = (state.content_width, state.content_height);
+    if output_pipeline_needs_refresh(
+        state.capture_monitor,
+        current_monitor,
+        previous_size,
+        current_size,
+    ) {
+        if current_size != previous_size {
+            return WgcFrameResult::Resized {
+                width: content_width,
+                height: content_height,
+            };
+        }
+        if let Err(error) = refresh_wgc_output_pipeline(ctx, state) {
+            return WgcFrameResult::Error(format!(
+                "WGC output pipeline refresh after monitor change failed: {error}"
+            ));
+        }
+    }
+    let frame_sink = resolve_frame_sink(inner, capture_id);
+    let cpu_frame_callback = inner.cpu_frame_tsfn.lock().clone();
+    if frame_sink.is_none() && cpu_frame_callback.is_none() {
         note_media_frame_without_sink(
             inner,
             "WGC frame dropped because no native frame sink is registered",
@@ -817,15 +1148,23 @@ fn emit_wgc_frame(
         Ok(resource) => resource,
         Err(e) => return WgcFrameResult::Error(e),
     };
-    let timestamp_us = capture_timestamp_us(capture_start);
+    let source_time = match frame.SystemRelativeTime() {
+        Ok(time) => time.Duration,
+        Err(error) => return WgcFrameResult::Error(format!("WGC frame timestamp: {error}")),
+    };
+    let timestamp_us = wgc_timestamp_us(
+        &mut state.timestamp_origin,
+        source_time,
+        capture_timestamp_us(capture_start),
+    );
     let Some(output_pipeline) = state.output_pipeline.as_mut() else {
         return WgcFrameResult::Error("WGC shared texture output unavailable".into());
     };
     match output_pipeline {
         WgcOutputPipeline::Bgra(shared_output) => emit_wgc_bgra_frame(
             inner,
-            context,
-            &frame_sink,
+            &ctx.context,
+            frame_sink.as_ref(),
             shared_output,
             &source_resource,
             content_width,
@@ -834,13 +1173,14 @@ fn emit_wgc_frame(
         ),
         WgcOutputPipeline::Nv12(pipeline) => emit_wgc_nv12_frame(
             inner,
-            context,
-            &frame_sink,
+            &ctx.context,
+            frame_sink.as_ref(),
             pipeline,
             &source_resource,
             content_width,
             content_height,
             timestamp_us,
+            cpu_frame_callback.as_ref(),
         ),
     }
 }
@@ -849,7 +1189,7 @@ fn emit_wgc_frame(
 fn emit_wgc_bgra_frame(
     inner: &Arc<CaptureInner>,
     context: &ID3D11DeviceContext,
-    frame_sink: &crate::FrameSinkRef,
+    frame_sink: Option<&crate::FrameSinkRef>,
     shared_output: &mut SharedTextureOutput,
     source_resource: &ID3D11Resource,
     content_width: u32,
@@ -888,15 +1228,17 @@ fn emit_wgc_bgra_frame(
         );
         context.Flush();
     }
-    let _ = emit_shared_texture_frame(
-        inner,
-        frame_sink,
-        slot.handle,
-        shared_output.width,
-        shared_output.height,
-        shared_output.dxgi_format,
-        timestamp_us,
-    );
+    if let Some(frame_sink) = frame_sink {
+        let _ = emit_shared_texture_frame(
+            inner,
+            frame_sink,
+            slot.handle,
+            shared_output.width,
+            shared_output.height,
+            shared_output.dxgi_format,
+            timestamp_us,
+        );
+    }
     WgcFrameResult::Ok
 }
 
@@ -904,12 +1246,13 @@ fn emit_wgc_bgra_frame(
 fn emit_wgc_nv12_frame(
     inner: &Arc<CaptureInner>,
     context: &ID3D11DeviceContext,
-    frame_sink: &crate::FrameSinkRef,
+    frame_sink: Option<&crate::FrameSinkRef>,
     pipeline: &mut WgcNv12Pipeline,
     source_resource: &ID3D11Resource,
     content_width: u32,
     content_height: u32,
     timestamp_us: i64,
+    cpu_frame_callback: Option<&crate::CpuFrameTsfn>,
 ) -> WgcFrameResult {
     let src_box = D3D11_BOX {
         left: 0,
@@ -919,7 +1262,7 @@ fn emit_wgc_nv12_frame(
         bottom: content_height,
         back: 1,
     };
-    unsafe {
+    let copy_source = || unsafe {
         context.CopySubresourceRegion(
             &pipeline.input_resource,
             0,
@@ -930,19 +1273,170 @@ fn emit_wgc_nv12_frame(
             0,
             Some(&src_box),
         );
-    }
-    let frame = match pipeline.converter.convert_shared_texture() {
-        Ok(frame) => frame,
+    };
+    let cpu_conversion = if cpu_frame_callback.is_some() {
+        let conversion = crate::try_convert_cpu_frame(&inner.cpu_frame_pending, || {
+            let conversion_started = std::time::Instant::now();
+            copy_source();
+            let converted = pipeline.converter.convert_cpu_frame();
+            inner
+                .cpu_pipeline
+                .record_conversion(conversion_started.elapsed());
+            converted.map(|(frame, data, timings)| {
+                inner.cpu_pipeline.record_readback_map(timings.readback_map);
+                inner.cpu_pipeline.record_cpu_pack(timings.cpu_pack);
+                (frame, data)
+            })
+        });
+        if matches!(conversion, Ok(None)) {
+            inner.cpu_pipeline.record_permit_rejected();
+        }
+        conversion
+    } else {
+        Ok(None)
+    };
+    let (frame, cpu_data) = match cpu_conversion {
+        Ok(Some(((frame, data), permit))) => (frame, Some((data, permit))),
+        Ok(None) if frame_sink.is_some() => {
+            copy_source();
+            match pipeline.converter.convert_shared_texture() {
+                Ok(frame) => (frame, None),
+                Err(error) => return WgcFrameResult::Error(error),
+            }
+        }
+        Ok(None) => return WgcFrameResult::Ok,
         Err(error) => return WgcFrameResult::Error(error),
     };
-    let _ = emit_shared_texture_frame(
-        inner,
-        frame_sink,
-        frame.handle,
-        frame.width,
-        frame.height,
-        frame.dxgi_format,
-        timestamp_us,
-    );
+    if let Some(frame_sink) = frame_sink {
+        let _ = emit_shared_texture_frame(
+            inner,
+            frame_sink,
+            frame.handle,
+            frame.width,
+            frame.height,
+            frame.dxgi_format,
+            timestamp_us,
+        );
+    }
+    if let (Some(callback), Some((data, permit))) = (cpu_frame_callback, cpu_data) {
+        let _ = callback.call(
+            crate::QueuedCpuFrame {
+                frame: crate::CpuFrame {
+                    width: frame.width,
+                    height: frame.height,
+                    pixel_format: "nv12".to_string(),
+                    timestamp_us,
+                    data: data.into(),
+                },
+                _permit: permit,
+            },
+            napi::threadsafe_function::ThreadsafeFunctionCallMode::NonBlocking,
+        );
+    }
     WgcFrameResult::Ok
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        SDR_WHITE_REFRESH_INTERVAL, output_pipeline_needs_refresh, sdr_white_query_due,
+        sdr_white_refresh_monitor, source_white_changed,
+    };
+    use windows::Win32::Graphics::Gdi::HMONITOR;
+
+    #[test]
+    fn source_timestamps_ignore_irregular_worker_delivery() {
+        let mut origin = None;
+        let source = 9_000_000_000i64;
+        assert_eq!(super::wgc_timestamp_us(&mut origin, source, 1_000), 1_000);
+        assert_eq!(
+            super::wgc_timestamp_us(&mut origin, source + 83_330, 30_000),
+            9_333
+        );
+        assert_eq!(
+            super::wgc_timestamp_us(&mut origin, source + 166_670, 31_000),
+            17_667
+        );
+        // Missing source frames remain a real gap, rather than a catch-up timeline.
+        assert_eq!(
+            super::wgc_timestamp_us(&mut origin, source + 500_000, 60_000),
+            51_000
+        );
+    }
+
+    #[test]
+    fn monitor_move_refreshes_pipeline_without_a_size_change() {
+        let previous_monitor = HMONITOR(1usize as *mut std::ffi::c_void);
+        let current_monitor = HMONITOR(2usize as *mut std::ffi::c_void);
+        let size = (2560, 1440);
+
+        assert!(output_pipeline_needs_refresh(
+            previous_monitor,
+            current_monitor,
+            size,
+            size,
+        ));
+        assert!(!output_pipeline_needs_refresh(
+            previous_monitor,
+            previous_monitor,
+            size,
+            size,
+        ));
+        assert!(output_pipeline_needs_refresh(
+            previous_monitor,
+            previous_monitor,
+            size,
+            (1920, 1080),
+        ));
+    }
+
+    #[test]
+    fn sdr_white_refresh_is_bounded_to_one_query_per_second() {
+        let last_query = std::time::Instant::now();
+        assert!(!sdr_white_query_due(
+            last_query,
+            last_query + SDR_WHITE_REFRESH_INTERVAL - std::time::Duration::from_millis(1),
+        ));
+        assert!(sdr_white_query_due(
+            last_query,
+            last_query + SDR_WHITE_REFRESH_INTERVAL,
+        ));
+    }
+
+    #[test]
+    fn sdr_white_refresh_queries_the_current_monitor_on_cadence() {
+        let last_query = std::time::Instant::now();
+        let moved_monitor = HMONITOR(2usize as *mut std::ffi::c_void);
+
+        assert_eq!(
+            sdr_white_refresh_monitor(
+                last_query,
+                last_query + SDR_WHITE_REFRESH_INTERVAL - std::time::Duration::from_millis(1),
+                moved_monitor,
+            ),
+            None,
+        );
+        assert_eq!(
+            sdr_white_refresh_monitor(
+                last_query,
+                last_query + SDR_WHITE_REFRESH_INTERVAL,
+                moved_monitor,
+            ),
+            Some(moved_monitor),
+        );
+        assert_eq!(
+            sdr_white_refresh_monitor(
+                last_query,
+                last_query + SDR_WHITE_REFRESH_INTERVAL,
+                HMONITOR(std::ptr::null_mut()),
+            ),
+            None,
+        );
+    }
+
+    #[test]
+    fn changed_sdr_white_requests_gpu_constant_resampling() {
+        assert!(source_white_changed(3.0, 4.0));
+        assert!(!source_white_changed(3.0, 3.0));
+    }
 }

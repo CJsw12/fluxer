@@ -384,12 +384,10 @@ pub(crate) fn resolve_output_size(
     let scale = (max_width as f64 / src_width.max(1) as f64)
         .min(max_height as f64 / src_height.max(1) as f64)
         .min(1.0);
-    if scale >= 1.0 {
-        return (src_width.max(1), src_height.max(1));
-    }
+    // NV12 requires even dimensions, including unscaled windows and resize events.
     (
-        ((src_width as f64 * scale).floor() as u32).max(1),
-        ((src_height as f64 * scale).floor() as u32).max(1),
+        ((src_width as f64 * scale).floor() as u32 & !1).max(2),
+        ((src_height as f64 * scale).floor() as u32 & !1).max(2),
     )
 }
 
@@ -1026,6 +1024,19 @@ mod tests {
     use std::time::{Duration, Instant};
 
     const TEST_FRAME_INTERVAL: Duration = Duration::from_millis(33);
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn output_size_aligns_native_and_scaled_sources_for_nv12() {
+        use super::resolve_output_size;
+        assert_eq!(resolve_output_size(1919, 1079, None, None), (1918, 1078));
+        assert_eq!(resolve_output_size(1920, 1080, None, None), (1920, 1080));
+        assert_eq!(
+            resolve_output_size(1920, 1080, Some(1279), Some(719)),
+            (1278, 718)
+        );
+        assert_eq!(resolve_output_size(1, 1, None, None), (2, 2));
+    }
 
     #[test]
     fn pacing_sleeps_remaining_time_and_advances_deadline_by_interval() {

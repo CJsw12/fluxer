@@ -15,6 +15,7 @@ export interface VideoFrameInit {
 	displayHeight?: number;
 	timestamp: number;
 	layout?: Array<{offset: number; stride: number}>;
+	colorSpace?: VideoColorSpaceInit;
 }
 
 export interface CanvasVideoFrameInit {

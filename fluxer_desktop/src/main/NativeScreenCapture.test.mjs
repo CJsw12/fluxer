@@ -86,7 +86,13 @@ function makeNativeAddon({
 	};
 }
 
-function loadNativeScreenCapture({platform = 'linux', addon, tccStatus = 'not-determined'} = {}) {
+function loadNativeScreenCapture({
+	platform = 'linux',
+	addon,
+	tccStatus = 'not-determined',
+	startOptionsValidator = () => true,
+	privilegedRendererSenderGuard = () => {},
+} = {}) {
 	const handlers = new Map();
 	const calls = {
 		logs: {debug: [], warn: []},
@@ -146,12 +152,12 @@ function loadNativeScreenCapture({platform = 'linux', addon, tccStatus = 'not-de
 		}
 		if (specifier === '@electron/main/NativeScreenCaptureValidation') {
 			return {
-				isValidStartOptions: () => true,
+				isValidStartOptions: startOptionsValidator,
 				normalizeScreenCaptureDimension: (value) => value,
 			};
 		}
 		if (specifier === '@electron/main/PrivilegedRendererDocuments') {
-			return {requirePrivilegedRendererDocumentSender: () => {}};
+			return {requirePrivilegedRendererDocumentSender: privilegedRendererSenderGuard};
 		}
 		throw new Error(`Unexpected import: ${specifier}`);
 	}
@@ -175,6 +181,64 @@ function loadNativeScreenCapture({platform = 'linux', addon, tccStatus = 'not-de
 }
 
 describe('NativeScreenCapture source identity and capability reporting', () => {
+	test('authorizes only trusted, valid Windows CPU capture starts', async () => {
+		const validatedOptions = [];
+		const trustedChecks = [];
+		const harness = loadNativeScreenCapture({
+			platform: 'win32',
+			startOptionsValidator: (options) => {
+				validatedOptions.push(options);
+				return options.nativeFrameSinkRequired === true && options.sourceId === 'window:999999:0';
+			},
+			privilegedRendererSenderGuard: (event, channel) => {
+				trustedChecks.push({event, channel});
+				if (event.untrusted) throw new Error('untrusted renderer');
+			},
+		});
+		harness.module.registerNativeScreenCaptureHandlers();
+		const authorize = harness.handlers.get('native-screen-capture:authorize-cpu-start');
+		const options = {
+			sourceId: 'window:999999:0',
+			sourceKind: 'window',
+			width: 1280,
+			height: 720,
+			frameRate: 144,
+		};
+		const event = {sender: makeSender().sender};
+
+		assert.equal(await authorize(event, options), true);
+		assert.deepEqual(plain(validatedOptions[0]), {...options, nativeFrameSinkRequired: true});
+		assert.equal(trustedChecks[0].event, event);
+		assert.equal(trustedChecks[0].channel, 'native-screen-capture:authorize-cpu-start');
+		assert.equal(await authorize(event, {...options, sourceId: 'window:invalid'}), false);
+		assert.equal(await authorize(event, {...options, sourceKind: 'game'}), false);
+		assert.equal(await authorize(event, {...options, frameRate: 145}), false);
+		assert.throws(() => authorize({...event, untrusted: true}, options), /untrusted renderer/);
+		assert.equal(trustedChecks.length, 5);
+
+		const outputOptions = {...options, frameRate: 60, outputFrameRate: 30};
+		assert.equal(await authorize(event, outputOptions), true);
+		assert.deepEqual(plain(validatedOptions.at(-1)), {
+			sourceId: outputOptions.sourceId,
+			sourceKind: outputOptions.sourceKind,
+			width: outputOptions.width,
+			height: outputOptions.height,
+			frameRate: outputOptions.frameRate,
+			nativeFrameSinkRequired: true,
+		});
+		for (const outputFrameRate of [0, 60.5, 61]) {
+			assert.equal(await authorize(event, {...outputOptions, outputFrameRate}), false);
+		}
+		assert.equal(trustedChecks.length, 9);
+
+		const nonWindowsHarness = loadNativeScreenCapture({platform: 'linux'});
+		nonWindowsHarness.module.registerNativeScreenCaptureHandlers();
+		assert.equal(
+			await nonWindowsHarness.handlers.get('native-screen-capture:authorize-cpu-start')(event, options),
+			false,
+		);
+	});
+
 	test('normalizes display and window sources without changing source ids', async () => {
 		const {addon} = makeNativeAddon({
 			sources: [

@@ -108,7 +108,11 @@ export function rankScreenShareCodecs(input: ScreenShareCodecRankingInput): Scre
 		input.encoderModeSetting === 'software'
 			? survivors
 			: [...survivors.filter(isHardware), ...survivors.filter((codec) => !isHardware(codec))];
-	const ordered = pin === null ? ranked : [pin, ...ranked.filter((codec) => codec !== pin)];
+	const automatic =
+		ranked.includes('h265') && isHardware('h265')
+			? ['h265' as const, ...ranked.filter((codec) => codec !== 'h265')]
+			: ranked;
+	const ordered = pin === null ? automatic : [pin, ...ranked.filter((codec) => codec !== pin)];
 	return {
 		order: ordered.length > 0 ? ordered : [LAST_RESORT_VIDEO_CODEC],
 		hardwareUnavailable: input.encoderModeSetting === 'hardware' && !hardwareAvailable,
@@ -212,7 +216,14 @@ export function computeNegotiatedVideoCodec(
 	remoteCodecs: ReadonlyArray<ReadonlyArray<FluxerCodecAdvertisement>>,
 	unknownParticipants = 0,
 	codecPreference: ReadonlyArray<VideoCodec> = CODEC_PREFERENCE,
+	requestedCodec: VideoCodec | null = null,
 ): CodecNegotiationSelection {
+	if (requestedCodec !== null) {
+		if (!getEncodeSet(localCodecs).has(requestedCodec)) {
+			throw new Error(`Selected screen share codec ${requestedCodec} is unavailable for local encoding`);
+		}
+		return {codec: requestedCodec, reason: 'manual', candidates: [requestedCodec], unknownParticipants};
+	}
 	const {codec, candidates} = negotiateVideoCodec(
 		getEncodeSet(localCodecs),
 		remoteCodecs.map((remote) => getDecodeSet(remote)),

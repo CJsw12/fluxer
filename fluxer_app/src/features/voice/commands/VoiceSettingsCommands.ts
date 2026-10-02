@@ -57,6 +57,7 @@ type VoiceSettingsPatch = Partial<{
 	preferredScreenShareCodec: CodecPreference;
 	screenShareAv1OptIn: boolean;
 	screenShareHevcOptIn: boolean;
+	screenShareMaxBitrateMbps: number | null;
 	screenShareContentHint: ScreenShareContentHint;
 	screenShareEncoderMode: ScreenShareEncoderMode;
 	screenShareScalabilityMode: ScreenShareScalabilityModePreference;
@@ -200,4 +201,8 @@ export function setActiveInputVoiceProcessingMode(mode: VoiceProcessingMode): vo
 
 export function update(settings: VoiceSettingsPatch, options?: VoiceSettingsUpdateOptions): void {
 	applyUpdatedVoiceSettings(settings, shouldRefreshMicrophone(settings), options);
+}
+
+export function setScreenShareMaxBitrateMbps(value: number | null): void {
+	update({screenShareMaxBitrateMbps: value});
 }

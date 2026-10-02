@@ -10,6 +10,7 @@ import {
 import type {StreamingMode} from '@app/features/voice/state/VoiceSettings';
 import type {ScreenShareContentHint} from '@app/features/voice/utils/CodecCapabilityDetector';
 import {
+	normaliseScreenShareFrameRateForContext,
 	resolveScreenShareFrameRate,
 	resolveScreenShareTarget,
 	type ScreenShareContext,
@@ -34,7 +35,7 @@ export const SCREEN_SHARE_PRESET_DESCRIPTORS: Record<Exclude<StreamingMode, 'cus
 const FREE_SCREEN_SHARE_RESOLUTIONS: ReadonlyArray<OfferedScreenShareResolution> = ['low_480p', 'medium'];
 const PREMIUM_SCREEN_SHARE_RESOLUTIONS: ReadonlyArray<OfferedScreenShareResolution> = ['high', 'ultra', 'source'];
 const FREE_SCREEN_SHARE_FRAME_RATES: ReadonlyArray<SupportedScreenShareFrameRate> = [15, 30];
-const PREMIUM_SCREEN_SHARE_FRAME_RATES: ReadonlyArray<SupportedScreenShareFrameRate> = [15, 30, 60];
+const PREMIUM_SCREEN_SHARE_FRAME_RATES: ReadonlyArray<SupportedScreenShareFrameRate> = [15, 30, 60, 120];
 
 export interface UserVideoTabScreenShareInput {
 	quality: ScreenShareQualityInput;
@@ -77,9 +78,14 @@ function buildResolutionOptions(
 function buildFrameRateOptions(
 	entitled: boolean,
 	effective: SupportedScreenShareFrameRate,
+	context: ScreenShareContext,
 ): ReadonlyArray<SupportedScreenShareFrameRate> {
 	const offered = entitled ? PREMIUM_SCREEN_SHARE_FRAME_RATES : FREE_SCREEN_SHARE_FRAME_RATES;
-	return SUPPORTED_SCREEN_SHARE_FRAME_RATES.filter((value) => value === effective || offered.includes(value));
+	return SUPPORTED_SCREEN_SHARE_FRAME_RATES.filter(
+		(value) =>
+			value === effective ||
+			(normaliseScreenShareFrameRateForContext(value, context) === value && offered.includes(value)),
+	);
 }
 
 export function resolveUserVideoTabScreenShareState(input: UserVideoTabScreenShareInput): UserVideoTabScreenShareState {
@@ -94,7 +100,7 @@ export function resolveUserVideoTabScreenShareState(input: UserVideoTabScreenSha
 			input.quality.context,
 			resolution,
 		),
-		frameRateOptions: buildFrameRateOptions(input.quality.entitled, target.frameRate),
+		frameRateOptions: buildFrameRateOptions(input.quality.entitled, target.frameRate, input.quality.context),
 		preset: input.quality.mode === 'custom' ? null : input.quality.mode,
 		presetOverriddenByContext: selectStreamSettingsPresetOverriddenByContext(input.quality.mode, input.quality.context),
 		saved: target.tierLimited

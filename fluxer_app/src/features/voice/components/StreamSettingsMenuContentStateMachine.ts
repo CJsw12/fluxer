@@ -7,6 +7,7 @@ import {
 	prestartAudioToggleIsPickerOwned,
 } from '@app/features/voice/utils/ScreenShareEnvironment';
 import {
+	normaliseScreenShareFrameRateForContext,
 	normaliseResolutionForContext,
 	normaliseStreamingModeForContext,
 	resolveScreenShareQualityPick,
@@ -245,7 +246,7 @@ export function offeredScreenShareResolution(resolution: ScreenshareResolution):
 const STREAM_SETTINGS_FREE_RESOLUTIONS: ReadonlyArray<OfferedScreenShareResolution> = ['low_480p', 'medium'];
 const STREAM_SETTINGS_PREMIUM_RESOLUTIONS: ReadonlyArray<OfferedScreenShareResolution> = ['high', 'ultra', 'source'];
 const STREAM_SETTINGS_FREE_FRAME_RATES: ReadonlyArray<SupportedScreenShareFrameRate> = [15, 30];
-const STREAM_SETTINGS_PREMIUM_FRAME_RATES: ReadonlyArray<SupportedScreenShareFrameRate> = [60];
+const STREAM_SETTINGS_PREMIUM_FRAME_RATES: ReadonlyArray<SupportedScreenShareFrameRate> = [60, 120];
 
 export interface StreamSettingsQualityOption<T> {
 	value: T;
@@ -277,6 +278,10 @@ export function selectStreamSettingsQualityMenuState(
 ): StreamSettingsQualityMenuViewState {
 	const offersPremium = signals.quality.entitled || signals.showPremiumFeatures;
 	const selectedResolution = offeredScreenShareResolution(signals.target.resolution);
+	const selectedFrameRate = normaliseScreenShareFrameRateForContext(
+		signals.target.frameRate,
+		signals.quality.context,
+	);
 	const buildOption = <T>(
 		value: T,
 		premium: boolean,
@@ -309,11 +314,12 @@ export function selectStreamSettingsQualityMenuState(
 		),
 		frameRates: SUPPORTED_SCREEN_SHARE_FRAME_RATES.filter(
 			(value) =>
-				value === signals.target.frameRate ||
-				STREAM_SETTINGS_FREE_FRAME_RATES.includes(value) ||
-				(offersPremium && STREAM_SETTINGS_PREMIUM_FRAME_RATES.includes(value)),
+				value === selectedFrameRate ||
+				(normaliseScreenShareFrameRateForContext(value, signals.quality.context) === value &&
+					(STREAM_SETTINGS_FREE_FRAME_RATES.includes(value) ||
+						(offersPremium && STREAM_SETTINGS_PREMIUM_FRAME_RATES.includes(value)))),
 		).map((value) =>
-			buildOption(value, !STREAM_SETTINGS_FREE_FRAME_RATES.includes(value), value === signals.target.frameRate, {
+			buildOption(value, !STREAM_SETTINGS_FREE_FRAME_RATES.includes(value), value === selectedFrameRate, {
 				axis: 'frameRate',
 				frameRate: value,
 			}),

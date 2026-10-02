@@ -121,6 +121,7 @@ vi.mock('@app/features/voice/utils/NativeAudioCaptureBridge', () => ({
 	getLastNativeAudioArmFailure: () => null,
 	getNativeAudioAvailabilityCached: async () => null,
 	getNativeAudioAvailabilitySnapshot: () => null,
+	installDesktopDisplayMediaCapture: () => undefined,
 	reconfigureLinuxNativeAudioRouting: async () => 'unsupported',
 }));
 
@@ -165,6 +166,8 @@ vi.mock('@app/features/ui/commands/ToastCommands', () => ({createToast: () => un
 
 vi.mock('@app/features/voice/commands/VoiceSettingsCommands', () => ({
 	update: (...args: Array<unknown>) => settingsUpdate(...args),
+	setScreenShareMaxBitrateMbps: (value: number | null) =>
+		VoiceSettings.updateSettings({screenShareMaxBitrateMbps: value}),
 }));
 
 vi.mock('@app/features/premium/commands/PremiumModalCommands', () => ({open: () => openPremiumModal()}));
@@ -197,6 +200,33 @@ vi.mock('@app/features/ui/action_menu/ContextMenu', async () => {
 				children,
 			),
 		useContextMenuClose: () => () => undefined,
+	};
+});
+
+vi.mock('@app/features/ui/action_menu/MenuItemSlider', async () => {
+	const React = await import('react');
+	return {
+		MenuItemSlider: ({
+			label,
+			value,
+			minValue,
+			maxValue,
+			onChange,
+		}: {
+			label: string;
+			value: number;
+			minValue: number;
+			maxValue: number;
+			onChange: (value: number) => void;
+		}) =>
+			React.createElement('input', {
+				type: 'range',
+				'aria-label': label,
+				value,
+				min: minValue,
+				max: maxValue,
+				onChange: (event: React.ChangeEvent<HTMLInputElement>) => onChange(Number(event.target.value)),
+			}),
 	};
 });
 
@@ -675,6 +705,93 @@ describe('the screen share wiring', () => {
 		);
 	});
 
+	it('updates an active text share to the 120 FPS motion policy and keeps it after enforcement', async () => {
+		const previousTarget = ensureCommittedScreenShareTarget();
+		vi.spyOn(VoiceSettings, 'getVideoFrameRate').mockReturnValue(120);
+		const nextTarget = resolveConfiguredScreenShareTarget('display', {width: 3840, height: 2160});
+		expect(nextTarget).toMatchObject({contentHint: 'motion', degradationPreference: 'maintain-framerate'});
+		ActiveScreenShareSource.setTarget(nextTarget);
+		expect(ActiveScreenShareSource.getTarget()?.degradationPreference).toBe(previousTarget.degradationPreference);
+
+		const sender = createSender(feed);
+		const {room, track} = createShare(sender.sender);
+		const setDegradationPreference = vi.spyOn(track, 'setDegradationPreference');
+		const {adapter} = createAdapter();
+		const updated = await adapter.updateActiveScreenShareSettings(
+			room,
+			{contentHint: nextTarget.contentHint},
+			{
+				videoCodec: 'h264',
+				degradationPreference: nextTarget.degradationPreference,
+				screenShareEncoding: {
+					maxBitrate: nextTarget.maxBitrate,
+					maxFramerate: nextTarget.frameRate,
+					priority: 'high',
+				},
+			},
+		);
+
+		expect(updated).toBe(true);
+		expect(setDegradationPreference).toHaveBeenCalledWith('maintain-framerate');
+		expect(sender.current().degradationPreference).toBe('maintain-framerate');
+		expect(sender.current().encodings?.[0]?.maxFramerate).toBe(120);
+		expect(ActiveScreenShareSource.getTarget()?.degradationPreference).toBe('maintain-framerate');
+		ActiveScreenShareSource.setTarget(resolveConfiguredScreenShareTarget('display', {width: 3840, height: 2160}));
+		expect(ActiveScreenShareSource.getTarget()?.degradationPreference).toBe('maintain-framerate');
+	});
+
+	it('restores the frozen preference when applying a live preference fails', async () => {
+		const previousTarget = ensureCommittedScreenShareTarget();
+		vi.spyOn(VoiceSettings, 'getVideoFrameRate').mockReturnValue(120);
+		const nextTarget = resolveConfiguredScreenShareTarget('display', {width: 3840, height: 2160});
+		ActiveScreenShareSource.setTarget(nextTarget);
+
+		const sender = createSender(feed);
+		const {room, track} = createShare(sender.sender);
+		vi.spyOn(track, 'setDegradationPreference').mockRejectedValue(new Error('preference update failed'));
+		const {adapter} = createAdapter();
+		await expect(
+			adapter.updateActiveScreenShareSettings(
+				room,
+				{contentHint: nextTarget.contentHint},
+				{
+					degradationPreference: nextTarget.degradationPreference,
+				},
+			),
+		).rejects.toThrow('preference update failed');
+
+		expect(ActiveScreenShareSource.getTarget()?.degradationPreference).toBe(previousTarget.degradationPreference);
+		expect(ActiveScreenShareSource.frozenDegradationPreference).toBe(previousTarget.degradationPreference);
+	});
+
+	it('does not commit the live preference when sender parameter enforcement fails', async () => {
+		const previousTarget = ensureCommittedScreenShareTarget();
+		vi.spyOn(VoiceSettings, 'getVideoFrameRate').mockReturnValue(120);
+		const nextTarget = resolveConfiguredScreenShareTarget('display', {width: 3840, height: 2160});
+		ActiveScreenShareSource.setTarget(nextTarget);
+
+		const sender = createSender(feed);
+		sender.setParameters.mockRejectedValue(new Error('sender parameters rejected'));
+		const {room, track} = createShare(sender.sender);
+		const setDegradationPreference = vi.spyOn(track, 'setDegradationPreference');
+		const {adapter} = createAdapter();
+		const updated = await adapter.updateActiveScreenShareSettings(
+			room,
+			{contentHint: nextTarget.contentHint},
+			{
+				videoCodec: 'h264',
+				degradationPreference: nextTarget.degradationPreference,
+			},
+		);
+
+		expect(updated).toBe(false);
+		expect(sender.setParameters).toHaveBeenCalledTimes(2);
+		expect(setDegradationPreference).toHaveBeenNthCalledWith(1, 'maintain-framerate');
+		expect(setDegradationPreference).toHaveBeenNthCalledWith(2, previousTarget.degradationPreference);
+		expect(ActiveScreenShareSource.getTarget()?.degradationPreference).toBe(previousTarget.degradationPreference);
+		expect(ActiveScreenShareSource.frozenDegradationPreference).toBe(previousTarget.degradationPreference);
+	});
+
 	it('drops a codec the sender cannot encode instead of flooring the order to it', () => {
 		const entry = (supported: boolean) => ({allowed: supported, supported, hardware: false});
 		const {order} = rankScreenShareCodecs({
@@ -865,6 +982,28 @@ describe('the retired H.264 backup stream mode', () => {
 });
 
 describe('the retired screen share settings on boot', () => {
+	it('sets hardware and 60 FPS once and preserves later preferences', () => {
+		const previous = AppStorage.getItem('VoiceSettings');
+		try {
+			AppStorage.setItem('VoiceSettings', JSON.stringify({videoFrameRate: 120, screenShareEncoderModePrefV2: 'auto'}));
+			const migrate = () =>
+				(VoiceSettings as unknown as {migratePersistedSettings: () => void}).migratePersistedSettings();
+			migrate();
+			const stored = JSON.parse(AppStorage.getItem('VoiceSettings') ?? '{}');
+			expect(stored.videoFrameRate).toBe(60);
+			expect(stored.screenShareEncoderModePrefV2).toBe('hardware');
+			stored.videoFrameRate = 120;
+			stored.screenShareEncoderModePrefV2 = 'software';
+			AppStorage.setItem('VoiceSettings', JSON.stringify(stored));
+			migrate();
+			const updated = JSON.parse(AppStorage.getItem('VoiceSettings') ?? '{}');
+			expect(updated.videoFrameRate).toBe(120);
+			expect(updated.screenShareEncoderModePrefV2).toBe('software');
+		} finally {
+			if (previous === null) AppStorage.removeItem('VoiceSettings');
+			else AppStorage.setItem('VoiceSettings', previous);
+		}
+	});
 	it('drops both stored keys when the store migrates its persisted settings', () => {
 		const previous = AppStorage.getItem('VoiceSettings');
 		AppStorage.setItem(
@@ -955,7 +1094,7 @@ describe('the video settings tab', () => {
 			resolution: 'high',
 			frameRate: 30,
 			resolutionOptions: PREMIUM_RESOLUTION_OPTIONS,
-			frameRateOptions: [15, 30, 60],
+			frameRateOptions: [15, 30, 60, 120],
 			preset: 'screenshare',
 			presetOverriddenByContext: false,
 			saved: null,
@@ -982,6 +1121,26 @@ describe('the video settings tab', () => {
 			presetOverriddenByContext: false,
 			saved: null,
 		});
+	});
+
+	it('does not publish an H264 backup for an explicitly selected H265 codec', async () => {
+		vi.spyOn(VoiceSettings, 'getPreferredScreenShareCodec').mockReturnValue('h265');
+		const options = await getEffectivePublishOptions(true, {videoCodec: 'h265'});
+		expect(options?.videoCodec).toBe('h265');
+		expect(options?.backupCodec).toBe(false);
+		expect(options?.backupCodecPolicy).toBeUndefined();
+	});
+
+	it('caps a capture device share at 60 FPS', () => {
+		const state = stateOf({
+			mode: 'custom',
+			storedResolution: 'medium',
+			storedFrameRate: 120,
+			entitled: true,
+			context: 'device',
+		});
+		expect(state.frameRate).toBe(60);
+		expect(state.frameRateOptions).toEqual([15, 30, 60]);
 	});
 
 	it('offers a self-hosted free account nothing it cannot send', () => {
@@ -1212,6 +1371,22 @@ describe('the in-call stream menu', () => {
 		expect(selectedValues(state.frameRates)).toEqual([60]);
 	});
 
+	it('writes 120 FPS for an entitled display or app share', () => {
+		for (const context of ['display', 'app'] as const) {
+			const state = menuStateOf({
+				mode: 'custom',
+				storedResolution: 'medium',
+				storedFrameRate: 30,
+				entitled: true,
+				context,
+			});
+			expect(state.frameRates.find((option) => option.value === 120)?.write).toEqual({
+				kind: 'write',
+				patch: {streamingMode: 'custom', videoFrameRate: 120},
+			});
+		}
+	});
+
 	it('routes every menu pick through the picker', () => {
 		const state = menuStateOf(freeScreenShare);
 		expect(state.resolutions.map((option) => [option.value, option.write])).toEqual([
@@ -1225,6 +1400,7 @@ describe('the in-call stream menu', () => {
 			[15, {kind: 'write', patch: {streamingMode: 'custom', videoFrameRate: 15}}],
 			[30, {kind: 'none'}],
 			[60, {kind: 'premium'}],
+			[120, {kind: 'premium'}],
 		]);
 	});
 
@@ -1234,7 +1410,7 @@ describe('the in-call stream menu', () => {
 			false,
 		);
 		expect(state.resolutions.map((option) => option.value)).toEqual(['low_480p', 'medium', 'high', 'ultra', 'source']);
-		expect(state.frameRates.map((option) => option.value)).toEqual([15, 30, 60]);
+		expect(state.frameRates.map((option) => option.value)).toEqual([15, 30, 60, 120]);
 	});
 
 	it('always offers the value it says the share uses', () => {
@@ -1252,8 +1428,9 @@ describe('the in-call stream menu', () => {
 								expect(`${scenario}|${selectedValues(state.resolutions).join()}`).toBe(
 									`${scenario}|${target.resolution === 'low_240p' ? 'low_480p' : target.resolution}`,
 								);
+								const expectedFrameRate = context === 'device' ? Math.min(target.frameRate, 60) : target.frameRate;
 								expect(`${scenario}|${selectedValues(state.frameRates).join()}`).toBe(
-									`${scenario}|${target.frameRate}`,
+									`${scenario}|${expectedFrameRate}`,
 								);
 							}
 						}
@@ -1291,6 +1468,9 @@ describe('the in-call stream menu', () => {
 				}),
 			);
 		});
+		const bitrateSlider = container.querySelector('input[aria-label="Maximum video bitrate"]');
+		expect(bitrateSlider?.getAttribute('min')).toBe('0');
+		expect(bitrateSlider?.getAttribute('max')).toBe('20');
 		return container;
 	};
 	const radios = (container: HTMLElement, submenu: string) =>
@@ -1344,6 +1524,19 @@ describe('the in-call stream menu', () => {
 		]);
 	});
 
+	it('writes a selected 120 FPS display share setting', async () => {
+		const container = await renderStreamMenu({
+			variant: 'full',
+			shareContext: 'display',
+			mode: 'custom',
+			storedResolution: 'medium',
+			storedFrameRate: 30,
+			entitled: true,
+		});
+		await pick(container, 'Frame rate', '120 FPS');
+		expect(settingsUpdate).toHaveBeenCalledWith({streamingMode: 'custom', videoFrameRate: 120});
+	});
+
 	it('lands a stored 90 FPS preference on the fastest rate it can send', async () => {
 		const container = await renderStreamMenu({
 			variant: 'full',
@@ -1357,6 +1550,7 @@ describe('the in-call stream menu', () => {
 			{label: '15 FPS', selected: false},
 			{label: '30 FPS', selected: false},
 			{label: '60 FPS', selected: true},
+			{label: '120 FPS', selected: false},
 		]);
 	});
 
@@ -1392,6 +1586,7 @@ describe('the in-call stream menu', () => {
 			{label: '15 FPS', selected: false},
 			{label: '30 FPS', selected: true},
 			{label: '60 FPS', selected: false},
+			{label: '120 FPS', selected: false},
 			{label: '480p', selected: false},
 			{label: '720p', selected: true},
 			{label: '1080p', selected: false},
@@ -1596,7 +1791,9 @@ describe('the configured display screen share start flow', () => {
 	});
 });
 
-const {pushActiveStreamSettings} = await import('@app/features/voice/components/StreamSettingsMenuContent');
+const {pushActiveStreamSettings, applyScreenShareBitrate} = await import(
+	'@app/features/voice/components/StreamSettingsMenuContent'
+);
 
 describe('a live settings push', () => {
 	const engine = MediaEngine as unknown as {
@@ -1622,6 +1819,30 @@ describe('a live settings push', () => {
 	afterEach(() => {
 		vi.restoreAllMocks();
 		ActiveScreenShareSource.clear();
+	});
+
+	it('applies a user bitrate above the old 12 Mbps ceiling and restores on rejection', async () => {
+		const previous = VoiceSettings.getScreenShareMaxBitrateMbps();
+		try {
+			engine.startDeviceScreenShare = vi.fn(async () => undefined);
+			engine.updateActiveScreenShareSettings = vi.fn(async () => true);
+			await startConfiguredDeviceScreenShare('camera-1');
+			expect(await applyScreenShareBitrate(20, true, 'device', 'desktop-custom')).toBe(true);
+			expect(VoiceSettings.getScreenShareMaxBitrateMbps()).toBe(20);
+			expect(engine.updateActiveScreenShareSettings.mock.calls.at(-1)?.[1].screenShareEncoding.maxBitrate).toBe(
+				20_000_000,
+			);
+			const before = ActiveScreenShareSource.getTarget();
+			engine.updateActiveScreenShareSettings.mockResolvedValueOnce(false).mockResolvedValue(true);
+			expect(await applyScreenShareBitrate(16, true, 'device', 'desktop-custom')).toBe(false);
+			expect(VoiceSettings.getScreenShareMaxBitrateMbps()).toBe(20);
+			expect(engine.updateActiveScreenShareSettings.mock.calls.at(-1)?.[1].screenShareEncoding.maxBitrate).toBe(
+				20_000_000,
+			);
+			expect(ActiveScreenShareSource.getTarget()).toEqual(before);
+		} finally {
+			VoiceSettings.updateSettings({screenShareMaxBitrateMbps: previous});
+		}
 	});
 
 	it('puts the committed target back when the live share refuses the push', async () => {
@@ -1825,5 +2046,25 @@ describe('the device share audio input', () => {
 			kind: 'message',
 			descriptor: DEVICE_AUDIO_ONLY_DESCRIPTOR,
 		});
+	});
+});
+
+describe('screen share bitrate preference', () => {
+	it('validates, retains and resets the persisted bitrate preference', () => {
+		const previous = VoiceSettings.getScreenShareMaxBitrateMbps();
+		try {
+			VoiceSettings.updateSettings({screenShareMaxBitrateMbps: 20});
+			expect(VoiceSettings.getScreenShareMaxBitrateMbps()).toBe(20);
+			VoiceSettings.updateSettings({screenShareMaxBitrateMbps: 50});
+			expect(VoiceSettings.getScreenShareMaxBitrateMbps()).toBe(20);
+			VoiceSettings.updateSettings({screenShareMaxBitrateMbps: null});
+			expect(VoiceSettings.getScreenShareMaxBitrateMbps()).toBeNull();
+			for (const value of [0, 12.5, Number.NaN]) {
+				VoiceSettings.updateSettings({screenShareMaxBitrateMbps: value});
+				expect(VoiceSettings.getScreenShareMaxBitrateMbps()).toBeNull();
+			}
+		} finally {
+			VoiceSettings.updateSettings({screenShareMaxBitrateMbps: previous});
+		}
 	});
 });

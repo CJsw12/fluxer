@@ -82,6 +82,22 @@ class ActiveScreenShareSource {
 		this.encoding = false;
 	}
 
+	updateTargetDegradationPreference(
+		degradationPreference: NonNullable<TrackPublishOptions['degradationPreference']>,
+	): void {
+		if (this.target === null) return;
+		this.target = {...this.target, degradationPreference};
+	}
+
+	commitTargetDegradationPreference(
+		degradationPreference: NonNullable<TrackPublishOptions['degradationPreference']>,
+	): void {
+		this.updateTargetDegradationPreference(degradationPreference);
+		if (this.target?.delivery === true) {
+			this.frozenDegradationPreference = degradationPreference;
+		}
+	}
+
 	setEncoding(encoding: boolean): void {
 		this.encoding = encoding;
 	}

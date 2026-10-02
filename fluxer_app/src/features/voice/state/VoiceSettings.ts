@@ -48,7 +48,7 @@ const logger = new Logger('VoiceSettings');
 const MAX_VOICE_PROCESSING_DEVICE_OVERRIDES = 16;
 const VIDEO_FRAME_RATE_MIN = 15;
 const VIDEO_FRAME_RATE_MAX = 120;
-const VIDEO_FRAME_RATE_DEFAULT = 30;
+const VIDEO_FRAME_RATE_DEFAULT = 60;
 const DEFAULT_BROWSER_NOISE_SUPPRESSION = true;
 const DEFAULT_DEEP_FILTER_NOISE_SUPPRESSION = false;
 const FREE_VIDEO_FRAME_RATE_MAX = 30;
@@ -58,7 +58,7 @@ export const CAMERA_EFFECT_STRENGTH_MIN = 0;
 export const CAMERA_EFFECT_STRENGTH_MAX = 100;
 export const CAMERA_EFFECT_STRENGTH_DEFAULT = 50;
 export const DEFAULT_SCREEN_SHARE_CONTENT_HINT: ScreenShareContentHint = 'text';
-export const DEFAULT_SCREEN_SHARE_ENCODER_MODE: ScreenShareEncoderMode = 'auto';
+export const DEFAULT_SCREEN_SHARE_ENCODER_MODE: ScreenShareEncoderMode = 'hardware';
 export const DEFAULT_SCREEN_SHARE_SCALABILITY_MODE: ScreenShareScalabilityModePreference = 'auto';
 
 type VoiceSettingsUpdate = Partial<{
@@ -101,6 +101,7 @@ type VoiceSettingsUpdate = Partial<{
 	preferredScreenShareCodec: CodecPreference;
 	screenShareAv1OptIn: boolean;
 	screenShareHevcOptIn: boolean;
+	screenShareMaxBitrateMbps: number | null;
 	screenShareContentHint: ScreenShareContentHint;
 	screenShareEncoderMode: ScreenShareEncoderMode;
 	screenShareScalabilityMode: ScreenShareScalabilityModePreference;
@@ -132,6 +133,10 @@ function parseVoiceSettingsStorage(raw: string | null): Record<string, unknown> 
 	}
 	const parsed: unknown = JSON.parse(raw);
 	return isRecord(parsed) ? parsed : {};
+}
+
+function normalizeScreenShareMaxBitrateMbps(value: unknown): number | null {
+	return typeof value === 'number' && Number.isInteger(value) && value >= 1 ? Math.min(value, 20) : null;
 }
 
 function isVoiceBackgroundMediaKind(value: unknown): value is VoiceBackgroundMediaKind {
@@ -367,6 +372,15 @@ function applyVideoQualityNormalisationMigration(parsed: Record<string, unknown>
 	return changed;
 }
 
+function applyScreenShareMaxBitrateMigration(parsed: Record<string, unknown>): boolean {
+	const value = parsed.screenShareMaxBitrateMbpsPrefV2;
+	if (value === undefined) return false;
+	const normalized = normalizeScreenShareMaxBitrateMbps(value);
+	if (normalized === value) return false;
+	parsed.screenShareMaxBitrateMbpsPrefV2 = normalized;
+	return true;
+}
+
 function applyNoiseSuppressionStandardDefaultMigrationV1(parsed: Record<string, unknown>): boolean {
 	if (parsed.noiseSuppressionStandardDefaultMigratedV1 === true) {
 		return false;
@@ -415,7 +429,8 @@ class VoiceSettings {
 	cameraResolution: CameraResolution = 'medium';
 	mirrorCamera = true;
 	screenshareResolution: ScreenshareResolution = 'medium';
-	videoFrameRate = 30;
+	videoFrameRate = VIDEO_FRAME_RATE_DEFAULT;
+	screenShareCaptureDefaultsMigratedV1 = false;
 	streamingMode: StreamingMode = 'screenshare';
 	streamingModeDefaultMigratedV1 = false;
 	screenShareFrameRateFloorMigratedV1 = false;
@@ -444,9 +459,11 @@ class VoiceSettings {
 	preferredVideoCodec: CodecPreference = 'auto';
 	preferredScreenShareCodec: CodecPreference = 'auto';
 	screenShareAv1OptIn = false;
-	screenShareHevcOptIn = false;
+	screenShareHevcAutoDefaultMigratedV1 = false;
+	screenShareHevcOptIn = true;
 	screenShareAv1OptOutMigratedV1 = false;
 	screenShareHevcOptOutMigratedV1 = false;
+	screenShareMaxBitrateMbpsPrefV2: number | null = null;
 	screenShareContentHintPrefV2: ScreenShareContentHint = DEFAULT_SCREEN_SHARE_CONTENT_HINT;
 	screenShareContentHintDefaultMigratedV1 = false;
 	screenShareSoftwareQualityRetiredV1 = false;
@@ -517,6 +534,7 @@ class VoiceSettings {
 				getPreferredScreenShareCodec: false,
 				getScreenShareAv1OptIn: false,
 				getScreenShareHevcOptIn: false,
+				getScreenShareMaxBitrateMbps: false,
 				getScreenShareContentHint: false,
 				getScreenShareContentHintOverride: false,
 				getScreenShareEncoderMode: false,
@@ -569,10 +587,24 @@ class VoiceSettings {
 			changed = applyOutputVolumeRecalibrationMigrationV1(parsed) || changed;
 			changed = applyNoiseSuppressionStandardDefaultMigrationV1(parsed) || changed;
 			changed = applyVideoQualityNormalisationMigration(parsed) || changed;
+			changed = applyScreenShareMaxBitrateMigration(parsed) || changed;
 			changed = applyScreenShareAv1OptOutMigrationV1(parsed) || changed;
 			changed = applyScreenShareHevcOptOutMigrationV1(parsed) || changed;
+			if (parsed.screenShareHevcAutoDefaultMigratedV1 !== true) {
+				parsed.preferredScreenShareCodec = 'auto';
+				parsed.screenShareHevcOptIn = true;
+				parsed.screenShareHevcAutoDefaultMigratedV1 = true;
+				changed = true;
+			}
 			changed = applyScreenShareSoftwareQualityRetiredMigrationV1(parsed) || changed;
 			changed = applyScreenShareBackupCodecModeRetiredMigrationV1(parsed) || changed;
+			if (parsed.screenShareCaptureDefaultsMigratedV1 !== true) {
+				parsed.videoFrameRate = VIDEO_FRAME_RATE_DEFAULT;
+				parsed.streamingMode = 'custom';
+				parsed.screenShareEncoderModePrefV2 = DEFAULT_SCREEN_SHARE_ENCODER_MODE;
+				parsed.screenShareCaptureDefaultsMigratedV1 = true;
+				changed = true;
+			}
 			if (changed) {
 				AppStorage.setItem('VoiceSettings', JSON.stringify(parsed));
 			}
@@ -607,6 +639,7 @@ class VoiceSettings {
 			'mirrorCamera',
 			'screenshareResolution',
 			'videoFrameRate',
+			'screenShareCaptureDefaultsMigratedV1',
 			'streamingMode',
 			'streamingModeDefaultMigratedV1',
 			'screenShareFrameRateFloorMigratedV1',
@@ -632,9 +665,11 @@ class VoiceSettings {
 			'pauseOwnScreenSharePreviewOnUnfocusPrefV2',
 			'disablePictureInPicturePopoutScreenShare',
 			'preferredVideoCodec',
+			'screenShareMaxBitrateMbpsPrefV2',
 			'preferredScreenShareCodec',
 			'screenShareAv1OptIn',
 			'screenShareHevcOptIn',
+			'screenShareHevcAutoDefaultMigratedV1',
 			'screenShareAv1OptOutMigratedV1',
 			'screenShareHevcOptOutMigratedV1',
 			'screenShareContentHintPrefV2',
@@ -953,6 +988,10 @@ class VoiceSettings {
 		return this.screenShareHevcOptIn;
 	}
 
+	getScreenShareMaxBitrateMbps(): number | null {
+		return normalizeScreenShareMaxBitrateMbps(this.screenShareMaxBitrateMbpsPrefV2);
+	}
+
 	getScreenShareContentHint(): ScreenShareContentHint {
 		return this.screenShareContentHint;
 	}
@@ -1116,6 +1155,8 @@ class VoiceSettings {
 			this.preferredScreenShareCodec = validated.preferredScreenShareCodec;
 		if (validated.screenShareAv1OptIn !== undefined) this.screenShareAv1OptIn = validated.screenShareAv1OptIn;
 		if (validated.screenShareHevcOptIn !== undefined) this.screenShareHevcOptIn = validated.screenShareHevcOptIn;
+		if (validated.screenShareMaxBitrateMbps !== undefined)
+			this.screenShareMaxBitrateMbpsPrefV2 = validated.screenShareMaxBitrateMbps;
 		if (validated.screenShareContentHint !== undefined) this.screenShareContentHint = validated.screenShareContentHint;
 		if (validated.screenShareEncoderMode !== undefined) this.screenShareEncoderMode = validated.screenShareEncoderMode;
 		if (validated.screenShareScalabilityMode !== undefined)
@@ -1244,6 +1285,10 @@ class VoiceSettings {
 			),
 			screenShareAv1OptIn,
 			screenShareHevcOptIn,
+			screenShareMaxBitrateMbps:
+				data.screenShareMaxBitrateMbps === undefined
+					? this.getScreenShareMaxBitrateMbps()
+					: normalizeScreenShareMaxBitrateMbps(data.screenShareMaxBitrateMbps),
 			screenShareContentHint: validateScreenShareContentHint(
 				data.screenShareContentHint ?? this.screenShareContentHint,
 			),

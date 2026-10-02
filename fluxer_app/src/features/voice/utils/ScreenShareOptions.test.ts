@@ -5,6 +5,7 @@ import {
 	getScreenShareBitrateBps,
 	resolveScreenShareDegradationPreference,
 	resolveScreenShareFrameRate,
+	resolveScreenShareQualityPick,
 	resolveScreenShareLayering,
 	resolveScreenShareTarget,
 } from '@app/features/voice/utils/ScreenShareOptions';
@@ -95,12 +96,116 @@ describe('the screen share delivery experiment', () => {
 		expect(resolveScreenShareFrameRate(60)).toBe(60);
 	});
 
-	it('moves the preset to 1080p30 and lands the faster rungs on 60 FPS on the experiment', () => {
+	it('moves the preset to 1080p30 and keeps 120 FPS available on the experiment', () => {
 		rollout.enabled = true;
 		expect(targetOf()).toMatchObject({resolution: 'high', frameRate: 30});
-		expect(resolveScreenShareFrameRate(120)).toBe(60);
+		expect(resolveScreenShareFrameRate(120)).toBe(120);
 		expect(resolveScreenShareFrameRate(90)).toBe(60);
 		expect(resolveScreenShareFrameRate(60)).toBe(60);
+	});
+
+	it('caps device shares at 60 FPS while display and app shares keep 120 FPS', () => {
+		for (const context of ['device', 'display', 'app'] as const) {
+			const target = resolveScreenShareTarget({
+				mode: 'custom',
+				storedResolution: 'medium',
+				storedFrameRate: 120,
+				entitled: true,
+				context,
+				sourceDimensions: null,
+				hintSetting: 'auto',
+				delivery: true,
+			});
+			const expectedFrameRate = context === 'device' ? 60 : 120;
+			const options = buildScreenShareOptions({
+				resolution: target.resolution,
+				frameRate: target.frameRate,
+				context,
+				includeAudio: false,
+				contentHint: target.contentHint,
+				delivery: true,
+			});
+
+			expect(target.frameRate).toBe(expectedFrameRate);
+			expect(options.captureOptions.resolution?.frameRate).toBe(expectedFrameRate);
+			expect(options.publishOptions.screenShareEncoding?.maxFramerate).toBe(expectedFrameRate);
+		}
+	});
+
+	it('uses motion and frame-rate priority for 90+ FPS display and app shares despite inherited text hints', () => {
+		rollout.enabled = true;
+		for (const context of ['display', 'app'] as const) {
+			for (const resolution of ['source', 'high'] as const) {
+				const target = resolveScreenShareTarget({
+					mode: 'custom',
+					storedResolution: resolution,
+					storedFrameRate: 120,
+					entitled: true,
+					context,
+					sourceDimensions: null,
+					hintSetting: 'text',
+					delivery: true,
+				});
+				const options = buildScreenShareOptions({
+					resolution: target.resolution,
+					frameRate: target.frameRate,
+					context,
+					includeAudio: false,
+					contentHint: 'text',
+					delivery: true,
+				});
+
+				expect(target).toMatchObject({
+					frameRate: 120,
+					contentHint: 'motion',
+					degradationPreference: 'maintain-framerate',
+				});
+				expect(options.captureOptions.contentHint).toBe('motion');
+				expect(options.publishOptions.degradationPreference).toBe('maintain-framerate');
+			}
+		}
+	});
+
+	it('keeps text-detail behavior at 60 FPS and honors an explicit published degradation preference', () => {
+		rollout.enabled = true;
+		const target = resolveScreenShareTarget({
+			mode: 'custom',
+			storedResolution: 'high',
+			storedFrameRate: 60,
+			entitled: true,
+			context: 'display',
+			sourceDimensions: null,
+			hintSetting: 'text',
+			delivery: true,
+		});
+		expect(target).toMatchObject({frameRate: 60, contentHint: 'text', degradationPreference: 'maintain-resolution'});
+		const options = buildScreenShareOptions({
+			resolution: 'high',
+			frameRate: 120,
+			context: 'display',
+			includeAudio: false,
+			contentHint: 'text',
+			degradationPreference: 'maintain-resolution',
+			delivery: true,
+		});
+		expect(options.captureOptions.contentHint).toBe('motion');
+		expect(options.publishOptions.degradationPreference).toBe('maintain-resolution');
+	});
+
+	it('does not accept a 120 FPS pick for a capture device', () => {
+		expect(
+			resolveScreenShareQualityPick(
+				{
+					mode: 'custom',
+					storedResolution: 'medium',
+					storedFrameRate: 60,
+					entitled: true,
+					context: 'device',
+					delivery: true,
+				},
+				{axis: 'frameRate', frameRate: 120},
+			),
+		).toBeNull();
 	});
 
 	it('reads the rung table off the experiment and the pixel budget on it', () => {
@@ -109,7 +214,7 @@ describe('the screen share delivery experiment', () => {
 		expect(getScreenShareBitrateBps('source', 60)).toBe(9_000_000);
 	});
 
-	it('publishes the stored frame rate and the rung bitrate off the experiment', () => {
+	it('publishes the stored frame rate and uses frame-rate priority for high FPS off the experiment', () => {
 		const {publishOptions} = buildScreenShareOptions({
 			resolution: 'source',
 			frameRate: 90,
@@ -118,11 +223,50 @@ describe('the screen share delivery experiment', () => {
 			sourceDimensions: {width: 3840, height: 2160},
 		});
 		expect(publishOptions.screenShareEncoding).toEqual({
-			maxBitrate: 6_000_000,
+			maxBitrate: 9_000_000,
 			maxFramerate: 90,
 			priority: 'high',
 		});
-		expect(publishOptions.degradationPreference).toBe('maintain-resolution');
+		expect(publishOptions.degradationPreference).toBe('maintain-framerate');
+	});
+
+	it('allows 12 Mbps for 1080p120 in both delivery modes', () => {
+		for (const delivery of [false, true]) {
+			expect(getScreenShareBitrateBps('high', 120, null, delivery)).toBe(12_000_000);
+		}
+	});
+
+	it('applies a user bitrate limit to targets and publish options', () => {
+		for (const delivery of [false, true]) {
+			expect(getScreenShareBitrateBps('high', 120, null, delivery, 20)).toBe(20_000_000);
+			const target = resolveScreenShareTarget({
+				mode: 'custom',
+				storedResolution: 'high',
+				storedFrameRate: 120,
+				entitled: true,
+				context: 'display',
+				sourceDimensions: null,
+				hintSetting: 'motion',
+				delivery,
+				maxBitrateMbps: 20,
+			});
+			expect(target.maxBitrate).toBe(20_000_000);
+			const options = buildScreenShareOptions({
+				resolution: 'high',
+				frameRate: 120,
+				context: 'display',
+				includeAudio: false,
+				delivery,
+				maxBitrateMbps: 20,
+			});
+			expect(options.publishOptions.screenShareEncoding?.maxBitrate).toBe(20_000_000);
+		}
+	});
+
+	it('uses the preset budget for invalid or automatic bitrate settings', () => {
+		for (const value of [null, NaN, Infinity, 0, -1, 12.5]) {
+			expect(getScreenShareBitrateBps('high', 120, null, false, value)).toBe(12_000_000);
+		}
 	});
 
 	it('holds the motion hint for every surface off the experiment and only for a camera on it', () => {
@@ -185,4 +329,8 @@ describe('screen share degradation preference', () => {
 			}),
 		).toBe('maintain-framerate');
 	});
+});
+
+it('caps a stored bitrate above the slider maximum at 20 Mbps', () => {
+	expect(getScreenShareBitrateBps('high', 120, null, false, 50)).toBe(20_000_000);
 });

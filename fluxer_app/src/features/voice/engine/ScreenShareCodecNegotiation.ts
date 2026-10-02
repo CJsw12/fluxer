@@ -105,6 +105,7 @@ type ScreenShareCodecNegotiationMachineEvent =
 			reason: NegotiationReason;
 			codecPreference: ReadonlyArray<VideoCodec>;
 			publishedCodec: VideoCodec | null;
+			requestedCodec?: VideoCodec | null;
 	  }
 	| {type: 'negotiation.reset'};
 
@@ -173,10 +174,13 @@ function evaluateScreenShareCodecNegotiation(
 		event.remoteCodecs,
 		event.unknownParticipants,
 		event.codecPreference,
+		event.requestedCodec,
 	);
 	const publishedCodec = event.publishedCodec;
 	const codec =
-		publishedCodec !== null && isScreenShareCodecUpgrade(event.codecPreference, publishedCodec, negotiated.codec)
+		!event.requestedCodec &&
+		publishedCodec !== null &&
+		isScreenShareCodecUpgrade(event.codecPreference, publishedCodec, negotiated.codec)
 			? publishedCodec
 			: negotiated.codec;
 	return {
@@ -442,6 +446,7 @@ class ScreenShareCodecNegotiation {
 			knownRemoteCodecs,
 			unknownParticipants,
 			this.resolveCodecPreferenceOrder(preference),
+			preference === 'auto' ? null : preference,
 		);
 		if (getEncodeSet(this.localCodecs).has(negotiated.codec)) return negotiated.codec;
 		return selector(preference);
@@ -750,6 +755,11 @@ class ScreenShareCodecNegotiation {
 		this.scheduleGraceReevaluations(room, bindingRevision);
 		const previousCodec = this.selectedCodec;
 		const delivery = this.resolveScreenShareDelivery(room);
+		const preference = VoiceSettings.getPreferredScreenShareCodec();
+		if (preference !== 'auto' && !this.canLocalEncode(preference)) {
+			logger.warn('Selected screen share codec is unavailable for local encoding', {codec: preference});
+			return null;
+		}
 		this.negotiationSnapshot = transitionScreenShareCodecNegotiationSnapshot(this.negotiationSnapshot, {
 			type: 'negotiation.evaluate',
 			localCodecs: this.localCodecs,
@@ -758,6 +768,7 @@ class ScreenShareCodecNegotiation {
 			reason,
 			codecPreference: this.resolveCodecPreferenceOrder(),
 			publishedCodec: delivery ? this.observePublishedScreenShareCodec(room) : null,
+			requestedCodec: preference === 'auto' ? null : preference,
 		});
 		const selection = this.negotiationSnapshot.context.selection;
 		if (!selection) return null;

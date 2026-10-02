@@ -6,6 +6,7 @@ import {shouldShowPremiumFeatures} from '@app/features/premium/utils/PremiumUtil
 import {remFromPx} from '@app/features/theme/layout/RemFromPx';
 import {CheckboxItem, MenuGroupLabel} from '@app/features/ui/action_menu/ContextMenu';
 import {MenuGroup} from '@app/features/ui/action_menu/MenuGroup';
+import {MenuItemSlider} from '@app/features/ui/action_menu/MenuItemSlider';
 import {MenuItemRadio} from '@app/features/ui/action_menu/MenuItemRadio';
 import {MenuItemSubmenu} from '@app/features/ui/action_menu/MenuItemSubmenu';
 import {getElectronAPI, supportsDesktopScreenShareAudioCapture} from '@app/features/ui/utils/NativeUtils';
@@ -318,6 +319,38 @@ export async function pushActiveStreamSettings(
 	});
 }
 
+export async function applyScreenShareBitrate(
+	value: number | null,
+	applyToLiveStream: boolean,
+	shareContext: StreamSettingsShareContext,
+	displayShareEnvironment: DisplayShareEnvironment,
+): Promise<boolean> {
+	return scheduleConfiguredScreenShareMutation(async () => {
+		const previous = VoiceSettings.getScreenShareMaxBitrateMbps();
+		const previousTarget = ActiveScreenShareSource.getTarget();
+		VoiceSettingsCommands.setScreenShareMaxBitrateMbps(value);
+		if (!applyToLiveStream) return true;
+		try {
+			if (await runActiveStreamSettingsPush(shareContext, displayShareEnvironment, {})) return true;
+		} catch (error) {
+			logger.warn('Failed to apply screen-share bitrate', error);
+		}
+		VoiceSettingsCommands.setScreenShareMaxBitrateMbps(previous);
+		if (previousTarget) ActiveScreenShareSource.setTarget(previousTarget);
+		// A rejected update may still have touched the sender during its cleanup retry.
+		try {
+			if (!(await runActiveStreamSettingsPush(shareContext, displayShareEnvironment, {}))) {
+				logger.warn('Could not restore the previous live screen-share bitrate');
+			}
+		} catch (error) {
+			logger.warn('Could not restore the previous live screen-share bitrate', error);
+		} finally {
+			if (previousTarget) ActiveScreenShareSource.setTarget(previousTarget);
+		}
+		return false;
+	});
+}
+
 interface StreamSettingsMenuContentProps {
 	applyToLiveStream?: boolean;
 	shareContext?: StreamSettingsShareContext;
@@ -355,6 +388,7 @@ export const StreamSettingsMenuContent = observer(
 			...quality,
 			sourceDimensions: null,
 			hintSetting: VoiceSettings.getScreenShareContentHint(),
+			maxBitrateMbps: VoiceSettings.getScreenShareMaxBitrateMbps(),
 		});
 		const presetOverriddenByContext = selectStreamSettingsPresetOverriddenByContext(currentMode, shareContext);
 		const captureAudioEnabled = isAppShare
@@ -545,6 +579,30 @@ export const StreamSettingsMenuContent = observer(
 		const selectedAudioDeviceLabel = selectedAudioDevice
 			? formatVoiceAudioDeviceLabel(i18n, selectedAudioDevice, i18n._(UNNAMED_INPUT_DESCRIPTOR))
 			: i18n._(SYSTEM_DEFAULT_DESCRIPTOR);
+		const bitrateMenu = (
+			<MenuItemSlider
+				label={i18n._(msg({message: 'Maximum video bitrate'}))}
+				value={VoiceSettings.getScreenShareMaxBitrateMbps() ?? 0}
+				minValue={0}
+				maxValue={20}
+				factoryDefaultValue={0}
+				step={1}
+				onFormat={(value) => (value === 0 ? i18n._(msg({message: 'Automatic'})) : `${value} Mbps`)}
+				onValueCommit={async (value) => {
+					let applied = false;
+					await executeScreenShareOperation(async () => {
+						applied = await applyScreenShareBitrate(
+							value === 0 ? null : value,
+							applyToLiveStream,
+							shareContext,
+							displayShareEnvironment,
+						);
+						if (!applied) throw new Error('Could not apply screen-share bitrate');
+					}).catch(handleScreenShareError);
+					return applied;
+				}}
+			/>
+		);
 		if (variant === 'compactLive') {
 			return (
 				<>
@@ -624,6 +682,7 @@ export const StreamSettingsMenuContent = observer(
 						)}
 						data-flx="voice.stream-settings-menu-content.compact-live.quality-submenu"
 					/>
+					{bitrateMenu}
 					<StreamSettingsAudioGroup
 						audioMenuState={audioMenuState}
 						shareContext={shareContext}
@@ -643,6 +702,7 @@ export const StreamSettingsMenuContent = observer(
 		}
 		return (
 			<>
+				{bitrateMenu}
 				<MenuGroup data-flx="voice.stream-settings-menu-content.menu-group">
 					<MenuGroupLabel data-flx="voice.stream-settings-menu-content.menu-group-label.streaming-mode">
 						{i18n._(STREAMING_MODE_DESCRIPTOR)}

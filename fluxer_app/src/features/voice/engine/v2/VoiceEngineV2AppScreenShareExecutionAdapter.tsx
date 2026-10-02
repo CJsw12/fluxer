@@ -1195,15 +1195,44 @@ class VoiceEngineV2AppScreenShareExecutionAdapter extends Store {
 		if (options && Object.hasOwn(options, 'contentHint')) {
 			screenShareTrack.mediaStreamTrack.contentHint = options.contentHint ?? '';
 		}
-		await screenShareTrack.setDegradationPreference(
-			resolveScreenShareDegradationPreference(ensureCommittedScreenShareTarget()),
-		);
-		await this.enforceScreenShareSenderParametersInternal(participant, publishOptions);
-		this.ensureScreenShareKeepAliveSinkInternal(participant);
-		updateLocalParticipantFromRoom(room);
-		this.syncLocalScreenShareAudioStateInternal(participant, participant.isScreenShareEnabled);
-		if (!this.screenShareDeliveryArmed) return true;
-		return geometryUpdate !== 'needs-capture-restart' && geometryUpdate !== 'failed';
+		const committedTarget = ensureCommittedScreenShareTarget();
+		const requestedDegradationPreference = publishOptions?.degradationPreference;
+		const degradationPreference =
+			requestedDegradationPreference ?? resolveScreenShareDegradationPreference(committedTarget);
+		if (requestedDegradationPreference !== undefined) {
+			ActiveScreenShareSource.updateTargetDegradationPreference(requestedDegradationPreference);
+		}
+		let updateSucceeded = false;
+		let degradationPreferenceApplied = false;
+		try {
+			await screenShareTrack.setDegradationPreference(degradationPreference);
+			degradationPreferenceApplied = true;
+			const senderParametersApplied = await this.enforceScreenShareSenderParametersInternal(participant, publishOptions);
+			this.ensureScreenShareKeepAliveSinkInternal(participant);
+			updateLocalParticipantFromRoom(room);
+			this.syncLocalScreenShareAudioStateInternal(participant, participant.isScreenShareEnabled);
+			updateSucceeded =
+				(publishOptions === undefined || senderParametersApplied) &&
+				(!this.screenShareDeliveryArmed ||
+					(geometryUpdate !== 'needs-capture-restart' && geometryUpdate !== 'failed'));
+			return updateSucceeded;
+		} finally {
+			if (requestedDegradationPreference !== undefined) {
+				if (updateSucceeded) {
+					ActiveScreenShareSource.commitTargetDegradationPreference(requestedDegradationPreference);
+				} else {
+					ActiveScreenShareSource.updateTargetDegradationPreference(committedTarget.degradationPreference);
+					if (degradationPreferenceApplied) {
+						try {
+							await screenShareTrack.setDegradationPreference(committedTarget.degradationPreference);
+							await this.enforceScreenShareSenderParametersInternal(participant, publishOptions);
+						} catch (error) {
+							logger.warn('Failed to restore screen share degradation preference after a settings update', {error});
+						}
+					}
+				}
+			}
+		}
 	}
 
 	setScreenShareAudioMuted(room: Room | null, muted: boolean): void {

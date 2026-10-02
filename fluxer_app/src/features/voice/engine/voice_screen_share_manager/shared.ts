@@ -195,8 +195,11 @@ export async function releaseScreenShareCaptureCleanup(snapshot: ScreenShareCapt
 	}
 }
 
-function clampScreenShareEncoding(encoding: VideoEncoding, delivery: boolean): VideoEncoding {
-	const ceiling = delivery ? SCREEN_SHARE_DELIVERY_MAX_VIDEO_BITRATE_BPS : SCREEN_SHARE_MAX_VIDEO_BITRATE_BPS;
+function clampScreenShareEncoding(encoding: VideoEncoding, target: ScreenShareTarget): VideoEncoding {
+	const ceiling = Math.max(
+		target.maxBitrate,
+		target.delivery ? SCREEN_SHARE_DELIVERY_MAX_VIDEO_BITRATE_BPS : SCREEN_SHARE_MAX_VIDEO_BITRATE_BPS,
+	);
 	return {
 		...encoding,
 		maxBitrate: typeof encoding.maxBitrate === 'number' ? Math.min(encoding.maxBitrate, ceiling) : encoding.maxBitrate,
@@ -225,6 +228,7 @@ export function resolveConfiguredScreenShareTarget(
 		context,
 		sourceDimensions,
 		hintSetting: VoiceSettings.getScreenShareContentHint(),
+		maxBitrateMbps: VoiceSettings.getScreenShareMaxBitrateMbps(),
 		delivery,
 		...(delivery
 			? {
@@ -270,7 +274,7 @@ export function getStatsKind(
 
 function resolveScreenShareEncoding(target: ScreenShareTarget, publishOptions?: TrackPublishOptions): VideoEncoding {
 	if (publishOptions?.screenShareEncoding) {
-		return clampScreenShareEncoding(publishOptions.screenShareEncoding, target.delivery === true);
+		return clampScreenShareEncoding(publishOptions.screenShareEncoding, target);
 	}
 	return {maxBitrate: target.maxBitrate, maxFramerate: target.frameRate, priority: 'high'};
 }
@@ -338,9 +342,13 @@ export async function getEffectivePublishOptions(
 	const target = recommitClampedScreenShareTarget(committed);
 	const policy = resolveVideoPublishCodecPolicy(publishOptions?.videoCodec ?? getPreferredScreenShareCodec());
 	const preferredVideoCodec = policy.primary;
-	const backupCodec = resolveBackupCodecWithinPolicy(publishOptions?.backupCodec, policy);
-	const backupCodecPolicy =
-		publishOptions?.backupCodecPolicy ?? (backupCodec ? BackupCodecPolicy.SIMULCAST : undefined);
+	const backupCodec =
+		VoiceSettings.getPreferredScreenShareCodec() === 'auto'
+			? resolveBackupCodecWithinPolicy(publishOptions?.backupCodec, policy)
+			: false;
+	const backupCodecPolicy = backupCodec
+		? (publishOptions?.backupCodecPolicy ?? BackupCodecPolicy.SIMULCAST)
+		: undefined;
 	const layering = getScreenShareLayeringForCodec(preferredVideoCodec);
 	if (target.softwareEncoderClamped && VoiceSettings.getScreenShareEncoderMode() !== 'software') {
 		logger.warn('Screen share target clamped to the software H.264 budget', {
@@ -358,7 +366,7 @@ export async function getEffectivePublishOptions(
 		simulcast: layering.simulcast,
 		scalabilityMode: layering.scalabilityMode,
 		backupCodec,
-		...(backupCodecPolicy !== undefined ? {backupCodecPolicy} : {}),
+		backupCodecPolicy,
 	};
 }
 

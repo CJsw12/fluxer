@@ -15,12 +15,28 @@ interface MenuItemSliderProps {
 	maxValue?: number;
 	disabled?: boolean;
 	onChange?: (value: number) => void;
+	onValueCommit?: (value: number) => Promise<boolean>;
 	onFormat?: (value: number) => string;
 	step?: number;
+	factoryDefaultValue?: number;
 }
 
 export const MenuItemSlider = React.forwardRef<HTMLDivElement, MenuItemSliderProps>(
-	({label, value, minValue = 0, maxValue = 100, disabled = false, onChange, onFormat, step = 1}, forwardedRef) => {
+	(
+		{
+			label,
+			value,
+			minValue = 0,
+			maxValue = 100,
+			disabled = false,
+			onChange,
+			onValueCommit,
+			onFormat,
+			step = 1,
+			factoryDefaultValue = 100,
+		},
+		forwardedRef,
+	) => {
 		const {i18n} = useLingui();
 		const [localValue, setLocalValue] = useState(value);
 		useEffect(() => {
@@ -30,15 +46,17 @@ export const MenuItemSlider = React.forwardRef<HTMLDivElement, MenuItemSliderPro
 		const handleValueChange = useCallback(
 			(newValue: number) => {
 				setLocalValue(newValue);
-				onChange?.(newValue);
+				if (!onValueCommit) onChange?.(newValue);
 			},
-			[onChange],
+			[onChange, onValueCommit],
 		);
 		const handleValueCommit = useCallback(
-			(newValue: number) => {
-				onChange?.(newValue);
+			async (newValue: number) => {
+				if (onValueCommit) {
+					if (!(await onValueCommit(newValue))) setLocalValue(value);
+				} else onChange?.(newValue);
 			},
-			[onChange],
+			[onChange, onValueCommit, value],
 		);
 		const stopPropagation = useCallback((e: React.SyntheticEvent) => {
 			e.stopPropagation();
@@ -74,7 +92,7 @@ export const MenuItemSlider = React.forwardRef<HTMLDivElement, MenuItemSliderPro
 					<div className={styles.sliderContainer} data-flx="ui.action-menu.menu-item-slider.slider-container">
 						<Slider
 							defaultValue={localValue}
-							factoryDefaultValue={100}
+							factoryDefaultValue={factoryDefaultValue}
 							minValue={minValue}
 							maxValue={maxValue}
 							disabled={disabled}

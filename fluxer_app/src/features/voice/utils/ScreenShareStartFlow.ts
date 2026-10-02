@@ -347,6 +347,7 @@ export function buildConfiguredScreenShareOptions(input: ScreenShareOptionsBuild
 		useBrowserAudioPicker: input.useBrowserAudioPicker,
 	});
 	publishOptions.videoCodec = input.videoCodec;
+	publishOptions.screenShareEncoding = {...publishOptions.screenShareEncoding, maxBitrate: input.target.maxBitrate};
 	return {captureOptions, publishOptions};
 }
 

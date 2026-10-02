@@ -32,6 +32,7 @@ import {
 	getNativeAudioBridgeStats,
 	getNativeAudioCaptureDiagnosticState,
 } from '@app/features/voice/utils/NativeAudioCaptureBridge';
+import {getCpuFrameBridgeStats} from '@app/features/voice/utils/native_screen_capture_bridge/createCpuFrameBridge';
 import {getDisplayShareEnvironment} from '@app/features/voice/utils/ScreenShareEnvironment';
 import {getRecentScreenShares} from '@app/features/voice/utils/ScreenShareLifecycleLog';
 import {getScreenShareBitrateBps, resolveStreamingModeSettings} from '@app/features/voice/utils/ScreenShareOptions';
@@ -43,6 +44,7 @@ import {
 	type StatsForNerdsData,
 } from '@app/features/voice/utils/VoiceStatsForNerdsPresenter';
 import type {NativeAudioApplication, VirtmicNode} from '@app/types/electron.d';
+import {Track} from 'livekit-client';
 
 const SNAPSHOT_TIMEOUT_MS = 3000;
 const MAX_INCLUDED_TARGETS = 200;
@@ -303,7 +305,13 @@ async function collectVoiceSettingsMetadata(): Promise<Record<string, unknown>> 
 		screenShareEncoderMode: VoiceSettings.getScreenShareEncoderMode(),
 		screenShareScalabilityMode: VoiceSettings.getScreenShareScalabilityMode(),
 		screenShareMaxBitrateMbps:
-			getScreenShareBitrateBps(configuredScreenShare.resolution, configuredScreenShare.frameRate) / 1000000,
+			getScreenShareBitrateBps(
+				configuredScreenShare.resolution,
+				configuredScreenShare.frameRate,
+				undefined,
+				undefined,
+				VoiceSettings.getScreenShareMaxBitrateMbps(),
+			) / 1000000,
 		linuxAudioCapture: {
 			workaround: VoiceSettings.getLinuxAudioCaptureWorkaround(),
 			onlySpeakers: VoiceSettings.getLinuxAudioCaptureOnlySpeakers(),
@@ -515,8 +523,13 @@ export function collectStatsForNerdsSnapshot(): StatsForNerdsData {
 			scalabilityMode: VoiceSettings.getScreenShareScalabilityMode(),
 			maxBitrateMbps:
 				(getPublishedScreenShareMaxBitrateBps(localParticipant) ??
-					getScreenShareBitrateBps(effectiveScreenShareSettings.resolution, effectiveScreenShareSettings.frameRate)) /
-				1000000,
+					getScreenShareBitrateBps(
+						effectiveScreenShareSettings.resolution,
+						effectiveScreenShareSettings.frameRate,
+						undefined,
+						undefined,
+						VoiceSettings.getScreenShareMaxBitrateMbps(),
+					)) / 1000000,
 			audioSourceMode: VoiceSettings.getScreenShareAudioSourceMode(),
 			audioIncludeSources: VoiceSettings.getScreenShareAudioIncludeSources(),
 			audioExcludeSources: VoiceSettings.getScreenShareAudioExcludeSources(),
@@ -552,6 +565,14 @@ export function collectStatsForNerdsSnapshot(): StatsForNerdsData {
 }
 
 export async function buildStatsForNerdsCopyPayload(data: StatsForNerdsData): Promise<Record<string, unknown>> {
+	const bridge = getCpuFrameBridgeStats();
+	const nativeCapture =
+		bridge?.active && bridge.captureId && getElectronAPI()?.nativeScreenCapture
+			? await withTimeout(
+					'native screen capture diagnostics',
+					getElectronAPI()!.nativeScreenCapture!.getDiagnostics(bridge.captureId),
+				)
+			: null;
 	const [nativePlatform, displayShareEnvironment, permissions, mediaDevices, voiceSettings, desktop, codecs] =
 		await Promise.all([
 			getNativePlatform(),
@@ -590,6 +611,23 @@ export async function buildStatsForNerdsCopyPayload(data: StatsForNerdsData): Pr
 		mediaDevices,
 		voiceSettings,
 		voiceSession: summarizeRoom(),
+		nativeScreenCaptureBridge: bridge,
+		nativeScreenCapture: nativeCapture,
+		screenShareSenderPolicy: safeCollect(() => {
+			const track = MediaEngine.room?.localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track;
+			const parameters = track?.sender?.getParameters();
+			return {
+				contentHint: track?.mediaStreamTrack.contentHint ?? null,
+				degradationPreference: parameters?.degradationPreference ?? null,
+				encodings:
+					parameters?.encodings.map((encoding) => ({
+						active: encoding.active,
+						maxFramerate: encoding.maxFramerate,
+						maxBitrate: encoding.maxBitrate,
+						scaleResolutionDownBy: encoding.scaleResolutionDownBy,
+					})) ?? [],
+			};
+		}),
 		recentScreenShares: getRecentScreenShares(),
 		screenShareWatchFailures: safeCollect(() => ScreenShareWatchFailures.getFailureHistory()),
 		screenShareNegotiation: safeCollect(() => ({

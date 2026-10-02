@@ -957,14 +957,11 @@ export async function armNativeAudioForNextCapture(sourceId: string): Promise<bo
 		setLastArmFailure({
 			platform: electronApi.platform,
 			sourceId,
+			sourceMode: 'specific',
 			reason: 'native-audio-start-failed',
 			detail,
 		});
-		logger.warn('Cannot arm per-window audio capture; attempting system fallback', {sourceId, targetPid, error});
-		if (electronApi.platform === 'win32') {
-			const fallback = await armNativeSystemAudioForNextCapture();
-			if (fallback) return true;
-		}
+		logger.warn('Cannot arm per-window audio capture: process capture failed', {sourceId, targetPid, error});
 		return false;
 	}
 	clearLastArmFailure();

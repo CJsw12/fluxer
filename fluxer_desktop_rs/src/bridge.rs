@@ -1653,6 +1653,35 @@ pub fn get_initialization_script() -> &'static str {
         }
     }, true);
 
+    // 7. HTML5 Fullscreen API를 OS 네이티브 Borderless Fullscreen과 100% 일치화
+    (function bridgeFullscreen() {
+        if (typeof Element !== 'undefined' && Element.prototype) {
+            var rawRequestFullscreen = Element.prototype.requestFullscreen;
+            Element.prototype.requestFullscreen = function(options) {
+                sendRust('windowSetFullscreen', { fullscreen: true });
+                if (rawRequestFullscreen) {
+                    return rawRequestFullscreen.call(this, options).catch(function() {});
+                }
+                return Promise.resolve();
+            };
+        }
+        if (typeof Document !== 'undefined' && Document.prototype) {
+            var rawExitFullscreen = Document.prototype.exitFullscreen;
+            Document.prototype.exitFullscreen = function() {
+                sendRust('windowSetFullscreen', { fullscreen: false });
+                if (rawExitFullscreen) {
+                    return rawExitFullscreen.call(this).catch(function() {});
+                }
+                return Promise.resolve();
+            };
+        }
+        window.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                sendRust('windowSetFullscreen', { fullscreen: false });
+            }
+        }, true);
+    })();
+
     console.info('[Fluxer Rust Shell] Native Electron Bridge (Phase 2 Full API) injected successfully.');
 })();
 "#
@@ -1702,5 +1731,6 @@ mod tests {
         assert!(script.contains("popoutVoiceOverlay"));
         assert!(script.contains("popoutStreamViewer"));
         assert!(script.contains("voiceStateUpdate"));
+        assert!(script.contains("bridgeFullscreen"));
     }
 }

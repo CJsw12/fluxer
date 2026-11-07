@@ -309,7 +309,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let webview = builder.build(&window)?;
 
     let mut is_revealed = false;
-    let mut is_maximized_tracked = false;
 
     // 7. 이벤트 루프 구동
     event_loop.run(move |event, _, control_flow| {
@@ -322,10 +321,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     window.set_minimized(true);
                 }
                 "windowMaximize" => {
-                    let next_max = !is_maximized_tracked;
-                    is_maximized_tracked = next_max;
+                    let current = window.is_maximized();
+                    let next_max = !current;
                     window.set_maximized(next_max);
-                    println!("[Fluxer Shell] windowMaximize toggled (next: {next_max}).");
+                    println!("[Fluxer Shell] windowMaximize toggled (actual current: {current}, next: {next_max}).");
                     let script = format!(
                         "window.__isMaximized = {next_max}; window.dispatchEvent(new CustomEvent('fluxer:maximize-change', {{ detail: {{ isMaximized: {next_max} }} }}));"
                     );
@@ -338,6 +337,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     } else {
                         window.set_fullscreen(None);
                     }
+                    println!("[Fluxer Shell] windowSetFullscreen executed: {is_fullscreen}");
+                    let script = format!(
+                        "window.__isNativeFullscreen = {is_fullscreen}; window.dispatchEvent(new CustomEvent('fluxer:fullscreen-change', {{ detail: {{ isFullscreen: {is_fullscreen} }} }}));"
+                    );
+                    let _ = webview.evaluate_script(&script);
                 }
                 "windowClose" => {
                     println!("[Fluxer Shell] windowClose requested by caption control.");
@@ -508,7 +512,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 WindowEvent::Resized(_) => {
                     let maximized = window.is_maximized();
-                    is_maximized_tracked = maximized;
                     let script = format!(
                         "if (window.__isMaximized !== {maximized}) {{ window.__isMaximized = {maximized}; window.dispatchEvent(new CustomEvent('fluxer:maximize-change', {{ detail: {{ isMaximized: {maximized} }} }})); }}"
                     );

@@ -560,6 +560,9 @@ pub fn get_initialization_script() -> &'static str {
         notifyFirstContentPainted: function() {
             sendRust('firstContentPainted');
         },
+        popoutVoiceOverlay: function() {
+            return invokeRust('popoutVoiceOverlay');
+        },
 
         // 시스템 및 진단 API
         getDesktopInfo: function() {
@@ -1592,6 +1595,59 @@ pub fn get_initialization_script() -> &'static str {
         });
     });
 
+    // 5. 음성 상태 실시간 모니터링 및 네이티브 GPUI 오버레이 동기화 파이프라인
+    (function monitorVoiceState() {
+        var lastStateJson = '';
+        setInterval(function() {
+            try {
+                var media = window._mediaEngineFacade || window._mediaEngine;
+                if (!media) return;
+
+                var isConnected = Boolean(media.connectionId || media.activeChannelId || (media.channelId && media.state === 'connected'));
+                var channelName = media.channelName || (media.channel && media.channel.name) || (isConnected ? 'Voice Connected' : 'Not Connected');
+                var isMuted = Boolean(media.isMuted || (media.localVoiceState && media.localVoiceState.selfMute));
+                var isDeafened = Boolean(media.isDeafened || (media.localVoiceState && media.localVoiceState.selfDeaf));
+                var isSpeaking = Boolean(media.isSpeaking || media.localSpeaking);
+                var activeSpeakers = [];
+
+                if (Array.isArray(media.speakers)) {
+                    activeSpeakers = media.speakers.slice(0, 5);
+                } else if (Array.isArray(media.activeSpeakers)) {
+                    activeSpeakers = media.activeSpeakers.slice(0, 5);
+                }
+
+                var stateObj = {
+                    isConnected: isConnected,
+                    channelName: String(channelName),
+                    isMuted: isMuted,
+                    isDeafened: isDeafened,
+                    isSpeaking: isSpeaking,
+                    activeSpeakers: activeSpeakers
+                };
+
+                var jsonStr = JSON.stringify(stateObj);
+                if (jsonStr !== lastStateJson) {
+                    lastStateJson = jsonStr;
+                    sendRust('voiceStateUpdate', stateObj);
+                }
+            } catch (_) {}
+        }, 200);
+    })();
+
+    // 6. 팝아웃 버튼 클릭 시 GPUI 네이티브 오버레이 자동 실행 연동
+    window.addEventListener('click', function(e) {
+        var target = e.target;
+        if (!target) return;
+        var btn = target.closest('button, [role="button"], a');
+        if (btn) {
+            var text = (btn.textContent || '').toLowerCase();
+            var aria = (btn.getAttribute('aria-label') || '').toLowerCase();
+            if (text.includes('pop out') || aria.includes('pop out') || text.includes('overlay') || aria.includes('overlay')) {
+                sendRust('popoutVoiceOverlay');
+            }
+        }
+    }, true);
+
     console.info('[Fluxer Rust Shell] Native Electron Bridge (Phase 2 Full API) injected successfully.');
 })();
 "#
@@ -1638,5 +1694,7 @@ mod tests {
         assert!(script.contains("popoutFocus"));
         assert!(script.contains("dispatchWindowControl"));
         assert!(script.contains("checkCaptionButtonClick"));
+        assert!(script.contains("popoutVoiceOverlay"));
+        assert!(script.contains("voiceStateUpdate"));
     }
 }

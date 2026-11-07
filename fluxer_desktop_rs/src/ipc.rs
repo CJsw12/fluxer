@@ -10,6 +10,7 @@ use tao::window::Window;
 use crate::audio;
 use crate::config;
 use crate::gateway::GatewayManager;
+use crate::overlay;
 use crate::storage::{self, DesktopAccountRecord, DesktopStorageWrite};
 
 static MINIMIZE_TO_TRAY: AtomicBool = AtomicBool::new(false);
@@ -233,6 +234,64 @@ pub fn handle_ipc_request(
             )
         }
         "desktopModulesConfirmLaunch" => IpcResponse::success(id, Value::Null),
+
+        "voiceStateUpdate" => {
+            let is_connected = req
+                .payload
+                .get("isConnected")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let channel_name = req
+                .payload
+                .get("channelName")
+                .and_then(Value::as_str)
+                .unwrap_or("Voice Channel")
+                .to_string();
+            let is_muted = req
+                .payload
+                .get("isMuted")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let is_deafened = req
+                .payload
+                .get("isDeafened")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let is_speaking = req
+                .payload
+                .get("isSpeaking")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let active_speakers = req
+                .payload
+                .get("activeSpeakers")
+                .and_then(Value::as_array)
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(Value::as_str)
+                        .map(String::from)
+                        .collect()
+                })
+                .unwrap_or_default();
+
+            overlay::update_voice_state(overlay::VoiceOverlayState {
+                is_connected,
+                channel_name,
+                is_muted,
+                is_deafened,
+                is_speaking,
+                active_speakers,
+            });
+
+            IpcResponse::success(id, Value::Null)
+        }
+
+        "popoutVoiceOverlay" | "windowToggleVoiceOverlay" => {
+            std::thread::spawn(|| {
+                overlay::launch_voice_overlay();
+            });
+            IpcResponse::success(id, json!(true))
+        }
 
         "desktopRuntimeInitialInput" => {
             // CLI 인수로 명시적인 인스턴스가 지정된 경우에만 해당 값을 반환하고,
@@ -816,5 +875,24 @@ mod tests {
             "replacesShell": false
         });
         assert_eq!(update_res["available"], false);
+    }
+
+    #[test]
+    fn test_voice_state_update_ipc_parsing() {
+        let req = IpcRequest {
+            id: Some(101),
+            cmd: "voiceStateUpdate".to_string(),
+            payload: json!({
+                "isConnected": true,
+                "channelName": "Voice Room",
+                "isMuted": false,
+                "isDeafened": false,
+                "isSpeaking": true,
+                "activeSpeakers": ["Alice", "Bob"]
+            }),
+        };
+        assert_eq!(req.cmd, "voiceStateUpdate");
+        assert_eq!(req.payload.get("isConnected").and_then(Value::as_bool), Some(true));
+        assert_eq!(req.payload.get("channelName").and_then(Value::as_str), Some("Voice Room"));
     }
 }

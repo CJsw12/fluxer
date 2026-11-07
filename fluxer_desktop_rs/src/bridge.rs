@@ -458,12 +458,74 @@ pub fn get_initialization_script() -> &'static str {
             return Promise.resolve();
         },
 
+        // 딥링크 및 알림 API (DeepLinkUtils, NotificationUtils 호환)
+        getInitialDeepLink: function() {
+            return Promise.resolve(null);
+        },
+        onDeepLink: function(callback) {
+            return function() {};
+        },
+        onNotificationClick: function(callback) {
+            return function() {};
+        },
+        showNotification: function(payload) {
+            return Promise.resolve({ id: 'stub-notification-' + Date.now() });
+        },
+        shouldPlayNotificationSound: function() {
+            return Promise.resolve(true);
+        },
+        closeNotification: function(id) {},
+        closeNotifications: function(ids) {},
+
+        // 스펠체크 API (Spellcheck.ts 호환)
+        onSpellcheckStateChanged: function(callback) {
+            return function() {};
+        },
+        onSpellcheckEngineResolved: function(callback) {
+            return function() {};
+        },
+        spellcheckGetAvailableLanguages: function() {
+            return Promise.resolve(['en-US']);
+        },
+        spellcheckGetBundledDictionaries: function() {
+            return Promise.resolve([]);
+        },
+        spellcheckSetState: function(state) {
+            return Promise.resolve(state || {});
+        },
+        spellcheckReplaceMisspelling: function(word) {},
+        spellcheckAddWordToDictionary: function(word) {},
+        onTextareaContextMenu: function(callback) {
+            return function() {};
+        },
+
         // 미디어 권한 및 시작 프로그램
         checkMediaAccess: function(type) {
             return invokeRust('checkMediaAccess', { type: type });
         },
         requestMediaAccess: function(type) {
             return invokeRust('requestMediaAccess', { type: type });
+        },
+        openMediaAccessSettings: function(type) {
+            return Promise.resolve();
+        },
+        openInputMonitoringSettings: function() {
+            return Promise.resolve();
+        },
+        checkInputMonitoringAccess: function() {
+            return Promise.resolve(true);
+        },
+        getInputMonitoringPermissionStatus: function() {
+            return Promise.resolve('granted');
+        },
+        requestInputMonitoringPermission: function() {
+            return Promise.resolve('granted');
+        },
+        getScreenRecordingPermissionStatus: function() {
+            return Promise.resolve('granted');
+        },
+        requestScreenRecordingPermission: function() {
+            return Promise.resolve('granted');
         },
         autostartIsEnabled: function() {
             return invokeRust('autostartIsEnabled');
@@ -481,9 +543,163 @@ pub fn get_initialization_script() -> &'static str {
             return Promise.resolve();
         },
 
+        // 글로벌 키훅 및 숏컷
+        globalKeyHookStart: function() {
+            return Promise.resolve(false);
+        },
+        globalKeyHookStop: function() {
+            return Promise.resolve();
+        },
+        globalKeyHookRegister: function(options) {
+            return Promise.resolve();
+        },
+        globalKeyHookUnregister: function(id) {
+            return Promise.resolve();
+        },
+        globalKeyHookUnregisterAll: function() {
+            return Promise.resolve();
+        },
+        onGlobalKeyEvent: function(callback) {
+            return function() {};
+        },
+        onGlobalMouseEvent: function(callback) {
+            return function() {};
+        },
+        onGlobalKeybindTriggered: function(callback) {
+            return function() {};
+        },
+        linuxEvdevStatus: function() {
+            return Promise.resolve(null);
+        },
+        globalShortcuts: {
+            sync: function() { return Promise.resolve(); },
+            setPaused: function() { return Promise.resolve(); },
+            getStatus: function() {
+                return Promise.resolve({
+                    state: 'unavailable',
+                    version: null,
+                    canConfigure: false,
+                    recovering: false,
+                    canRecheck: false,
+                    portalAppId: null,
+                    shortcuts: [],
+                    error: null
+                });
+            },
+            onStatus: function(cb) { return function() {}; },
+            onEvent: function(cb) { return function() {}; },
+            setUp: function() {
+                return Promise.resolve({
+                    state: 'unavailable',
+                    version: null,
+                    canConfigure: false,
+                    recovering: false,
+                    canRecheck: false,
+                    portalAppId: null,
+                    shortcuts: [],
+                    error: null
+                });
+            },
+            recheck: function() {
+                return Promise.resolve({
+                    state: 'unavailable',
+                    version: null,
+                    canConfigure: false,
+                    recovering: false,
+                    canRecheck: false,
+                    portalAppId: null,
+                    shortcuts: [],
+                    error: null
+                });
+            },
+            configure: function() { return Promise.resolve(); },
+            setDirectInputEnabled: function() {
+                return Promise.resolve({
+                    state: 'unavailable',
+                    version: null,
+                    canConfigure: false,
+                    recovering: false,
+                    canRecheck: false,
+                    portalAppId: null,
+                    shortcuts: [],
+                    error: null
+                });
+            },
+            startCapture: function() { return Promise.resolve(null); },
+            stopCapture: function() { return Promise.resolve(); },
+            onCapture: function(cb) { return function() {}; }
+        },
+
+        // 화면 공유 및 디스플레이 미디어
+        getDesktopSources: function(types, reqId, opt) {
+            return Promise.resolve([]);
+        },
+        onDisplayMediaRequested: function(callback) {
+            return function() {};
+        },
+        onDisplayMediaPortalEmpty: function(callback) {
+            return function() {};
+        },
+        selectDisplayMediaSource: function(requestId, sourceId, withAudio) {},
+        setDisplayMediaPortalPreference: function(preference) {
+            return Promise.resolve();
+        },
+        getStreamerModeCaptureAppStatus: function() {
+            return Promise.resolve({ active: false });
+        },
+
+        // 팝아웃 및 진단
+        popoutSetAlwaysOnTop: function(key, flag) {
+            return Promise.resolve(false);
+        },
+        popoutFocus: function(key) {
+            return Promise.resolve(false);
+        },
+        cssEditorWindow: true,
+        openVoiceDebugEventSinkPopout: function(entries) {
+            return Promise.resolve();
+        },
+        appendVoiceDebugEventSinkEntries: function(entries) {},
+        setVoiceDebugEventSinkStatsHtml: function(html) {},
+
+        // 테마 관리
+        pickThemeLocalFiles: function() { return Promise.resolve([]); },
+        readThemeLocalFiles: function(paths) { return Promise.resolve([]); },
+        clearThemeLocalFiles: function() { return Promise.resolve(); },
+        importThemeDirectory: function() { return Promise.resolve([]); },
+        pickThemeLinkedFiles: function(options) { return Promise.resolve([]); },
+        watchThemeLinkedFiles: function(paths) { return Promise.resolve(); },
+        onThemeLinkedFileChange: function(callback) { return function() {}; },
+        importThemeFolder: function() { return Promise.resolve(null); },
+        watchThemeFolders: function(paths) { return Promise.resolve(); },
+        removeThemeFolder: function(path) { return Promise.resolve(); },
+        onThemeFolderChange: function(callback) { return function() {}; },
+        themeFolderWatch: true,
+
+        // 보이스 백그라운드 미디어 캐시
+        cacheVoiceBackgroundMedia: function(options) { return Promise.resolve({ ok: false }); },
+        readVoiceBackgroundMedia: function(id) { return Promise.resolve(null); },
+        deleteVoiceBackgroundMedia: function(id) { return Promise.resolve(); },
+
+        // 트러블슈팅
+        getDesktopTroubleshootingSettings: function() { return Promise.resolve({}); },
+        setDesktopDisableHardwareAcceleration: function(options) { return Promise.resolve({}); },
+        setDesktopDisableModuleUpdates: function(options) { return Promise.resolve({}); },
+
         // 패스키 및 보안
         passkeyIsSupported: function() {
             return invokeRust('passkeyIsSupported');
+        },
+        passkeyAuthenticate: function(options, requestContext) {
+            return Promise.reject(new Error('Passkey not supported in webview'));
+        },
+        passkeyRegister: function(options, requestContext) {
+            return Promise.reject(new Error('Passkey not supported in webview'));
+        },
+
+        // 다운로드
+        downloadFile: function(url, suggestedName, sha256) {
+            return Promise.resolve({ success: false, error: 'Not supported' });
         },
 
         // 업데이트 모듈
@@ -491,6 +707,12 @@ pub fn get_initialization_script() -> &'static str {
             return function() {};
         },
         updaterCheck: function() {
+            return Promise.resolve();
+        },
+        updaterDownload: function() {
+            return Promise.resolve();
+        },
+        updaterInstall: function() {
             return Promise.resolve();
         },
         desktopUpdate: {
@@ -501,6 +723,54 @@ pub fn get_initialization_script() -> &'static str {
         desktopModules: {
             ensure: function(name) { return invokeRust('desktopModulesEnsure', { name: name }); },
             confirmLaunch: function() { return Promise.resolve(); }
+        },
+
+        // 줌 및 접근성
+        onJumpListNewDm: function(callback) { return function() {}; },
+        getAccessibilitySupportEnabled: function() { return Promise.resolve(false); },
+        onAccessibilitySupportChanged: function(callback) { return function() {}; },
+        getLinuxAppearance: function() { return Promise.resolve(null); },
+        setPrebootTheme: function(theme) {},
+        onLinuxAppearanceChanged: function(callback) { return function() {}; },
+        onZoomIn: function(callback) { return function() {}; },
+        onZoomOut: function(callback) { return function() {}; },
+        onZoomReset: function(callback) { return function() {}; },
+        onOpenSettings: function(callback) { return function() {}; },
+        setTrayRuntimeState: function(state) {},
+        setDirectMessagesAvailable: function(available) {},
+        acquireStreamingPriority: function() {},
+        releaseStreamingPriority: function() {},
+        getStreamingPriorityDiagnostics: function() { return Promise.resolve(null); },
+        onTrayAction: function(callback) { return function() {}; },
+
+        // 음성 및 하드웨어 인코더 서브시스템
+        virtmic: {
+            getAvailability: function() { return Promise.resolve({ available: false }); },
+            listTargets: function() { return Promise.resolve({ ok: true, targets: [], availability: { available: false } }); },
+            stop: function() { return Promise.resolve(); }
+        },
+        nativeAudio: {
+            getAvailability: function() { return Promise.resolve({ available: false }); },
+            listAudibleApplications: function() { return Promise.resolve([]); },
+            resolveAudioRootPidForSource: function() { return Promise.resolve(null); },
+            start: function() { return Promise.resolve({ ok: false }); },
+            setRule: function() { return Promise.resolve(false); },
+            listPlaybackDevices: function() { return Promise.resolve([]); },
+            setWinEndpoints: function() { return Promise.resolve(false); },
+            stop: function() { return Promise.resolve(); },
+            onFrame: function(cb) { return function() {}; },
+            onEnd: function(cb) { return function() {}; }
+        },
+        nativeScreenCapture: {
+            onLifecycleEvent: function(cb) { return function() {}; }
+        },
+        voiceEngine: {
+            getHardwareEncoderCapabilities: function() {
+                return Promise.resolve({ h264: false, hevc: false, av1: false });
+            }
+        },
+        localApp: {
+            origin: window.location.origin
         },
 
         // 런타임 인스턴스 및 데스크톱 스토리지 API (Zero-Touch UI 호환)
@@ -759,5 +1029,9 @@ mod tests {
         assert!(script.contains("desktopStorage"));
         assert!(script.contains("initialInput"));
         assert!(script.contains("desktopRuntimeResolve"));
+        assert!(script.contains("onSpellcheckStateChanged"));
+        assert!(script.contains("onNotificationClick"));
+        assert!(script.contains("getInitialDeepLink"));
+        assert!(script.contains("onDeepLink"));
     }
 }

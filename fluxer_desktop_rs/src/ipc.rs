@@ -406,6 +406,17 @@ pub fn handle_ipc_request(
             IpcResponse::success(id, json!(is_max))
         }
 
+        "popoutSetAlwaysOnTop" | "popout:set-always-on-top" => {
+            let flag = req.payload.get("flag").and_then(Value::as_bool).unwrap_or(false);
+            window.set_always_on_top(flag);
+            IpcResponse::success(id, json!(true))
+        }
+
+        "popoutFocus" | "popout:focus" => {
+            window.set_focus();
+            IpcResponse::success(id, json!(true))
+        }
+
         // =========================================================
         // 네이티브 스토리지 API (desktopStorage)
         // =========================================================
@@ -719,5 +730,16 @@ mod tests {
         let avail = audio::get_availability();
         assert_eq!(avail["available"], true);
         assert_eq!(avail["backend"], "windows-wasapi-loopback");
+    }
+
+    #[test]
+    fn test_popout_ipc_commands_matching() {
+        let req = IpcRequest {
+            id: Some(99),
+            cmd: "popoutSetAlwaysOnTop".to_string(),
+            payload: json!({ "key": "test-key", "flag": true }),
+        };
+        assert_eq!(req.cmd, "popoutSetAlwaysOnTop");
+        assert_eq!(req.payload.get("flag").and_then(Value::as_bool), Some(true));
     }
 }

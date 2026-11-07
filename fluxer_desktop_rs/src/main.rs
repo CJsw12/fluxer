@@ -54,18 +54,33 @@ fn get_cli_launch_instance() -> Option<String> {
     None
 }
 
+fn load_app_icon() -> Option<tao::window::Icon> {
+    const ICON_BYTES: &[u8] = include_bytes!("../resources/tray_32x32.png");
+    if let Ok(img) = image::load_from_memory(ICON_BYTES) {
+        let rgba = img.to_rgba8();
+        let (width, height) = rgba.dimensions();
+        return tao::window::Icon::from_rgba(rgba.into_raw(), width, height).ok();
+    }
+    None
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let event_loop: EventLoop<UserEvent> = EventLoopBuilder::<UserEvent>::with_user_event().build();
 
     // 1. Electron 창 생성 옵션 준수: 1280x800 기본, 800x600 최소, Frameless, 초기 비가시
-    // 창 아이콘은 .exe 리소스(icon.ico)를 Windows OS가 네이티브로 자동 상속하여 검은 배경 없이 완벽하게 투명화됩니다.
-    let window = WindowBuilder::new()
+    // 창 아이콘을 Win32 HWND에 명시적으로 등록하여 작업 관리자 및 창 목록에 선명한 Fluxer 로고를 표출합니다.
+    let mut window_builder = WindowBuilder::new()
         .with_title("Fluxer")
         .with_decorations(false)
         .with_inner_size(LogicalSize::new(1280.0, 800.0))
         .with_min_inner_size(LogicalSize::new(800.0, 600.0))
-        .with_visible(false)
-        .build(&event_loop)?;
+        .with_visible(false);
+
+    if let Some(icon) = load_app_icon() {
+        window_builder = window_builder.with_window_icon(Some(icon));
+    }
+
+    let window = window_builder.build(&event_loop)?;
 
     let window = Arc::new(window);
     let proxy = event_loop.create_proxy();
@@ -226,11 +241,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let builder = builder
         .with_devtools(true)
-        .with_url(&target_url);
+        .with_url(&target_url)
+        .with_new_window_req_handler(move |url, _disposition| {
+            // 빈 URL, about:blank, data: 또는 fluxer 내부 팝아웃 새 창 허용
+            if url.is_empty() || url == "about:blank" || url.starts_with("data:") || url.contains("fluxer") {
+                wry::NewWindowResponse::Allow
+            } else {
+                let _ = open::that_detached(&url);
+                wry::NewWindowResponse::Deny
+            }
+        });
 
     let webview = builder.build(&window)?;
 
     let mut is_revealed = false;
+    let mut is_maximized_tracked = false;
 
     // 7. 이벤트 루프 구동
     event_loop.run(move |event, _, control_flow| {
@@ -242,12 +267,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     window.set_minimized(true);
                 }
                 "windowMaximize" => {
-                    let maximized = !window.is_maximized();
-                    window.set_maximized(maximized);
+                    is_maximized_tracked = !is_maximized_tracked;
+                    window.set_maximized(is_maximized_tracked);
                     let script = format!(
-                        "window.__isMaximized = {maximized}; window.dispatchEvent(new CustomEvent('fluxer:maximize-change', {{ detail: {{ isMaximized: {maximized} }} }}));"
+                        "window.__isMaximized = {is_maximized_tracked}; window.dispatchEvent(new CustomEvent('fluxer:maximize-change', {{ detail: {{ isMaximized: {is_maximized_tracked} }} }}));"
                     );
                     let _ = webview.evaluate_script(&script);
+                }
+                "windowSetFullscreen" => {
+                    let is_fullscreen = req.payload.get("fullscreen").and_then(|v| v.as_bool()).unwrap_or(false);
+                    if is_fullscreen {
+                        window.set_fullscreen(Some(tao::window::Fullscreen::Borderless(None)));
+                    } else {
+                        window.set_fullscreen(None);
+                    }
                 }
                 "windowClose" => {
                     *control_flow = ControlFlow::Exit;
@@ -344,18 +377,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         TrayMenuAction::OpenSettings => {
                             let _ = webview.evaluate_script(
-                                "window.dispatchEvent(new CustomEvent('fluxer:open-settings'));"
+                                "if (window.__fluxerEmitOpenSettings) { window.__fluxerEmitOpenSettings(); } else { window.dispatchEvent(new CustomEvent('fluxer:open-settings')); }"
                             );
                         }
                         TrayMenuAction::SetStatus(status) => {
                             let script = format!(
-                                "window.dispatchEvent(new CustomEvent('fluxer:set-status', {{ detail: {{ status: '{status}' }} }}));"
+                                "if (window.__fluxerEmitTrayAction) {{ window.__fluxerEmitTrayAction({{ action: 'set-status', status: '{status}' }}); }} else {{ window.dispatchEvent(new CustomEvent('fluxer:set-status', {{ detail: {{ status: '{status}' }} }})); }}"
                             );
                             let _ = webview.evaluate_script(&script);
                         }
                         TrayMenuAction::CheckForUpdates => {
                             let _ = webview.evaluate_script(
-                                "window.dispatchEvent(new CustomEvent('fluxer:check-updates'));"
+                                "if (window.__fluxerEmitTrayAction) { window.__fluxerEmitTrayAction({ action: 'check-for-updates' }); } else { window.dispatchEvent(new CustomEvent('fluxer:check-updates')); }"
                             );
                         }
                         TrayMenuAction::ToggleWindow => (),
@@ -388,6 +421,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 WindowEvent::Resized(_) => {
                     let maximized = window.is_maximized();
+                    is_maximized_tracked = maximized;
                     let script = format!(
                         "if (window.__isMaximized !== {maximized}) {{ window.__isMaximized = {maximized}; window.dispatchEvent(new CustomEvent('fluxer:maximize-change', {{ detail: {{ isMaximized: {maximized} }} }})); }}"
                     );

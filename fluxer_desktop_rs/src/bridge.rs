@@ -418,6 +418,30 @@ pub fn get_initialization_script() -> &'static str {
         }
     } catch (_) {}
 
+    // 2-3. HTML5 Fullscreen API 감지 및 Win32 창 모니터 전체화면 자동 동기화
+    function syncNativeFullscreen() {
+        var isFs = Boolean(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+        sendRust('windowSetFullscreen', { fullscreen: isFs });
+    }
+    document.addEventListener('fullscreenchange', syncNativeFullscreen);
+    document.addEventListener('webkitfullscreenchange', syncNativeFullscreen);
+    document.addEventListener('mozfullscreenchange', syncNativeFullscreen);
+    document.addEventListener('MSFullscreenChange', syncNativeFullscreen);
+
+    // 2-4. 시스템 트레이 및 설정 이벤트 디스패처
+    var _openSettingsListeners = [];
+    window.__fluxerEmitOpenSettings = function() {
+        _openSettingsListeners.forEach(function(fn) {
+            try { fn(); } catch(e) { console.error('[Fluxer] onOpenSettings listener error', e); }
+        });
+    };
+    var _trayActionListeners = [];
+    window.__fluxerEmitTrayAction = function(payload) {
+        _trayActionListeners.forEach(function(fn) {
+            try { fn(payload); } catch(e) { console.error('[Fluxer] onTrayAction listener error', e); }
+        });
+    };
+
     // 2. 최대화 상태 로컬 캐시 관리
     let isMaximizedCached = false;
 
@@ -780,10 +804,10 @@ pub fn get_initialization_script() -> &'static str {
 
         // 팝아웃 및 진단
         popoutSetAlwaysOnTop: function(key, flag) {
-            return Promise.resolve(false);
+            return invokeRust('popoutSetAlwaysOnTop', { key: key, flag: Boolean(flag) }).catch(function() { return false; });
         },
         popoutFocus: function(key) {
-            return Promise.resolve(false);
+            return invokeRust('popoutFocus', { key: key }).catch(function() { return false; });
         },
         cssEditorWindow: true,
         openVoiceDebugEventSinkPopout: function(entries) {
@@ -865,13 +889,29 @@ pub fn get_initialization_script() -> &'static str {
         onZoomIn: function(callback) { return function() {}; },
         onZoomOut: function(callback) { return function() {}; },
         onZoomReset: function(callback) { return function() {}; },
-        onOpenSettings: function(callback) { return function() {}; },
+        onOpenSettings: function(callback) {
+            if (typeof callback === 'function') {
+                _openSettingsListeners.push(callback);
+                return function() {
+                    _openSettingsListeners = _openSettingsListeners.filter(function(cb) { return cb !== callback; });
+                };
+            }
+            return function() {};
+        },
         setTrayRuntimeState: function(state) {},
         setDirectMessagesAvailable: function(available) {},
         acquireStreamingPriority: function() {},
         releaseStreamingPriority: function() {},
         getStreamingPriorityDiagnostics: function() { return Promise.resolve(null); },
-        onTrayAction: function(callback) { return function() {}; },
+        onTrayAction: function(callback) {
+            if (typeof callback === 'function') {
+                _trayActionListeners.push(callback);
+                return function() {
+                    _trayActionListeners = _trayActionListeners.filter(function(cb) { return cb !== callback; });
+                };
+            }
+            return function() {};
+        },
 
         // 음성 및 하드웨어 인코더 서브시스템
         virtmic: {
@@ -1416,5 +1456,10 @@ mod tests {
         assert!(script.contains("__fluxerNativeGatewayEmit"));
         assert!(script.contains("nativeAudio"));
         assert!(script.contains("nativeAudioGetAvailability"));
+        assert!(script.contains("windowSetFullscreen"));
+        assert!(script.contains("__fluxerEmitOpenSettings"));
+        assert!(script.contains("__fluxerEmitTrayAction"));
+        assert!(script.contains("popoutSetAlwaysOnTop"));
+        assert!(script.contains("popoutFocus"));
     }
 }

@@ -72,6 +72,83 @@ pub struct ChatMessageModel {
     pub pinned: bool,
 }
 
+/// DM 상대방 정보 모델입니다.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DmRecipientModel {
+    pub id: String,
+    pub username: String,
+    pub discriminator: String,
+    pub display_name: String,
+    pub avatar_initial: String,
+    pub avatar_bg: u32,
+    pub status: String,
+    pub status_color: u32,
+    pub mutual_community: String,
+}
+
+/// DM 채널 모델입니다.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DmChannelModel {
+    pub id: String,
+    pub recipient: DmRecipientModel,
+    pub unread: bool,
+}
+
+/// 실시간 음성 통화 세션 상태 모델입니다.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VoiceSessionState {
+    pub in_voice: bool,
+    pub channel_title: String,
+    pub topic: String,
+    pub participant_initials: Vec<String>,
+    pub is_muted: bool,
+    pub is_deafened: bool,
+    pub is_screen_sharing: bool,
+}
+
+impl Default for VoiceSessionState {
+    fn default() -> Self {
+        Self {
+            in_voice: true,
+            channel_title: "General / Fluxer Refugee".to_string(),
+            topic: "bicolor-paradise".to_string(),
+            participant_initials: vec!["J".to_string(), "T".to_string(), "A".to_string()],
+            is_muted: false,
+            is_deafened: false,
+            is_screen_sharing: false,
+        }
+    }
+}
+
+/// 우측 상단 PiP 화면 공유 스트림 비디오 타일 상태 모델입니다.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PipStreamTileState {
+    pub is_visible: bool,
+    pub stream_title: String,
+    pub streamer_name: String,
+    pub fps: u32,
+}
+
+impl Default for PipStreamTileState {
+    fn default() -> Self {
+        Self {
+            is_visible: true,
+            stream_title: "LiveKit WebRTC 60FPS Native Stream".to_string(),
+            streamer_name: "Ann".to_string(),
+            fps: 60,
+        }
+    }
+}
+
+/// 좌측 사이드바 내비게이션 탭 모드입니다.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NavTab {
+    DirectMessages,
+    Server(String),
+    Friends,
+    PersonalNotes,
+}
+
 /// 메인 네이티브 클라이언트 전역 상태 저장소입니다.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ClientAppState {
@@ -79,91 +156,156 @@ pub struct ClientAppState {
     pub guilds: Vec<GuildModel>,
     pub active_guild_id: Option<String>,
     pub active_channel_id: Option<String>,
+    pub dm_channels: Vec<DmChannelModel>,
+    pub active_dm_id: Option<String>,
+    pub voice_session: VoiceSessionState,
+    pub pip_stream: PipStreamTileState,
+    pub active_nav: NavTab,
     pub messages: Vec<ChatMessageModel>,
 }
 
 impl Default for ClientAppState {
     fn default() -> Self {
+        // 이미지 1의 실제 프로필: Kazuma
         let default_user = UserProfile {
-            id: "1551530442950180864".to_string(),
-            username: "fluxer_native".to_string(),
-            display_name: Some("Fluxer Pioneer".to_string()),
+            id: "100000000000000000".to_string(),
+            username: "Kazuma".to_string(),
+            display_name: Some("Kazuma".to_string()),
             avatar: None,
             bot: false,
         };
 
-        let gen_channel = ChannelModel {
-            id: "200000000000000001".to_string(),
-            guild_id: Some("100000000000000001".to_string()),
-            name: "general".to_string(),
-            channel_type: ChannelType::GuildText,
-            topic: Some("General discussion for all community members".to_string()),
-            position: 0,
-        };
-
-        let voice_channel = ChannelModel {
-            id: "200000000000000002".to_string(),
-            guild_id: Some("100000000000000001".to_string()),
-            name: "Lounge (Voice)".to_string(),
-            channel_type: ChannelType::GuildVoice,
-            topic: Some("Drop-in voice room".to_string()),
-            position: 1,
-        };
-
-        let dev_channel = ChannelModel {
-            id: "200000000000000003".to_string(),
-            guild_id: Some("100000000000000001".to_string()),
-            name: "rust-desktop".to_string(),
-            channel_type: ChannelType::GuildText,
-            topic: Some("Discussion on GPUI Native Desktop Client".to_string()),
-            position: 2,
-        };
-
-        let default_guild = GuildModel {
-            id: "100000000000000001".to_string(),
-            name: "Fluxer HQ".to_string(),
-            icon: None,
-            description: Some("Official Fluxer Development Guild".to_string()),
-            channels: vec![gen_channel.clone(), voice_channel, dev_channel],
-        };
-
-        let sample_messages = vec![
-            ChatMessageModel {
-                id: "300000000000000001".to_string(),
-                channel_id: gen_channel.id.clone(),
-                author: UserProfile {
-                    id: "100000000000000002".to_string(),
-                    username: "system".to_string(),
-                    display_name: Some("Fluxer Bot".to_string()),
-                    avatar: None,
-                    bot: true,
+        // 이미지 1의 실제 DM 목록: Justi, T4IN, Jy, pillmedii, SigeonPexMao, Ann
+        let dm_channels = vec![
+            DmChannelModel {
+                id: "dm_justi".to_string(),
+                recipient: DmRecipientModel {
+                    id: "u_justi".to_string(),
+                    username: "Justi".to_string(),
+                    discriminator: "1001".to_string(),
+                    display_name: "Justi".to_string(),
+                    avatar_initial: "J".to_string(),
+                    avatar_bg: 0xe67e22,
+                    status: "Online".to_string(),
+                    status_color: 0x23a55a,
+                    mutual_community: "FR 2 mutual communities".to_string(),
                 },
-                content: "Welcome to Fluxer Native GPUI Client! Direct3D 11 hardware-accelerated 144Hz pipeline initialized.".to_string(),
-                timestamp: "Today at 01:00 AM".to_string(),
-                pinned: true,
+                unread: false,
             },
-            ChatMessageModel {
-                id: "300000000000000002".to_string(),
-                channel_id: gen_channel.id.clone(),
-                author: UserProfile {
-                    id: "1551530442950180864".to_string(),
-                    username: "developer".to_string(),
-                    display_name: Some("Lead Engineer".to_string()),
-                    avatar: None,
-                    bot: false,
+            DmChannelModel {
+                id: "dm_t4in".to_string(),
+                recipient: DmRecipientModel {
+                    id: "u_t4in".to_string(),
+                    username: "T4IN".to_string(),
+                    discriminator: "2002".to_string(),
+                    display_name: "T4IN".to_string(),
+                    avatar_initial: "T".to_string(),
+                    avatar_bg: 0x9b59b6,
+                    status: "Offline".to_string(),
+                    status_color: 0x80848e,
+                    mutual_community: "FR 1 mutual community".to_string(),
                 },
-                content: "Testing pure Rust native rendering performance. Zero DOM garbage collection, 30MB base RAM consumption confirmed.".to_string(),
-                timestamp: "Today at 01:05 AM".to_string(),
-                pinned: false,
+                unread: false,
+            },
+            DmChannelModel {
+                id: "dm_jy".to_string(),
+                recipient: DmRecipientModel {
+                    id: "u_jy".to_string(),
+                    username: "Jy".to_string(),
+                    discriminator: "3003".to_string(),
+                    display_name: "Jy".to_string(),
+                    avatar_initial: "J".to_string(),
+                    avatar_bg: 0xe91e63,
+                    status: "Online".to_string(),
+                    status_color: 0x23a55a,
+                    mutual_community: "FR 1 mutual community".to_string(),
+                },
+                unread: false,
+            },
+            DmChannelModel {
+                id: "dm_pillmedii".to_string(),
+                recipient: DmRecipientModel {
+                    id: "u_pillmedii".to_string(),
+                    username: "pillmedii".to_string(),
+                    discriminator: "4004".to_string(),
+                    display_name: "pillmedii".to_string(),
+                    avatar_initial: "P".to_string(),
+                    avatar_bg: 0x3498db,
+                    status: "Offline".to_string(),
+                    status_color: 0x80848e,
+                    mutual_community: "FR 1 mutual community".to_string(),
+                },
+                unread: false,
+            },
+            DmChannelModel {
+                id: "dm_sigeon".to_string(),
+                recipient: DmRecipientModel {
+                    id: "u_sigeon".to_string(),
+                    username: "SigeonPexMao".to_string(),
+                    discriminator: "5005".to_string(),
+                    display_name: "SigeonPexMao".to_string(),
+                    avatar_initial: "S".to_string(),
+                    avatar_bg: 0x1abc9c,
+                    status: "Online".to_string(),
+                    status_color: 0x23a55a,
+                    mutual_community: "FR 1 mutual community".to_string(),
+                },
+                unread: false,
+            },
+            DmChannelModel {
+                id: "dm_ann".to_string(),
+                recipient: DmRecipientModel {
+                    id: "u_ann".to_string(),
+                    username: "Ann".to_string(),
+                    discriminator: "4873".to_string(),
+                    display_name: "Ann".to_string(),
+                    avatar_initial: "A".to_string(),
+                    avatar_bg: 0x2ecc71,
+                    status: "Online".to_string(),
+                    status_color: 0x23a55a,
+                    mutual_community: "FR 1 mutual community".to_string(),
+                },
+                unread: false,
             },
         ];
 
+        // 이미지 1의 실제 서버: Fluxer Refugee (FR)
+        let default_guild = GuildModel {
+            id: "guild_fr".to_string(),
+            name: "Fluxer Refugee".to_string(),
+            icon: None,
+            description: Some("Official Fluxer Refugee Community".to_string()),
+            channels: vec![
+                ChannelModel {
+                    id: "ch_general".to_string(),
+                    guild_id: Some("guild_fr".to_string()),
+                    name: "general".to_string(),
+                    channel_type: ChannelType::GuildText,
+                    topic: Some("General discussion for all community members".to_string()),
+                    position: 0,
+                },
+                ChannelModel {
+                    id: "ch_lounge".to_string(),
+                    guild_id: Some("guild_fr".to_string()),
+                    name: "Lounge (Voice)".to_string(),
+                    channel_type: ChannelType::GuildVoice,
+                    topic: Some("bicolor-paradise".to_string()),
+                    position: 1,
+                },
+            ],
+        };
+
         Self {
             current_user: default_user,
-            guilds: vec![default_guild.clone()],
-            active_guild_id: Some(default_guild.id),
-            active_channel_id: Some(gen_channel.id),
-            messages: sample_messages,
+            guilds: vec![default_guild],
+            active_guild_id: None,
+            active_channel_id: None,
+            dm_channels,
+            active_dm_id: Some("dm_ann".to_string()),
+            voice_session: VoiceSessionState::default(),
+            pip_stream: PipStreamTileState::default(),
+            active_nav: NavTab::DirectMessages,
+            messages: Vec::new(),
         }
     }
 }
@@ -202,6 +344,7 @@ pub fn append_message(content: String) {
     let state = get_client_state();
     let channel_id = state
         .active_channel_id
+        .or_else(|| state.active_dm_id.clone())
         .unwrap_or_else(|| "default".to_string());
     let author = state.current_user.clone();
     let msg = ChatMessageModel {
@@ -281,9 +424,10 @@ mod tests {
     fn test_client_app_state_default() {
         let state = ClientAppState::default();
         assert!(!state.guilds.is_empty());
-        assert!(state.active_guild_id.is_some());
-        assert!(state.active_channel_id.is_some());
-        assert!(!state.messages.is_empty());
+        assert!(state.active_dm_id.is_some());
+        assert!(!state.dm_channels.is_empty());
+        assert!(state.voice_session.in_voice);
+        assert!(state.pip_stream.is_visible);
     }
 
     #[test]

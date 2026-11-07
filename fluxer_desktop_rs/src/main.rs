@@ -144,17 +144,24 @@ pub fn trim_process_working_set() {
 pub fn trim_process_working_set() {}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // WebView2의 과도한 메모리 점유 및 다중 프로세스 분할(491MB)을 억제하기 위한 초경량 Chromium 플래그 주입
+    // WebView2의 과도한 메모리 점유 및 다중 프로세스 분할(491MB)을 억제하기 위한 극한의 경량화 플래그 주입
+    // 1. --enable-low-end-device-mode: Skia 캔버스 및 텍스처 풀 40% 강제 축소
+    // 2. --disable-extensions & --disk-cache-size=1: 확장기능 완전 차단 및 디스크 캐시 극소화
+    // 3. --optimize-for-size & --max-semi-space-size=1: V8 JIT 코드 캐시 및 신생 영역 힙 극단적 축소
     if std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").is_err() {
         unsafe {
             std::env::set_var(
                 "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
                 "--renderer-process-limit=1 \
                  --in-process-gpu \
+                 --enable-low-end-device-mode \
+                 --disable-extensions \
+                 --disk-cache-size=1 \
+                 --disable-background-networking \
                  --disable-gpu-shader-disk-cache \
                  --disable-component-update \
                  --disable-features=AudioServiceOutOfProcess,RendererCodeIntegrity,PreloadMediaEngagementData,AutofillServerCommunication,CalculateNativeWinOcclusion \
-                 --js-flags=\"--max-old-space-size=64 --expose-gc\"",
+                 --js-flags=\"--optimize-for-size --max-semi-space-size=1 --max-old-space-size=64 --expose-gc\"",
             );
         }
     }

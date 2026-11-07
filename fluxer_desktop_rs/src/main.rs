@@ -404,6 +404,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 "if (window.__fluxerEmitTrayAction) { window.__fluxerEmitTrayAction({ action: 'check-for-updates' }); } else { window.dispatchEvent(new CustomEvent('fluxer:check-updates')); }"
                             );
                         }
+                        TrayMenuAction::ToggleOverlay => {
+                            println!("[Fluxer Shell] Tray action triggered: Launch GPUI voice overlay");
+                            std::thread::spawn(|| {
+                                overlay::launch_voice_overlay();
+                            });
+                        }
                         TrayMenuAction::ToggleWindow => (),
                         TrayMenuAction::None => (),
                     }
@@ -425,6 +431,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             "window.dispatchEvent(new CustomEvent('fluxer:global-keybind', { detail: { action: 'toggle-mute' } }));"
                         );
                         println!("[Fluxer Shell] Global shortcut triggered: Toggle mute");
+                    } else if hotkey_id == sc.overlay_hotkey.id() {
+                        println!("[Fluxer Shell] Global shortcut triggered: Launch GPUI voice overlay (Ctrl+Shift+O)");
+                        std::thread::spawn(|| {
+                            overlay::launch_voice_overlay();
+                        });
                     }
                 }
             }

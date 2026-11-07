@@ -13,6 +13,7 @@ pub enum TrayMenuAction {
     None,
     ToggleWindow,
     OpenSettings,
+    ToggleOverlay,
     SetStatus(String),
     CheckForUpdates,
     Restart,
@@ -23,6 +24,7 @@ pub struct TrayManager {
     _tray_icon: TrayIcon,
     toggle_item: MenuItem,
     open_settings_id: MenuId,
+    overlay_item_id: MenuId,
     status_online_item: CheckMenuItem,
     status_idle_item: CheckMenuItem,
     status_dnd_item: CheckMenuItem,
@@ -36,14 +38,17 @@ impl TrayManager {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let menu = Menu::new();
 
-        // 1. Hide Fluxer / Show Fluxer
+        // 1. Hide Fluxer / Show Fluxer & Overlay
         let toggle_item = MenuItem::new("Hide Fluxer", true, None);
         let open_settings_item = MenuItem::new("Open settings", true, None);
+        let overlay_item = MenuItem::new("Voice Overlay (GPUI)", true, None);
 
         let open_settings_id = open_settings_item.id().clone();
+        let overlay_item_id = overlay_item.id().clone();
 
         menu.append(&toggle_item)?;
         menu.append(&open_settings_item)?;
+        menu.append(&overlay_item)?;
         menu.append(&PredefinedMenuItem::separator())?;
 
         // 2. Status 서브메뉴
@@ -91,6 +96,7 @@ impl TrayManager {
             _tray_icon: tray_icon,
             toggle_item,
             open_settings_id,
+            overlay_item_id,
             status_online_item,
             status_idle_item,
             status_dnd_item,
@@ -110,6 +116,8 @@ impl TrayManager {
             ensure_window_visible(window);
             self.update_visibility_label(true);
             TrayMenuAction::OpenSettings
+        } else if id == &self.overlay_item_id {
+            TrayMenuAction::ToggleOverlay
         } else if id == self.status_online_item.id() {
             self.set_active_status("online");
             TrayMenuAction::SetStatus("online".to_string())
@@ -209,5 +217,11 @@ mod tests {
     fn test_create_tray_icon() {
         let icon_res = create_tray_icon();
         assert!(icon_res.is_ok());
+    }
+
+    #[test]
+    fn test_tray_menu_action_variants() {
+        let action = TrayMenuAction::ToggleOverlay;
+        assert_eq!(action, TrayMenuAction::ToggleOverlay);
     }
 }

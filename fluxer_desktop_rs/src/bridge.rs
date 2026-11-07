@@ -1048,49 +1048,73 @@ pub fn get_initialization_script() -> &'static str {
         }
     };
 
-    // 4. 화면 공유 버튼 클릭 시 2중 선택창 없이 크로미움 시스템 선택창으로 자연스럽게 직결 (통합 파이프라인)
+    // 4. 화면 공유 시작 및 창 변경 시 2중 선택창 없이 크로미움 시스템 선택창으로 자연스럽게 직결 (통합 파이프라인)
     let isScreenShareStarting = false;
 
-    function isScreenShareButton(target) {
-        if (!target) return null;
-        var btn = (target.nodeType === 1) ? target.closest('button') : null;
-        if (!btn) return null;
+    function isScreenShareGesture(target) {
+        if (!target) return false;
+        var el = (target.nodeType === 1) ? target : target.parentElement;
+        if (!el) return false;
 
-        var flx = btn.getAttribute('data-flx') || '';
-        var parentFlx = (btn.parentElement && btn.parentElement.getAttribute('data-flx')) || '';
-        if (parentFlx.includes('screen-share') || flx.includes('screen-share')) {
-            return btn;
+        // 클릭된 요소부터 상위 6단계 부모까지 탐색 (버튼, 메뉴 아이템, div, 아이콘 등 모두 포괄)
+        var curr = el;
+        var depth = 0;
+        while (curr && depth < 6 && curr !== document.body) {
+            var flx = (curr.getAttribute('data-flx') || '').toLowerCase();
+            var aria = (curr.getAttribute('aria-label') || '').toLowerCase();
+            var text = (curr.textContent || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+            // (1) 화면 공유 중지/종료(Stop) 액션이면 바이패스하지 않음 (정상적인 종료 보장)
+            if (flx.includes('stop') || aria.includes('stop') || aria.includes('중지') || aria.includes('종료')) {
+                return false;
+            }
+
+            // (2) 화면 공유 창/스트림 변경 (Change stream / Source switcher)
+            if (flx.includes('change-stream') || flx.includes('change-action') || flx.includes('source-switcher') || flx.includes('active-screen-share-menu')) {
+                if (!flx.includes('stop')) {
+                    return true;
+                }
+            }
+            if (text.includes('change stream') || text.includes('스트림 변경') || text.includes('화면 변경') || text.includes('창 변경') || text.includes('change window') || text.includes('switch stream')) {
+                return true;
+            }
+
+            // (3) 화면 공유 시작 버튼 (Screen Share Button)
+            if (flx.includes('screen-share') || aria.includes('screen') || aria.includes('화면')) {
+                var cls = curr.className || '';
+                var isAlreadyOn = (curr.getAttribute('aria-pressed') === 'true') ||
+                                  (typeof cls === 'string' && (cls.includes('ScreenShareOn') || cls.includes('screenShareActive')));
+                // 이미 켜진 상태의 일반 토글 클릭이 아니면 시작으로 판별
+                if (!isAlreadyOn) {
+                    return true;
+                }
+            }
+
+            // (4) 아이콘 기반 판별 (Phosphor MonitorPlay, ChangeStream 아이콘 등)
+            if (curr.querySelector && (
+                curr.querySelector('svg.ph-monitor-play') ||
+                curr.querySelector('[data-flx*="change-stream"]') ||
+                curr.querySelector('[data-flx*="monitor-play"]') ||
+                curr.querySelector('[data-flx*="media-icon--3"]')
+            )) {
+                if (!curr.querySelector('svg.ph-stop-circle') && !flx.includes('stop')) {
+                    return true;
+                }
+            }
+
+            curr = curr.parentElement;
+            depth++;
         }
 
-        if (btn.querySelector('svg.ph-monitor-play') || btn.querySelector('[data-flx*="icon--7"]') || btn.querySelector('[data-flx*="media-icon--3"]')) {
-            return btn;
-        }
-
-        var aria = (btn.getAttribute('aria-label') || '').toLowerCase();
-        if (aria.includes('screen') || aria.includes('화면')) {
-            return btn;
-        }
-
-        return null;
-    }
-
-    function isScreenShareActive(btn) {
-        if (!btn) return false;
-        if (btn.getAttribute('aria-pressed') === 'true') return true;
-        var cls = btn.className || '';
-        if (typeof cls === 'string' && (cls.includes('ScreenShareOn') || cls.includes('screenShareActive'))) return true;
-        var aria = (btn.getAttribute('aria-label') || '').toLowerCase();
-        if (aria.includes('end') || aria.includes('stop') || aria.includes('중지') || aria.includes('종료')) return true;
         return false;
     }
 
     window.addEventListener('click', function(e) {
-        var btn = isScreenShareButton(e.target);
-        if (btn && !isScreenShareActive(btn)) {
+        if (isScreenShareGesture(e.target)) {
             isScreenShareStarting = true;
             setTimeout(function() {
                 isScreenShareStarting = false;
-            }, 600);
+            }, 800);
         }
     }, true);
 

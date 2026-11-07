@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! GPUI 기반 초고성능 네이티브 채팅 뷰 (Chat View) 컴포넌트입니다.
-//! DOM 레이아웃 및 JS GC 오버헤드 없이 Direct3D 11 가속 텍스트 렌더러를 통해
-//! 수천 개의 메시지를 144Hz 버터 스크롤로 매끄럽게 렌더링합니다.
+//! Fluxer 공식 디자인 시스템(`theme.rs`)을 1:1로 적용하여,
+//! 웹뷰 없이 Direct3D 11 하드웨어 가속 144Hz 버터 스크롤로 매끄럽게 렌더링합니다.
 
 use gpui::*;
 use crate::state::{get_client_state, ChatMessageModel, ClientAppState};
+use crate::theme::*;
 
 /// 네이티브 채팅 뷰 컴포넌트입니다.
 pub struct ChatView {
@@ -44,6 +45,7 @@ impl ChatView {
         }
     }
 
+    /// 상단 채널 헤더 바 렌더러 (높이 48px, 원본 Fluxer 룩앤필 1:1 일치)
     fn render_header(&self) -> AnyElement {
         let channel_name = self
             .state
@@ -61,17 +63,17 @@ impl ChatView {
             .flat_map(|g| &g.channels)
             .find(|c| Some(&c.id) == self.state.active_channel_id.as_ref())
             .and_then(|c| c.topic.clone())
-            .unwrap_or_else(|| "Fluxer GPUI High-Performance Native Viewport".to_string());
+            .unwrap_or_else(|| "Fluxer Pure Native GPUI Viewport — Direct3D 11 144Hz Engine".to_string());
 
         div()
             .flex()
             .items_center()
             .justify_between()
-            .h(px(48.0))
+            .h(px(HEADER_HEIGHT))
             .px_4()
-            .bg(rgb(0x0f172a)) // #0f172a 다크 헤더
+            .bg(BG_CHANNEL_HEADER)
             .border_b_1()
-            .border_color(rgba(0x33415588))
+            .border_color(BORDER_DIVIDER)
             .child(
                 div()
                     .flex()
@@ -81,26 +83,26 @@ impl ChatView {
                         div()
                             .text_lg()
                             .font_weight(FontWeight::BOLD)
-                            .text_color(rgb(0x94a3b8))
+                            .text_color(TEXT_MUTED)
                             .child("#"),
                     )
                     .child(
                         div()
                             .font_weight(FontWeight::BOLD)
-                            .text_color(rgb(0xf8fafc))
+                            .text_color(TEXT_PRIMARY)
                             .text_sm()
                             .child(channel_name),
                     )
                     .child(
                         div()
-                            .text_color(rgba(0x64748b88))
-                            .text_sm()
+                            .text_color(TEXT_MUTED)
+                            .text_xs()
                             .child("|"),
                     )
                     .child(
                         div()
                             .text_xs()
-                            .text_color(rgb(0x94a3b8))
+                            .text_color(TEXT_MUTED)
                             .child(topic),
                     ),
             )
@@ -111,30 +113,41 @@ impl ChatView {
                     .gap_3()
                     .child(
                         div()
-                            .bg(rgba(0x1e293b88))
-                            .text_color(rgb(0x38bdf8))
+                            .bg(rgba(0x5865f222))
+                            .text_color(BRAND_ACCENT)
                             .px_2()
                             .py_0p5()
                             .rounded_sm()
                             .text_xs()
-                            .child("144Hz D3D11"),
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child("144Hz Direct3D 11"),
                     )
                     .child(
                         div()
                             .text_sm()
-                            .text_color(rgb(0x94a3b8))
+                            .text_color(TEXT_MUTED)
+                            .hover(|s| s.text_color(TEXT_PRIMARY))
                             .child("📌"),
                     )
                     .child(
                         div()
                             .text_sm()
-                            .text_color(rgb(0x94a3b8))
+                            .text_color(TEXT_MUTED)
+                            .hover(|s| s.text_color(TEXT_PRIMARY))
                             .child("🔔"),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(TEXT_MUTED)
+                            .hover(|s| s.text_color(TEXT_PRIMARY))
+                            .child("👥"),
                     ),
             )
             .into_any_element()
     }
 
+    /// 개별 채팅 메시지 행 렌더러 (호버 하이라이트 및 봇 배지, 원형 아바타)
     fn render_message_item(&self, msg: &ChatMessageModel) -> AnyElement {
         let is_bot = msg.author.bot;
         let author_initial = msg
@@ -158,20 +171,20 @@ impl ChatView {
             .items_start()
             .gap_3()
             .px_4()
-            .py_2()
-            .hover(|s| s.bg(rgba(0x1e293b44)))
+            .py_1p5()
+            .hover(|s| s.bg(BG_MESSAGE_HOVER))
             .child(
-                // 원형 아바타 플레이스홀더
+                // 40x40 원형 아바타 (Discord/Fluxer 표준 규격)
                 div()
-                    .size(px(36.0))
+                    .size(px(40.0))
                     .rounded_full()
-                    .bg(if is_bot { rgb(0x2563eb) } else { rgb(0x475569) })
+                    .bg(if is_bot { BRAND_ACCENT } else { rgb(0x475569) })
                     .flex()
                     .items_center()
                     .justify_center()
                     .text_color(rgb(0xffffff))
                     .font_weight(FontWeight::BOLD)
-                    .text_xs()
+                    .text_sm()
                     .child(author_initial),
             )
             .child(
@@ -179,7 +192,7 @@ impl ChatView {
                     .flex()
                     .flex_col()
                     .flex_1()
-                    .gap_1()
+                    .gap_0p5()
                     .child(
                         div()
                             .flex()
@@ -189,14 +202,14 @@ impl ChatView {
                                 div()
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_sm()
-                                    .text_color(if is_bot { rgb(0x60a5fa) } else { rgb(0xf1f5f9) })
+                                    .text_color(if is_bot { rgb(0x60a5fa) } else { TEXT_PRIMARY })
                                     .child(author_name),
                             )
                             .children(if is_bot {
                                 Some(
                                     div()
-                                        .bg(rgb(0x2563eb))
-                                        .text_color(rgb(0xffffff))
+                                        .bg(BRAND_ACCENT)
+                                        .text_color(TEXT_BOT_BADGE)
                                         .px_1()
                                         .py_0p5()
                                         .rounded_sm()
@@ -211,20 +224,21 @@ impl ChatView {
                             .child(
                                 div()
                                     .text_xs()
-                                    .text_color(rgb(0x64748b))
+                                    .text_color(TEXT_MUTED)
                                     .child(msg.timestamp.clone()),
                             ),
                     )
                     .child(
                         div()
                             .text_sm()
-                            .text_color(rgb(0xe2e8f0))
+                            .text_color(TEXT_BODY)
                             .child(msg.content.clone()),
                     ),
             )
             .into_any_element()
     }
 
+    /// 메시지 리스트 렌더러
     fn render_message_list(&self) -> AnyElement {
         let messages = &self.state.messages;
         let items: Vec<AnyElement> = messages
@@ -237,11 +251,12 @@ impl ChatView {
             .flex_col()
             .flex_1()
             .overflow_hidden()
-            .py_2()
+            .py_3()
             .children(items)
             .into_any_element()
     }
 
+    /// 하단 메시지 입력 바 렌더러 (높이 44px, 둥근 8px 박스, 좌측 +, 우측 이모지)
     fn render_input_bar(&self) -> AnyElement {
         let channel_name = self
             .state
@@ -258,35 +273,35 @@ impl ChatView {
             .flex()
             .items_center()
             .justify_between()
-            .h(px(44.0))
+            .h(px(INPUT_BAR_HEIGHT))
             .mx_4()
             .mb_4()
             .px_3()
             .rounded_lg()
-            .bg(rgb(0x1e293b))
-            .border_1()
-            .border_color(rgba(0x33415588))
+            .bg(BG_TEXTAREA)
             .child(
                 div()
                     .flex()
                     .items_center()
                     .gap_3()
                     .child(
+                        // 첨부파일 + 버튼
                         div()
                             .size(px(24.0))
                             .rounded_full()
-                            .bg(rgba(0x33415588))
+                            .bg(rgb(0x4e5058))
                             .flex()
                             .items_center()
                             .justify_center()
-                            .text_color(rgb(0x94a3b8))
+                            .text_color(TEXT_PRIMARY)
                             .text_xs()
+                            .font_weight(FontWeight::BOLD)
                             .child("+"),
                     )
                     .child(
                         div()
                             .text_sm()
-                            .text_color(rgb(0x64748b))
+                            .text_color(TEXT_PLACEHOLDER)
                             .child(placeholder),
                     ),
             )
@@ -298,13 +313,16 @@ impl ChatView {
                     .child(
                         div()
                             .text_xs()
-                            .text_color(rgb(0x64748b))
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(TEXT_MUTED)
+                            .hover(|s| s.text_color(TEXT_PRIMARY))
                             .child("GIF"),
                     )
                     .child(
                         div()
                             .text_sm()
-                            .text_color(rgb(0x64748b))
+                            .text_color(TEXT_MUTED)
+                            .hover(|s| s.text_color(TEXT_PRIMARY))
                             .child("😃"),
                     ),
             )
@@ -318,7 +336,8 @@ impl Render for ChatView {
             .flex()
             .flex_col()
             .size_full()
-            .bg(rgb(0x0b1120)) // 다크 메인 배경 (#0b1120)
+            .bg(BG_PRIMARY)
+            .text_color(TEXT_BODY)
             .child(self.render_header())
             .child(self.render_message_list())
             .child(self.render_input_bar())

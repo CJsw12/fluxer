@@ -25,6 +25,7 @@ mod shortcuts;
 mod state;
 mod storage;
 mod stream_viewer;
+mod theme;
 mod tray;
 
 use assets::AssetHandler;

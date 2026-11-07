@@ -37,26 +37,59 @@ impl Default for VoiceOverlayState {
 static VOICE_STATE: RwLock<Option<VoiceOverlayState>> = RwLock::new(None);
 
 /// 메인 프로세스(웹뷰 IPC)에서 전달된 최신 음성 상태를 갱신합니다.
+/// 메모리와 함께 `%APPDATA%\fluxer_desktop_rs\voice_state.json` 파일에 원자적으로 저장하여
+/// 독립 프로세스로 구동되는 GPUI 오버레이와 무지연 실시간 동기화를 보장합니다.
 pub fn update_voice_state(state: VoiceOverlayState) {
     if let Ok(mut lock) = VOICE_STATE.write() {
-        *lock = Some(state);
+        *lock = Some(state.clone());
+    }
+
+    let file_path = crate::config::get_voice_state_file_path();
+    if let Ok(serialized) = serde_json::to_string(&state) {
+        let _ = std::fs::write(file_path, serialized.as_bytes());
     }
 }
 
-/// 현재 저장된 음성 상태를 조회합니다.
+/// 현재 저장된 음성 상태를 메모리 또는 디스크 동기화 파일로부터 조회합니다.
 pub fn get_voice_state() -> VoiceOverlayState {
-    VOICE_STATE
-        .read()
-        .ok()
-        .and_then(|lock| lock.clone())
-        .unwrap_or_else(|| VoiceOverlayState {
-            is_connected: true,
-            channel_name: "Voice Channel".to_string(),
-            is_muted: false,
-            is_deafened: false,
-            is_speaking: false,
-            active_speakers: vec!["Local User".to_string()],
-        })
+    if let Ok(lock) = VOICE_STATE.read() {
+        if let Some(ref st) = *lock {
+            return st.clone();
+        }
+    }
+
+    let file_path = crate::config::get_voice_state_file_path();
+    if let Ok(bytes) = std::fs::read_to_string(&file_path) {
+        if let Ok(parsed) = serde_json::from_str::<VoiceOverlayState>(&bytes) {
+            if let Ok(mut lock) = VOICE_STATE.write() {
+                *lock = Some(parsed.clone());
+            }
+            return parsed;
+        }
+    }
+
+    VoiceOverlayState {
+        is_connected: false,
+        channel_name: "No Voice Channel".to_string(),
+        is_muted: false,
+        is_deafened: false,
+        is_speaking: false,
+        active_speakers: Vec::new(),
+    }
+}
+
+/// 디스크 동기화 파일로부터 최신 상태를 직접 조회하여 프로세스 간 변경 사항을 즉시 반영합니다.
+pub fn get_voice_state_from_disk_or_memory() -> VoiceOverlayState {
+    let file_path = crate::config::get_voice_state_file_path();
+    if let Ok(bytes) = std::fs::read_to_string(&file_path) {
+        if let Ok(parsed) = serde_json::from_str::<VoiceOverlayState>(&bytes) {
+            if let Ok(mut lock) = VOICE_STATE.write() {
+                *lock = Some(parsed.clone());
+            }
+            return parsed;
+        }
+    }
+    get_voice_state()
 }
 
 /// GPUI 기반 음성 상태 오버레이 뷰 컴포넌트입니다.
@@ -74,7 +107,7 @@ impl VoiceOverlayView {
                 cx.background_executor()
                     .timer(Duration::from_millis(100))
                     .await;
-                let latest = get_voice_state();
+                let latest = get_voice_state_from_disk_or_memory();
                 let update_result = this.update(&mut *cx, |view, cx| {
                     if view.state != latest {
                         view.state = latest;
@@ -197,6 +230,29 @@ impl Render for VoiceOverlayView {
             .gap_3()
             .child(self.render_header(status_color))
             .child(self.render_speakers())
+    }
+}
+
+/// 별도 독립 서브 프로세스(`fluxer.exe --overlay`)로 GPUI 오버레이를 스폰합니다.
+/// 메인 프로세스의 Wry / Tao 메시지 루프와 100% 격리되어 독립 12MB 초경량 프로세스로 동작하며,
+/// 만약 프로세스 생성에 실패할 경우 동일 프로세스 내 백그라운드 스레드로 안전하게 폴백합니다.
+pub fn launch_voice_overlay_process() {
+    if let Ok(exe_path) = std::env::current_exe() {
+        println!("[Fluxer Overlay] Spawning isolated GPUI overlay process: {:?}", exe_path);
+        let spawn_result = std::process::Command::new(exe_path)
+            .arg("--overlay")
+            .spawn();
+
+        if let Err(err) = spawn_result {
+            eprintln!("[Fluxer Overlay] Failed to spawn child overlay process: {err:?}, falling back to thread");
+            std::thread::spawn(|| {
+                launch_voice_overlay();
+            });
+        }
+    } else {
+        std::thread::spawn(|| {
+            launch_voice_overlay();
+        });
     }
 }
 

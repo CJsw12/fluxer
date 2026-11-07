@@ -21,6 +21,7 @@ mod ipc;
 mod overlay;
 mod shortcuts;
 mod storage;
+mod stream_viewer;
 mod tray;
 
 use assets::AssetHandler;
@@ -71,6 +72,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--overlay" || a == "--voice-overlay") {
         overlay::launch_voice_overlay();
+        return Ok(());
+    }
+    if args.iter().any(|a| a == "--stream-viewer" || a == "--popout-stream") {
+        stream_viewer::launch_stream_viewer();
         return Ok(());
     }
 
@@ -406,9 +411,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         TrayMenuAction::ToggleOverlay => {
                             println!("[Fluxer Shell] Tray action triggered: Launch GPUI voice overlay");
-                            std::thread::spawn(|| {
-                                overlay::launch_voice_overlay();
-                            });
+                            overlay::launch_voice_overlay_process();
                         }
                         TrayMenuAction::ToggleWindow => (),
                         TrayMenuAction::None => (),
@@ -433,9 +436,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         println!("[Fluxer Shell] Global shortcut triggered: Toggle mute");
                     } else if hotkey_id == sc.overlay_hotkey.id() {
                         println!("[Fluxer Shell] Global shortcut triggered: Launch GPUI voice overlay (Ctrl+Shift+O)");
-                        std::thread::spawn(|| {
-                            overlay::launch_voice_overlay();
-                        });
+                        overlay::launch_voice_overlay_process();
                     }
                 }
             }

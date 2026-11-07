@@ -12,6 +12,7 @@ use crate::config;
 use crate::gateway::GatewayManager;
 use crate::overlay;
 use crate::storage::{self, DesktopAccountRecord, DesktopStorageWrite};
+use crate::stream_viewer;
 
 static MINIMIZE_TO_TRAY: AtomicBool = AtomicBool::new(false);
 static CLOSE_TO_TRAY: AtomicBool = AtomicBool::new(false);
@@ -287,9 +288,12 @@ pub fn handle_ipc_request(
         }
 
         "popoutVoiceOverlay" | "windowToggleVoiceOverlay" => {
-            std::thread::spawn(|| {
-                overlay::launch_voice_overlay();
-            });
+            overlay::launch_voice_overlay_process();
+            IpcResponse::success(id, json!(true))
+        }
+
+        "popoutStream" | "popoutStreamViewer" | "windowPopoutStream" => {
+            stream_viewer::launch_stream_viewer_process();
             IpcResponse::success(id, json!(true))
         }
 
@@ -894,5 +898,16 @@ mod tests {
         assert_eq!(req.cmd, "voiceStateUpdate");
         assert_eq!(req.payload.get("isConnected").and_then(Value::as_bool), Some(true));
         assert_eq!(req.payload.get("channelName").and_then(Value::as_str), Some("Voice Room"));
+    }
+
+    #[test]
+    fn test_popout_stream_ipc_commands_matching() {
+        let req = IpcRequest {
+            id: Some(102),
+            cmd: "popoutStreamViewer".to_string(),
+            payload: json!({ "streamId": "test-stream-123" }),
+        };
+        assert_eq!(req.cmd, "popoutStreamViewer");
+        assert_eq!(req.payload.get("streamId").and_then(Value::as_str), Some("test-stream-123"));
     }
 }

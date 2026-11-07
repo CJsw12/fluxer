@@ -563,6 +563,9 @@ pub fn get_initialization_script() -> &'static str {
         popoutVoiceOverlay: function() {
             return invokeRust('popoutVoiceOverlay');
         },
+        popoutStreamViewer: function(payload) {
+            return invokeRust('popoutStreamViewer', payload);
+        },
 
         // 시스템 및 진단 API
         getDesktopInfo: function() {
@@ -1634,7 +1637,7 @@ pub fn get_initialization_script() -> &'static str {
         }, 200);
     })();
 
-    // 6. 팝아웃 버튼 클릭 시 GPUI 네이티브 오버레이 자동 실행 연동
+    // 6. 팝아웃 버튼 클릭 시 GPUI 네이티브 오버레이 및 스트림 뷰어 자동 실행 연동
     window.addEventListener('click', function(e) {
         var target = e.target;
         if (!target) return;
@@ -1642,7 +1645,9 @@ pub fn get_initialization_script() -> &'static str {
         if (btn) {
             var text = (btn.textContent || '').toLowerCase();
             var aria = (btn.getAttribute('aria-label') || '').toLowerCase();
-            if (text.includes('pop out') || aria.includes('pop out') || text.includes('overlay') || aria.includes('overlay')) {
+            if (text.includes('pop out stream') || text.includes('stream popout') || aria.includes('pop out stream')) {
+                sendRust('popoutStreamViewer');
+            } else if (text.includes('pop out') || aria.includes('pop out') || text.includes('overlay') || aria.includes('overlay')) {
                 sendRust('popoutVoiceOverlay');
             }
         }
@@ -1695,6 +1700,7 @@ mod tests {
         assert!(script.contains("dispatchWindowControl"));
         assert!(script.contains("checkCaptionButtonClick"));
         assert!(script.contains("popoutVoiceOverlay"));
+        assert!(script.contains("popoutStreamViewer"));
         assert!(script.contains("voiceStateUpdate"));
     }
 }

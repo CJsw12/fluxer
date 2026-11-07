@@ -28,6 +28,11 @@ fn get_known_instances_file_path() -> PathBuf {
     get_config_dir().join("known_instances.json")
 }
 
+/// 실시간 음성 채널 및 발언자 상태를 프로세스 간 동기화하기 위한 JSON 파일 경로를 반환합니다.
+pub fn get_voice_state_file_path() -> PathBuf {
+    get_config_dir().join("voice_state.json")
+}
+
 /// 저장된 최근 인스턴스 URL을 읽어옵니다.
 #[allow(dead_code)]
 pub fn load_last_instance() -> Option<String> {
@@ -171,5 +176,11 @@ mod tests {
     fn test_load_latest_known_instance_url() {
         // known_instances.json이 존재하지 않거나 빈 배열일 때의 안전성 검증
         let _ = load_latest_known_instance_url();
+    }
+
+    #[test]
+    fn test_voice_state_file_path() {
+        let path = get_voice_state_file_path();
+        assert!(path.ends_with("voice_state.json"));
     }
 }

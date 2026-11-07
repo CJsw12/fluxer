@@ -210,8 +210,29 @@ pub fn handle_ipc_request(
 
         "passkeyIsSupported" => IpcResponse::success(id, json!(false)),
 
-        "desktopUpdateState" => IpcResponse::success(id, json!({ "status": "idle" })),
-        "desktopModulesEnsure" => IpcResponse::success(id, json!({ "status": "ready" })),
+        "desktopUpdateState" => IpcResponse::success(
+            id,
+            json!({
+                "available": false,
+                "updating": false,
+                "replacesShell": false
+            }),
+        ),
+        "desktopModulesEnsure" => {
+            let module_name = req
+                .payload
+                .get("name")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown");
+            IpcResponse::success(
+                id,
+                json!({
+                    "module": module_name,
+                    "status": "already-installed"
+                }),
+            )
+        }
+        "desktopModulesConfirmLaunch" => IpcResponse::success(id, Value::Null),
 
         "desktopRuntimeInitialInput" => {
             // CLI 인수로 명시적인 인스턴스가 지정된 경우에만 해당 값을 반환하고,
@@ -380,12 +401,48 @@ pub fn handle_ipc_request(
                     let status = resp.status().as_u16();
                     let status_text = resp.status().canonical_reason().unwrap_or("OK").to_string();
                     let mut resp_headers = serde_json::Map::new();
+                    let mut is_binary = false;
                     for (k, v) in resp.headers() {
                         if let Ok(v_str) = v.to_str() {
+                            let k_lower = k.as_str().to_lowercase();
+                            if k_lower == "content-type" {
+                                let ct_lower = v_str.to_lowercase();
+                                if ct_lower.contains("wasm")
+                                    || ct_lower.contains("octet-stream")
+                                    || ct_lower.contains("gzip")
+                                    || ct_lower.contains("tar")
+                                    || ct_lower.contains("audio")
+                                    || ct_lower.contains("image")
+                                    || ct_lower.contains("video")
+                                    || ct_lower.contains("zip")
+                                {
+                                    is_binary = true;
+                                }
+                            }
                             resp_headers.insert(k.as_str().to_string(), Value::String(v_str.to_string()));
                         }
                     }
-                    let resp_body = resp.text().unwrap_or_default();
+
+                    // 파일 확장자 기반 바이너리 판정 보강 (WASM, 모델 아카이브 등)
+                    let url_lower = url.to_lowercase();
+                    if url_lower.ends_with(".wasm")
+                        || url_lower.ends_with(".tar.gz")
+                        || url_lower.ends_with(".gz")
+                        || url_lower.ends_with(".bin")
+                        || url_lower.ends_with(".onnx")
+                    {
+                        is_binary = true;
+                    }
+
+                    let raw_bytes = resp.bytes().unwrap_or_default();
+                    let (body_val, is_b64) = if is_binary {
+                        (BASE64_STANDARD.encode(&raw_bytes), true)
+                    } else {
+                        match String::from_utf8(raw_bytes.to_vec()) {
+                            Ok(text) => (text, false),
+                            Err(_) => (BASE64_STANDARD.encode(&raw_bytes), true),
+                        }
+                    };
 
                     IpcResponse::success(
                         id,
@@ -393,7 +450,8 @@ pub fn handle_ipc_request(
                             "status": status,
                             "statusText": status_text,
                             "headers": resp_headers,
-                            "body": resp_body
+                            "body": body_val,
+                            "isBase64": is_b64
                         }),
                     )
                 }
@@ -741,5 +799,22 @@ mod tests {
         };
         assert_eq!(req.cmd, "popoutSetAlwaysOnTop");
         assert_eq!(req.payload.get("flag").and_then(Value::as_bool), Some(true));
+    }
+
+    #[test]
+    fn test_desktop_module_and_update_contract() {
+        let module_res = json!({
+            "module": "fluxer_deepfilter",
+            "status": "already-installed"
+        });
+        assert_eq!(module_res["status"], "already-installed");
+        assert_eq!(module_res["module"], "fluxer_deepfilter");
+
+        let update_res = json!({
+            "available": false,
+            "updating": false,
+            "replacesShell": false
+        });
+        assert_eq!(update_res["available"], false);
     }
 }

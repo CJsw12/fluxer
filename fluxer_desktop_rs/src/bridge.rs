@@ -141,7 +141,20 @@ pub fn get_initialization_script() -> &'static str {
                     });
 
                     var responseHeaders = new Headers(resp.headers || {});
-                    return new Response(resp.body, {
+                    var responseBody;
+                    if (resp.isBase64 && typeof resp.body === 'string') {
+                        var binaryStr = atob(resp.body);
+                        var len = binaryStr.length;
+                        var bytes = new Uint8Array(len);
+                        for (var i = 0; i < len; i++) {
+                            bytes[i] = binaryStr.charCodeAt(i);
+                        }
+                        responseBody = bytes.buffer;
+                    } else {
+                        responseBody = resp.body;
+                    }
+
+                    return new Response(responseBody, {
                         status: resp.status,
                         statusText: resp.statusText || 'OK',
                         headers: responseHeaders
@@ -367,11 +380,25 @@ pub fn get_initialization_script() -> &'static str {
             self.status = resp.status || 200;
             self.statusText = resp.statusText || 'OK';
             self._respHeaders = resp.headers || {};
-            self.responseText = typeof resp.body === 'string' ? resp.body : '';
+            var rawBody = resp.body;
+            var arrayBuf = null;
+            if (resp.isBase64 && typeof resp.body === 'string') {
+                var binaryStr = atob(resp.body);
+                var len = binaryStr.length;
+                var bytes = new Uint8Array(len);
+                for (var i = 0; i < len; i++) {
+                    bytes[i] = binaryStr.charCodeAt(i);
+                }
+                arrayBuf = bytes.buffer;
+                rawBody = binaryStr;
+            }
+            self.responseText = typeof rawBody === 'string' ? rawBody : '';
             if (self.responseType === 'json') {
                 try { self.response = JSON.parse(self.responseText); } catch (_) { self.response = null; }
             } else if (self.responseType === 'blob') {
-                self.response = new Blob([self.responseText]);
+                self.response = new Blob([arrayBuf || self.responseText]);
+            } else if (self.responseType === 'arraybuffer') {
+                self.response = arrayBuf || new ArrayBuffer(0);
             } else {
                 self.response = self.responseText;
             }
@@ -400,7 +427,51 @@ pub fn get_initialization_script() -> &'static str {
     };
     window.XMLHttpRequest = ProxyXMLHttpRequest;
 
-    // 2-2. 화면 공유 (Screen Share / getDisplayMedia) 로깅 및 파이프라인
+    // 2-2. Web Audio 정규화 (음성 노이즈 억제 백엔드 RNNoise, GTCRN, DeepFilterNet 48000Hz 호환성 보장)
+    try {
+        var OrigAudioContext = window.AudioContext || window.webkitAudioContext;
+        if (OrigAudioContext) {
+            var PatchedAudioContext = function(options) {
+                options = options || {};
+                // Windows 사운드카드 드라이버가 44.1kHz 등으로 설정된 경우
+                // RNNoise(48kHz 필수) 등 모델이 "sample_rate" 불일치로 실패하는 것을 방지하기 위해
+                // 명시적 sampleRate가 없는 경우 표준 음성 처리 샘플 레이트인 48000Hz를 기본 적용합니다.
+                if (!options.sampleRate) {
+                    options.sampleRate = 48000;
+                }
+                var ctx = new OrigAudioContext(options);
+                sendRust('consoleLog', {
+                    level: 'info',
+                    message: '[Fluxer Audio] Created AudioContext with sampleRate: ' + ctx.sampleRate + ' (requested: ' + options.sampleRate + ')'
+                });
+                return ctx;
+            };
+            PatchedAudioContext.prototype = OrigAudioContext.prototype;
+            window.AudioContext = PatchedAudioContext;
+            if (window.webkitAudioContext) {
+                window.webkitAudioContext = PatchedAudioContext;
+            }
+        }
+
+        // AudioWorklet 모듈 로드 상태 및 예외 실시간 진단
+        if (window.AudioWorklet && window.AudioWorklet.prototype && window.AudioWorklet.prototype.addModule) {
+            var origAddModule = window.AudioWorklet.prototype.addModule;
+            window.AudioWorklet.prototype.addModule = function(moduleURL, options) {
+                sendRust('consoleLog', { level: 'info', message: '[Fluxer Audio] AudioWorklet.addModule requested: ' + moduleURL });
+                return origAddModule.call(this, moduleURL, options).then(function(res) {
+                    sendRust('consoleLog', { level: 'info', message: '[Fluxer Audio] AudioWorklet.addModule succeeded: ' + moduleURL });
+                    return res;
+                }).catch(function(err) {
+                    sendRust('consoleLog', { level: 'error', message: '[Fluxer Audio] AudioWorklet.addModule failed: ' + moduleURL + ' error: ' + (err.message || String(err)) });
+                    throw err;
+                });
+            };
+        }
+    } catch (audioPatchErr) {
+        console.warn('[Fluxer Native] Failed to initialize AudioContext patch:', audioPatchErr);
+    }
+
+    // 2-3. 화면 공유 (Screen Share / getDisplayMedia) 로깅 및 파이프라인
     try {
         if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
             const rawGetDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
@@ -876,7 +947,10 @@ pub fn get_initialization_script() -> &'static str {
         },
         desktopModules: {
             ensure: function(name) { return invokeRust('desktopModulesEnsure', { name: name }); },
-            confirmLaunch: function() { return Promise.resolve(); }
+            confirmLaunch: function() { return invokeRust('desktopModulesConfirmLaunch'); },
+            pendingUpdate: function() { return Promise.resolve(null); },
+            applyPendingUpdate: function() { return Promise.resolve(false); },
+            onPendingUpdateChanged: function() { return function() {}; }
         },
 
         // 줌 및 접근성

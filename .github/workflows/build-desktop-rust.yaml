@@ -59,15 +59,12 @@ jobs:
           cargo build --release -p fluxer_desktop_rs
           New-Item -ItemType Directory -Path "target/dist" -Force
           Copy-Item target/release/fluxer.exe target/dist/Fluxer.exe -Force
-          Compress-Archive -Path target/release/fluxer.exe -DestinationPath target/dist/fluxer-windows-x64.zip -Force
 
       - name: Upload Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Fluxer-Windows-x64
-          path: |
-            target/dist/Fluxer.exe
-            target/dist/fluxer-windows-x64.zip
+          path: target/dist/Fluxer.exe
           if-no-files-found: error
 
       - name: Determine Release Tag
@@ -95,8 +92,6 @@ jobs:
           name: "Fluxer Desktop (Rust) ${{ steps.release_info.outputs.tag }}"
           prerelease: ${{ steps.release_info.outputs.is_prerelease == 'true' }}
           generate_release_notes: true
-          files: |
-            target/dist/Fluxer.exe
-            target/dist/fluxer-windows-x64.zip
+          files: target/dist/Fluxer.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

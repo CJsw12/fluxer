@@ -58,7 +58,7 @@ impl StorageEngine {
         let storage_path = storage_dir.join("desktop_storage.json");
         let accounts_path = storage_dir.join("desktop_accounts.json");
 
-        let payload = if storage_path.exists() {
+        let mut payload = if storage_path.exists() {
             fs::read_to_string(&storage_path)
                 .ok()
                 .and_then(|text| serde_json::from_str::<StorageFilePayload>(&text).ok())
@@ -66,6 +66,24 @@ impl StorageEngine {
         } else {
             StorageFilePayload::default()
         };
+
+        // 데스크톱 스토리지 권한 마커의 무결성을 보장합니다.
+        // authority가 committed.v1일 때 phase 마커가 없으면 프론트엔드가 부트스트랩을 중단하므로,
+        // 항상 phase: "done" 마커가 완벽한 쌍으로 존재하도록 자동 보장 및 자가 치유합니다.
+        let mut modified = false;
+        if !payload.markers.contains_key("legacy_import.authority") {
+            payload.markers.insert("legacy_import.authority".to_string(), "committed.v1".to_string());
+            modified = true;
+        }
+        if !payload.markers.contains_key("legacy_import.v1") {
+            let done_marker = json!({
+                "version": 1,
+                "phase": "done",
+                "updatedAt": 1700000000000_u64
+            }).to_string();
+            payload.markers.insert("legacy_import.v1".to_string(), done_marker);
+            modified = true;
+        }
 
         let accounts: HashMap<String, DesktopAccountRecord> = if accounts_path.exists() {
             fs::read_to_string(&accounts_path)
@@ -81,12 +99,18 @@ impl StorageEngine {
             HashMap::new()
         };
 
-        Self {
+        let engine = Self {
             storage_path,
             accounts_path,
             payload,
             accounts,
+        };
+
+        if modified {
+            engine.persist_storage();
         }
+
+        engine
     }
 
     fn persist_storage(&self) {

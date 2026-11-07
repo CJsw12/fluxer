@@ -1,0 +1,56 @@
+name: Build Rust Native Desktop (Fluxer)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'fluxer_desktop_rs/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/build-desktop-rust.yaml'
+  pull_request:
+    paths:
+      - 'fluxer_desktop_rs/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/build-desktop-rust.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Windows x64 Native Build
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+
+      - name: Run unit tests
+        run: cargo test -p fluxer_desktop_rs --verbose
+
+      - name: Build optimized release binary
+        run: |
+          cargo build --release -p fluxer_desktop_rs
+          Copy-Item target/release/fluxer.exe target/release/Fluxer.exe -Force
+
+      - name: Upload Fluxer.exe artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fluxer-Windows-x64
+          path: target/release/Fluxer.exe
+          if-no-files-found: error

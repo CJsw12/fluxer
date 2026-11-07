@@ -1,0 +1,25 @@
+[package]
+name = "fluxer_desktop_rs"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "fluxer"
+path = "src/main.rs"
+
+[dependencies]
+wry = "0.57"
+tao = "0.37"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+open = "5.3"
+arboard = "3.4"
+tray-icon = "0.20"
+global-hotkey = "0.6"
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls", "blocking"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[build-dependencies]
+winres = "0.1"

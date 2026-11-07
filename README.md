@@ -1,182 +1,45 @@
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./fluxer_static/marketing/branding/logo-white.svg">
-    <img src="./fluxer_static/marketing/branding/logo-color.svg" alt="Fluxer logo" width="400">
-  </picture>
-</p>
+# Fluxer (Rust Native Desktop)
 
-<p align="center">
-  <a href="https://fluxer.com/download">
-    <img src="https://img.shields.io/badge/Download-fluxer.com-4641D9" alt="Download" /></a>
-  <a href="https://docs.fluxer.com">
-    <img src="https://img.shields.io/badge/Docs-docs.fluxer.com-blue" alt="Documentation" /></a>
-  <a href="https://fluxer.com/donate">
-    <img src="https://img.shields.io/badge/Donate-fluxer.com%2Fdonate-brightgreen" alt="Donate" /></a>
-  <a href="./LICENSE">
-    <img src="https://img.shields.io/badge/License-AGPLv3-purple" alt="AGPLv3 License" /></a>
-</p>
+공식 [Fluxer](https://github.com/fluxerapp/fluxer) 웹/백엔드와 100% 호환되는 Windows용 초경량 Safe Rust 네이티브 데스크톱 클라이언트입니다.
 
-<p align="center">
-  <a href="https://flathub.org/apps/app.fluxer.Fluxer">
-    <img src="https://dl.flathub.org/assets/badges/flathub-badge-en.svg" alt="Get it on Flathub" height="60" /></a>
-</p>
+---
 
-# Fluxer
+## 주요 특징
 
-> [!IMPORTANT]
-> Bug reports and feature requests have moved to [feedback.fluxer.com](https://feedback.fluxer.com). Sign in with your Fluxer account to post, vote and follow updates. GitHub Issues and Discussions are closed. Report security vulnerabilities privately through [fluxer.com/security](https://fluxer.com/security).
+- **0ms 창 드래그 레이턴시**: 마우스 이벤트 직렬화 병목 없이 Win32 네이티브 `drag_window` 파이프라인 직결
+- **초경량 바이너리 (5.19 MB)**: Node.js 메인 런타임을 완전히 제거하여 메모리 점유 최소화 및 즉시 부팅
+- **완전한 호환성**: 공식 인스턴스 및 셀프호스트 인스턴스 선택/전환, 안전한 뒤로가기 탐색 완벽 지원
+- **공식 1:1 트레이 메뉴**: 숨기기/보이기, 설정, 상태(온라인/자리비움/방해금지/오프라인), 업데이트 확인, 재시작, 종료
+- **Rust Red 테마**: 투명 마스크가 보존된 32-bit DIB Rust Red(`#CE412B`) 아이콘 적용
 
-Fluxer is a free and open source instant messaging and VoIP chat app built for friends, groups, and communities.
+---
 
-<p align="center">
-  <img src="https://fluxer.app/static/img/screenshots-desktop-readme-1920w.9f7c8fdb2760d49b.png" alt="Fluxer running side by side on a desktop monitor and a phone" width="640">
-</p>
+## 실행 방법
 
-## Download
+1. [Actions](https://github.com/CJsw12/fluxer/actions) 탭의 최신 빌드에서 `Fluxer-Windows-x64` 아티팩트를 다운로드합니다.
+2. 실행:
+   - 기본 실행 (인스턴스 선택 화면): `Fluxer.exe`
+   - 특정 인스턴스 직접 실행: `Fluxer.exe https://your-fluxer-instance.org`
 
-| Windows | macOS | Linux | Android | iOS |
-| --- | --- | --- | --- | --- |
-| [Installer (x64)][win-setup-x64] | [Disk image][mac-dmg] | [Flatpak][flatpak-ref] | [Google Play (beta)][android-play] | [Beta paused][ios-beta-paused] |
-| [Installer (ARM64)][win-setup-arm64] | | [Flathub][flathub] | [APK (beta)][android-apk] | |
-| [Portable (x64)][win-portable-x64] | | [deb (x64)][linux-deb-x64] | [Obtainium (most phones)][obtainium-fcm] | |
-| [Portable (ARM64)][win-portable-arm64] | | [deb (ARM64)][linux-deb-arm64] | [Obtainium (degoogled phones)][obtainium-oss] | |
-| | | [rpm (x64)][linux-rpm-x64] | | |
-| | | [rpm (ARM64)][linux-rpm-arm64] | | |
-| | | [AppImage (x64)][linux-appimage-x64] | | |
-| | | [AppImage (ARM64)][linux-appimage-arm64] | | |
-| | | [tar.gz (x64)][linux-targz-x64] | | |
-| | | [tar.gz (ARM64)][linux-targz-arm64] | | |
+---
 
-The macOS disk image runs on both Apple silicon and Intel. Windows and Linux need the build matching your processor.
+## 빌드 방법
 
-On Linux, prefer a repository over a single file so Fluxer updates with the rest of your system.
-
-## Linux package repositories
-
-The package is `fluxer` for stable and `fluxer-canary` for canary. apt and dnf subscribe to one channel per entry file. pacman and Flatpak serve both from one repository.
-
-### Flatpak
-
-Fluxer's own Flatpak repository gets every update the day we release it. Open [the stable][flatpak-ref] or [the canary][flatpak-canary-ref] reference file and your software manager takes over. Some desktops also accept `flatpak+https://pkgs.fluxer.com/flatpak/fluxer.flatpakref` in the address bar.
-
-From a terminal:
+Windows 환경에서 Rust 툴체인이 설치되어 있어야 합니다.
 
 ```sh
-flatpak install https://pkgs.fluxer.com/flatpak/fluxer.flatpakref
+# 단위 테스트
+cargo test -p fluxer_desktop_rs
+
+# 릴리스 빌드
+cargo build --release -p fluxer_desktop_rs
 ```
 
-Stable is also on [Flathub][flathub], but Flathub can be a few weeks behind and has no canary:
+빌드 결과물은 `target/release/Fluxer.exe`로 생성됩니다.
 
-```sh
-flatpak install flathub app.fluxer.Fluxer
-```
+---
 
-### Debian and Ubuntu
+## 라이선스
 
-```sh
-sudo install -d -m 0755 /etc/apt/keyrings
-sudo curl -fsSL -o /etc/apt/keyrings/fluxer-archive-keyring.gpg https://pkgs.fluxer.com/keys/fluxer-archive-keyring.gpg
-sudo curl -fsSL -o /etc/apt/sources.list.d/fluxer.sources https://pkgs.fluxer.com/deb/fluxer.sources
-sudo apt update && sudo apt install fluxer
-```
-
-For canary, use the canary entry file and package.
-
-```sh
-sudo curl -fsSL -o /etc/apt/sources.list.d/fluxer-canary.sources https://pkgs.fluxer.com/deb/fluxer-canary.sources
-sudo apt update && sudo apt install fluxer-canary
-```
-
-A `.deb` installed from a download only updates once its channel's entry is added.
-
-### Fedora and RHEL
-
-```sh
-sudo curl -fsSL -o /etc/yum.repos.d/fluxer.repo https://pkgs.fluxer.com/rpm/fluxer.repo
-sudo dnf install fluxer
-```
-
-For canary, use the canary entry file and package.
-
-```sh
-sudo curl -fsSL -o /etc/yum.repos.d/fluxer-canary.repo https://pkgs.fluxer.com/rpm/fluxer-canary.repo
-sudo dnf install fluxer-canary
-```
-
-RHEL, Rocky, Alma and CentOS Stream need `sudo dnf install epel-release` first, because their base repositories lack `libXScrnSaver`. Fedora does not.
-
-### Arch Linux
-
-The repository is signed, so pacman needs the key once:
-
-```sh
-sudo pacman-key --init
-curl -fsSL -o /tmp/fluxer-archive-keyring.asc https://pkgs.fluxer.com/keys/fluxer-archive-keyring.asc
-sudo pacman-key --add /tmp/fluxer-archive-keyring.asc
-sudo pacman-key --lsign-key 09D01339EE128925F75E675C855C5BDE34D205D2
-```
-
-`--lsign-key` is what makes pacman trust it. Then add the repository:
-
-```sh
-sudo tee -a /etc/pacman.conf >/dev/null <<'REPO'
-
-[fluxer]
-SigLevel = Required TrustedOnly
-Server = https://pkgs.fluxer.com/arch/$repo/os/$arch
-REPO
-sudo pacman -Syu fluxer
-```
-
-Write `$repo` and `$arch` literally. Both are pacman variables, not shell ones, hence the quoted heredoc.
-
-Full setup notes, including canary, are in the [Linux repositories documentation][docs-linux].
-
-## Other ways to run it
-
-- [Open Fluxer in a browser](https://fluxer.com/app), no install needed.
-- [Host your own instance][docs-selfhost] from this repository.
-
-## Documentation
-
-- [Documentation home][docs]
-- [Downloads][docs-downloads]
-- [Self-hosting][docs-selfhost]
-
-## License
-
-The source is licensed under the [AGPL-3.0-or-later](./LICENSE) license.
-
-Fluxer artwork, such as the logo, icons, badges and default avatars, is
-licensed under [CC BY-SA 4.0](./fluxer_static/LICENSE). Third-party material
-keeps its own terms, listed in
-[fluxer_static/THIRD_PARTY_LICENSES.md](./fluxer_static/THIRD_PARTY_LICENSES.md).
-
-Use of the Fluxer name and logo is covered by the
-[name and marks policy](./.github/GOVERNANCE.md#name-and-marks).
-
-[win-setup-x64]: https://pkgs.fluxer.com/desktop/stable/win32/x64/latest/setup
-[win-setup-arm64]: https://pkgs.fluxer.com/desktop/stable/win32/arm64/latest/setup
-[win-portable-x64]: https://pkgs.fluxer.com/desktop/stable/win32/x64/latest/portable
-[win-portable-arm64]: https://pkgs.fluxer.com/desktop/stable/win32/arm64/latest/portable
-[mac-dmg]: https://pkgs.fluxer.com/desktop/stable/darwin/arm64/latest/dmg
-[linux-deb-x64]: https://pkgs.fluxer.com/desktop/stable/linux/x64/latest/deb
-[linux-deb-arm64]: https://pkgs.fluxer.com/desktop/stable/linux/arm64/latest/deb
-[linux-rpm-x64]: https://pkgs.fluxer.com/desktop/stable/linux/x64/latest/rpm
-[linux-rpm-arm64]: https://pkgs.fluxer.com/desktop/stable/linux/arm64/latest/rpm
-[linux-appimage-x64]: https://pkgs.fluxer.com/desktop/stable/linux/x64/latest/appimage
-[linux-appimage-arm64]: https://pkgs.fluxer.com/desktop/stable/linux/arm64/latest/appimage
-[linux-targz-x64]: https://pkgs.fluxer.com/desktop/stable/linux/x64/latest/tar_gz
-[linux-targz-arm64]: https://pkgs.fluxer.com/desktop/stable/linux/arm64/latest/tar_gz
-[flatpak-ref]: https://pkgs.fluxer.com/flatpak/fluxer.flatpakref
-[flatpak-canary-ref]: https://pkgs.fluxer.com/flatpak/fluxer-canary.flatpakref
-[flathub]: https://flathub.org/apps/app.fluxer.Fluxer
-[android-play]: https://play.google.com/store/apps/details?id=com.fluxer
-[android-apk]: https://fluxer.com/download/android
-[obtainium-fcm]: https://apps.obtainium.imranr.dev/redirect?r=obtainium%3A%2F%2Fapp%2F%7B%22id%22%3A%22com.fluxer%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Ffluxerapp%2Fflutter_client%22%2C%22author%22%3A%22fluxerapp%22%2C%22name%22%3A%22Fluxer%20Beta%20%28FCM%29%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Atrue%2C%5C%22fallbackToOlderReleases%5C%22%3Atrue%2C%5C%22apkFilterRegEx%5C%22%3A%5C%22betafcm%5C%22%2C%5C%22autoApkFilterByArch%5C%22%3Atrue%7D%22%7D
-[obtainium-oss]: https://apps.obtainium.imranr.dev/redirect?r=obtainium%3A%2F%2Fapp%2F%7B%22id%22%3A%22com.fluxer%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Ffluxerapp%2Fflutter_client%22%2C%22author%22%3A%22fluxerapp%22%2C%22name%22%3A%22Fluxer%20Beta%20%28OSS%29%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Atrue%2C%5C%22fallbackToOlderReleases%5C%22%3Atrue%2C%5C%22apkFilterRegEx%5C%22%3A%5C%22betaoss%5C%22%2C%5C%22autoApkFilterByArch%5C%22%3Atrue%7D%22%7D
-[ios-beta-paused]: https://fluxer.com/help/ios-testflight
-[docs]: https://docs.fluxer.com
-[docs-downloads]: https://docs.fluxer.com/downloads/overview/
-[docs-linux]: https://docs.fluxer.com/downloads/linux-repositories/
-[docs-selfhost]: https://docs.fluxer.com/operator/get-started/
+- 원본 프로젝트: [Fluxer](https://github.com/fluxerapp/fluxer)
+- 본 저장소의 코드는 원본과 동일하게 [AGPL-3.0-or-later](./LICENSE) 라이선스를 따릅니다.

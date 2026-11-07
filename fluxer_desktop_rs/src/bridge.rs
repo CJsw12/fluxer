@@ -1380,9 +1380,110 @@ pub fn get_initialization_script() -> &'static str {
         window.electron = safeElectronProxy;
     }
 
-    // 4. 타이틀바 Win32 무지연 네이티브 드래그 가로채기 (Event Capturing)
+    // 4-1. 캡션 버튼 및 타이틀바 CSS 최우선 레이어 노출 강제 주입
+    (function injectTitlebarStyles() {
+        var style = document.createElement('style');
+        style.textContent = `
+            .fluxer-native-titlebar {
+                z-index: 2147483647 !important;
+                pointer-events: auto !important;
+            }
+            .fluxer-native-titlebar__controls {
+                z-index: 2147483647 !important;
+                pointer-events: auto !important;
+                -webkit-app-region: no-drag !important;
+            }
+            .fluxer-native-titlebar__control {
+                pointer-events: auto !important;
+                -webkit-app-region: no-drag !important;
+            }
+        `;
+        function appendStyle() {
+            var target = document.head || document.documentElement;
+            if (target) {
+                target.appendChild(style);
+            }
+        }
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', appendStyle);
+        } else {
+            appendStyle();
+        }
+    })();
+
+    // 4-2. 창 제어 캡션 버튼 (최소화, 최대화/복원, 닫기) 즉각 캡처 처리 함수
+    function dispatchWindowControl(action) {
+        if (action === 'minimize') {
+            sendRust('windowMinimize');
+            return true;
+        } else if (action === 'maximize') {
+            sendRust('windowMaximize');
+            return true;
+        } else if (action === 'close') {
+            sendRust('windowClose');
+            return true;
+        }
+        return false;
+    }
+
+    function checkCaptionButtonClick(e) {
+        if (e.button !== 0) return false;
+        var target = e.target;
+
+        // 1) DOM 속성 및 클래스 기반 최우선 판별
+        if (target) {
+            var btn = target.closest('[data-window-control], .fluxer-native-titlebar__control, button[aria-label*="window"], button[aria-label*="Window"]');
+            if (btn) {
+                var control = btn.getAttribute('data-window-control');
+                if (!control) {
+                    var aria = (btn.getAttribute('aria-label') || '').toLowerCase();
+                    if (btn.classList.contains('fluxer-native-titlebar__control--close') || aria.includes('close')) {
+                        control = 'close';
+                    } else if (aria.includes('maximize') || aria.includes('restore')) {
+                        control = 'maximize';
+                    } else if (aria.includes('minimize')) {
+                        control = 'minimize';
+                    }
+                }
+                if (control) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return dispatchWindowControl(control);
+                }
+            }
+        }
+
+        // 2) 절대 좌표 기반 100% 보장: 음성 통화 오버레이나 WebRTC 뷰가 가리더라도 우상단 캡션 버튼 영역(높이 34px, 우측 146px) 클릭 즉시 실행
+        if (e.clientY <= 34 && e.clientX >= (window.innerWidth - 146)) {
+            var offsetFromRight = window.innerWidth - e.clientX;
+            e.preventDefault();
+            e.stopPropagation();
+            if (offsetFromRight <= 48) {
+                return dispatchWindowControl('close');
+            } else if (offsetFromRight <= 96) {
+                return dispatchWindowControl('maximize');
+            } else {
+                return dispatchWindowControl('minimize');
+            }
+        }
+
+        return false;
+    }
+
+    // 마우스 클릭 및 마우스 다운 최우선 캡처링 (Capture Phase)
+    window.addEventListener('click', function(e) {
+        checkCaptionButtonClick(e);
+    }, true);
+
+    // 4-3. 타이틀바 Win32 무지연 네이티브 드래그 가로채기 (Event Capturing)
     window.addEventListener('mousedown', function(e) {
         if (e.button !== 0) return;
+
+        // 우상단 캡션 버튼 영역에서는 절대 드래그 발동 금지 (클릭 이벤트 보호)
+        if (e.clientY <= 34 && e.clientX >= (window.innerWidth - 146)) {
+            checkCaptionButtonClick(e);
+            return;
+        }
 
         const target = e.target;
         if (!target) return;
@@ -1461,5 +1562,7 @@ mod tests {
         assert!(script.contains("__fluxerEmitTrayAction"));
         assert!(script.contains("popoutSetAlwaysOnTop"));
         assert!(script.contains("popoutFocus"));
+        assert!(script.contains("dispatchWindowControl"));
+        assert!(script.contains("checkCaptionButtonClick"));
     }
 }

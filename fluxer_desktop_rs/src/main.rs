@@ -264,13 +264,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         match event {
             Event::UserEvent(UserEvent::IpcOneWay(req)) => match req.cmd.as_str() {
                 "windowMinimize" => {
+                    println!("[Fluxer Shell] windowMinimize requested by caption control.");
                     window.set_minimized(true);
                 }
                 "windowMaximize" => {
-                    is_maximized_tracked = !is_maximized_tracked;
-                    window.set_maximized(is_maximized_tracked);
+                    let next_max = !is_maximized_tracked;
+                    is_maximized_tracked = next_max;
+                    window.set_maximized(next_max);
+                    println!("[Fluxer Shell] windowMaximize toggled (next: {next_max}).");
                     let script = format!(
-                        "window.__isMaximized = {is_maximized_tracked}; window.dispatchEvent(new CustomEvent('fluxer:maximize-change', {{ detail: {{ isMaximized: {is_maximized_tracked} }} }}));"
+                        "window.__isMaximized = {next_max}; window.dispatchEvent(new CustomEvent('fluxer:maximize-change', {{ detail: {{ isMaximized: {next_max} }} }}));"
                     );
                     let _ = webview.evaluate_script(&script);
                 }
@@ -283,6 +286,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
                 "windowClose" => {
+                    println!("[Fluxer Shell] windowClose requested by caption control.");
                     *control_flow = ControlFlow::Exit;
                 }
                 "firstContentPainted" => {

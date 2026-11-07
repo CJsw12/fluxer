@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+#![recursion_limit = "256"]
+
 use std::sync::Arc;
 use std::time::Duration;
 use tao::{
@@ -16,6 +18,7 @@ mod bridge;
 mod config;
 mod gateway;
 mod ipc;
+mod overlay;
 mod shortcuts;
 mod storage;
 mod tray;
@@ -65,6 +68,12 @@ fn load_app_icon() -> Option<tao::window::Icon> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--overlay" || a == "--voice-overlay") {
+        overlay::launch_voice_overlay();
+        return Ok(());
+    }
+
     let event_loop: EventLoop<UserEvent> = EventLoopBuilder::<UserEvent>::with_user_event().build();
 
     // 1. Electron 창 생성 옵션 준수: 1280x800 기본, 800x600 최소, Frameless, 초기 비가시

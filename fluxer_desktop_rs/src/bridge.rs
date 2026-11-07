@@ -54,7 +54,16 @@ pub fn get_initialization_script() -> &'static str {
     function invokeRust(cmd, payload) {
         return new Promise(function(resolve, reject) {
             const id = nextRequestId++;
-            pendingInvokes.set(id, { resolve: resolve, reject: reject });
+            const timeout = setTimeout(function() {
+                if (pendingInvokes.has(id)) {
+                    pendingInvokes.delete(id);
+                    reject(new Error('Rust IPC invoke timed out: ' + cmd));
+                }
+            }, 30000);
+            pendingInvokes.set(id, {
+                resolve: function(val) { clearTimeout(timeout); resolve(val); },
+                reject: function(err) { clearTimeout(timeout); reject(err); }
+            });
             try {
                 window.ipc.postMessage(JSON.stringify({
                     id: id,
@@ -62,6 +71,7 @@ pub fn get_initialization_script() -> &'static str {
                     payload: payload || {}
                 }));
             } catch (err) {
+                clearTimeout(timeout);
                 pendingInvokes.delete(id);
                 reject(err);
             }
@@ -1684,10 +1694,13 @@ pub fn get_initialization_script() -> &'static str {
         }, true);
     })();
 
-    // 8. 렌더러 V8 힙 가비지 컬렉터 정기 트리거
+    // 8. 렌더러 V8 힙 가비지 컬렉터 정기 트리거 및 Rust OS 작업 세트 실시간 동기 회수
     setInterval(function() {
         if (typeof window.gc === 'function') {
-            try { window.gc(); } catch (_) {}
+            try {
+                window.gc();
+                sendRust('rendererGcComplete');
+            } catch (_) {}
         }
     }, 20000);
 
@@ -1741,5 +1754,6 @@ mod tests {
         assert!(script.contains("popoutStreamViewer"));
         assert!(script.contains("voiceStateUpdate"));
         assert!(script.contains("bridgeFullscreen"));
+        assert!(script.contains("rendererGcComplete"));
     }
 }

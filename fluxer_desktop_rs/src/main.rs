@@ -44,10 +44,8 @@ fn get_cli_launch_instance() -> Option<String> {
     let args: Vec<String> = std::env::args().collect();
     for (i, arg) in args.iter().enumerate().skip(1) {
         if arg == "--fluxer-instance" {
-            if let Some(next) = args.get(i + 1) {
-                if !next.starts_with("--") {
-                    return Some(next.clone());
-                }
+            if let Some(next) = args.get(i + 1).filter(|s| !s.starts_with("--")) {
+                return Some(next.clone());
             }
         } else if let Some(stripped) = arg.strip_prefix("--fluxer-instance=") {
             return Some(stripped.to_string());
@@ -223,23 +221,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             // 트레이 아이콘 좌클릭 이벤트 (우클릭 컨텍스트 메뉴 깜박임 방지)
-            if let Ok(event) = tray_receiver.try_recv() {
-                if let tray_icon::TrayIconEvent::Click {
-                    button: tray_icon::MouseButton::Left,
-                    button_state: tray_icon::MouseButtonState::Up,
-                    ..
-                } = event
-                {
-                    let _ = proxy_for_events.send_event(UserEvent::TrayIconClick);
-                }
+            if let Ok(tray_icon::TrayIconEvent::Click {
+                button: tray_icon::MouseButton::Left,
+                button_state: tray_icon::MouseButtonState::Up,
+                ..
+            }) = tray_receiver.try_recv()
+            {
+                let _ = proxy_for_events.send_event(UserEvent::TrayIconClick);
             }
 
             // 전역 단축키 이벤트
-            if let Ok(event) = hotkey_receiver.try_recv() {
-                if event.state == global_hotkey::HotKeyState::Pressed {
+            if let Ok(event) = hotkey_receiver.try_recv()
+                && event.state == global_hotkey::HotKeyState::Pressed {
                     let _ = proxy_for_events.send_event(UserEvent::GlobalShortcut(event.id));
                 }
-            }
 
             std::thread::sleep(Duration::from_millis(16)); // ~60Hz 폴링
         }
@@ -464,6 +459,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "reportInstanceProductName" => {
                     // 프론트엔드 제품명 통지 (정상 수용)
                 }
+                "rendererGcComplete" => {
+                    // 렌더러 V8 GC 완료 통지에 동기화하여 Windows OS 작업 세트 즉각 강제 회수
+                    trim_process_working_set();
+                }
                 other => {
                     eprintln!("[IPC Warning] Unhandled one-way channel: '{other}'");
                 }
@@ -558,10 +557,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     );
                     let _ = webview.evaluate_script(&script);
                 }
-                WindowEvent::Focused(focused) => {
-                    if !focused {
-                        trim_process_working_set();
-                    }
+                WindowEvent::Focused(false) => {
+                    trim_process_working_set();
                 }
                 _ => (),
             },

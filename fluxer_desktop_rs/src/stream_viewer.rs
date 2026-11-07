@@ -312,7 +312,7 @@ pub fn launch_stream_viewer() {
         };
 
         let _ = cx.open_window(window_options, |_window, cx| {
-            cx.new(|cx| StreamViewerView::new(cx))
+            cx.new(StreamViewerView::new)
         });
     });
 }

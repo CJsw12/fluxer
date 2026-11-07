@@ -52,21 +52,18 @@ pub fn update_voice_state(state: VoiceOverlayState) {
 
 /// 현재 저장된 음성 상태를 메모리 또는 디스크 동기화 파일로부터 조회합니다.
 pub fn get_voice_state() -> VoiceOverlayState {
-    if let Ok(lock) = VOICE_STATE.read() {
-        if let Some(ref st) = *lock {
-            return st.clone();
-        }
+    if let Some(st) = VOICE_STATE.read().ok().and_then(|lock| lock.clone()) {
+        return st;
     }
 
     let file_path = crate::config::get_voice_state_file_path();
-    if let Ok(bytes) = std::fs::read_to_string(&file_path) {
-        if let Ok(parsed) = serde_json::from_str::<VoiceOverlayState>(&bytes) {
+    if let Ok(file) = std::fs::File::open(&file_path)
+        && let Ok(parsed) = serde_json::from_reader::<_, VoiceOverlayState>(file) {
             if let Ok(mut lock) = VOICE_STATE.write() {
                 *lock = Some(parsed.clone());
             }
             return parsed;
         }
-    }
 
     VoiceOverlayState {
         is_connected: false,
@@ -81,14 +78,13 @@ pub fn get_voice_state() -> VoiceOverlayState {
 /// 디스크 동기화 파일로부터 최신 상태를 직접 조회하여 프로세스 간 변경 사항을 즉시 반영합니다.
 pub fn get_voice_state_from_disk_or_memory() -> VoiceOverlayState {
     let file_path = crate::config::get_voice_state_file_path();
-    if let Ok(bytes) = std::fs::read_to_string(&file_path) {
-        if let Ok(parsed) = serde_json::from_str::<VoiceOverlayState>(&bytes) {
+    if let Ok(file) = std::fs::File::open(&file_path)
+        && let Ok(parsed) = serde_json::from_reader::<_, VoiceOverlayState>(file) {
             if let Ok(mut lock) = VOICE_STATE.write() {
                 *lock = Some(parsed.clone());
             }
             return parsed;
         }
-    }
     get_voice_state()
 }
 
@@ -286,7 +282,7 @@ pub fn launch_voice_overlay() {
         };
 
         let _ = cx.open_window(window_options, |_window, cx| {
-            cx.new(|cx| VoiceOverlayView::new(cx))
+            cx.new(VoiceOverlayView::new)
         });
     });
 }

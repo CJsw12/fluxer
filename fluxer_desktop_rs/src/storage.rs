@@ -257,14 +257,12 @@ pub fn compare_and_swap_account(
     replacement: &DesktopAccountRecord,
 ) -> bool {
     let mut engine = STORAGE_ENGINE.write().unwrap();
-    if let Some(current) = engine.accounts.get(&expected.storage_key) {
-        if current.record == expected.record {
-            engine
-                .accounts
-                .insert(replacement.storage_key.clone(), replacement.clone());
-            engine.persist_accounts();
-            return true;
-        }
+    if engine.accounts.get(&expected.storage_key).is_some_and(|c| c.record == expected.record) {
+        engine
+            .accounts
+            .insert(replacement.storage_key.clone(), replacement.clone());
+        engine.persist_accounts();
+        return true;
     }
     false
 }
@@ -314,15 +312,14 @@ pub fn get_last_instance_from_accounts() -> Option<String> {
         if let Some(url) = extract_instance_url(&account.storage_key) {
             return Some(url);
         }
-        if let Some(endpoint) = account
+        if let Some(url) = account
             .record
             .get("instance")
             .and_then(|i| i.get("apiEndpoint"))
             .and_then(Value::as_str)
+            .and_then(extract_instance_url)
         {
-            if let Some(url) = extract_instance_url(endpoint) {
-                return Some(url);
-            }
+            return Some(url);
         }
     }
     None

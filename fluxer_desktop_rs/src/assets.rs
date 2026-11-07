@@ -31,8 +31,8 @@ impl AssetHandler {
 
         // 1. 실제 번들 파일이 존재하는 경우 파일 서빙
         let target_file = self.dist_dir.join(relative_path);
-        if target_file.exists() && target_file.is_file() {
-            if let Ok(content) = fs::read(&target_file) {
+        if target_file.is_file()
+            && let Ok(content) = fs::read(&target_file) {
                 let mime_type = get_mime_type(relative_path);
                 return Response::builder()
                     .header("content-type", mime_type)
@@ -40,7 +40,6 @@ impl AssetHandler {
                     .body(Cow::Owned(content))
                     .unwrap();
             }
-        }
 
         // 2. 파일이 없거나 index.html 요청인 경우 검증용 내장 HTML 렌더링
         if relative_path == "index.html" {

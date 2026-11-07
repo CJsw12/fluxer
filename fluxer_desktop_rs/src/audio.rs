@@ -103,15 +103,11 @@ pub fn resolve_root_pid(source_id: &str) -> Option<u32> {
         return None;
     }
 
-    // "window:12345:0" 또는 "window:12345" 형식 파싱
-    if let Some(stripped) = source_id.strip_prefix("window:") {
-        let parts: Vec<&str> = stripped.split(':').collect();
-        if let Some(pid_str) = parts.first() {
-            if let Ok(pid) = pid_str.parse::<u32>() {
-                return Some(pid);
-            }
+    // "window:12345:0" 또는 "window:12345" 형식 파싱 (힙 할당 없는 Zero-copy 이터레이터)
+    if let Some(stripped) = source_id.strip_prefix("window:")
+        && let Some(pid) = stripped.split(':').next().and_then(|s| s.parse::<u32>().ok()) {
+            return Some(pid);
         }
-    }
 
     // 순수 숫자 PID
     if let Ok(pid) = source_id.parse::<u32>() {

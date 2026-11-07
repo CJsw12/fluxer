@@ -77,11 +77,10 @@ pub fn clear_last_instance() {
 /// 로컬 PC(`%APPDATA%\fluxer_desktop_rs\known_instances.json`)에 저장된 외부 인스턴스 목록을 불러옵니다.
 pub fn load_known_instances() -> Vec<Value> {
     let path = get_known_instances_file_path();
-    if let Ok(content) = fs::read_to_string(path) {
-        if let Ok(Value::Array(arr)) = serde_json::from_str::<Value>(&content) {
+    if let Ok(file) = fs::File::open(path)
+        && let Ok(Value::Array(arr)) = serde_json::from_reader(file) {
             return arr;
         }
-    }
     Vec::new()
 }
 

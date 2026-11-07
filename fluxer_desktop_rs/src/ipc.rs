@@ -339,21 +339,17 @@ pub fn handle_ipc_request(
 
                 let mut discovery_doc: Option<(Value, String)> = None;
                 for url in &candidates {
-                    if let Ok(resp) = client.get(url).send() {
-                        if resp.status().is_success() {
-                            if let Ok(text) = resp.text() {
-                                if let Ok(json) = serde_json::from_str::<Value>(&text) {
-                                    let origin = if url.starts_with("https://") {
-                                        format!("https://{domain}")
-                                    } else {
-                                        format!("http://{domain}")
-                                    };
-                                    discovery_doc = Some((json, origin));
-                                    break;
-                                }
+                    if let Ok(resp) = client.get(url).send()
+                        && resp.status().is_success()
+                            && let Ok(json) = resp.json::<Value>() {
+                                let origin = if url.starts_with("https://") {
+                                    format!("https://{domain}")
+                                } else {
+                                    format!("http://{domain}")
+                                };
+                                discovery_doc = Some((json, origin));
+                                break;
                             }
-                        }
-                    }
                 }
 
                 match discovery_doc {

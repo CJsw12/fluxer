@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tao::window::Window;
 use crate::config;
+use crate::storage::{self, DesktopAccountRecord, DesktopStorageWrite};
 
 static MINIMIZE_TO_TRAY: AtomicBool = AtomicBool::new(false);
 static CLOSE_TO_TRAY: AtomicBool = AtomicBool::new(false);
@@ -386,6 +387,145 @@ pub fn handle_ipc_request(
         "windowIsMaximized" => {
             let is_max = window.is_maximized();
             IpcResponse::success(id, json!(is_max))
+        }
+
+        // =========================================================
+        // 네이티브 스토리지 API (desktopStorage)
+        // =========================================================
+        "desktopStorageGetStatus" | "desktop-storage:get-status" => {
+            IpcResponse::success(id, storage::get_storage_status())
+        }
+
+        "desktopStorageLoad" | "desktop-storage:load" => {
+            let scope = req.payload.get("scope").and_then(Value::as_str)
+                .or_else(|| req.payload.as_str())
+                .unwrap_or_default();
+            let entries = storage::load_scope(scope);
+            IpcResponse::success(id, json!(entries))
+        }
+
+        "desktopStorageGet" | "desktop-storage:get" => {
+            let scope = req.payload.get("scope").and_then(Value::as_str).unwrap_or_default();
+            let key = req.payload.get("key").and_then(Value::as_str).unwrap_or_default();
+            let entry = storage::get_entry(scope, key);
+            IpcResponse::success(id, json!(entry))
+        }
+
+        "desktopStorageSet" | "desktop-storage:set" => {
+            let scope = req.payload.get("scope").and_then(Value::as_str).unwrap_or_default();
+            let key = req.payload.get("key").and_then(Value::as_str).unwrap_or_default();
+            let value = req.payload.get("value").and_then(Value::as_str).unwrap_or_default();
+            storage::set_entry(scope, key, value);
+            IpcResponse::success(id, Value::Null)
+        }
+
+        "desktopStorageDelete" | "desktop-storage:delete" => {
+            let scope = req.payload.get("scope").and_then(Value::as_str).unwrap_or_default();
+            let key = req.payload.get("key").and_then(Value::as_str).unwrap_or_default();
+            storage::delete_entry(scope, key);
+            IpcResponse::success(id, Value::Null)
+        }
+
+        "desktopStorageClearAllForScope" | "desktop-storage:clear-all-for-scope" => {
+            let scope = req.payload.get("scope").and_then(Value::as_str)
+                .or_else(|| req.payload.as_str())
+                .unwrap_or_default();
+            storage::clear_all_for_scope(scope);
+            IpcResponse::success(id, Value::Null)
+        }
+
+        "desktopStorageClearAllExcept" | "desktop-storage:clear-all-except" => {
+            let keys: Vec<String> = req.payload.get("keysToKeep")
+                .or_else(|| req.payload.as_array().map(|_| &req.payload))
+                .and_then(Value::as_array)
+                .map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect())
+                .unwrap_or_default();
+            storage::clear_all_except(&keys);
+            IpcResponse::success(id, Value::Null)
+        }
+
+        "desktopStorageSetMany" | "desktop-storage:set-many" => {
+            let writes: Vec<DesktopStorageWrite> = req.payload.get("writes")
+                .or_else(|| req.payload.as_array().map(|_| &req.payload))
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
+            storage::set_many(&writes);
+            IpcResponse::success(id, Value::Null)
+        }
+
+        "desktopStorageGetMarker" | "desktop-storage:get-marker" => {
+            let key = req.payload.get("key").and_then(Value::as_str)
+                .or_else(|| req.payload.as_str())
+                .unwrap_or_default();
+            let val = storage::get_marker(key);
+            IpcResponse::success(id, json!(val))
+        }
+
+        "desktopStorageSetMarker" | "desktop-storage:set-marker" => {
+            let key = req.payload.get("key").and_then(Value::as_str).unwrap_or_default();
+            let val = req.payload.get("value").and_then(Value::as_str).unwrap_or_default();
+            storage::set_marker(key, val);
+            IpcResponse::success(id, Value::Null)
+        }
+
+        // =========================================================
+        // 네이티브 계정 저장소 API (desktopAccounts)
+        // =========================================================
+        "desktopAccountsGetAll" | "desktop-accounts:get-all" => {
+            let accounts = storage::get_all_accounts();
+            IpcResponse::success(id, json!(accounts))
+        }
+
+        "desktopAccountsGet" | "desktop-accounts:get" => {
+            let key = req.payload.get("storageKey").and_then(Value::as_str)
+                .or_else(|| req.payload.as_str())
+                .unwrap_or_default();
+            let acc = storage::get_account(key);
+            IpcResponse::success(id, json!(acc))
+        }
+
+        "desktopAccountsUpsert" | "desktop-accounts:upsert" => {
+            let acc_opt: Option<DesktopAccountRecord> = req.payload.get("account")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .or_else(|| serde_json::from_value(req.payload.clone()).ok());
+
+            if let Some(acc) = acc_opt {
+                storage::upsert_account(acc);
+                IpcResponse::success(id, Value::Null)
+            } else {
+                IpcResponse::error(id, "Invalid DesktopAccountRecord format")
+            }
+        }
+
+        "desktopAccountsCompareAndSwap" | "desktop-accounts:compare-and-swap" => {
+            let expected_opt: Option<DesktopAccountRecord> = req.payload.get("expected")
+                .and_then(|v| serde_json::from_value(v.clone()).ok());
+            let replacement_opt: Option<DesktopAccountRecord> = req.payload.get("replacement")
+                .and_then(|v| serde_json::from_value(v.clone()).ok());
+
+            if let (Some(expected), Some(replacement)) = (expected_opt, replacement_opt) {
+                let swapped = storage::compare_and_swap_account(&expected, &replacement);
+                IpcResponse::success(id, json!(swapped))
+            } else {
+                IpcResponse::error(id, "Missing expected or replacement account")
+            }
+        }
+
+        "desktopAccountsDelete" | "desktop-accounts:delete" => {
+            let key = req.payload.get("storageKey").and_then(Value::as_str)
+                .or_else(|| req.payload.as_str())
+                .unwrap_or_default();
+            storage::delete_account(key);
+            IpcResponse::success(id, Value::Null)
+        }
+
+        "desktopAccountsPrune" | "desktop-accounts:prune" => {
+            let keys: Vec<String> = req.payload.get("keysToKeep")
+                .and_then(Value::as_array)
+                .map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect())
+                .unwrap_or_default();
+            let pruned = storage::prune_accounts(&keys);
+            IpcResponse::success(id, json!({ "pruned": pruned }))
         }
 
         unknown => {

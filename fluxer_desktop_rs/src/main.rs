@@ -15,6 +15,7 @@ mod bridge;
 mod config;
 mod ipc;
 mod shortcuts;
+mod storage;
 mod tray;
 
 use assets::AssetHandler;

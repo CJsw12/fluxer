@@ -928,13 +928,36 @@ pub fn get_initialization_script() -> &'static str {
             }
         },
         desktopAccounts: {
-            getAll: function() { return Promise.resolve([]); },
-            get: function() { return Promise.resolve(null); },
-            upsert: function() { return Promise.resolve(); },
-            compareAndSwap: function() { return Promise.resolve(true); },
-            delete: function() { return Promise.resolve(); },
-            import: function() { return Promise.resolve({ imported: 0 }); },
-            prune: function() { return Promise.resolve({ pruned: 0 }); }
+            getAll: function() {
+                return invokeRust('desktopAccountsGetAll').then(function(res) {
+                    return Array.isArray(res) ? res : [];
+                });
+            },
+            get: function(storageKey) {
+                return invokeRust('desktopAccountsGet', { storageKey: storageKey });
+            },
+            upsert: function(account) {
+                return invokeRust('desktopAccountsUpsert', { account: account });
+            },
+            compareAndSwap: function(request) {
+                return invokeRust('desktopAccountsCompareAndSwap', request || {});
+            },
+            delete: function(storageKey) {
+                return invokeRust('desktopAccountsDelete', { storageKey: storageKey });
+            },
+            import: function(request) {
+                var records = (request && request.records) ? request.records : [];
+                var promises = records.map(function(acc) {
+                    return invokeRust('desktopAccountsUpsert', { account: acc });
+                });
+                return Promise.all(promises).then(function() {
+                    return { imported: records.length, skipped: [] };
+                });
+            },
+            prune: function(request) {
+                var keys = (request && request.keysToKeep) ? request.keysToKeep : [];
+                return invokeRust('desktopAccountsPrune', { keysToKeep: keys });
+            }
         },
         desktopKnownInstances: {
             getAll: function() {
@@ -987,17 +1010,53 @@ pub fn get_initialization_script() -> &'static str {
             }
         },
         desktopStorage: {
-            getStatus: function() { return Promise.resolve({ available: false, authorityExpected: false, quarantined: false }); },
-            load: function() { return Promise.resolve([]); },
-            get: function() { return Promise.resolve(null); },
-            set: function() { return Promise.resolve(); },
-            delete: function() { return Promise.resolve(); },
-            clearAllForScope: function() { return Promise.resolve(); },
-            clearAllExcept: function() { return Promise.resolve(); },
-            setMany: function() { return Promise.resolve(); },
-            import: function() { return Promise.resolve({ imported: 0 }); },
-            getMarker: function() { return Promise.resolve(null); },
-            setMarker: function() { return Promise.resolve(); }
+            getStatus: function() {
+                return invokeRust('desktopStorageGetStatus');
+            },
+            load: function(scope) {
+                return invokeRust('desktopStorageLoad', { scope: scope }).then(function(res) {
+                    return Array.isArray(res) ? res : [];
+                });
+            },
+            get: function(scope, key) {
+                return invokeRust('desktopStorageGet', { scope: scope, key: key });
+            },
+            set: function(scope, key, value) {
+                return invokeRust('desktopStorageSet', { scope: scope, key: key, value: String(value) });
+            },
+            delete: function(scope, key) {
+                return invokeRust('desktopStorageDelete', { scope: scope, key: key });
+            },
+            clearAllForScope: function(scope) {
+                return invokeRust('desktopStorageClearAllForScope', { scope: scope });
+            },
+            clearAllExcept: function(keysToKeep) {
+                return invokeRust('desktopStorageClearAllExcept', { keysToKeep: keysToKeep });
+            },
+            setMany: function(writes) {
+                return invokeRust('desktopStorageSetMany', { writes: writes || [] });
+            },
+            import: function(request) {
+                var entries = (request && request.entries) ? request.entries : [];
+                var writes = entries.map(function(e) {
+                    return { scope: e.scope, key: e.key, value: e.value };
+                });
+                var markerPromise = (request && request.marker)
+                    ? invokeRust('desktopStorageSetMarker', { key: request.marker.key, value: request.marker.value })
+                    : Promise.resolve();
+                return Promise.all([
+                    invokeRust('desktopStorageSetMany', { writes: writes }),
+                    markerPromise
+                ]).then(function() {
+                    return { imported: entries.length, skipped: [] };
+                });
+            },
+            getMarker: function(key) {
+                return invokeRust('desktopStorageGetMarker', { key: key });
+            },
+            setMarker: function(key, value) {
+                return invokeRust('desktopStorageSetMarker', { key: key, value: String(value) });
+            }
         },
         desktopLegacyHarvest: {
             read: function() { return Promise.resolve(null); },

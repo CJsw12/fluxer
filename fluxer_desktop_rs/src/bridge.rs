@@ -1048,15 +1048,85 @@ pub fn get_initialization_script() -> &'static str {
         }
     };
 
-    // window.electron 전역 주입
-    window.electron = electronApi;
+    // 4. 화면 공유 버튼 클릭 시 2중 선택창 없이 크로미움 시스템 선택창으로 자연스럽게 직결 (통합 파이프라인)
+    let isScreenShareStarting = false;
+
+    function isScreenShareButton(target) {
+        if (!target) return null;
+        var btn = (target.nodeType === 1) ? target.closest('button') : null;
+        if (!btn) return null;
+
+        var flx = btn.getAttribute('data-flx') || '';
+        var parentFlx = (btn.parentElement && btn.parentElement.getAttribute('data-flx')) || '';
+        if (parentFlx.includes('screen-share') || flx.includes('screen-share')) {
+            return btn;
+        }
+
+        if (btn.querySelector('svg.ph-monitor-play') || btn.querySelector('[data-flx*="icon--7"]') || btn.querySelector('[data-flx*="media-icon--3"]')) {
+            return btn;
+        }
+
+        var aria = (btn.getAttribute('aria-label') || '').toLowerCase();
+        if (aria.includes('screen') || aria.includes('화면')) {
+            return btn;
+        }
+
+        return null;
+    }
+
+    function isScreenShareActive(btn) {
+        if (!btn) return false;
+        if (btn.getAttribute('aria-pressed') === 'true') return true;
+        var cls = btn.className || '';
+        if (typeof cls === 'string' && (cls.includes('ScreenShareOn') || cls.includes('screenShareActive'))) return true;
+        var aria = (btn.getAttribute('aria-label') || '').toLowerCase();
+        if (aria.includes('end') || aria.includes('stop') || aria.includes('중지') || aria.includes('종료')) return true;
+        return false;
+    }
+
+    window.addEventListener('click', function(e) {
+        var btn = isScreenShareButton(e.target);
+        if (btn && !isScreenShareActive(btn)) {
+            isScreenShareStarting = true;
+            setTimeout(function() {
+                isScreenShareStarting = false;
+            }, 600);
+        }
+    }, true);
+
+    // 미구현 Electron API 호출 시 예외 없이 안전하게 동작하도록 보호하는 Proxy 방어 계층
+    var safeElectronProxy = (typeof Proxy !== 'undefined') ? new Proxy(electronApi, {
+        get: function(target, prop, receiver) {
+            if (prop in target) {
+                return Reflect.get(target, prop, receiver);
+            }
+            if (typeof prop === 'string') {
+                if (prop.startsWith('on') || prop.startsWith('handle')) {
+                    return function() { return function() {}; };
+                }
+                if (prop.startsWith('get') || prop.startsWith('check') || prop.startsWith('request') || prop.startsWith('is') || prop.startsWith('fetch')) {
+                    return function() { return Promise.resolve(null); };
+                }
+            }
+            return function() { return Promise.resolve(); };
+        }
+    }) : electronApi;
+
+    // window.electron 전역 주입 (화면 공유 시작 제스처 시 다이렉트 크로미움 피커 직결)
     try {
         Object.defineProperty(window, 'electron', {
-            value: electronApi,
-            writable: false,
+            get: function() {
+                if (isScreenShareStarting) {
+                    return undefined;
+                }
+                return safeElectronProxy;
+            },
+            set: function(v) {},
             configurable: true
         });
-    } catch (_) {}
+    } catch (_) {
+        window.electron = safeElectronProxy;
+    }
 
     // 4. 타이틀바 Win32 무지연 네이티브 드래그 가로채기 (Event Capturing)
     window.addEventListener('mousedown', function(e) {

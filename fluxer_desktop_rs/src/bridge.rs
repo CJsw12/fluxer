@@ -23,6 +23,34 @@ pub fn get_initialization_script() -> &'static str {
         }
     };
 
+    // 1-0. Rust 네이티브 게이트웨이 WebSocket 실시간 이벤트 디스패처
+    let nextGatewayListenerId = 1;
+    const gatewayListeners = new Map();
+
+    window.__fluxerNativeGatewayEmit = function(event) {
+        if (!event) return;
+        if (event.binary && typeof event.binary === 'string') {
+            try {
+                var binaryStr = atob(event.binary);
+                var len = binaryStr.length;
+                var bytes = new Uint8Array(len);
+                for (var i = 0; i < len; i++) {
+                    bytes[i] = binaryStr.charCodeAt(i);
+                }
+                event.binary = bytes.buffer;
+            } catch (err) {
+                console.error('[Fluxer Shell] Failed to decode gateway binary payload:', err);
+            }
+        }
+        gatewayListeners.forEach(function(listener) {
+            try {
+                listener(event);
+            } catch (err) {
+                console.error('[Fluxer Shell] Error in gateway listener callback:', err);
+            }
+        });
+    };
+
     function invokeRust(cmd, payload) {
         return new Promise(function(resolve, reject) {
             const id = nextRequestId++;
@@ -1074,7 +1102,45 @@ pub fn get_initialization_script() -> &'static str {
             subscribe: function() { return function() {}; }
         },
         nativeGatewayTransport: {
-            isAvailable: false
+            isAvailable: true,
+            create: function(request) {
+                return invokeRust('nativeGatewayTransportCreate', request || {});
+            },
+            sendText: function(request) {
+                return invokeRust('nativeGatewayTransportSendText', request || {});
+            },
+            sendBinary: function(request) {
+                var payload = request && request.payload;
+                var base64 = '';
+                if (payload instanceof ArrayBuffer) {
+                    var bytes = new Uint8Array(payload);
+                    var binary = '';
+                    var len = bytes.byteLength;
+                    for (var i = 0; i < len; i++) {
+                        binary += String.fromCharCode(bytes[i]);
+                    }
+                    base64 = btoa(binary);
+                } else if (typeof payload === 'string') {
+                    base64 = payload;
+                }
+                return invokeRust('nativeGatewayTransportSendBinary', {
+                    connectionId: request ? request.connectionId : '',
+                    payload: base64
+                });
+            },
+            close: function(request) {
+                return invokeRust('nativeGatewayTransportClose', request || {});
+            },
+            dispose: function(connectionId) {
+                return invokeRust('nativeGatewayTransportDispose', { connectionId: connectionId });
+            },
+            onEvent: function(callback) {
+                var id = nextGatewayListenerId++;
+                gatewayListeners.set(id, callback);
+                return function() {
+                    gatewayListeners.delete(id);
+                };
+            }
         },
         accountEngine: {
             request: function() { return Promise.reject(new Error('AccountEngine unavailable in Rust shell')); },
@@ -1100,10 +1166,10 @@ pub fn get_initialization_script() -> &'static str {
         // 기능 매니페스트
         capabilities: {
             appStore: true,
-            gatewaySocket: false,
+            gatewaySocket: true,
             audioCapture: false,
             voiceEngineV2: true,
-            nativeGatewayTransport: false
+            nativeGatewayTransport: true
         }
     };
 
@@ -1283,5 +1349,7 @@ mod tests {
         assert!(script.contains("onDeepLink"));
         assert!(script.contains("getDesktopSources"));
         assert!(script.contains("navigator.mediaDevices.getDisplayMedia"));
+        assert!(script.contains("nativeGatewayTransport"));
+        assert!(script.contains("__fluxerNativeGatewayEmit"));
     }
 }

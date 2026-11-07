@@ -13,6 +13,7 @@ use wry::WebViewBuilder;
 mod assets;
 mod bridge;
 mod config;
+mod gateway;
 mod ipc;
 mod shortcuts;
 mod storage;
@@ -28,6 +29,7 @@ use tray_icon::menu::{MenuEvent, MenuId};
 enum UserEvent {
     IpcOneWay(IpcRequest),
     IpcReply(IpcResponse),
+    GatewayEvent(gateway::NativeGatewayTransportEvent),
     TrayMenu(MenuId),
     TrayIconClick,
     GlobalShortcut(u32),
@@ -141,6 +143,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli_launch_instance = get_cli_launch_instance();
     let cli_for_ipc = cli_launch_instance.clone();
 
+    // 5. Rust 네이티브 백그라운드 WebSocket 게이트웨이 매니저 초기화
+    let proxy_for_gateway = proxy.clone();
+    let gateway_manager = Arc::new(gateway::GatewayManager::new(Arc::new(move |evt| {
+        let _ = proxy_for_gateway.send_event(UserEvent::GatewayEvent(evt));
+    }))?);
+    let gateway_for_ipc = Arc::clone(&gateway_manager);
+
     // 6. Wry WebView2 빌드
     let builder = WebViewBuilder::new()
         .with_background_color((0x1a, 0x18, 0x1e, 255))
@@ -164,8 +173,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let win = Arc::clone(&win_for_ipc);
                     let cli = cli_for_ipc.clone();
                     let proxy = proxy_for_ipc.clone();
+                    let gw = Arc::clone(&gateway_for_ipc);
                     std::thread::spawn(move || {
-                        if let Some(res) = ipc::handle_ipc_request(ipc_req, &win, cli.as_deref()) {
+                        if let Some(res) = ipc::handle_ipc_request(ipc_req, &win, cli.as_deref(), Some(&gw)) {
                             let _ = proxy.send_event(UserEvent::IpcReply(res));
                         }
                     });
@@ -293,6 +303,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     res.id, res.result, err_str
                 );
                 let _ = webview.evaluate_script(&script);
+            }
+            Event::UserEvent(UserEvent::GatewayEvent(evt)) => {
+                if let Ok(json) = serde_json::to_string(&evt) {
+                    let script = format!(
+                        "if (window.__fluxerNativeGatewayEmit) {{ window.__fluxerNativeGatewayEmit({json}); }}"
+                    );
+                    let _ = webview.evaluate_script(&script);
+                }
             }
             Event::UserEvent(UserEvent::TrayMenu(menu_id)) => {
                 if let Some(tray) = &tray_manager {

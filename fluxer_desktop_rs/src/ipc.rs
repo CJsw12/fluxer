@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use base64::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -7,6 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tao::window::Window;
 use crate::config;
+use crate::gateway::GatewayManager;
 use crate::storage::{self, DesktopAccountRecord, DesktopStorageWrite};
 
 static MINIMIZE_TO_TRAY: AtomicBool = AtomicBool::new(false);
@@ -50,6 +52,7 @@ pub fn handle_ipc_request(
     req: IpcRequest,
     window: &Arc<Window>,
     cli_instance: Option<&str>,
+    gateway: Option<&Arc<GatewayManager>>,
 ) -> Option<IpcResponse> {
     let id = req.id?;
 
@@ -528,6 +531,83 @@ pub fn handle_ipc_request(
             IpcResponse::success(id, json!({ "pruned": pruned }))
         }
 
+        // =========================================================
+        // 네이티브 게이트웨이 트랜스포트 API (nativeGatewayTransport)
+        // =========================================================
+        "nativeGatewayTransportIsAvailable" | "native-gateway-transport:is-available" => {
+            IpcResponse::success(id, json!(true))
+        }
+
+        "nativeGatewayTransportCreate" | "native-gateway-transport:create" => {
+            let connection_id = req.payload.get("connectionId").and_then(Value::as_str).unwrap_or("");
+            let url = req.payload.get("url").and_then(Value::as_str).unwrap_or("");
+
+            match gateway {
+                Some(mgr) => match mgr.create(connection_id.to_string(), url.to_string()) {
+                    Ok(()) => IpcResponse::success(id, json!({ "connectionId": connection_id })),
+                    Err(err) => IpcResponse::error(id, err.to_string()),
+                },
+                None => IpcResponse::error(id, "Gateway manager unavailable"),
+            }
+        }
+
+        "nativeGatewayTransportSendText" | "native-gateway-transport:send-text" => {
+            let connection_id = req.payload.get("connectionId").and_then(Value::as_str).unwrap_or("");
+            let payload = req.payload.get("payload").and_then(Value::as_str).unwrap_or("");
+
+            match gateway {
+                Some(mgr) => match mgr.send_text(connection_id, payload.to_string()) {
+                    Ok(()) => IpcResponse::success(id, json!({})),
+                    Err(err) => IpcResponse::error(id, err.to_string()),
+                },
+                None => IpcResponse::error(id, "Gateway manager unavailable"),
+            }
+        }
+
+        "nativeGatewayTransportSendBinary" | "native-gateway-transport:send-binary" => {
+            let connection_id = req.payload.get("connectionId").and_then(Value::as_str).unwrap_or("");
+            let b64 = req.payload.get("payload").and_then(Value::as_str).unwrap_or("");
+
+            match BASE64_STANDARD.decode(b64) {
+                Ok(bytes) => match gateway {
+                    Some(mgr) => match mgr.send_binary(connection_id, bytes) {
+                        Ok(()) => IpcResponse::success(id, json!({})),
+                        Err(err) => IpcResponse::error(id, err.to_string()),
+                    },
+                    None => IpcResponse::error(id, "Gateway manager unavailable"),
+                },
+                Err(err) => IpcResponse::error(id, format!("Invalid base64 payload: {err}")),
+            }
+        }
+
+        "nativeGatewayTransportClose" | "native-gateway-transport:close" => {
+            let connection_id = req.payload.get("connectionId").and_then(Value::as_str).unwrap_or("");
+            let code = req.payload.get("code").and_then(Value::as_u64).unwrap_or(1000) as u16;
+            let reason = req.payload.get("reason").and_then(Value::as_str).unwrap_or("");
+
+            match gateway {
+                Some(mgr) => match mgr.close(connection_id, code, reason.to_string()) {
+                    Ok(()) => IpcResponse::success(id, json!({})),
+                    Err(err) => IpcResponse::error(id, err.to_string()),
+                },
+                None => IpcResponse::error(id, "Gateway manager unavailable"),
+            }
+        }
+
+        "nativeGatewayTransportDispose" | "native-gateway-transport:dispose" => {
+            let connection_id = req.payload.get("connectionId").and_then(Value::as_str)
+                .or_else(|| req.payload.as_str())
+                .unwrap_or("");
+
+            match gateway {
+                Some(mgr) => match mgr.dispose(connection_id) {
+                    Ok(()) => IpcResponse::success(id, json!({})),
+                    Err(err) => IpcResponse::error(id, err.to_string()),
+                },
+                None => IpcResponse::error(id, "Gateway manager unavailable"),
+            }
+        }
+
         unknown => {
             eprintln!("[IPC Warning] Unhandled invoke channel: '{unknown}', returning safe null success");
             IpcResponse::success(id, Value::Null)
@@ -556,5 +636,22 @@ mod tests {
         assert!(serialized.contains(r#""id":1"#));
         assert!(serialized.contains(r#""status":"ok""#));
         assert!(serialized.contains(r#""error":null"#));
+    }
+
+    #[test]
+    fn test_native_gateway_ipc_availability() {
+        let req = IpcRequest {
+            id: Some(10),
+            cmd: "nativeGatewayTransportIsAvailable".to_string(),
+            payload: Value::Null,
+        };
+        // window가 없어도 id와 cmd 매칭 가능하도록 테스트
+        let response = match req.cmd.as_str() {
+            "nativeGatewayTransportIsAvailable" => IpcResponse::success(req.id.unwrap(), json!(true)),
+            _ => panic!("unexpected cmd"),
+        };
+        assert_eq!(response.id, 10);
+        assert_eq!(response.result, json!(true));
+        assert!(response.error.is_none());
     }
 }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-#![recursion_limit = "256"]
+#![recursion_limit = "512"]
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -15,11 +15,14 @@ use wry::WebViewBuilder;
 mod assets;
 mod audio;
 mod bridge;
+mod chat_view;
 mod config;
 mod gateway;
 mod ipc;
+mod native_shell;
 mod overlay;
 mod shortcuts;
+mod state;
 mod storage;
 mod stream_viewer;
 mod tray;
@@ -76,6 +79,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     if args.iter().any(|a| a == "--stream-viewer" || a == "--popout-stream") {
         stream_viewer::launch_stream_viewer();
+        return Ok(());
+    }
+    if args.iter().any(|a| a == "--native-shell" || a == "--pure-gpui") {
+        native_shell::launch_native_shell();
         return Ok(());
     }
 
@@ -412,6 +419,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         TrayMenuAction::ToggleOverlay => {
                             println!("[Fluxer Shell] Tray action triggered: Launch GPUI voice overlay");
                             overlay::launch_voice_overlay_process();
+                        }
+                        TrayMenuAction::LaunchNativeShell => {
+                            println!("[Fluxer Shell] Tray action triggered: Launch GPUI pure native shell");
+                            if let Ok(exe_path) = std::env::current_exe() {
+                                let _ = std::process::Command::new(exe_path)
+                                    .arg("--native-shell")
+                                    .spawn();
+                            }
                         }
                         TrayMenuAction::ToggleWindow => (),
                         TrayMenuAction::None => (),

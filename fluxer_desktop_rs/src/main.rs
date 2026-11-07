@@ -166,7 +166,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         stream_viewer::launch_stream_viewer();
         return Ok(());
     }
-    if args.iter().any(|a| a == "--native-shell" || a == "--pure-gpui") {
+
+    // 기본 진입점(Default Entry Point): 순수 Rust GPUI 네이티브 클라이언트 (RAM ~35MB, 단 1개의 프로세스)
+    // 크로미움 기반 WebView2는 --webview 또는 --hybrid 플래그를 명시적으로 전달했을 때만 레거시 호환용으로 구동됩니다.
+    let launch_legacy_webview = args.iter().any(|a| a == "--webview" || a == "--legacy-webview" || a == "--hybrid");
+    if !launch_legacy_webview {
         native_shell::launch_native_shell();
         return Ok(());
     }

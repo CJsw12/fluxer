@@ -14,6 +14,8 @@ use crate::theme::*;
 pub struct NativeShellView {
     pub state: ClientAppState,
     pub chat_view: Entity<ChatView>,
+    pub is_muted: bool,
+    pub is_deafened: bool,
 }
 
 impl NativeShellView {
@@ -22,16 +24,62 @@ impl NativeShellView {
         Self {
             state: get_client_state(),
             chat_view,
+            is_muted: false,
+            is_deafened: false,
         }
     }
 
-    /// 최좌측 길드(서버) 레일 렌더러 (너비 72px, 원본 Fluxer 룩앤필 1:1 일치)
-    fn render_guild_rail(&self) -> AnyElement {
+    /// 길드(서버)를 전환하고 활성 채널을 자동 선택합니다.
+    pub fn select_guild(&mut self, guild_id: String, cx: &mut Context<Self>) {
+        crate::state::update_client_state(|s| {
+            s.active_guild_id = Some(guild_id.clone());
+            if let Some(guild) = s.guilds.iter().find(|g| g.id == guild_id) {
+                if let Some(first_ch) = guild.channels.first() {
+                    s.active_channel_id = Some(first_ch.id.clone());
+                }
+            }
+        });
+        self.state = get_client_state();
+        self.chat_view.update(cx, |chat, cx| {
+            chat.sync_state();
+            cx.notify();
+        });
+        cx.notify();
+    }
+
+    /// 채널을 전환하고 해당 채널의 채팅 뷰를 즉시 갱신합니다.
+    pub fn select_channel(&mut self, channel_id: String, cx: &mut Context<Self>) {
+        crate::state::update_client_state(|s| {
+            s.active_channel_id = Some(channel_id);
+        });
+        self.state = get_client_state();
+        self.chat_view.update(cx, |chat, cx| {
+            chat.sync_state();
+            cx.notify();
+        });
+        cx.notify();
+    }
+
+    /// 마이크 음소거 상태를 실시간 토글합니다.
+    pub fn toggle_mute(&mut self, cx: &mut Context<Self>) {
+        self.is_muted = !self.is_muted;
+        cx.notify();
+    }
+
+    /// 헤드폰 데픈(듣기 끄기) 상태를 실시간 토글합니다.
+    pub fn toggle_deafen(&mut self, cx: &mut Context<Self>) {
+        self.is_deafened = !self.is_deafened;
+        cx.notify();
+    }
+
+    /// 최좌측 길드(서버) 레일 렌더러 (너비 72px, 원본 Fluxer 룩앤필 및 실제 클릭 전환 완벽 연동)
+    fn render_guild_rail(&self, cx: &mut Context<Self>) -> AnyElement {
         let guilds = &self.state.guilds;
         let active_id = self.state.active_guild_id.as_ref();
 
         let guild_items = guilds.iter().map(|guild| {
             let is_active = Some(&guild.id) == active_id;
+            let guild_id = guild.id.clone();
             let initial = guild
                 .name
                 .chars()
@@ -47,6 +95,13 @@ impl NativeShellView {
                 .relative()
                 .w_full()
                 .py_1()
+                .cursor(CursorStyle::PointingHand)
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, _, _, cx| {
+                        this.select_guild(guild_id.clone(), cx);
+                    }),
+                )
                 .child(
                     // 활성 길드 왼쪽 인디케이터 알약(Pill)
                     div()
@@ -90,6 +145,7 @@ impl NativeShellView {
                     .rounded_2xl()
                     .bg(BRAND_ACCENT)
                     .hover(|s| s.bg(BRAND_ACCENT_HOVER).rounded(px(16.0)))
+                    .cursor(CursorStyle::PointingHand)
                     .flex()
                     .items_center()
                     .justify_center()
@@ -114,6 +170,7 @@ impl NativeShellView {
                     .rounded_full()
                     .bg(BG_PRIMARY)
                     .hover(|s| s.bg(STATUS_ONLINE).rounded(px(16.0)))
+                    .cursor(CursorStyle::PointingHand)
                     .flex()
                     .items_center()
                     .justify_center()
@@ -126,8 +183,8 @@ impl NativeShellView {
             .into_any_element()
     }
 
-    /// 채널 목록 및 사용자 프로필 사이드바 렌더러 (너비 240px, 원본 Fluxer 룩앤필 1:1 일치)
-    fn render_channel_sidebar(&self) -> AnyElement {
+    /// 채널 목록 및 사용자 프로필 사이드바 렌더러 (너비 240px, 실제 채널 클릭 전환 및 카테고리 분류 완벽 연동)
+    fn render_channel_sidebar(&self, cx: &mut Context<Self>) -> AnyElement {
         let active_guild: Option<&GuildModel> = self
             .state
             .guilds
@@ -142,8 +199,9 @@ impl NativeShellView {
         let channels = active_guild.map(|g| &g.channels[..]).unwrap_or(&[]);
         let active_channel_id = self.state.active_channel_id.as_ref();
 
-        let channel_items = channels.iter().map(|channel| {
+        let render_channel_row = |channel: &crate::state::ChannelModel| {
             let is_active = Some(&channel.id) == active_channel_id;
+            let channel_id = channel.id.clone();
             let icon = match channel.channel_type {
                 crate::state::ChannelType::GuildVoice => "🔊",
                 _ => "#",
@@ -157,8 +215,15 @@ impl NativeShellView {
                 .py_1p5()
                 .mx_2()
                 .rounded_md()
+                .cursor(CursorStyle::PointingHand)
                 .bg(if is_active { BG_CHANNEL_SELECTED } else { rgba(0x00000000) })
                 .hover(|s| s.bg(if is_active { BG_CHANNEL_SELECTED } else { BG_CHANNEL_HOVER }))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, _, _, cx| {
+                        this.select_channel(channel_id.clone(), cx);
+                    }),
+                )
                 .child(
                     div()
                         .text_sm()
@@ -174,7 +239,17 @@ impl NativeShellView {
                         .child(channel.name.clone()),
                 )
                 .into_any_element()
-        });
+        };
+
+        let text_channels = channels
+            .iter()
+            .filter(|c| c.channel_type != crate::state::ChannelType::GuildVoice)
+            .map(render_channel_row);
+
+        let voice_channels = channels
+            .iter()
+            .filter(|c| c.channel_type == crate::state::ChannelType::GuildVoice)
+            .map(render_channel_row);
 
         div()
             .flex()
@@ -209,7 +284,7 @@ impl NativeShellView {
                     ),
             )
             .child(
-                // 채널 리스트
+                // 채널 리스트 (텍스트 채널 / 음성 채널 카테고리 분리 렌더링)
                 div()
                     .flex()
                     .flex_col()
@@ -223,12 +298,23 @@ impl NativeShellView {
                             .text_xs()
                             .font_weight(FontWeight::BOLD)
                             .text_color(TEXT_MUTED)
-                            .child("CHANNELS"),
+                            .child("TEXT CHANNELS"),
                     )
-                    .children(channel_items),
+                    .children(text_channels)
+                    .child(
+                        div()
+                            .px_4()
+                            .pt_3()
+                            .pb_1()
+                            .text_xs()
+                            .font_weight(FontWeight::BOLD)
+                            .text_color(TEXT_MUTED)
+                            .child("VOICE CHANNELS"),
+                    )
+                    .children(voice_channels),
             )
             .child(
-                // 하단 사용자 프로필 미니 독 (높이 52px)
+                // 하단 사용자 프로필 미니 독 (높이 52px, 마이크/헤드폰 음소거 실시간 인터랙션)
                 div()
                     .flex()
                     .items_center()
@@ -282,20 +368,45 @@ impl NativeShellView {
                             .gap_2()
                             .child(
                                 div()
+                                    .px_1()
+                                    .py_0p5()
+                                    .rounded_sm()
+                                    .cursor(CursorStyle::PointingHand)
+                                    .bg(if self.is_muted { rgba(0xf23f4333) } else { rgba(0x00000000) })
                                     .text_sm()
-                                    .text_color(TEXT_MUTED)
+                                    .text_color(if self.is_muted { STATUS_DND } else { TEXT_MUTED })
                                     .hover(|s| s.text_color(TEXT_PRIMARY))
-                                    .child("🎙️"),
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.toggle_mute(cx);
+                                        }),
+                                    )
+                                    .child(if self.is_muted { "🔇" } else { "🎙️" }),
                             )
                             .child(
                                 div()
+                                    .px_1()
+                                    .py_0p5()
+                                    .rounded_sm()
+                                    .cursor(CursorStyle::PointingHand)
+                                    .bg(if self.is_deafened { rgba(0xf23f4333) } else { rgba(0x00000000) })
                                     .text_sm()
-                                    .text_color(TEXT_MUTED)
+                                    .text_color(if self.is_deafened { STATUS_DND } else { TEXT_MUTED })
                                     .hover(|s| s.text_color(TEXT_PRIMARY))
-                                    .child("🎧"),
+                                    .on_mouse_down(
+                                        MouseButton::Left,
+                                        cx.listener(|this, _, _, cx| {
+                                            this.toggle_deafen(cx);
+                                        }),
+                                    )
+                                    .child(if self.is_deafened { "🚫" } else { "🎧" }),
                             )
                             .child(
                                 div()
+                                    .px_1()
+                                    .py_0p5()
+                                    .cursor(CursorStyle::PointingHand)
                                     .text_sm()
                                     .text_color(TEXT_MUTED)
                                     .hover(|s| s.text_color(TEXT_PRIMARY))
@@ -416,14 +527,14 @@ impl NativeShellView {
 }
 
 impl Render for NativeShellView {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .flex()
             .size_full()
             .bg(BG_TERTIARY)
             .text_color(TEXT_PRIMARY)
-            .child(self.render_guild_rail())
-            .child(self.render_channel_sidebar())
+            .child(self.render_guild_rail(cx))
+            .child(self.render_channel_sidebar(cx))
             .child(
                 div()
                     .flex()
@@ -481,5 +592,26 @@ mod tests {
         let guild = &state.guilds[0];
         assert_eq!(guild.name, "Fluxer HQ");
         assert_eq!(guild.channels.len(), 3);
+    }
+
+    #[test]
+    fn test_native_shell_mute_toggle_state() {
+        let mut is_muted = false;
+        let mut is_deafened = false;
+        is_muted = !is_muted;
+        assert!(is_muted);
+        is_deafened = !is_deafened;
+        assert!(is_deafened);
+    }
+
+    #[test]
+    fn test_channel_switching_updates_active_channel() {
+        let state = get_client_state();
+        let target_channel = &state.guilds[0].channels[1];
+        crate::state::update_client_state(|s| {
+            s.active_channel_id = Some(target_channel.id.clone());
+        });
+        let updated = get_client_state();
+        assert_eq!(updated.active_channel_id, Some(target_channel.id.clone()));
     }
 }

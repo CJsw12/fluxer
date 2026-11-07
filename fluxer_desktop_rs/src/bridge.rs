@@ -365,6 +365,24 @@ pub fn get_initialization_script() -> &'static str {
     };
     window.XMLHttpRequest = ProxyXMLHttpRequest;
 
+    // 2-2. 화면 공유 (Screen Share / getDisplayMedia) 로깅 및 파이프라인
+    try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+            const rawGetDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices);
+            navigator.mediaDevices.getDisplayMedia = async function(constraints) {
+                sendRust('consoleLog', { level: 'info', message: '[ScreenShare] navigator.mediaDevices.getDisplayMedia requested' });
+                try {
+                    const stream = await rawGetDisplayMedia(constraints);
+                    sendRust('consoleLog', { level: 'info', message: '[ScreenShare] getDisplayMedia succeeded with ' + stream.getTracks().length + ' tracks' });
+                    return stream;
+                } catch (err) {
+                    sendRust('consoleLog', { level: 'error', message: '[ScreenShare] getDisplayMedia failed: ' + (err.name || '') + ': ' + (err.message || String(err)) });
+                    throw err;
+                }
+            };
+        }
+    } catch (_) {}
+
     // 2. 최대화 상태 로컬 캐시 관리
     let isMaximizedCached = false;
 
@@ -632,7 +650,84 @@ pub fn get_initialization_script() -> &'static str {
 
         // 화면 공유 및 디스플레이 미디어
         getDesktopSources: function(types, reqId, opt) {
-            return Promise.resolve([]);
+            var requestedTypes = Array.isArray(types) ? types : ['screen', 'window'];
+            var sources = [];
+
+            function makeThumbnail(label, isWindow) {
+                try {
+                    var canvas = document.createElement('canvas');
+                    canvas.width = 320;
+                    canvas.height = 180;
+                    var ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.fillStyle = '#1e1f22';
+                        ctx.fillRect(0, 0, 320, 180);
+
+                        ctx.fillStyle = '#2b2d31';
+                        ctx.strokeStyle = isWindow ? '#23a55a' : '#5865f2';
+                        ctx.lineWidth = 4;
+                        if (typeof ctx.roundRect === 'function') {
+                            ctx.roundRect(24, 16, 272, 148, 8);
+                        } else {
+                            ctx.rect(24, 16, 272, 148);
+                        }
+                        ctx.fill();
+                        ctx.stroke();
+
+                        if (isWindow) {
+                            ctx.fillStyle = '#35373c';
+                            ctx.fillRect(24, 16, 272, 24);
+                            ctx.fillStyle = '#ed4245';
+                            ctx.beginPath(); ctx.arc(38, 28, 4, 0, Math.PI * 2); ctx.fill();
+                            ctx.fillStyle = '#faa81a';
+                            ctx.beginPath(); ctx.arc(50, 28, 4, 0, Math.PI * 2); ctx.fill();
+                            ctx.fillStyle = '#57f287';
+                            ctx.beginPath(); ctx.arc(62, 28, 4, 0, Math.PI * 2); ctx.fill();
+                        } else {
+                            ctx.fillStyle = '#4e5058';
+                            ctx.fillRect(150, 150, 20, 14);
+                            ctx.fillRect(130, 162, 60, 4);
+                        }
+
+                        ctx.fillStyle = '#f2f3f5';
+                        ctx.font = 'bold 15px sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText(label, 160, isWindow ? 100 : 85);
+                        return canvas.toDataURL('image/png');
+                    }
+                } catch (_) {}
+                return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+            }
+
+            var screenWidth = (window.screen && window.screen.width) || 1920;
+            var screenHeight = (window.screen && window.screen.height) || 1080;
+
+            if (requestedTypes.includes('screen')) {
+                sources.push({
+                    id: 'screen:0:0',
+                    name: 'Entire Screen (전체 화면)',
+                    display_id: '0',
+                    nativeWidth: screenWidth,
+                    nativeHeight: screenHeight,
+                    isOwnWindow: false,
+                    thumbnailDataUrl: makeThumbnail('Entire Screen', false)
+                });
+            }
+
+            if (requestedTypes.includes('window')) {
+                sources.push({
+                    id: 'window:0:0',
+                    name: 'Application Window (창 / 앱)',
+                    display_id: '0',
+                    nativeWidth: 1280,
+                    nativeHeight: 720,
+                    isOwnWindow: false,
+                    thumbnailDataUrl: makeThumbnail('Application Window', true)
+                });
+            }
+
+            return Promise.resolve(sources);
         },
         onDisplayMediaRequested: function(callback) {
             return function() {};
@@ -1033,5 +1128,7 @@ mod tests {
         assert!(script.contains("onNotificationClick"));
         assert!(script.contains("getInitialDeepLink"));
         assert!(script.contains("onDeepLink"));
+        assert!(script.contains("getDesktopSources"));
+        assert!(script.contains("navigator.mediaDevices.getDisplayMedia"));
     }
 }

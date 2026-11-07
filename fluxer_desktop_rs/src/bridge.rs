@@ -51,6 +51,38 @@ pub fn get_initialization_script() -> &'static str {
         }
     }
 
+    // 1-1. 웹뷰 내부 에러 및 경고를 Rust 콘솔로 실시간 포워딩
+    var origConsoleError = console.error;
+    var origConsoleWarn = console.warn;
+    console.error = function() {
+        try {
+            var msg = Array.prototype.slice.call(arguments).map(function(a) {
+                return (a instanceof Error) ? (a.stack || a.message) : (typeof a === 'object' ? JSON.stringify(a) : String(a));
+            }).join(' ');
+            sendRust('consoleLog', { level: 'error', message: msg });
+        } catch (_) {}
+        origConsoleError.apply(console, arguments);
+    };
+    console.warn = function() {
+        try {
+            var msg = Array.prototype.slice.call(arguments).map(function(a) {
+                return (a instanceof Error) ? (a.stack || a.message) : (typeof a === 'object' ? JSON.stringify(a) : String(a));
+            }).join(' ');
+            sendRust('consoleLog', { level: 'warn', message: msg });
+        } catch (_) {}
+        origConsoleWarn.apply(console, arguments);
+    };
+    window.addEventListener('error', function(e) {
+        try {
+            sendRust('consoleLog', { level: 'error', message: 'Window error: ' + (e.error ? (e.error.stack || e.error.message) : e.message) });
+        } catch (_) {}
+    });
+    window.addEventListener('unhandledrejection', function(e) {
+        try {
+            sendRust('consoleLog', { level: 'error', message: 'Unhandled rejection: ' + (e.reason ? (e.reason.stack || e.reason.message) : String(e.reason)) });
+        } catch (_) {}
+    });
+
     // 2. 외부 셀프호스트 인스턴스 CORS 우회용 네이티브 Fetch 프록시
     const originalFetch = window.fetch;
     window.fetch = async function(input, init) {
@@ -575,12 +607,6 @@ pub fn get_initialization_script() -> &'static str {
                     filtered.push(inst);
                     localStorage.setItem('__fluxer_known_instances', JSON.stringify(filtered));
                 } catch (_) {}
-                if (inst && (inst.domain || inst.instanceKey)) {
-                    var targetDomain = inst.domain || inst.instanceKey;
-                    if (typeof targetDomain === 'string' && targetDomain.indexOf('web.fluxer.app') === -1) {
-                        sendRust('navigateToInstance', { url: targetDomain });
-                    }
-                }
                 return invokeRust('knownInstancesUpsert', inst).then(function() {});
             },
             delete: function(key) {

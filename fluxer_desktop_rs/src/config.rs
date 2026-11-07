@@ -105,6 +105,7 @@ pub fn delete_known_instance(instance_key: &str) {
 }
 
 /// 알려진 인스턴스 목록(`known_instances.json`) 중 가장 최근에 사용된 인스턴스 웹앱 URL을 반환합니다.
+#[allow(dead_code)]
 pub fn load_latest_known_instance_url() -> Option<String> {
     let instances = load_known_instances();
     if instances.is_empty() {

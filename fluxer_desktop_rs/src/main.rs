@@ -180,8 +180,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. FLUXER_WEB_URL 환경변수 우선
     // 2. CLI 실행 인자 (--fluxer-instance=... 또는 URL)
     // 3. 로컬에 영구 저장된 마지막 활성 인스턴스 (config::load_last_instance())
-    // 4. 로컬에 영구 저장된 알려진 인스턴스 최신 항목 (config::load_latest_known_instance_url())
-    // 5. 기본값: 공식 웹 클라이언트 (https://web.fluxer.app) -> 최초 실행 시 인스턴스 선택기 표출
+    // 4. 기본값: 공식 웹 클라이언트 (https://web.fluxer.app) -> 인스턴스 선택기 표출
     let target_url = if let Ok(env_url) = std::env::var("FLUXER_WEB_URL") {
         env_url
     } else if let Some(cli_url) = cli_launch_instance.as_deref() {
@@ -192,8 +191,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     } else if let Some(last_url) = config::load_last_instance() {
         last_url
-    } else if let Some(latest_known) = config::load_latest_known_instance_url() {
-        latest_known
     } else {
         "https://web.fluxer.app".to_string()
     };
@@ -265,6 +262,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     config::clear_last_instance();
                     println!("[Fluxer Shell] Deactivated instance, returning to default picker.");
                     let _ = webview.load_url("https://web.fluxer.app");
+                }
+                "consoleLog" => {
+                    let level = req.payload.get("level").and_then(|v| v.as_str()).unwrap_or("log");
+                    let message = req.payload.get("message").and_then(|v| v.as_str()).unwrap_or("");
+                    match level {
+                        "error" => eprintln!("[Web Error] {message}"),
+                        "warn" => eprintln!("[Web Warn] {message}"),
+                        _ => println!("[Web Log] {message}"),
+                    }
                 }
                 "reportLastRoute" => {
                     // 프론트엔드 라우트 변경 통지 (정상 수용)

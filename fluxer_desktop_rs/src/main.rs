@@ -71,7 +71,32 @@ fn load_app_icon() -> Option<tao::window::Icon> {
     None
 }
 
+/// 백그라운드 대기 또는 포커스 아웃 시 미사용 가상 메모리 페이지를 OS로 즉각 반환하는 Win32 메모리 트리머입니다.
+#[cfg(target_os = "windows")]
+pub fn trim_process_working_set() {
+    unsafe {
+        use windows_sys::Win32::System::Threading::{GetCurrentProcess, SetProcessWorkingSetSize};
+        let _ = SetProcessWorkingSetSize(GetCurrentProcess(), usize::MAX, usize::MAX);
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn trim_process_working_set() {}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // WebView2의 과도한 메모리 점유 및 다중 프로세스 분할을 억제하기 위한 초경량 Chromium 플래그 주입
+    if std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").is_err() {
+        unsafe {
+            std::env::set_var(
+                "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+                "--renderer-process-limit=1 \
+                 --disable-features=RendererCodeIntegrity,PreloadMediaEngagementData,AutofillServerCommunication,CalculateNativeWinOcclusion \
+                 --disable-gpu-shader-disk-cache \
+                 --disable-component-update \
+                 --js-flags=\"--max-old-space-size=128\"",
+            );
+        }
+    }
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--overlay" || a == "--voice-overlay") {
         overlay::launch_voice_overlay();
@@ -169,6 +194,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             cmd: "firstContentPainted".into(),
             payload: serde_json::Value::Null,
         }));
+    });
+
+    // 6. 주기적 메모리 압축기: 60초마다 OS 작업 세트를 비워 장기 실행 시 램 누수 및 과점유 원천 억제
+    std::thread::spawn(|| {
+        loop {
+            std::thread::sleep(Duration::from_secs(60));
+            trim_process_working_set();
+        }
     });
 
     let asset_handler = AssetHandler::new();
@@ -480,6 +513,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "if (window.__isMaximized !== {maximized}) {{ window.__isMaximized = {maximized}; window.dispatchEvent(new CustomEvent('fluxer:maximize-change', {{ detail: {{ isMaximized: {maximized} }} }})); }}"
                     );
                     let _ = webview.evaluate_script(&script);
+                }
+                WindowEvent::Focused(focused) => {
+                    if !focused {
+                        trim_process_working_set();
+                    }
                 }
                 _ => (),
             },

@@ -71,12 +71,71 @@ fn load_app_icon() -> Option<tao::window::Icon> {
     None
 }
 
-/// 백그라운드 대기 또는 포커스 아웃 시 미사용 가상 메모리 페이지를 OS로 즉각 반환하는 Win32 메모리 트리머입니다.
+/// 현재 프로세스 및 모든 WebView2 자식/손자 프로세스(렌더러, GPU 프로세스 등)의 작업 세트를 전수 압축(Trimming)합니다.
 #[cfg(target_os = "windows")]
 pub fn trim_process_working_set() {
     unsafe {
-        use windows_sys::Win32::System::Threading::{GetCurrentProcess, SetProcessWorkingSetSize};
+        use std::collections::HashSet;
+        use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+        use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+            CreateToolhelp32Snapshot, PROCESSENTRY32, Process32First, Process32Next,
+            TH32CS_SNAPPROCESS,
+        };
+        use windows_sys::Win32::System::Threading::{
+            GetCurrentProcess, GetCurrentProcessId, OpenProcess, SetProcessWorkingSetSize,
+            PROCESS_QUERY_INFORMATION, PROCESS_SET_QUOTA,
+        };
+
+        // 1. 메인 호스트 프로세스 자체 워킹셋 비우기
         let _ = SetProcessWorkingSetSize(GetCurrentProcess(), usize::MAX, usize::MAX);
+
+        let my_pid = GetCurrentProcessId();
+        let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snapshot == INVALID_HANDLE_VALUE {
+            return;
+        }
+
+        let mut child_pids: HashSet<u32> = HashSet::new();
+        child_pids.insert(my_pid);
+
+        // 2. 부모-자식 관계를 2차 순회하여 직계 자식 및 손자 프로세스(msedgewebview2.exe, Renderer 357MB, GPU 93MB)를 모두 수집
+        let mut all_processes: Vec<(u32, u32)> = Vec::new();
+        let mut entry: PROCESSENTRY32 = std::mem::zeroed();
+        entry.dwSize = std::mem::size_of::<PROCESSENTRY32>() as u32;
+
+        if Process32First(snapshot, &mut entry) != 0 {
+            loop {
+                all_processes.push((entry.th32ProcessID, entry.th32ParentProcessID));
+                if Process32Next(snapshot, &mut entry) == 0 {
+                    break;
+                }
+            }
+        }
+        CloseHandle(snapshot);
+
+        // 자식 및 손자 PID 확산 수집
+        let mut changed = true;
+        while changed {
+            changed = false;
+            for &(pid, ppid) in &all_processes {
+                if child_pids.contains(&ppid) && !child_pids.contains(&pid) {
+                    child_pids.insert(pid);
+                    changed = true;
+                }
+            }
+        }
+
+        // 3. 수집된 모든 자식 프로세스의 작업 세트를 일괄 비우기 (357MB 렌더러 + 93MB GPU 프로세스 전수 압축)
+        for pid in child_pids {
+            if pid == my_pid {
+                continue;
+            }
+            let handle = OpenProcess(PROCESS_SET_QUOTA | PROCESS_QUERY_INFORMATION, 0, pid);
+            if !handle.is_null() {
+                let _ = SetProcessWorkingSetSize(handle, usize::MAX, usize::MAX);
+                CloseHandle(handle);
+            }
+        }
     }
 }
 
@@ -196,10 +255,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }));
     });
 
-    // 6. 주기적 메모리 압축기: 60초마다 OS 작업 세트를 비워 장기 실행 시 램 누수 및 과점유 원천 억제
+    // 6. 주기적 메모리 압축기: 기동 5초 후 초기 로딩 힙 즉각 회수, 이후 20초마다 모든 WebView2 자식/손자 프로세스 작업 세트를 전수 압축
     std::thread::spawn(|| {
+        std::thread::sleep(Duration::from_secs(5));
+        trim_process_working_set();
         loop {
-            std::thread::sleep(Duration::from_secs(60));
+            std::thread::sleep(Duration::from_secs(20));
             trim_process_working_set();
         }
     });

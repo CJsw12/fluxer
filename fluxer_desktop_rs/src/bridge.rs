@@ -1682,6 +1682,13 @@ pub fn get_initialization_script() -> &'static str {
         }, true);
     })();
 
+    // 8. 렌더러 V8 힙 가비지 컬렉터 정기 트리거
+    setInterval(function() {
+        if (typeof window.gc === 'function') {
+            try { window.gc(); } catch (_) {}
+        }
+    }, 20000);
+
     console.info('[Fluxer Rust Shell] Native Electron Bridge (Phase 2 Full API) injected successfully.');
 })();
 "#

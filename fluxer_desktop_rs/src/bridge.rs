@@ -1491,12 +1491,12 @@ pub fn get_initialization_script() -> &'static str {
         }
     })();
 
-    // 4-2. 창 제어 캡션 버튼 (최소화, 최대화/복원, 닫기) 즉각 캡처 처리 함수
+    // 4-2. 창 제어 캡션 버튼 (최소화, 최대화/복원, 닫기) 정밀 캡처 처리 함수
     function dispatchWindowControl(action) {
         if (action === 'minimize') {
             sendRust('windowMinimize');
             return true;
-        } else if (action === 'maximize') {
+        } else if (action === 'maximize' || action === 'restore') {
             sendRust('windowMaximize');
             return true;
         } else if (action === 'close') {
@@ -1509,36 +1509,38 @@ pub fn get_initialization_script() -> &'static str {
     function checkCaptionButtonClick(e) {
         if (e.button !== 0) return false;
         var target = e.target;
+        if (!target) return false;
 
-        // 1) DOM 속성 및 클래스 기반 최우선 판별
-        if (target) {
-            var btn = target.closest('[data-window-control], .fluxer-native-titlebar__control, button[aria-label*="window"], button[aria-label*="Window"]');
-            if (btn) {
-                var control = btn.getAttribute('data-window-control');
-                if (!control) {
-                    var aria = (btn.getAttribute('aria-label') || '').toLowerCase();
-                    if (btn.classList.contains('fluxer-native-titlebar__control--close') || aria.includes('close')) {
-                        control = 'close';
-                    } else if (aria.includes('maximize') || aria.includes('restore')) {
-                        control = 'maximize';
-                    } else if (aria.includes('minimize')) {
-                        control = 'minimize';
-                    }
+        // 1) DOM 요소 및 data-window-control 속성 기반 100% 정밀 판별
+        var btn = target.closest('[data-window-control], .fluxer-native-titlebar__control, button[aria-label*="window"], button[aria-label*="Window"]');
+        if (btn) {
+            var control = btn.getAttribute('data-window-control');
+            if (!control) {
+                var aria = (btn.getAttribute('aria-label') || '').toLowerCase();
+                if (btn.classList.contains('fluxer-native-titlebar__control--close') || aria.includes('close') || aria.includes('닫기')) {
+                    control = 'close';
+                } else if (aria.includes('maximize') || aria.includes('restore') || aria.includes('최대화') || aria.includes('복원')) {
+                    control = 'maximize';
+                } else if (aria.includes('minimize') || aria.includes('최소화')) {
+                    control = 'minimize';
                 }
-                if (control) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return dispatchWindowControl(control);
-                }
+            }
+
+            if (control) {
+                e.preventDefault();
+                e.stopPropagation();
+                return dispatchWindowControl(control);
             }
         }
 
-        // 2) 절대 좌표 기반 100% 보장: 음성 통화 오버레이나 WebRTC 뷰가 가리더라도 우상단 캡션 버튼 영역(높이 34px, 우측 146px) 클릭 즉시 실행
-        if (e.clientY <= 34 && e.clientX >= (window.innerWidth - 146)) {
+        // 2) DOM이 아닌 경우에만 우상단 영역 바운딩 박스를 기준으로 안전하게 판별
+        // 절대 닫기(close)가 오발송되지 않도록 우측 끝 0~48px만 close로 제한하고, 그 왼쪽은 철저히 maximize/minimize로 매핑
+        var titlebar = target.closest('.fluxer-native-titlebar, [data-flx-titlebar="true"]');
+        if (titlebar && e.clientY <= 34 && e.clientX >= (window.innerWidth - 146)) {
             var offsetFromRight = window.innerWidth - e.clientX;
             e.preventDefault();
             e.stopPropagation();
-            if (offsetFromRight <= 48) {
+            if (offsetFromRight <= 46) {
                 return dispatchWindowControl('close');
             } else if (offsetFromRight <= 96) {
                 return dispatchWindowControl('maximize');
@@ -1550,7 +1552,7 @@ pub fn get_initialization_script() -> &'static str {
         return false;
     }
 
-    // 마우스 클릭 및 마우스 다운 최우선 캡처링 (Capture Phase)
+    // 마우스 클릭 이벤트에서만 단일 정밀 디스패치 (중복 트리거 및 오발송 방지)
     window.addEventListener('click', function(e) {
         checkCaptionButtonClick(e);
     }, true);
@@ -1559,9 +1561,9 @@ pub fn get_initialization_script() -> &'static str {
     window.addEventListener('mousedown', function(e) {
         if (e.button !== 0) return;
 
-        // 우상단 캡션 버튼 영역에서는 절대 드래그 발동 금지 (클릭 이벤트 보호)
-        if (e.clientY <= 34 && e.clientX >= (window.innerWidth - 146)) {
-            checkCaptionButtonClick(e);
+        // 우상단 캡션 버튼 영역에서는 절대 드래그 발동 금지 (버튼 클릭 보호)
+        var btn = e.target && e.target.closest('[data-window-control], .fluxer-native-titlebar__control, button[aria-label*="window"], button[aria-label*="Window"]');
+        if (btn || (e.clientY <= 34 && e.clientX >= (window.innerWidth - 146))) {
             return;
         }
 

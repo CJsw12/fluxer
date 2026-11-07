@@ -144,16 +144,17 @@ pub fn trim_process_working_set() {
 pub fn trim_process_working_set() {}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // WebView2의 과도한 메모리 점유 및 다중 프로세스 분할을 억제하기 위한 초경량 Chromium 플래그 주입
+    // WebView2의 과도한 메모리 점유 및 다중 프로세스 분할(491MB)을 억제하기 위한 초경량 Chromium 플래그 주입
     if std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").is_err() {
         unsafe {
             std::env::set_var(
                 "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
                 "--renderer-process-limit=1 \
-                 --disable-features=RendererCodeIntegrity,PreloadMediaEngagementData,AutofillServerCommunication,CalculateNativeWinOcclusion \
+                 --in-process-gpu \
                  --disable-gpu-shader-disk-cache \
                  --disable-component-update \
-                 --js-flags=\"--max-old-space-size=128\"",
+                 --disable-features=AudioServiceOutOfProcess,RendererCodeIntegrity,PreloadMediaEngagementData,AutofillServerCommunication,CalculateNativeWinOcclusion \
+                 --js-flags=\"--max-old-space-size=64 --expose-gc\"",
             );
         }
     }
@@ -166,11 +167,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         stream_viewer::launch_stream_viewer();
         return Ok(());
     }
-
-    // 기본 진입점(Default Entry Point): 순수 Rust GPUI 네이티브 클라이언트 (RAM ~35MB, 단 1개의 프로세스)
-    // 크로미움 기반 WebView2는 --webview 또는 --hybrid 플래그를 명시적으로 전달했을 때만 레거시 호환용으로 구동됩니다.
-    let launch_legacy_webview = args.iter().any(|a| a == "--webview" || a == "--legacy-webview" || a == "--hybrid");
-    if !launch_legacy_webview {
+    if args.iter().any(|a| a == "--pure-gpui" || a == "--native-shell") {
         native_shell::launch_native_shell();
         return Ok(());
     }

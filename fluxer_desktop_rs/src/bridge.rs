@@ -873,14 +873,34 @@ pub fn get_initialization_script() -> &'static str {
             stop: function() { return Promise.resolve(); }
         },
         nativeAudio: {
-            getAvailability: function() { return Promise.resolve({ available: false }); },
-            listAudibleApplications: function() { return Promise.resolve([]); },
-            resolveAudioRootPidForSource: function() { return Promise.resolve(null); },
-            start: function() { return Promise.resolve({ ok: false }); },
-            setRule: function() { return Promise.resolve(false); },
-            listPlaybackDevices: function() { return Promise.resolve([]); },
-            setWinEndpoints: function() { return Promise.resolve(false); },
-            stop: function() { return Promise.resolve(); },
+            getAvailability: function() {
+                return invokeRust('nativeAudioGetAvailability');
+            },
+            listAudibleApplications: function() {
+                return invokeRust('nativeAudioListApplications').then(function(res) {
+                    return Array.isArray(res) ? res : [];
+                });
+            },
+            resolveAudioRootPidForSource: function(sourceId) {
+                return invokeRust('nativeAudioResolveRootPid', { sourceId: sourceId });
+            },
+            start: function(options) {
+                return invokeRust('nativeAudioStart', options || {});
+            },
+            setRule: function(captureId, linuxRule) {
+                return invokeRust('nativeAudioSetRule', { captureId: captureId, linuxRule: linuxRule });
+            },
+            listPlaybackDevices: function() {
+                return invokeRust('nativeAudioListPlaybackDevices').then(function(res) {
+                    return Array.isArray(res) ? res : [];
+                });
+            },
+            setWinEndpoints: function(captureId, endpoints) {
+                return invokeRust('nativeAudioSetWinEndpoints', { captureId: captureId, endpoints: endpoints || [] });
+            },
+            stop: function(captureId) {
+                return invokeRust('nativeAudioStop', { captureId: captureId });
+            },
             onFrame: function(cb) { return function() {}; },
             onEnd: function(cb) { return function() {}; }
         },
@@ -1167,7 +1187,7 @@ pub fn get_initialization_script() -> &'static str {
         capabilities: {
             appStore: true,
             gatewaySocket: true,
-            audioCapture: false,
+            audioCapture: true,
             voiceEngineV2: true,
             nativeGatewayTransport: true
         }
@@ -1351,5 +1371,7 @@ mod tests {
         assert!(script.contains("navigator.mediaDevices.getDisplayMedia"));
         assert!(script.contains("nativeGatewayTransport"));
         assert!(script.contains("__fluxerNativeGatewayEmit"));
+        assert!(script.contains("nativeAudio"));
+        assert!(script.contains("nativeAudioGetAvailability"));
     }
 }

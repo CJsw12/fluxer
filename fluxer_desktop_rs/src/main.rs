@@ -11,6 +11,7 @@ use tao::{
 use wry::WebViewBuilder;
 
 mod assets;
+mod audio;
 mod bridge;
 mod config;
 mod gateway;

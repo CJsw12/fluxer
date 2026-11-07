@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tao::window::Window;
+use crate::audio;
 use crate::config;
 use crate::gateway::GatewayManager;
 use crate::storage::{self, DesktopAccountRecord, DesktopStorageWrite};
@@ -608,6 +609,48 @@ pub fn handle_ipc_request(
             }
         }
 
+        // =========================================================
+        // 네이티브 오디오 캡처 서브시스템 API (nativeAudio)
+        // =========================================================
+        "nativeAudioGetAvailability" | "native-audio:get-availability" => {
+            IpcResponse::success(id, audio::get_availability())
+        }
+
+        "nativeAudioListApplications" | "native-audio:list-applications" => {
+            IpcResponse::success(id, json!(audio::list_applications()))
+        }
+
+        "nativeAudioResolveRootPid" | "native-audio:resolve-root-pid" => {
+            let source_id = req.payload.get("sourceId").and_then(Value::as_str)
+                .or_else(|| req.payload.as_str())
+                .unwrap_or("");
+            IpcResponse::success(id, json!(audio::resolve_root_pid(source_id)))
+        }
+
+        "nativeAudioListPlaybackDevices" | "native-audio:list-playback-devices" => {
+            IpcResponse::success(id, json!(audio::list_playback_devices()))
+        }
+
+        "nativeAudioStart" | "native-audio:start" => {
+            IpcResponse::success(id, audio::start_capture(&req.payload))
+        }
+
+        "nativeAudioStop" | "native-audio:stop" => {
+            let capture_id = req.payload.get("captureId").and_then(Value::as_str)
+                .or_else(|| req.payload.as_str())
+                .unwrap_or("");
+            audio::stop_capture(capture_id);
+            IpcResponse::success(id, Value::Null)
+        }
+
+        "nativeAudioSetWinEndpoints" | "native-audio:set-win-endpoints" => {
+            IpcResponse::success(id, json!(true))
+        }
+
+        "nativeAudioSetRule" | "native-audio:set-rule" => {
+            IpcResponse::success(id, json!(true))
+        }
+
         unknown => {
             eprintln!("[IPC Warning] Unhandled invoke channel: '{unknown}', returning safe null success");
             IpcResponse::success(id, Value::Null)
@@ -653,5 +696,12 @@ mod tests {
         assert_eq!(response.id, 10);
         assert_eq!(response.result, json!(true));
         assert!(response.error.is_none());
+    }
+
+    #[test]
+    fn test_native_audio_ipc_availability() {
+        let avail = audio::get_availability();
+        assert_eq!(avail["available"], true);
+        assert_eq!(avail["backend"], "windows-wasapi-loopback");
     }
 }

@@ -335,7 +335,14 @@ pub fn get_initialization_script() -> &'static str {
         var isUnauthRoute = /\/auth\/(login|register|forgot|reset|handoff|sso)|\.well-known\/fluxer/i.test(self._url);
         if (!hasAuth && !isUnauthRoute) {
             try {
-                var storedToken = localStorage.getItem('token') || window.__fluxerLastAuthToken;
+                var storedToken = window.__fluxerLastAuthToken || localStorage.getItem('token') || localStorage.getItem('__fluxer_last_token');
+                if (!storedToken) {
+                    var rawAccount = localStorage.getItem('__fluxer_last_account');
+                    if (rawAccount) {
+                        var acc = JSON.parse(rawAccount);
+                        storedToken = acc && (acc.token || (acc.record && acc.record.token));
+                    }
+                }
                 if (storedToken && storedToken !== 'null' && storedToken !== 'undefined') {
                     self._reqHeaders['Authorization'] = storedToken;
                 }
@@ -985,6 +992,31 @@ pub fn get_initialization_script() -> &'static str {
                 return invokeRust('desktopAccountsGet', { storageKey: storageKey });
             },
             upsert: function(account) {
+                if (account) {
+                    try {
+                        var token = account.token || (account.record && account.record.token);
+                        if (token) {
+                            window.__fluxerLastAuthToken = token;
+                            localStorage.setItem('__fluxer_last_account', JSON.stringify(account));
+                        }
+                        var endpoint = (account.instance && account.instance.apiEndpoint) ||
+                                       (account.record && account.record.instance && account.record.instance.apiEndpoint) ||
+                                       account.storageKey || '';
+                        if (endpoint) {
+                            var rawInstance = endpoint.split('::')[0] || endpoint;
+                            var match = rawInstance.match(/^https?:\/\/[^\/:]+(?::\d+)?/i);
+                            if (match) {
+                                var instUrl = match[0];
+                                if (window.location.origin !== instUrl && !instUrl.includes('web.fluxer.app')) {
+                                    console.log('[Fluxer Bridge] Detected login to remote instance:', instUrl, 'Navigating...');
+                                    sendRust('navigateToInstance', { url: instUrl });
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        console.error('[Fluxer Bridge] Error detecting instance during upsert:', e);
+                    }
+                }
                 return invokeRust('desktopAccountsUpsert', { account: account });
             },
             compareAndSwap: function(request) {
@@ -1043,7 +1075,18 @@ pub fn get_initialization_script() -> &'static str {
                     filtered.push(inst);
                     localStorage.setItem('__fluxer_known_instances', JSON.stringify(filtered));
                 } catch (_) {}
-                return invokeRust('knownInstancesUpsert', inst).then(function() {});
+                return invokeRust('knownInstancesUpsert', inst).then(function() {
+                    if (inst && inst.domain) {
+                        var domain = String(inst.domain).trim();
+                        var fullUrl = (domain.startsWith('http://') || domain.startsWith('https://')) ? domain : ('https://' + domain);
+                        var targetOrigin = '';
+                        try { targetOrigin = new URL(fullUrl).origin; } catch(_) {}
+                        if (targetOrigin && window.location.origin !== targetOrigin && !targetOrigin.includes('web.fluxer.app')) {
+                            console.log('[Fluxer Bridge] Instance selected in picker, navigating:', targetOrigin);
+                            sendRust('navigateToInstance', { url: targetOrigin });
+                        }
+                    }
+                });
             },
             delete: function(key) {
                 try {

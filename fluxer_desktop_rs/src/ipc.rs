@@ -311,6 +311,19 @@ pub fn handle_ipc_request(
         }
 
         "knownInstancesUpsert" => {
+            if let Some(domain) = req.payload.get("domain").and_then(Value::as_str) {
+                let trimmed = domain.trim();
+                if !trimmed.is_empty() && !trimmed.contains("web.fluxer.app") {
+                    let full = if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
+                        trimmed.to_string()
+                    } else {
+                        format!("https://{trimmed}")
+                    };
+                    if config::load_last_instance().is_none() {
+                        config::save_last_instance(&full);
+                    }
+                }
+            }
             config::upsert_known_instance(req.payload);
             IpcResponse::success(id, Value::Null)
         }
@@ -494,6 +507,9 @@ pub fn handle_ipc_request(
                 .or_else(|| serde_json::from_value(req.payload.clone()).ok());
 
             if let Some(acc) = acc_opt {
+                if let Some(inst) = storage::extract_instance_url(&acc.storage_key) {
+                    config::save_last_instance(&inst);
+                }
                 storage::upsert_account(acc);
                 IpcResponse::success(id, Value::Null)
             } else {

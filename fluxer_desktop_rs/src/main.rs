@@ -192,7 +192,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. FLUXER_WEB_URL 환경변수 우선
     // 2. CLI 실행 인자 (--fluxer-instance=... 또는 URL)
     // 3. 로컬에 영구 저장된 마지막 활성 인스턴스 (config::load_last_instance())
-    // 4. 기본값: 공식 웹 클라이언트 (https://web.fluxer.app) -> 인스턴스 선택기 표출
+    // 4. 저장된 계정 목록으로부터 인스턴스 복원 (storage::get_last_instance_from_accounts())
+    // 5. 알려진 인스턴스 기록으로부터 복원 (config::load_latest_known_instance_url())
+    // 6. 기본값: 공식 웹 클라이언트 (https://web.fluxer.app) -> 인스턴스 선택기 표출
     let target_url = if let Ok(env_url) = std::env::var("FLUXER_WEB_URL") {
         env_url
     } else if let Some(cli_url) = cli_launch_instance.as_deref() {
@@ -202,7 +204,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             format!("https://{cli_url}")
         }
     } else if let Some(last_url) = config::load_last_instance() {
-        last_url
+        let base = last_url.trim_end_matches('/');
+        format!("{base}/channels/@me")
+    } else if let Some(acc_url) = storage::get_last_instance_from_accounts() {
+        config::save_last_instance(&acc_url);
+        let base = acc_url.trim_end_matches('/');
+        format!("{base}/channels/@me")
+    } else if let Some(known_url) = config::load_latest_known_instance_url() {
+        if !known_url.contains("web.fluxer.app") {
+            config::save_last_instance(&known_url);
+            let base = known_url.trim_end_matches('/');
+            format!("{base}/channels/@me")
+        } else {
+            "https://web.fluxer.app".to_string()
+        }
     } else {
         "https://web.fluxer.app".to_string()
     };
@@ -253,8 +268,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         };
                         let base_url = full_url.trim_end_matches("/api").trim_end_matches('/').to_string();
                         config::save_last_instance(&base_url);
-                        println!("[Fluxer Shell] Navigating to committed instance: {base_url}");
-                        let _ = webview.load_url(&base_url);
+                        let target = format!("{base_url}/channels/@me");
+                        println!("[Fluxer Shell] Navigating to committed instance: {target}");
+                        let _ = webview.load_url(&target);
                     }
                 }
                 "navigateToInstance" => {
@@ -266,8 +282,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         };
                         let base_url = full_url.trim_end_matches("/api").trim_end_matches('/').to_string();
                         config::save_last_instance(&base_url);
-                        println!("[Fluxer Shell] Navigating to selected instance: {base_url}");
-                        let _ = webview.load_url(&base_url);
+                        let target = format!("{base_url}/channels/@me");
+                        println!("[Fluxer Shell] Navigating to selected instance: {target}");
+                        let _ = webview.load_url(&target);
                     }
                 }
                 "deactivateInstance" => {

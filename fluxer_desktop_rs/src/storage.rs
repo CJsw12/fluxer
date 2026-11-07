@@ -288,9 +288,66 @@ pub fn prune_accounts(keys_to_keep: &[String]) -> usize {
     pruned
 }
 
+/// 저장된 계정 키 또는 엔드포인트 문자열로부터 인스턴스 베이스 URL(예: "https://fluxer.itsuj.duckdns.org")을 추출합니다.
+pub fn extract_instance_url(input: &str) -> Option<String> {
+    let raw = if let Some((instance_part, _)) = input.split_once("::") {
+        instance_part
+    } else {
+        input
+    };
+    let trimmed = raw.trim();
+    if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
+        return None;
+    }
+    let base = trimmed.trim_end_matches("/api").trim_end_matches('/');
+    if !base.is_empty() {
+        Some(base.to_string())
+    } else {
+        None
+    }
+}
+
+/// 저장된 계정 목록 중 가장 최근 계정으로부터 활성 인스턴스 URL을 가져옵니다.
+pub fn get_last_instance_from_accounts() -> Option<String> {
+    let accounts = get_all_accounts();
+    for account in accounts.iter().rev() {
+        if let Some(url) = extract_instance_url(&account.storage_key) {
+            return Some(url);
+        }
+        if let Some(endpoint) = account
+            .record
+            .get("instance")
+            .and_then(|i| i.get("apiEndpoint"))
+            .and_then(Value::as_str)
+        {
+            if let Some(url) = extract_instance_url(endpoint) {
+                return Some(url);
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_extract_instance_url() {
+        assert_eq!(
+            extract_instance_url("https://fluxer.itsuj.duckdns.org/api::1551530442950180864"),
+            Some("https://fluxer.itsuj.duckdns.org".to_string())
+        );
+        assert_eq!(
+            extract_instance_url("https://my-fluxer.app/api"),
+            Some("https://my-fluxer.app".to_string())
+        );
+        assert_eq!(
+            extract_instance_url("http://localhost:8088::user1"),
+            Some("http://localhost:8088".to_string())
+        );
+        assert_eq!(extract_instance_url("invalid_key"), None);
+    }
 
     #[test]
     fn test_storage_crud_operations() {

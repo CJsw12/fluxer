@@ -15,17 +15,13 @@ use wry::WebViewBuilder;
 mod assets;
 mod audio;
 mod bridge;
-mod chat_view;
 mod config;
 mod gateway;
 mod ipc;
-mod native_shell;
 mod overlay;
 mod shortcuts;
-mod state;
 mod storage;
 mod stream_viewer;
-mod theme;
 mod tray;
 
 use assets::AssetHandler;
@@ -172,10 +168,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     if args.iter().any(|a| a == "--stream-viewer" || a == "--popout-stream") {
         stream_viewer::launch_stream_viewer();
-        return Ok(());
-    }
-    if args.iter().any(|a| a == "--pure-gpui" || a == "--native-shell") {
-        native_shell::launch_native_shell();
         return Ok(());
     }
 
@@ -488,25 +480,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let _ = webview.evaluate_script(&script);
             }
             Event::UserEvent(UserEvent::GatewayEvent(evt)) => {
-                // 1. 웹뷰 프론트엔드로 네이티브 게이트웨이 이벤트 포워딩
+                // 웹뷰 프론트엔드로 네이티브 게이트웨이 이벤트 포워딩
                 if let Ok(json) = serde_json::to_string(&evt) {
                     let script = format!(
                         "if (window.__fluxerNativeGatewayEmit) {{ window.__fluxerNativeGatewayEmit({json}); }}"
                     );
                     let _ = webview.evaluate_script(&script);
-                }
-
-                // 2. 순수 GPUI 네이티브 셸 상태(state.rs)로도 실시간 이벤트 무지연 디스패치
-                if evt.kind == "message" {
-                    if let Some(ref text) = evt.data {
-                        if let Ok(val) = serde_json::from_str::<serde_json::Value>(text) {
-                            let op = val.get("op").and_then(|v| v.as_i64()).unwrap_or(-1) as i32;
-                            let t = val.get("t").and_then(|v| v.as_str());
-                            if let Some(d) = val.get("d") {
-                                state::handle_gateway_dispatch(op, t, d);
-                            }
-                        }
-                    }
                 }
             }
             Event::UserEvent(UserEvent::TrayMenu(menu_id)) => {
@@ -540,14 +519,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         TrayMenuAction::ToggleOverlay => {
                             println!("[Fluxer Shell] Tray action triggered: Launch GPUI voice overlay");
                             overlay::launch_voice_overlay_process();
-                        }
-                        TrayMenuAction::LaunchNativeShell => {
-                            println!("[Fluxer Shell] Tray action triggered: Launch GPUI pure native shell");
-                            if let Ok(exe_path) = std::env::current_exe() {
-                                let _ = std::process::Command::new(exe_path)
-                                    .arg("--native-shell")
-                                    .spawn();
-                            }
                         }
                         TrayMenuAction::ToggleWindow => (),
                         TrayMenuAction::None => (),

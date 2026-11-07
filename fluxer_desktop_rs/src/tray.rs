@@ -14,7 +14,6 @@ pub enum TrayMenuAction {
     ToggleWindow,
     OpenSettings,
     ToggleOverlay,
-    LaunchNativeShell,
     SetStatus(String),
     CheckForUpdates,
     Restart,
@@ -26,7 +25,6 @@ pub struct TrayManager {
     toggle_item: MenuItem,
     open_settings_id: MenuId,
     overlay_item_id: MenuId,
-    native_shell_item_id: MenuId,
     status_online_item: CheckMenuItem,
     status_idle_item: CheckMenuItem,
     status_dnd_item: CheckMenuItem,
@@ -40,20 +38,17 @@ impl TrayManager {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
         let menu = Menu::new();
 
-        // 1. Hide Fluxer / Show Fluxer & Overlay / Native Shell
+        // 1. Hide Fluxer / Show Fluxer & Overlay
         let toggle_item = MenuItem::new("Hide Fluxer", true, None);
         let open_settings_item = MenuItem::new("Open settings", true, None);
         let overlay_item = MenuItem::new("Voice Overlay (GPUI)", true, None);
-        let native_shell_item = MenuItem::new("Pure Native Shell (GPUI)", true, None);
 
         let open_settings_id = open_settings_item.id().clone();
         let overlay_item_id = overlay_item.id().clone();
-        let native_shell_item_id = native_shell_item.id().clone();
 
         menu.append(&toggle_item)?;
         menu.append(&open_settings_item)?;
         menu.append(&overlay_item)?;
-        menu.append(&native_shell_item)?;
         menu.append(&PredefinedMenuItem::separator())?;
 
         // 2. Status 서브메뉴
@@ -102,7 +97,6 @@ impl TrayManager {
             toggle_item,
             open_settings_id,
             overlay_item_id,
-            native_shell_item_id,
             status_online_item,
             status_idle_item,
             status_dnd_item,
@@ -124,8 +118,6 @@ impl TrayManager {
             TrayMenuAction::OpenSettings
         } else if id == &self.overlay_item_id {
             TrayMenuAction::ToggleOverlay
-        } else if id == &self.native_shell_item_id {
-            TrayMenuAction::LaunchNativeShell
         } else if id == self.status_online_item.id() {
             self.set_active_status("online");
             TrayMenuAction::SetStatus("online".to_string())

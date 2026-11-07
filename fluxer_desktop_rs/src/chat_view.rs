@@ -15,9 +15,31 @@ pub struct ChatView {
 }
 
 impl ChatView {
-    pub fn new(_cx: &mut Context<Self>) -> Self {
+    pub fn new(cx: &mut Context<Self>) -> Self {
+        let initial_state = get_client_state();
+
+        // 100ms 주기로 최신 클라이언트 상태(실시간 메시지 수신 등)를 비동기 관찰하여 화면을 리액티브하게 자동 갱신합니다.
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(std::time::Duration::from_millis(100))
+                    .await;
+                let latest = get_client_state();
+                let update_result = this.update(&mut *cx, |view, cx| {
+                    if view.state != latest {
+                        view.state = latest;
+                        cx.notify();
+                    }
+                });
+                if update_result.is_err() {
+                    break;
+                }
+            }
+        })
+        .detach();
+
         Self {
-            state: get_client_state(),
+            state: initial_state,
             input_text: String::new(),
         }
     }

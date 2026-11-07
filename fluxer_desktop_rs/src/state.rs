@@ -218,6 +218,61 @@ pub fn append_message(content: String) {
     });
 }
 
+/// 게이트웨이 WebSocket으로부터 수신된 실시간 이벤트를 파싱하여 전역 상태를 갱신합니다.
+#[allow(dead_code)]
+pub fn handle_gateway_dispatch(op: i32, event_type: Option<&str>, data: &serde_json::Value) {
+    if op != 0 {
+        return;
+    }
+
+    match event_type {
+        Some("MESSAGE_CREATE") => {
+            let id = data.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            let channel_id = data.get("channel_id").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            let content = data.get("content").and_then(|v| v.as_str()).unwrap_or_default().to_string();
+            let timestamp = data.get("timestamp").and_then(|v| v.as_str()).unwrap_or("Just now").to_string();
+            let pinned = data.get("pinned").and_then(|v| v.as_bool()).unwrap_or(false);
+
+            let author_obj = data.get("author");
+            let author = UserProfile {
+                id: author_obj.and_then(|a| a.get("id")).and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+                username: author_obj.and_then(|a| a.get("username")).and_then(|v| v.as_str()).unwrap_or("Unknown").to_string(),
+                display_name: author_obj.and_then(|a| a.get("global_name").or_else(|| a.get("display_name"))).and_then(|v| v.as_str()).map(ToString::to_string),
+                avatar: author_obj.and_then(|a| a.get("avatar")).and_then(|v| v.as_str()).map(ToString::to_string),
+                bot: author_obj.and_then(|a| a.get("bot")).and_then(|v| v.as_bool()).unwrap_or(false),
+            };
+
+            let msg = ChatMessageModel {
+                id,
+                channel_id,
+                author,
+                content,
+                timestamp,
+                pinned,
+            };
+
+            update_client_state(|st| {
+                st.messages.push(msg);
+            });
+        }
+        Some("READY") => {
+            if let Some(user_obj) = data.get("user") {
+                let user = UserProfile {
+                    id: user_obj.get("id").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+                    username: user_obj.get("username").and_then(|v| v.as_str()).unwrap_or("User").to_string(),
+                    display_name: user_obj.get("global_name").and_then(|v| v.as_str()).map(ToString::to_string),
+                    avatar: user_obj.get("avatar").and_then(|v| v.as_str()).map(ToString::to_string),
+                    bot: user_obj.get("bot").and_then(|v| v.as_bool()).unwrap_or(false),
+                };
+                update_client_state(|st| {
+                    st.current_user = user;
+                });
+            }
+        }
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,5 +301,33 @@ mod tests {
         let deserialized: ClientAppState = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(state.current_user, deserialized.current_user);
         assert_eq!(state.guilds.len(), deserialized.guilds.len());
+    }
+
+    #[test]
+    fn test_handle_gateway_dispatch_message_create() {
+        let payload = serde_json::json!({
+            "id": "9990001",
+            "channel_id": "200000000000000001",
+            "content": "Realtime WebSocket Message Test",
+            "timestamp": "2026-11-08T01:22:00Z",
+            "pinned": false,
+            "author": {
+                "id": "8880001",
+                "username": "tester",
+                "global_name": "Gateway Tester",
+                "avatar": null,
+                "bot": false
+            }
+        });
+
+        let initial_len = get_client_state().messages.len();
+        handle_gateway_dispatch(0, Some("MESSAGE_CREATE"), &payload);
+        let after_len = get_client_state().messages.len();
+        assert_eq!(after_len, initial_len + 1);
+
+        let last_msg = get_client_state().messages.last().cloned().expect("last message");
+        assert_eq!(last_msg.id, "9990001");
+        assert_eq!(last_msg.content, "Realtime WebSocket Message Test");
+        assert_eq!(last_msg.author.username, "tester");
     }
 }

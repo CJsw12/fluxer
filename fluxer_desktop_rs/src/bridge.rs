@@ -523,6 +523,7 @@ pub fn get_initialization_script() -> &'static str {
                 });
             },
             deactivate: function() {
+                sendRust('deactivateInstance');
                 return Promise.resolve({
                     revision: 0,
                     deactivatedInstanceKey: ''
@@ -574,6 +575,12 @@ pub fn get_initialization_script() -> &'static str {
                     filtered.push(inst);
                     localStorage.setItem('__fluxer_known_instances', JSON.stringify(filtered));
                 } catch (_) {}
+                if (inst && (inst.domain || inst.instanceKey)) {
+                    var targetDomain = inst.domain || inst.instanceKey;
+                    if (typeof targetDomain === 'string' && targetDomain.indexOf('web.fluxer.app') === -1) {
+                        sendRust('navigateToInstance', { url: targetDomain });
+                    }
+                }
                 return invokeRust('knownInstancesUpsert', inst).then(function() {});
             },
             delete: function(key) {

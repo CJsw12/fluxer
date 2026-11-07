@@ -177,10 +177,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
 
     // 공식 데스크톱 웹 프론트엔드로 진입하여 인스턴스 선택 및 인증 파이프라인 구동
-    let target_url = std::env::var("FLUXER_WEB_URL")
-        .unwrap_or_else(|_| "https://web.fluxer.app".to_string());
+    // 1. FLUXER_WEB_URL 환경변수 우선
+    // 2. CLI 실행 인자 (--fluxer-instance=... 또는 URL)
+    // 3. 로컬에 영구 저장된 마지막 활성 인스턴스 (config::load_last_instance())
+    // 4. 로컬에 영구 저장된 알려진 인스턴스 최신 항목 (config::load_latest_known_instance_url())
+    // 5. 기본값: 공식 웹 클라이언트 (https://web.fluxer.app) -> 최초 실행 시 인스턴스 선택기 표출
+    let target_url = if let Ok(env_url) = std::env::var("FLUXER_WEB_URL") {
+        env_url
+    } else if let Some(cli_url) = cli_launch_instance.as_deref() {
+        if cli_url.starts_with("http://") || cli_url.starts_with("https://") {
+            cli_url.to_string()
+        } else {
+            format!("https://{cli_url}")
+        }
+    } else if let Some(last_url) = config::load_last_instance() {
+        last_url
+    } else if let Some(latest_known) = config::load_latest_known_instance_url() {
+        latest_known
+    } else {
+        "https://web.fluxer.app".to_string()
+    };
 
-    let builder = builder.with_url(&target_url);
+    println!("[Fluxer Shell] Bootstrapping WebView with target URL: {target_url}");
+
+    let builder = builder
+        .with_devtools(true)
+        .with_url(&target_url);
 
     let webview = builder.build(&window)?;
 
@@ -215,8 +237,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
                 "commitInstance" => {
                     if let Some(instance_key) = req.payload.get("instanceKey").and_then(|v| v.as_str()) {
-                        config::save_last_instance(instance_key);
+                        let full_url = if !instance_key.starts_with("http://") && !instance_key.starts_with("https://") {
+                            format!("https://{instance_key}")
+                        } else {
+                            instance_key.to_string()
+                        };
+                        let base_url = full_url.trim_end_matches("/api").trim_end_matches('/').to_string();
+                        config::save_last_instance(&base_url);
+                        println!("[Fluxer Shell] Navigating to committed instance: {base_url}");
+                        let _ = webview.load_url(&base_url);
                     }
+                }
+                "navigateToInstance" => {
+                    if let Some(url) = req.payload.get("url").and_then(|v| v.as_str()) {
+                        let full_url = if !url.starts_with("http://") && !url.starts_with("https://") {
+                            format!("https://{url}")
+                        } else {
+                            url.to_string()
+                        };
+                        let base_url = full_url.trim_end_matches("/api").trim_end_matches('/').to_string();
+                        config::save_last_instance(&base_url);
+                        println!("[Fluxer Shell] Navigating to selected instance: {base_url}");
+                        let _ = webview.load_url(&base_url);
+                    }
+                }
+                "deactivateInstance" => {
+                    config::clear_last_instance();
+                    println!("[Fluxer Shell] Deactivated instance, returning to default picker.");
+                    let _ = webview.load_url("https://web.fluxer.app");
                 }
                 "reportLastRoute" => {
                     // 프론트엔드 라우트 변경 통지 (정상 수용)

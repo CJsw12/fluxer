@@ -57,16 +57,17 @@ jobs:
       - name: Build optimized release binary
         run: |
           cargo build --release -p fluxer_desktop_rs
-          Copy-Item target/release/fluxer.exe target/release/Fluxer.exe -Force
-          Compress-Archive -Path target/release/Fluxer.exe -DestinationPath target/release/fluxer-windows-x64.zip -Force
+          New-Item -ItemType Directory -Path "target/dist" -Force
+          Copy-Item target/release/fluxer.exe target/dist/Fluxer.exe -Force
+          Compress-Archive -Path target/release/fluxer.exe -DestinationPath target/dist/fluxer-windows-x64.zip -Force
 
       - name: Upload Workflow Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Fluxer-Windows-x64
           path: |
-            target/release/Fluxer.exe
-            target/release/fluxer-windows-x64.zip
+            target/dist/Fluxer.exe
+            target/dist/fluxer-windows-x64.zip
           if-no-files-found: error
 
       - name: Determine Release Tag
@@ -95,7 +96,7 @@ jobs:
           prerelease: ${{ steps.release_info.outputs.is_prerelease == 'true' }}
           generate_release_notes: true
           files: |
-            target/release/Fluxer.exe
-            target/release/fluxer-windows-x64.zip
+            target/dist/Fluxer.exe
+            target/dist/fluxer-windows-x64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

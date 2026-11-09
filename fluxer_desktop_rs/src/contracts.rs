@@ -181,6 +181,95 @@ pub struct ThemeFolderChange {
     pub renamed: Vec<ThemeFolderRename>,
 }
 
+/// 전역 단축키 상태 DTO (`packages/desktop_ipc/src/GlobalShortcutsContract.ts`)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "contracts/GlobalShortcutsStatus.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalShortcutsStatus {
+    pub supported: bool,
+    pub has_access: bool,
+    pub direct_input_enabled: bool,
+    pub direct_input_available: bool,
+    pub is_capturing: bool,
+    pub mode: String,
+}
+
+/// 전역 키/마우스 훅 등록 옵션 DTO (`packages/desktop_ipc/src/GlobalKeyHookContract.ts`)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "contracts/GlobalKeyHookRegisterOptions.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalKeyHookRegisterOptions {
+    pub id: String,
+    #[serde(default)]
+    pub ctrl: bool,
+    #[serde(default)]
+    pub alt: bool,
+    #[serde(default)]
+    pub shift: bool,
+    #[serde(default)]
+    pub meta: bool,
+    #[serde(default)]
+    pub key_name: Option<String>,
+    #[serde(default)]
+    pub physical_key_name: Option<String>,
+    #[serde(default)]
+    pub mouse_button: Option<u8>,
+}
+
+/// AccountEngine 스냅샷 커서 DTO (`packages/desktop_ipc/src/AccountEngineContract.ts`)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "contracts/AccountEngineSnapshotCursor.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AccountEngineSnapshotCursor {
+    pub session_id: String,
+    pub schema_epoch: u32,
+    #[ts(type = "number")]
+    pub updated_at: u64,
+}
+
+/// AccountEngine 계정 요약 DTO (`packages/desktop_ipc/src/AccountEngineContract.ts`)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "contracts/AccountEngineAccountSummary.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AccountEngineAccountSummary {
+    pub account_key: String,
+    pub user_id: String,
+    pub username: String,
+    pub global_name: Option<String>,
+    pub avatar_hash: Option<String>,
+    pub unread_count: u32,
+    pub mention_count: u32,
+    #[ts(type = "number")]
+    pub last_active: u64,
+}
+
+/// AccountEngine 멘션 DTO (`packages/desktop_ipc/src/AccountEngineContract.ts`)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "contracts/AccountEngineMention.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AccountEngineMention {
+    pub account_key: String,
+    pub message_id: String,
+    #[ts(type = "number")]
+    pub created_at: u64,
+    pub channel_id: String,
+    pub channel_type: Option<i32>,
+    pub guild_id: Option<String>,
+    pub author_id: String,
+    pub author_name: String,
+    pub content: String,
+}
+
+/// AccountEngine 계정 활동 DTO (`packages/desktop_ipc/src/AccountEngineContract.ts`)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "contracts/AccountEngineAccountActivity.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct AccountEngineAccountActivity {
+    pub account_key: String,
+    pub unread_channels: Vec<String>,
+    pub mentions: Vec<AccountEngineMention>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,6 +292,12 @@ mod tests {
         ThemeFolderRename::export().unwrap();
         ThemeFolderStatus::export().unwrap();
         ThemeFolderChange::export().unwrap();
+        GlobalShortcutsStatus::export().unwrap();
+        GlobalKeyHookRegisterOptions::export().unwrap();
+        AccountEngineSnapshotCursor::export().unwrap();
+        AccountEngineAccountSummary::export().unwrap();
+        AccountEngineMention::export().unwrap();
+        AccountEngineAccountActivity::export().unwrap();
 
         let base = std::path::Path::new("bindings/contracts");
         assert!(base.join("DesktopCapabilityManifest.ts").exists() || std::path::Path::new("contracts/DesktopCapabilityManifest.ts").exists());

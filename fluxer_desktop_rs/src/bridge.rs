@@ -51,6 +51,36 @@ pub fn get_initialization_script() -> &'static str {
         });
     };
 
+    // 1-0-1. 전역 키훅/PTT 트리거 실시간 디스패처
+    let nextKeybindListenerId = 1;
+    const keybindListeners = new Map();
+
+    window.__fluxerGlobalKeybindTriggered = function(payload) {
+        if (!payload) return;
+        keybindListeners.forEach(function(listener) {
+            try {
+                listener(payload);
+            } catch (err) {
+                console.error('[Fluxer Shell] Error in keybind listener callback:', err);
+            }
+        });
+    };
+
+    // 1-0-2. AccountEngine 실시간 이벤트 디스패처
+    let nextAccountEngineListenerId = 1;
+    const accountEngineListeners = new Map();
+
+    window.__fluxerAccountEngineEvent = function(event) {
+        if (!event) return;
+        accountEngineListeners.forEach(function(listener) {
+            try {
+                listener(event);
+            } catch (err) {
+                console.error('[Fluxer Shell] Error in accountEngine listener callback:', err);
+            }
+        });
+    };
+
     function invokeRust(cmd, payload) {
         return new Promise(function(resolve, reject) {
             const id = nextRequestId++;
@@ -707,21 +737,21 @@ pub fn get_initialization_script() -> &'static str {
             return Promise.resolve();
         },
 
-        // 글로벌 키훅 및 숏컷
+        // 글로벌 키훅 및 숏컷 (Rust windows-input-hook 직결)
         globalKeyHookStart: function() {
-            return Promise.resolve(false);
+            return invokeRust('globalKeyHookStart');
         },
         globalKeyHookStop: function() {
-            return Promise.resolve();
+            return invokeRust('globalKeyHookStop');
         },
         globalKeyHookRegister: function(options) {
-            return Promise.resolve();
+            return invokeRust('globalKeyHookRegister', options);
         },
         globalKeyHookUnregister: function(id) {
-            return Promise.resolve();
+            return invokeRust('globalKeyHookUnregister', { id: id });
         },
         globalKeyHookUnregisterAll: function() {
-            return Promise.resolve();
+            return invokeRust('globalKeyHookUnregisterAll');
         },
         onGlobalKeyEvent: function(callback) {
             return function() {};
@@ -730,7 +760,11 @@ pub fn get_initialization_script() -> &'static str {
             return function() {};
         },
         onGlobalKeybindTriggered: function(callback) {
-            return function() {};
+            var id = nextKeybindListenerId++;
+            keybindListeners.set(id, callback);
+            return function() {
+                keybindListeners.delete(id);
+            };
         },
         linuxEvdevStatus: function() {
             return Promise.resolve(null);
@@ -739,45 +773,23 @@ pub fn get_initialization_script() -> &'static str {
             sync: function() { return Promise.resolve(); },
             setPaused: function() { return Promise.resolve(); },
             getStatus: function() {
-                return Promise.resolve({
-                    state: 'unavailable',
-                    version: null,
-                    canConfigure: false,
-                    recovering: false,
-                    canRecheck: false,
-                    portalAppId: null,
-                    shortcuts: [],
-                    error: null
-                });
+                return invokeRust('globalShortcutsGetStatus');
             },
             onStatus: function(cb) { return function() {}; },
             onEvent: function(cb) { return function() {}; },
             setUp: function() {
-                return Promise.resolve({
-                    state: 'unavailable',
-                    version: null,
-                    canConfigure: false,
-                    recovering: false,
-                    canRecheck: false,
-                    portalAppId: null,
-                    shortcuts: [],
-                    error: null
-                });
+                return invokeRust('globalShortcutsGetStatus');
             },
             recheck: function() {
-                return Promise.resolve({
-                    state: 'unavailable',
-                    version: null,
-                    canConfigure: false,
-                    recovering: false,
-                    canRecheck: false,
-                    portalAppId: null,
-                    shortcuts: [],
-                    error: null
-                });
+                return invokeRust('globalShortcutsGetStatus');
             },
+            startCapture: function() { return Promise.resolve(null); },
+            stopCapture: function() { return Promise.resolve(); },
             configure: function() { return Promise.resolve(); },
             setDirectInputEnabled: function() {
+                return invokeRust('globalShortcutsGetStatus');
+            }
+        },
                 return Promise.resolve({
                     state: 'unavailable',
                     version: null,
@@ -1360,8 +1372,23 @@ pub fn get_initialization_script() -> &'static str {
             }
         },
         accountEngine: {
-            request: function() { return Promise.reject(new Error('AccountEngine unavailable in Rust shell')); },
-            on: function() { return function() {}; }
+            isAvailable: true,
+            request: function(method, params) {
+                return invokeRust('accountEngineRequest', { method: method, params: params });
+            },
+            provideAccounts: function(accounts) {
+                return invokeRust('accountEngineProvideAccounts', { accounts: accounts });
+            },
+            onEvent: function(callback) {
+                var id = nextAccountEngineListenerId++;
+                accountEngineListeners.set(id, callback);
+                return function() {
+                    accountEngineListeners.delete(id);
+                };
+            },
+            on: function(event, callback) {
+                return this.onEvent(callback);
+            }
         },
 
         // 상태 리포트

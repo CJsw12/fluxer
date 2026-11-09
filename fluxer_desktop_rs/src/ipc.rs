@@ -57,6 +57,8 @@ pub fn handle_ipc_request(
     window: &Arc<Window>,
     cli_instance: Option<&str>,
     gateway: Option<&Arc<GatewayManager>>,
+    account_engine: Option<&Arc<crate::account_engine::AccountEngineManager>>,
+    input_hook: Option<&Arc<crate::input_hook::InputHookManager>>,
 ) -> Option<IpcResponse> {
     let id = req.id?;
 
@@ -879,6 +881,95 @@ pub fn handle_ipc_request(
             IpcResponse::success(id, Value::Array(results))
         }
 
+        // =========================================================
+        // AccountEngine API (accountEngine)
+        // =========================================================
+        "accountEngineRequest" | "account-engine:request" => {
+            let method = req.payload.get("method").and_then(Value::as_str).unwrap_or("");
+            let params = req.payload.get("params").unwrap_or(&Value::Null);
+
+            match account_engine {
+                Some(engine) => match engine.handle_request(method, params) {
+                    Ok(res) => IpcResponse::success(id, res),
+                    Err(err) => IpcResponse::error(id, err),
+                },
+                None => IpcResponse::error(id, "AccountEngine unavailable"),
+            }
+        }
+
+        "accountEngineProvideAccounts" | "account-engine:accounts" => {
+            let accounts: Vec<Value> = req.payload.get("accounts")
+                .or_else(|| req.payload.as_array().map(|_| &req.payload))
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+
+            match account_engine {
+                Some(engine) => match engine.provide_accounts(accounts) {
+                    Ok(res) => IpcResponse::success(id, json!(res)),
+                    Err(err) => IpcResponse::error(id, err),
+                },
+                None => IpcResponse::error(id, "AccountEngine unavailable"),
+            }
+        }
+
+        // =========================================================
+        // 전역 단축키 및 PTT 입력 훅 API (globalKeyHook / globalShortcuts)
+        // =========================================================
+        "globalKeyHookStart" | "global-key-hook-start" => {
+            match input_hook {
+                Some(hook) => IpcResponse::success(id, json!(hook.start())),
+                None => IpcResponse::success(id, json!(false)),
+            }
+        }
+
+        "globalKeyHookStop" | "global-key-hook-stop" => {
+            if let Some(hook) = input_hook {
+                hook.stop();
+            }
+            IpcResponse::success(id, json!({}))
+        }
+
+        "globalKeyHookRegister" | "global-key-hook-register" => {
+            if let Some(hook) = input_hook
+                && let Ok(opts) = serde_json::from_value::<crate::contracts::GlobalKeyHookRegisterOptions>(req.payload)
+            {
+                hook.register(opts);
+            }
+            IpcResponse::success(id, json!({}))
+        }
+
+        "globalKeyHookUnregister" | "global-key-hook-unregister" => {
+            let hook_id = req.payload.get("id").and_then(Value::as_str)
+                .or_else(|| req.payload.as_str())
+                .unwrap_or("");
+            if let Some(hook) = input_hook {
+                hook.unregister(hook_id);
+            }
+            IpcResponse::success(id, json!({}))
+        }
+
+        "globalKeyHookUnregisterAll" | "global-key-hook-unregister-all" => {
+            if let Some(hook) = input_hook {
+                hook.unregister_all();
+            }
+            IpcResponse::success(id, json!({}))
+        }
+
+        "globalShortcutsGetStatus" | "global-shortcuts:get-status" => {
+            match input_hook {
+                Some(hook) => IpcResponse::success(id, json!(hook.get_status())),
+                None => IpcResponse::success(id, json!({
+                    "supported": false,
+                    "hasAccess": false,
+                    "directInputEnabled": false,
+                    "directInputAvailable": false,
+                    "isCapturing": false,
+                    "mode": "native"
+                })),
+            }
+        }
+
         unknown => {
             eprintln!("[IPC Warning] Unhandled invoke channel: '{unknown}', returning safe null success");
             IpcResponse::success(id, Value::Null)
@@ -1000,5 +1091,33 @@ mod tests {
         let val = serde_json::to_value(&manifest).unwrap();
         assert_eq!(val["appStore"], true);
         assert_eq!(val["gatewaySocket"], true);
+    }
+
+    #[test]
+    fn test_account_engine_ipc_routing() {
+        let store = Arc::new(crate::sqlite_store::SqliteStore::open_in_memory().unwrap());
+        let ae = Arc::new(crate::account_engine::AccountEngineManager::new(store));
+
+        let req = IpcRequest {
+            id: Some(200),
+            cmd: "accountEngineRequest".to_string(),
+            payload: json!({
+                "method": "configure",
+                "params": { "badgeEnabled": true }
+            }),
+        };
+
+        let method = req.payload.get("method").and_then(Value::as_str).unwrap_or("");
+        let params = req.payload.get("params").unwrap_or(&Value::Null);
+        let res = ae.handle_request(method, params).unwrap();
+        assert_eq!(res, Value::Null);
+    }
+
+    #[test]
+    fn test_global_shortcuts_status_ipc() {
+        let hook_mgr = crate::input_hook::InputHookManager::new(Arc::new(|_, _| {}));
+        let status = hook_mgr.get_status();
+        assert_eq!(status.has_access, true);
+        assert_eq!(status.mode, "native");
     }
 }

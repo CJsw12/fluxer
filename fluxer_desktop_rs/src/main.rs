@@ -12,6 +12,7 @@ use tao::{
 };
 use wry::WebViewBuilder;
 
+pub mod account_engine;
 mod assets;
 mod audio;
 pub mod badge;
@@ -19,9 +20,11 @@ mod bridge;
 mod config;
 pub mod contracts;
 mod gateway;
+pub mod input_hook;
 mod ipc;
 mod overlay;
 mod shortcuts;
+pub mod sqlite_store;
 mod storage;
 mod stream_viewer;
 pub mod theme_watch;
@@ -41,6 +44,9 @@ enum UserEvent {
     TrayMenu(MenuId),
     TrayIconClick,
     GlobalShortcut(u32),
+    GlobalKeybindTriggered { id: String, event_type: String },
+    #[allow(dead_code)]
+    AccountEngineEvent(serde_json::Value),
 }
 
 fn get_cli_launch_instance() -> Option<String> {
@@ -141,23 +147,22 @@ pub fn trim_process_working_set() {
 pub fn trim_process_working_set() {}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // WebView2의 과도한 메모리 점유(491MB)를 억제하면서도 V8 OOM 크래시를 원천 방지하는 정밀 플래그 주입
-    // 1. --disable-extensions & --disk-cache-size=1: 불필요한 확장기능 및 디스크 캐시 극소화
-    // 2. --optimize-for-size & --expose-gc: V8 코드 캐시 최소화 및 20초 주기 OS 작업 세트 동기 회수 파이프라인 가동
-    // 3. --max-old-space-size=256: 기존 64MB 및 semi-space=1로 인한 V8 Fatal Out of Memory 크래시 원천 차단
+    // WebView2의 안정성을 확보하고 V8 OOM(Out of Memory) 크래시를 원천 방지하는 정밀 플래그 주입
+    // 1. --disable-extensions: 불필요한 Chromium 확장기능 관리 시스템 언로드
+    // 2. --renderer-process-limit=1: 렌더러 프로세스 단일화로 다중 프로세스 분할 억제
+    // 3. --max-old-space-size=2048 & --expose-gc: 복합 React SPA 및 실시간 미디어/채널 로딩 시 V8 Fatal OOM 크래시 완전 방지
+    // 4. 인프로세스 GPU(--in-process-gpu) 및 극단적 디스크 캐시 제한(--disk-cache-size=1) 배제로 렌더러 메모리 고갈 원천 차단
     if std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").is_err() {
         unsafe {
             std::env::set_var(
                 "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
                 "--renderer-process-limit=1 \
-                 --in-process-gpu \
                  --disable-extensions \
-                 --disk-cache-size=1 \
                  --disable-background-networking \
                  --disable-gpu-shader-disk-cache \
                  --disable-component-update \
                  --disable-features=AudioServiceOutOfProcess,RendererCodeIntegrity,PreloadMediaEngagementData,AutofillServerCommunication,CalculateNativeWinOcclusion \
-                 --js-flags=\"--optimize-for-size --max-old-space-size=256 --expose-gc\"",
+                 --js-flags=\"--max-old-space-size=2048 --expose-gc\"",
             );
         }
     }
@@ -279,6 +284,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }))?);
     let gateway_for_ipc = Arc::clone(&gateway_manager);
 
+    // 5-1. SQLite 및 AccountEngine 초기화
+    let sqlite_store = Arc::new(sqlite_store::SqliteStore::open_default().unwrap_or_else(|err| {
+        eprintln!("[Fluxer SQLite] Failed to open disk sqlite, falling back to in-memory: {err}");
+        sqlite_store::SqliteStore::open_in_memory().expect("in-memory sqlite must succeed")
+    }));
+    let account_engine = Arc::new(account_engine::AccountEngineManager::new(sqlite_store));
+    let account_engine_for_ipc = Arc::clone(&account_engine);
+
+    // 5-2. 전역 입력 훅 및 PTT 매니저 초기화
+    let proxy_for_input_hook = proxy.clone();
+    let input_hook = Arc::new(input_hook::InputHookManager::new(Arc::new(move |id, event_type| {
+        let _ = proxy_for_input_hook.send_event(UserEvent::GlobalKeybindTriggered { id, event_type });
+    })));
+    let input_hook_for_ipc = Arc::clone(&input_hook);
+
     // 6. Wry WebView2 빌드
     let builder = WebViewBuilder::new()
         .with_background_color((0x1a, 0x18, 0x1e, 255))
@@ -303,8 +323,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let cli = cli_for_ipc.clone();
                     let proxy = proxy_for_ipc.clone();
                     let gw = Arc::clone(&gateway_for_ipc);
+                    let ae = Arc::clone(&account_engine_for_ipc);
+                    let ih = Arc::clone(&input_hook_for_ipc);
                     std::thread::spawn(move || {
-                        if let Some(res) = ipc::handle_ipc_request(ipc_req, &win, cli.as_deref(), Some(&gw)) {
+                        if let Some(res) = ipc::handle_ipc_request(
+                            ipc_req,
+                            &win,
+                            cli.as_deref(),
+                            Some(&gw),
+                            Some(&ae),
+                            Some(&ih),
+                        ) {
                             let _ = proxy.send_event(UserEvent::IpcReply(res));
                         }
                     });
@@ -503,6 +532,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Ok(json) = serde_json::to_string(&evt) {
                     let script = format!(
                         "if (window.__fluxerNativeGatewayEmit) {{ window.__fluxerNativeGatewayEmit({json}); }}"
+                    );
+                    let _ = webview.evaluate_script(&script);
+                }
+            }
+            Event::UserEvent(UserEvent::GlobalKeybindTriggered { id, event_type }) => {
+                let payload = serde_json::json!({ "id": id, "type": event_type });
+                if let Ok(json) = serde_json::to_string(&payload) {
+                    let script = format!(
+                        "if (window.__fluxerGlobalKeybindTriggered) {{ window.__fluxerGlobalKeybindTriggered({json}); }}"
+                    );
+                    let _ = webview.evaluate_script(&script);
+                }
+            }
+            Event::UserEvent(UserEvent::AccountEngineEvent(evt)) => {
+                if let Ok(json) = serde_json::to_string(&evt) {
+                    let script = format!(
+                        "if (window.__fluxerAccountEngineEvent) {{ window.__fluxerAccountEngineEvent({json}); }}"
                     );
                     let _ = webview.evaluate_script(&script);
                 }

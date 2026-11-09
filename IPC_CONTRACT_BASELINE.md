@@ -37,18 +37,18 @@
 | **게이트웨이** | `nativeGatewayTransport*` (5종) | `nativeGatewayTransport.*` | **구현 완료 (Live)** | Tokio 웹소켓 기반 비동기 게이트웨이 파이프라인 |
 | **프록시 네트워킹**| `fetchProxy` | `fetchProxy` | **구현 완료 (Live)** | WASM/바이너리 및 REST 프록시 전송 |
 | **오버레이/스트림**| `voiceStateUpdate` / `popout*` | `voiceStateUpdate` / `popout*` | **구현 완료 (Live)** | [`VoiceOverlayState`](file:///C:/Users/k3832/orca/projects/fluxer/fluxer_desktop_rs/bindings/contracts/VoiceOverlayState.ts) 및 GPUI 서브프로세스 기동 |
-| **AccountEngine** | `accountEngine.request` | `desktopBridge.accountEngine` | **자리표시자 (Stub)** | 현재 무조건 `Error: AccountEngine unavailable` 반환 (마일스톤 3 SQLite 직결 대상) |
+| **AccountEngine** | `accountEngine.request` / `provideAccounts` | `desktopBridge.accountEngine` | **구현 완료 (Live)** | 마일스톤 3: 번들 SQLite 및 RowStore/멘션/요약 캐시 직결 |
 | **오디오 스트림** | `nativeAudio.onFrame` / `onEnd` | `desktopBridge.nativeAudio` | **자리표시자 (Stub)** | 장치/프로세스 목록은 반환하나 실시간 PCM 콜백 미연동 (마일스톤 4 대상) |
-| **테마 감시** | `watchThemeFolders` / `Change` | `desktopBridge.watchThemeFolders` | **자리표시자 (Stub)** | 빈 Promise / 빈 리스너 반환 (마일스톤 2 `notify` 직결 대상) |
-| **작업표시줄 뱃지**| `setBadgeCount` / `setUnreadBadge` | `desktopBridge.setBadgeCount` | **자리표시자 (Stub)** | 빈 함수 (마일스톤 2 `ITaskbarList3` 직결 대상) |
-| **입력 단축키** | 전역 단축키 훅 (PTT) | 미등록 | **미구현 (Unsupported)** | 마일스톤 3 `windows-input-hook` 분리 직결 대상 |
+| **테마 감시** | `watchThemeFolders` / `Change` | `desktopBridge.watchThemeFolders` | **구현 완료 (Live)** | 마일스톤 2: `notify` 150ms 디바운스 파일 감시 파이프라인 |
+| **작업표시줄 뱃지**| `setBadgeCount` / `setUnreadBadge` | `desktopBridge.setBadgeCount` | **구현 완료 (Live)** | 마일스톤 2: `ITaskbarList3` COM 오버레이 및 22개 아이콘 바이트 직결 |
+| **입력 단축키** | `globalKeyHook*` / `globalShortcuts` | `desktopBridge.globalKeyHook*` | **구현 완료 (Live)** | 마일스톤 3: `windows-input-hook` 저수준 키보드/마우스 훅 및 PTT 직결 |
 | **화면 공유** | DXGI/WGC 네이티브 주입 | `bridge.rs` (크로미움 대화상자) | **브라우저 유지 (Baseline)** | 브라우저 `getDisplayMedia`로 무결성 보존 중 |
 
 ---
 
 ## 3. `ts-rs` 추출 타입 및 스키마 검증 결과
 
-`fluxer_desktop_rs/src/contracts.rs`로부터 생성된 1차 핵심 계약 TypeScript 파일 11종:
+`fluxer_desktop_rs/src/contracts.rs`로부터 생성된 핵심 계약 TypeScript 파일 21종:
 
 1. [`DesktopCapabilityManifest.ts`](file:///C:/Users/k3832/orca/projects/fluxer/fluxer_desktop_rs/bindings/contracts/DesktopCapabilityManifest.ts)
 2. [`DesktopKnownInstanceRecord.ts`](file:///C:/Users/k3832/orca/projects/fluxer/fluxer_desktop_rs/bindings/contracts/DesktopKnownInstanceRecord.ts)
@@ -61,11 +61,21 @@
 9. [`DesktopAccountCompareAndSwapRequest.ts`](file:///C:/Users/k3832/orca/projects/fluxer/fluxer_desktop_rs/bindings/contracts/DesktopAccountCompareAndSwapRequest.ts)
 10. [`DesktopWindowBehaviorSettings.ts`](file:///C:/Users/k3832/orca/projects/fluxer/fluxer_desktop_rs/bindings/contracts/DesktopWindowBehaviorSettings.ts)
 11. [`VoiceOverlayState.ts`](file:///C:/Users/k3832/orca/projects/fluxer/fluxer_desktop_rs/bindings/contracts/VoiceOverlayState.ts)
+12. [`ThemeDirectoryCssFile.ts`](file:///C:/Users/k3832/orca/projects/fluxer/fluxer_desktop_rs/bindings/contracts/ThemeDirectoryCssFile.ts)
+13. [`ThemeFolderRename.ts`](file:///C:/Users/k3832/orca/projects/fluxer/fluxer_desktop_rs/bindings/contracts/ThemeFolderRename.ts)
+14. [`ThemeFolderStatus.ts`](file:///C:/Users/k3832/orca/projects/fluxer/fluxer_desktop_rs/bindings/contracts/ThemeFolderStatus.ts)
+15. [`ThemeFolderChange.ts`](file:///C:/Users/k3832/orca/projects/fluxer/fluxer_desktop_rs/bindings/contracts/ThemeFolderChange.ts)
+16. [`GlobalShortcutsStatus.ts`](file:///C:/Users/k3832/orca/projects/fluxer/fluxer_desktop_rs/bindings/contracts/GlobalShortcutsStatus.ts)
+17. [`GlobalKeyHookRegisterOptions.ts`](file:///C:/Users/k3832/orca/projects/fluxer/fluxer_desktop_rs/bindings/contracts/GlobalKeyHookRegisterOptions.ts)
+18. [`AccountEngineSnapshotCursor.ts`](file:///C:/Users/k3832/orca/projects/fluxer/fluxer_desktop_rs/bindings/contracts/AccountEngineSnapshotCursor.ts)
+19. [`AccountEngineAccountSummary.ts`](file:///C:/Users/k3832/orca/projects/fluxer/fluxer_desktop_rs/bindings/contracts/AccountEngineAccountSummary.ts)
+20. [`AccountEngineMention.ts`](file:///C:/Users/k3832/orca/projects/fluxer/fluxer_desktop_rs/bindings/contracts/AccountEngineMention.ts)
+21. [`AccountEngineAccountActivity.ts`](file:///C:/Users/k3832/orca/projects/fluxer/fluxer_desktop_rs/bindings/contracts/AccountEngineAccountActivity.ts)
 
 ### 검증 핵심 포인트
 - **JavaScript 타임스탬프 정밀도 호환**: `u64` 타입에 `#[ts(type = "number")]`를 명시하여 TypeScript의 53비트 정수(IEEE-754 `number`)와 100% 호환되도록 구성.
 - **CamelCase 직렬화 보장**: `#[serde(rename_all = "camelCase")]`를 통해 프론트엔드 계약 필드명(`storageKey`, `instanceKey`, `appStore` 등)과 완벽 일치.
-- **Fixture 양방향 라운드트립**: 단위 테스트 49개 전수 통과로 역직렬화 정합성 입증 완료.
+- **Fixture 양방향 라운드트립**: 단위 테스트 68개 전수 통과로 역직렬화 정합성 입증 완료.
 
 ---
 

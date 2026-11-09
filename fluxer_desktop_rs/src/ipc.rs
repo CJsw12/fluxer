@@ -9,6 +9,7 @@ use std::time::Duration;
 use tao::window::Window;
 use crate::audio;
 use crate::config;
+use crate::contracts::{DesktopCapabilityManifest, DesktopWindowBehaviorSettings};
 use crate::gateway::GatewayManager;
 use crate::overlay;
 use crate::storage::{self, DesktopAccountRecord, DesktopStorageWrite};
@@ -114,25 +115,34 @@ pub fn handle_ipc_request(
 
         "systemIdleTimeMs" => IpcResponse::success(id, json!(0)),
 
-        "desktopWindowBehaviorGet" => IpcResponse::success(
-            id,
-            json!({
-                "showTrayIcon": true,
-                "coloredTrayIcon": false,
-                "darkTaskbarBadge": false,
-                "minimizeToTray": MINIMIZE_TO_TRAY.load(Ordering::Relaxed),
-                "closeToTray": CLOSE_TO_TRAY.load(Ordering::Relaxed),
-                "useNativeTitleBar": false,
-                "activeUseNativeTitleBar": false,
-                "rememberWindowState": true,
-                "allowTransparency": false,
-                "activeAllowTransparency": false,
-                "smoothScrolling": true,
-                "activeSmoothScrolling": true,
-                "middleClickAutoscroll": true,
-                "activeMiddleClickAutoscroll": true
-            }),
-        ),
+        "desktop-capability-manifest:get" | "desktopCapabilityManifestGet" => {
+            let manifest = DesktopCapabilityManifest {
+                app_store: true,
+                gateway_socket: true,
+            };
+            IpcResponse::success(id, serde_json::to_value(&manifest).unwrap_or(Value::Null))
+        }
+
+        "desktopWindowBehaviorGet" => {
+            let settings = DesktopWindowBehaviorSettings {
+                show_tray_icon: true,
+                colored_tray_icon: false,
+                dark_taskbar_badge: false,
+                minimize_to_tray: MINIMIZE_TO_TRAY.load(Ordering::Relaxed),
+                close_to_tray: CLOSE_TO_TRAY.load(Ordering::Relaxed),
+                start_minimized: false,
+                use_native_title_bar: false,
+                active_use_native_title_bar: false,
+                remember_window_state: true,
+                allow_transparency: false,
+                active_allow_transparency: false,
+                smooth_scrolling: true,
+                active_smooth_scrolling: true,
+                middle_click_autoscroll: true,
+                active_middle_click_autoscroll: true,
+            };
+            IpcResponse::success(id, serde_json::to_value(&settings).unwrap_or(Value::Null))
+        }
 
         "desktopWindowBehaviorSet" => {
             if let Some(minimize_to_tray) = req.payload.get("minimizeToTray").and_then(Value::as_bool) {
@@ -905,5 +915,16 @@ mod tests {
         };
         assert_eq!(req.cmd, "popoutStreamViewer");
         assert_eq!(req.payload.get("streamId").and_then(Value::as_str), Some("test-stream-123"));
+    }
+
+    #[test]
+    fn test_desktop_capability_manifest_contract() {
+        let manifest = DesktopCapabilityManifest {
+            app_store: true,
+            gateway_socket: true,
+        };
+        let val = serde_json::to_value(&manifest).unwrap();
+        assert_eq!(val["appStore"], true);
+        assert_eq!(val["gatewaySocket"], true);
     }
 }

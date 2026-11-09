@@ -132,11 +132,15 @@ impl StorageEngine {
 // ---------------------------------------------------------
 
 pub fn get_storage_status() -> Value {
-    json!({
-        "available": true,
-        "authorityExpected": true,
-        "quarantined": false
-    })
+    let status = crate::contracts::DesktopStoreStatus {
+        available: true,
+        authority_expected: true,
+        schema_version: 1,
+        quarantined: false,
+        quarantine_reason: None,
+        unavailable_reason: None,
+    };
+    serde_json::to_value(&status).unwrap_or(Value::Null)
 }
 
 pub fn load_scope(scope: &str) -> Vec<DesktopStorageEntry> {

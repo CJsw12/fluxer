@@ -16,6 +16,7 @@ mod assets;
 mod audio;
 mod bridge;
 mod config;
+pub mod contracts;
 mod gateway;
 mod ipc;
 mod overlay;

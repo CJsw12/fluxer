@@ -9,30 +9,80 @@ mod windows_version;
 
 use std::sync::Arc;
 
+#[cfg(feature = "node")]
 use napi::{
     Env, Task,
     bindgen_prelude::{
-        AsyncTask, Error, Float32Array, Function, Result, Status, ToNapiValue, Unknown,
+        AsyncTask, Error as NapiError, Float32Array, Function, Result, Status, ToNapiValue, Unknown,
     },
     sys,
     threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode, UnknownReturnValue},
 };
+#[cfg(feature = "node")]
 use napi_derive::napi;
 
 pub mod pcm_pool;
 
-use crate::pcm_pool::{PCM_SLOT_SAMPLES_MAX, PooledPcmFrame};
+#[cfg(feature = "node")]
+use crate::pcm_pool::PCM_SLOT_SAMPLES_MAX;
+use crate::pcm_pool::PooledPcmFrame;
 
+#[derive(Debug, Clone)]
+pub struct LoopbackError {
+    pub message: String,
+    pub reason: String,
+}
+
+impl LoopbackError {
+    pub fn new(message: impl Into<String>) -> Self {
+        let msg = message.into();
+        Self {
+            reason: msg.clone(),
+            message: msg,
+        }
+    }
+}
+
+impl std::fmt::Display for LoopbackError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for LoopbackError {}
+
+#[cfg(feature = "node")]
+impl From<LoopbackError> for napi::Error {
+    fn from(err: LoopbackError) -> Self {
+        napi::Error::new(napi::Status::GenericFailure, err.message)
+    }
+}
+
+#[cfg(feature = "node")]
+impl From<napi::Error> for LoopbackError {
+    fn from(err: napi::Error) -> Self {
+        LoopbackError::new(err.to_string())
+    }
+}
+
+pub type LoopbackResult<T> = std::result::Result<T, LoopbackError>;
+
+#[cfg(not(feature = "node"))]
+pub type Result<T> = LoopbackResult<T>;
+
+#[derive(Debug, Clone)]
 pub struct ErrorMessage(pub String);
 
+#[cfg(feature = "node")]
 impl ToNapiValue for ErrorMessage {
     unsafe fn to_napi_value(env: sys::napi_env, val: Self) -> Result<sys::napi_value> {
-        let napi_err = Error::new(Status::GenericFailure, val.0);
+        let napi_err = NapiError::new(Status::GenericFailure, val.0);
         let js_err = napi::JsError::from(napi_err);
         Ok(unsafe { js_err.into_value(env) })
     }
 }
 
+#[cfg(feature = "node")]
 #[napi(object)]
 pub struct LoopbackFrame {
     pub samples: napi::bindgen_prelude::Float32Array,
@@ -59,12 +109,12 @@ const DEFAULT_ENDPOINT: &str = "default";
 const MAX_ENDPOINT_ENTRIES: usize = 16;
 const MAX_ENDPOINT_ID_CHARS: usize = 512;
 
-fn parse_endpoints(raw: Option<Vec<String>>) -> Result<EndpointSelector> {
+fn parse_endpoints(raw: Option<Vec<String>>) -> LoopbackResult<EndpointSelector> {
     let Some(entries) = raw else {
         return Ok(EndpointSelector::All);
     };
     if entries.is_empty() || entries.len() > MAX_ENDPOINT_ENTRIES {
-        return Err(Error::new(Status::InvalidArg, "invalid endpoints"));
+        return Err(LoopbackError::new("invalid endpoints"));
     }
     let mut default = false;
     let mut ids: Vec<String> = Vec::new();
@@ -77,7 +127,7 @@ fn parse_endpoints(raw: Option<Vec<String>>) -> Result<EndpointSelector> {
             || entry.contains('\0')
             || !entry.starts_with('{')
         {
-            return Err(Error::new(Status::InvalidArg, "invalid endpoints"));
+            return Err(LoopbackError::new("invalid endpoints"));
         }
         if !ids.contains(&entry) {
             ids.push(entry);
@@ -112,32 +162,24 @@ impl Default for LoopbackOptions {
     }
 }
 
-fn validate_options(raw: RawOptions) -> Result<LoopbackOptions> {
+#[cfg(feature = "node")]
+fn validate_options(raw: RawOptions) -> LoopbackResult<LoopbackOptions> {
     if let Some(sample_rate) = raw.sample_rate
         && !audio_contract::validate_sample_rate(sample_rate)
     {
-        return Err(Error::new(
-            Status::InvalidArg,
-            "unsupported sampleRate; expected 48000",
-        ));
+        return Err(LoopbackError::new("unsupported sampleRate; expected 48000"));
     }
     if let Some(channels) = raw.channels
         && !audio_contract::validate_channels(channels)
     {
-        return Err(Error::new(
-            Status::InvalidArg,
-            "unsupported channels; expected 2",
-        ));
+        return Err(LoopbackError::new("unsupported channels; expected 2"));
     }
     let capture_scope = match raw.capture_scope.as_deref() {
         Some("session-mixer") => CaptureScope::SessionMixer,
         Some("system") => CaptureScope::System,
         Some("process") | None => CaptureScope::Process,
         Some(other) => {
-            return Err(Error::new(
-                Status::InvalidArg,
-                format!("unknown captureScope: {other}"),
-            ));
+            return Err(LoopbackError::new(format!("unknown captureScope: {other}")));
         }
     };
     let include_tree = match capture_scope {
@@ -146,10 +188,7 @@ fn validate_options(raw: RawOptions) -> Result<LoopbackOptions> {
     };
     let endpoints = parse_endpoints(raw.endpoints)?;
     if endpoints != EndpointSelector::All && capture_scope != CaptureScope::SessionMixer {
-        return Err(Error::new(
-            Status::InvalidArg,
-            "endpoints require session-mixer scope",
-        ));
+        return Err(LoopbackError::new("endpoints require session-mixer scope"));
     }
     Ok(LoopbackOptions {
         include_tree,
@@ -158,6 +197,7 @@ fn validate_options(raw: RawOptions) -> Result<LoopbackOptions> {
     })
 }
 
+#[cfg(feature = "node")]
 #[derive(Debug, Default)]
 struct RawOptions {
     include_process_tree: Option<bool>,
@@ -167,6 +207,7 @@ struct RawOptions {
     endpoints: Option<Vec<String>>,
 }
 
+#[cfg(feature = "node")]
 fn read_raw_options(env: &Env, value: Unknown) -> Result<RawOptions> {
     use napi::ValueType;
     let value_type = value.get_type()?;
@@ -201,6 +242,7 @@ struct FramePayload {
     timestamp_us: i64,
 }
 
+#[cfg(feature = "node")]
 fn pooled_pcm_into_float32_array(slot: PooledPcmFrame) -> Float32Array {
     let (ptr, len, slot) = slot.into_external_parts();
     debug_assert!(!ptr.is_null());
@@ -219,6 +261,7 @@ fn pooled_pcm_into_float32_array(slot: PooledPcmFrame) -> Float32Array {
     }
 }
 
+#[cfg(feature = "node")]
 fn loopback_frame_sample_truncation(len: usize) -> usize {
     let channels = usize::from(audio_contract::TARGET_CHANNELS);
     if channels == 0 {
@@ -227,6 +270,7 @@ fn loopback_frame_sample_truncation(len: usize) -> usize {
     len - (len % channels)
 }
 
+#[cfg(feature = "node")]
 fn report_loopback_frame_truncation_once(original_len: usize, kept_len: usize) {
     use std::sync::atomic::{AtomicBool, Ordering};
     static REPORTED: AtomicBool = AtomicBool::new(false);
@@ -240,6 +284,7 @@ fn report_loopback_frame_truncation_once(original_len: usize, kept_len: usize) {
     );
 }
 
+#[cfg(feature = "node")]
 fn owned_samples_into_whole_frame_array(mut samples: Vec<f32>) -> Float32Array {
     let kept = loopback_frame_sample_truncation(samples.len());
     if kept != samples.len() {
@@ -249,6 +294,7 @@ fn owned_samples_into_whole_frame_array(mut samples: Vec<f32>) -> Float32Array {
     samples.into()
 }
 
+#[cfg(feature = "node")]
 fn frame_payload_into_loopback_frame(payload: FramePayload) -> LoopbackFrame {
     let samples = match payload.samples {
         FrameSamples::Pooled(slot) => pooled_pcm_into_float32_array(slot),
@@ -262,6 +308,7 @@ fn frame_payload_into_loopback_frame(payload: FramePayload) -> LoopbackFrame {
     }
 }
 
+#[cfg(feature = "node")]
 fn empty_loopback_frame(timestamp_us: i64) -> LoopbackFrame {
     LoopbackFrame {
         samples: Vec::<f32>::new().into(),
@@ -271,6 +318,7 @@ fn empty_loopback_frame(timestamp_us: i64) -> LoopbackFrame {
     }
 }
 
+#[cfg(feature = "node")]
 fn guard_frame_callback<F>(timestamp_us: i64, build: F) -> LoopbackFrame
 where
     F: FnOnce() -> LoopbackFrame,
@@ -284,6 +332,7 @@ where
     }
 }
 
+#[cfg(feature = "node")]
 fn frame_callback_into_loopback_frame(payload: FramePayload) -> LoopbackFrame {
     let timestamp_us = payload.timestamp_us;
     guard_frame_callback(timestamp_us, move || {
@@ -291,6 +340,7 @@ fn frame_callback_into_loopback_frame(payload: FramePayload) -> LoopbackFrame {
     })
 }
 
+#[cfg_attr(not(feature = "node"), allow(dead_code))]
 fn report_loopback_frame_callback_panic_once() {
     use std::sync::atomic::{AtomicBool, Ordering};
     static REPORTED: AtomicBool = AtomicBool::new(false);
@@ -302,6 +352,7 @@ fn report_loopback_frame_callback_panic_once() {
     );
 }
 
+#[cfg(feature = "node")]
 type FrameTsfn = Arc<
     ThreadsafeFunction<
         FramePayload,
@@ -313,6 +364,7 @@ type FrameTsfn = Arc<
         FRAME_QUEUE_LIMIT,
     >,
 >;
+#[cfg(feature = "node")]
 type ErrorTsfn = Arc<
     ThreadsafeFunction<
         ErrorMessage,
@@ -324,48 +376,113 @@ type ErrorTsfn = Arc<
         ERROR_QUEUE_LIMIT,
     >,
 >;
+#[cfg(feature = "node")]
 type VoidTsfn =
     Arc<ThreadsafeFunction<(), UnknownReturnValue, (), Status, false, true, LIFECYCLE_QUEUE_LIMIT>>;
+
+#[cfg_attr(not(feature = "node"), allow(dead_code))]
 const FRAME_QUEUE_LIMIT: usize = 64;
+#[cfg_attr(not(feature = "node"), allow(dead_code))]
 const ERROR_QUEUE_LIMIT: usize = 8;
+#[cfg_attr(not(feature = "node"), allow(dead_code))]
 const LIFECYCLE_QUEUE_LIMIT: usize = 8;
 
+pub type RawFrameSink = Arc<dyn Fn(&[f32], u32, u32, i64) + Send + Sync + 'static>;
+pub type RawErrorSink = Arc<dyn Fn(String) + Send + Sync + 'static>;
+pub type RawVoidSink = Arc<dyn Fn() + Send + Sync + 'static>;
+
+#[derive(Clone)]
+enum CallbackBackend {
+    #[cfg(feature = "node")]
+    Node {
+        on_frame: FrameTsfn,
+        on_error: ErrorTsfn,
+        on_closed: VoidTsfn,
+        on_started: Option<VoidTsfn>,
+    },
+    Rust {
+        on_frame: RawFrameSink,
+        on_error: RawErrorSink,
+        on_closed: RawVoidSink,
+        on_started: Option<RawVoidSink>,
+    },
+}
+
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+#[derive(Clone)]
 struct Callbacks {
-    on_frame: FrameTsfn,
-    on_error: ErrorTsfn,
-    on_closed: VoidTsfn,
-    on_started: Option<VoidTsfn>,
+    backend: CallbackBackend,
 }
 
 #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
 impl Callbacks {
     fn emit_frame(&self, frame: FramePayload) {
-        let _ = self
-            .on_frame
-            .call(frame, ThreadsafeFunctionCallMode::NonBlocking);
+        match &self.backend {
+            #[cfg(feature = "node")]
+            CallbackBackend::Node { on_frame, .. } => {
+                let _ = on_frame.call(frame, ThreadsafeFunctionCallMode::NonBlocking);
+            }
+            CallbackBackend::Rust { on_frame, .. } => {
+                let samples = match &frame.samples {
+                    FrameSamples::Pooled(slot) => slot.as_slice(),
+                    FrameSamples::Owned(vec) => vec.as_slice(),
+                };
+                on_frame(
+                    samples,
+                    audio_contract::TARGET_SAMPLE_RATE,
+                    u32::from(audio_contract::TARGET_CHANNELS),
+                    frame.timestamp_us,
+                );
+            }
+        }
     }
 
     fn emit_error(&self, message: impl Into<String>) {
-        let _ = self.on_error.call(
-            ErrorMessage(message.into()),
-            ThreadsafeFunctionCallMode::NonBlocking,
-        );
+        let msg = message.into();
+        match &self.backend {
+            #[cfg(feature = "node")]
+            CallbackBackend::Node { on_error, .. } => {
+                let _ = on_error.call(
+                    ErrorMessage(msg),
+                    ThreadsafeFunctionCallMode::NonBlocking,
+                );
+            }
+            CallbackBackend::Rust { on_error, .. } => {
+                on_error(msg);
+            }
+        }
     }
 
     fn emit_closed(&self) {
-        let _ = self
-            .on_closed
-            .call((), ThreadsafeFunctionCallMode::NonBlocking);
+        match &self.backend {
+            #[cfg(feature = "node")]
+            CallbackBackend::Node { on_closed, .. } => {
+                let _ = on_closed.call((), ThreadsafeFunctionCallMode::NonBlocking);
+            }
+            CallbackBackend::Rust { on_closed, .. } => {
+                on_closed();
+            }
+        }
     }
 
     fn emit_started(&self) {
-        if let Some(started) = self.on_started.as_ref() {
-            let _ = started.call((), ThreadsafeFunctionCallMode::NonBlocking);
+        match &self.backend {
+            #[cfg(feature = "node")]
+            CallbackBackend::Node { on_started, .. } => {
+                if let Some(started) = on_started.as_ref() {
+                    let _ = started.call((), ThreadsafeFunctionCallMode::NonBlocking);
+                }
+            }
+            CallbackBackend::Rust { on_started, .. } => {
+                if let Some(started) = on_started.as_ref() {
+                    started();
+                }
+            }
         }
     }
 }
 
+#[cfg(feature = "node")]
 fn build_frame_tsfn(
     env: &Env,
     callback: Function<LoopbackFrame, UnknownReturnValue>,
@@ -381,6 +498,7 @@ fn build_frame_tsfn(
         .map_err(clone_napi_err)
 }
 
+#[cfg(feature = "node")]
 fn build_error_tsfn(
     env: &Env,
     callback: Function<ErrorMessage, UnknownReturnValue>,
@@ -396,10 +514,12 @@ fn build_error_tsfn(
         .map_err(clone_napi_err)
 }
 
-fn clone_napi_err(err: napi::Error) -> Error {
-    Error::new(Status::GenericFailure, err.to_string())
+#[cfg(feature = "node")]
+fn clone_napi_err(err: napi::Error) -> napi::Error {
+    err
 }
 
+#[cfg(feature = "node")]
 fn build_void_tsfn(env: &Env, callback: Function<(), UnknownReturnValue>) -> Result<VoidTsfn> {
     let _ = env;
     callback
@@ -412,11 +532,65 @@ fn build_void_tsfn(env: &Env, callback: Function<(), UnknownReturnValue>) -> Res
         .map_err(clone_napi_err)
 }
 
-#[napi]
+#[cfg_attr(feature = "node", napi)]
 pub struct ProcessLoopback {
     inner: platform::Inner,
 }
 
+impl ProcessLoopback {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_with_sink(
+        pid: u32,
+        include_process_tree: bool,
+        capture_scope: &str,
+        endpoints: Option<Vec<String>>,
+        on_frame: RawFrameSink,
+        on_error: RawErrorSink,
+        on_closed: RawVoidSink,
+        on_started: Option<RawVoidSink>,
+    ) -> LoopbackResult<Self> {
+        let capture_scope_enum = match capture_scope {
+            "system" => CaptureScope::System,
+            "session-mixer" => CaptureScope::SessionMixer,
+            _ => CaptureScope::Process,
+        };
+        let endpoint_selector = parse_endpoints(endpoints)?;
+        let options = LoopbackOptions {
+            include_tree: include_process_tree,
+            capture_scope: capture_scope_enum,
+            endpoints: endpoint_selector,
+        };
+        let callbacks = Callbacks {
+            backend: CallbackBackend::Rust {
+                on_frame,
+                on_error,
+                on_closed,
+                on_started,
+            },
+        };
+        Ok(Self {
+            inner: platform::Inner::new(pid, options, callbacks)?,
+        })
+    }
+
+    pub fn start(&self) -> LoopbackResult<()> {
+        self.inner.start()
+    }
+
+    pub fn stop(&self) {
+        self.inner.stop();
+    }
+
+    pub fn dispose(&self) {
+        self.inner.dispose();
+    }
+
+    pub fn set_endpoints(&self, endpoints: Vec<String>) -> LoopbackResult<bool> {
+        self.inner.set_endpoints(endpoints)
+    }
+}
+
+#[cfg(feature = "node")]
 #[napi]
 impl ProcessLoopback {
     #[allow(clippy::too_many_arguments)]
@@ -433,34 +607,36 @@ impl ProcessLoopback {
         let raw = read_raw_options(&env, opts)?;
         let options = validate_options(raw)?;
         let callbacks = Callbacks {
-            on_frame: build_frame_tsfn(&env, on_frame)?,
-            on_error: build_error_tsfn(&env, on_error)?,
-            on_closed: build_void_tsfn(&env, on_closed)?,
-            on_started: on_started.map(|cb| build_void_tsfn(&env, cb)).transpose()?,
+            backend: CallbackBackend::Node {
+                on_frame: build_frame_tsfn(&env, on_frame)?,
+                on_error: build_error_tsfn(&env, on_error)?,
+                on_closed: build_void_tsfn(&env, on_closed)?,
+                on_started: on_started.map(|cb| build_void_tsfn(&env, cb)).transpose()?,
+            },
         };
         Ok(Self {
             inner: platform::Inner::new(pid, options, callbacks)?,
         })
     }
 
-    #[napi]
-    pub fn start(&self) -> Result<()> {
-        self.inner.start()
+    #[napi(js_name = "start")]
+    pub fn start_napi(&self) -> Result<()> {
+        self.start().map_err(Into::into)
     }
 
-    #[napi]
-    pub fn stop(&self) {
-        self.inner.stop();
+    #[napi(js_name = "stop")]
+    pub fn stop_napi(&self) {
+        self.stop();
     }
 
-    #[napi]
-    pub fn dispose(&self) {
-        self.inner.dispose();
+    #[napi(js_name = "dispose")]
+    pub fn dispose_napi(&self) {
+        self.dispose();
     }
 
     #[napi(js_name = "setEndpoints")]
-    pub fn set_endpoints(&self, endpoints: Vec<String>) -> Result<bool> {
-        self.inner.set_endpoints(endpoints)
+    pub fn set_endpoints_napi(&self, endpoints: Vec<String>) -> Result<bool> {
+        self.set_endpoints(endpoints).map_err(Into::into)
     }
 }
 
@@ -470,35 +646,36 @@ impl Drop for ProcessLoopback {
     }
 }
 
-#[napi(js_name = "isSupported")]
+#[cfg_attr(feature = "node", napi(js_name = "isSupported"))]
 pub fn is_supported() -> bool {
     platform::is_supported()
 }
 
-#[napi(object, js_name = "WinProcessLoopbackBackendInfo")]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "node", napi(object, js_name = "WinProcessLoopbackBackendInfo"))]
 pub struct WinProcessLoopbackBackendInfo {
     pub backend: String,
     pub supported: bool,
     pub reason: String,
-    #[napi(js_name = "processSupported")]
+    #[cfg_attr(feature = "node", napi(js_name = "processSupported"))]
     pub process_supported: bool,
-    #[napi(js_name = "systemSupported")]
+    #[cfg_attr(feature = "node", napi(js_name = "systemSupported"))]
     pub system_supported: bool,
-    #[napi(js_name = "systemExcludesSelf")]
+    #[cfg_attr(feature = "node", napi(js_name = "systemExcludesSelf"))]
     pub system_excludes_self: bool,
-    #[napi(js_name = "processIncludeSupported")]
+    #[cfg_attr(feature = "node", napi(js_name = "processIncludeSupported"))]
     pub process_include_supported: bool,
-    #[napi(js_name = "processExcludeSupported")]
+    #[cfg_attr(feature = "node", napi(js_name = "processExcludeSupported"))]
     pub process_exclude_supported: bool,
-    #[napi(js_name = "sessionMixerSupported")]
+    #[cfg_attr(feature = "node", napi(js_name = "sessionMixerSupported"))]
     pub session_mixer_supported: bool,
-    #[napi(js_name = "systemLoopbackMode")]
+    #[cfg_attr(feature = "node", napi(js_name = "systemLoopbackMode"))]
     pub system_loopback_mode: String,
-    #[napi(js_name = "minWindowsBuild")]
+    #[cfg_attr(feature = "node", napi(js_name = "minWindowsBuild"))]
     pub min_windows_build: u32,
-    #[napi(js_name = "minWindowsVersionLabel")]
+    #[cfg_attr(feature = "node", napi(js_name = "minWindowsVersionLabel"))]
     pub min_windows_version_label: String,
-    #[napi(js_name = "detectedWindowsBuild")]
+    #[cfg_attr(feature = "node", napi(js_name = "detectedWindowsBuild"))]
     pub detected_windows_build: Option<u32>,
 }
 
@@ -617,7 +794,7 @@ fn classify_windows_capabilities(
     )
 }
 
-#[napi(js_name = "getBackendInfo")]
+#[cfg_attr(feature = "node", napi(js_name = "getBackendInfo"))]
 pub fn get_backend_info() -> WinProcessLoopbackBackendInfo {
     let detected = platform::detected_build();
     let runtime_probe = platform::process_loopback_probe();
@@ -657,18 +834,24 @@ pub fn get_backend_info() -> WinProcessLoopbackBackendInfo {
     }
 }
 
+pub fn pid_from_hwnd_raw(hwnd: u64) -> u32 {
+    platform::pid_from_hwnd(hwnd)
+}
+
+#[cfg(feature = "node")]
 #[napi(js_name = "pidFromHwnd")]
 pub fn pid_from_hwnd(hwnd: napi::bindgen_prelude::BigInt) -> u32 {
     let (_, value, _) = hwnd.get_u64();
     platform::pid_from_hwnd(value)
 }
 
-#[napi(js_name = "resolveAudioRootPid")]
+#[cfg_attr(feature = "node", napi(js_name = "resolveAudioRootPid"))]
 pub fn resolve_audio_root_pid(pid: u32) -> u32 {
     platform::resolve_audio_root_pid(pid)
 }
 
-#[napi(object)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "node", napi(object))]
 pub struct PlaybackDeviceSession {
     pub pid: u32,
     pub root_pid: u32,
@@ -677,7 +860,8 @@ pub struct PlaybackDeviceSession {
     pub excluded: bool,
 }
 
-#[napi(object)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "node", napi(object))]
 pub struct PlaybackDevice {
     pub id: String,
     pub name: String,
@@ -685,14 +869,20 @@ pub struct PlaybackDevice {
     pub sessions: Vec<PlaybackDeviceSession>,
 }
 
+pub fn list_playback_devices_sync() -> LoopbackResult<Vec<PlaybackDevice>> {
+    platform::list_playback_devices()
+}
+
+#[cfg(feature = "node")]
 pub struct ListPlaybackDevicesTask;
 
+#[cfg(feature = "node")]
 impl Task for ListPlaybackDevicesTask {
     type Output = Vec<PlaybackDevice>;
     type JsValue = Vec<PlaybackDevice>;
 
     fn compute(&mut self) -> Result<Self::Output> {
-        platform::list_playback_devices()
+        platform::list_playback_devices().map_err(Into::into)
     }
 
     fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
@@ -700,6 +890,7 @@ impl Task for ListPlaybackDevicesTask {
     }
 }
 
+#[cfg(feature = "node")]
 #[napi(js_name = "listPlaybackDevices")]
 pub fn list_playback_devices() -> AsyncTask<ListPlaybackDevicesTask> {
     AsyncTask::new(ListPlaybackDevicesTask)
@@ -709,13 +900,12 @@ pub fn list_playback_devices() -> AsyncTask<ListPlaybackDevicesTask> {
 mod platform {
     use super::{
         Callbacks, CaptureScope, EndpointSelector, FRAME_QUEUE_LIMIT, FramePayload, FrameSamples,
-        LoopbackOptions, PlaybackDevice, PlaybackDeviceSession, ProcessLoopbackRuntimeProbe,
-        parse_endpoints,
+        LoopbackError as Error, LoopbackOptions, PlaybackDevice, PlaybackDeviceSession,
+        ProcessLoopbackRuntimeProbe, LoopbackResult as Result, parse_endpoints,
     };
     use crate::pcm_pool::{PCM_SLOT_SAMPLES_MAX, PcmFramePool, PcmPoolError, PooledPcmFrame};
     use crate::{audio_contract, process_tree, session_mixer};
     use fluxer_rt_thread::{PriorityProfile, RealtimePriorityGuard};
-    use napi::bindgen_prelude::{Error, Result, Status};
     use std::{
         ffi::c_void,
         mem::{ManuallyDrop, size_of, zeroed},
@@ -900,7 +1090,6 @@ mod platform {
             ) && !options.include_tree;
             if is_self_or_descendant_pid(pid) && !is_excluding_self_system_scope {
                 return Err(Error::new(
-                    Status::GenericFailure,
                     "ProcessLoopback refuses to capture Fluxer's own process tree",
                 ));
             }
@@ -923,7 +1112,6 @@ mod platform {
         pub(crate) fn start(&self) -> Result<()> {
             if self.disposed.load(Ordering::Acquire) {
                 return Err(Error::new(
-                    Status::GenericFailure,
                     "ProcessLoopback is disposed",
                 ));
             }
@@ -1028,7 +1216,7 @@ mod platform {
     }
 
     fn generic(message: impl Into<String>) -> Error {
-        Error::new(Status::GenericFailure, message.into())
+        Error::new(message.into())
     }
 
     fn hresult_error(stage: &str, hr: i32) -> Error {
@@ -2132,7 +2320,6 @@ mod platform {
                     .ok()
                     .map_err(|err| {
                         Error::new(
-                            Status::GenericFailure,
                             format!("CoInitializeEx failed: hr=0x{:08x}", err.code().0 as u32),
                         )
                     })?;
@@ -2399,8 +2586,10 @@ mod platform {
 
 #[cfg(not(target_os = "windows"))]
 mod platform {
-    use super::{Callbacks, LoopbackOptions, PlaybackDevice, ProcessLoopbackRuntimeProbe};
-    use napi::bindgen_prelude::{Error, Result, Status};
+    use super::{
+        Callbacks, LoopbackError as Error, LoopbackOptions, PlaybackDevice,
+        ProcessLoopbackRuntimeProbe, Result,
+    };
 
     pub(crate) struct Inner;
 
@@ -2411,14 +2600,12 @@ mod platform {
             _callbacks: Callbacks,
         ) -> Result<Self> {
             Err(Error::new(
-                Status::GenericFailure,
                 "win-process-loopback only supports Windows",
             ))
         }
 
         pub(crate) fn start(&self) -> Result<()> {
             Err(Error::new(
-                Status::GenericFailure,
                 "win-process-loopback only supports Windows",
             ))
         }

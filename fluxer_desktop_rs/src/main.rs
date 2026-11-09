@@ -47,6 +47,7 @@ enum UserEvent {
     GlobalKeybindTriggered { id: String, event_type: String },
     #[allow(dead_code)]
     AccountEngineEvent(serde_json::Value),
+    Audio(crate::audio::AudioEvent),
 }
 
 fn get_cli_launch_instance() -> Option<String> {
@@ -299,6 +300,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     })));
     let input_hook_for_ipc = Arc::clone(&input_hook);
 
+    // 5-3. WASAPI 오디오 캡처 매니저 초기화
+    let proxy_for_audio = proxy.clone();
+    let audio_manager = Arc::new(audio::AudioManager::new(Arc::new(move |evt| {
+        let _ = proxy_for_audio.send_event(UserEvent::Audio(evt));
+    })));
+    let audio_for_ipc = Arc::clone(&audio_manager);
+
     // 6. Wry WebView2 빌드
     let builder = WebViewBuilder::new()
         .with_background_color((0x1a, 0x18, 0x1e, 255))
@@ -325,6 +333,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let gw = Arc::clone(&gateway_for_ipc);
                     let ae = Arc::clone(&account_engine_for_ipc);
                     let ih = Arc::clone(&input_hook_for_ipc);
+                    let au = Arc::clone(&audio_for_ipc);
                     std::thread::spawn(move || {
                         if let Some(res) = ipc::handle_ipc_request(
                             ipc_req,
@@ -333,6 +342,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             Some(&gw),
                             Some(&ae),
                             Some(&ih),
+                            Some(&au),
                         ) {
                             let _ = proxy.send_event(UserEvent::IpcReply(res));
                         }
@@ -552,6 +562,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     );
                     let _ = webview.evaluate_script(&script);
                 }
+            }
+            Event::UserEvent(UserEvent::Audio(crate::audio::AudioEvent::Frame {
+                capture_id,
+                sample_rate,
+                channels,
+                timestamp_us,
+                samples_base64,
+            })) => {
+                let script = format!(
+                    "if (window.__fluxerNativeAudioFrame) {{ window.__fluxerNativeAudioFrame('{}', {}, {}, {}, '{}'); }}",
+                    capture_id.replace('\'', "\\'"),
+                    sample_rate,
+                    channels,
+                    timestamp_us,
+                    samples_base64,
+                );
+                let _ = webview.evaluate_script(&script);
+            }
+            Event::UserEvent(UserEvent::Audio(crate::audio::AudioEvent::End {
+                capture_id,
+                reason,
+                detail,
+            })) => {
+                let detail_str = match detail {
+                    Some(d) => format!("'{}'", d.replace('\'', "\\'")),
+                    None => "null".to_string(),
+                };
+                let script = format!(
+                    "if (window.__fluxerNativeAudioEnd) {{ window.__fluxerNativeAudioEnd('{}', '{}', {}); }}",
+                    capture_id.replace('\'', "\\'"),
+                    reason.replace('\'', "\\'"),
+                    detail_str,
+                );
+                let _ = webview.evaluate_script(&script);
             }
             Event::UserEvent(UserEvent::TrayMenu(menu_id)) => {
                 if let Some(tray) = &tray_manager {

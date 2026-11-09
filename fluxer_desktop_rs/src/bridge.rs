@@ -81,6 +81,52 @@ pub fn get_initialization_script() -> &'static str {
         });
     };
 
+    // 1-0-3. NativeAudio 실시간 PCM 프레임 및 수명주기 이벤트 디스패처
+    const nativeAudioFrameListeners = new Set();
+    const nativeAudioEndListeners = new Set();
+
+    window.__fluxerNativeAudioFrame = function(captureId, sampleRate, channels, timestampUs, base64) {
+        try {
+            var binary = atob(base64);
+            var len = binary.length;
+            var bytes = new Uint8Array(len);
+            for (var i = 0; i < len; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            var msg = {
+                captureId: captureId,
+                sampleRate: sampleRate,
+                channels: channels,
+                timestampUs: timestampUs,
+                samples: bytes.buffer
+            };
+            nativeAudioFrameListeners.forEach(function(listener) {
+                try {
+                    listener(msg);
+                } catch (err) {
+                    console.error('[Fluxer Shell] Error in nativeAudio frame listener:', err);
+                }
+            });
+        } catch (err) {
+            console.error('[Fluxer Shell] Failed to decode nativeAudio PCM frame:', err);
+        }
+    };
+
+    window.__fluxerNativeAudioEnd = function(captureId, reason, detail) {
+        var msg = {
+            captureId: captureId,
+            reason: reason,
+            detail: detail || undefined
+        };
+        nativeAudioEndListeners.forEach(function(listener) {
+            try {
+                listener(msg);
+            } catch (err) {
+                console.error('[Fluxer Shell] Error in nativeAudio end listener:', err);
+            }
+        });
+    };
+
     function invokeRust(cmd, payload) {
         return new Promise(function(resolve, reject) {
             const id = nextRequestId++;
@@ -1074,8 +1120,24 @@ pub fn get_initialization_script() -> &'static str {
             stop: function(captureId) {
                 return invokeRust('nativeAudioStop', { captureId: captureId });
             },
-            onFrame: function(cb) { return function() {}; },
-            onEnd: function(cb) { return function() {}; }
+            onFrame: function(cb) {
+                if (typeof cb === 'function') {
+                    nativeAudioFrameListeners.add(cb);
+                    return function() {
+                        nativeAudioFrameListeners.delete(cb);
+                    };
+                }
+                return function() {};
+            },
+            onEnd: function(cb) {
+                if (typeof cb === 'function') {
+                    nativeAudioEndListeners.add(cb);
+                    return function() {
+                        nativeAudioEndListeners.delete(cb);
+                    };
+                }
+                return function() {};
+            }
         },
         nativeScreenCapture: {
             onLifecycleEvent: function(cb) { return function() {}; }
@@ -1802,6 +1864,8 @@ mod tests {
         assert!(script.contains("__fluxerNativeGatewayEmit"));
         assert!(script.contains("nativeAudio"));
         assert!(script.contains("nativeAudioGetAvailability"));
+        assert!(script.contains("__fluxerNativeAudioFrame"));
+        assert!(script.contains("__fluxerNativeAudioEnd"));
         assert!(script.contains("windowSetFullscreen"));
         assert!(script.contains("__fluxerEmitOpenSettings"));
         assert!(script.contains("__fluxerEmitTrayAction"));

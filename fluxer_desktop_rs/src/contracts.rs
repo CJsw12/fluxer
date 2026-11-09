@@ -270,6 +270,75 @@ pub struct AccountEngineAccountActivity {
     pub mentions: Vec<AccountEngineMention>,
 }
 
+/// 네이티브 오디오 기능 매니페스트 DTO (`packages/desktop_ipc/src/DesktopBridgeTypes.ts`)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "contracts/NativeAudioCapabilities.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct NativeAudioCapabilities {
+    pub process: bool,
+    pub system: bool,
+    pub system_excludes_self: bool,
+    pub process_include: bool,
+    pub process_exclude: bool,
+    pub session_mixer: bool,
+    pub endpoint_select: bool,
+    pub system_loopback_mode: String,
+}
+
+/// 네이티브 오디오 가용성 응답 DTO (`packages/desktop_ipc/src/DesktopBridgeTypes.ts`)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "contracts/NativeAudioAvailability.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct NativeAudioAvailability {
+    pub available: bool,
+    pub backend: String,
+    #[serde(default)]
+    #[ts(optional)]
+    pub reason: Option<String>,
+    pub capabilities: NativeAudioCapabilities,
+}
+
+/// 네이티브 오디오 캡처 시작 옵션 DTO (`packages/desktop_ipc/src/DesktopBridgeTypes.ts`)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "contracts/NativeAudioStartOptions.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct NativeAudioStartOptions {
+    #[serde(default)]
+    #[ts(optional)]
+    pub target_pid: Option<u32>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub include_process_tree: Option<bool>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub win_capture_scope: Option<String>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub win_endpoints: Option<Vec<String>>,
+}
+
+/// 네이티브 오디오 캡처 시작 결과 DTO (`packages/desktop_ipc/src/DesktopBridgeTypes.ts`)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "contracts/NativeAudioStartResult.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct NativeAudioStartResult {
+    pub capture_id: String,
+    pub sample_rate: u32,
+    pub channels: u32,
+}
+
+/// 네이티브 오디오 종료 메시지 DTO (`packages/desktop_ipc/src/DesktopBridgeTypes.ts`)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "contracts/NativeAudioEndMessage.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct NativeAudioEndMessage {
+    pub capture_id: String,
+    pub reason: String,
+    #[serde(default)]
+    #[ts(optional)]
+    pub detail: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -298,6 +367,11 @@ mod tests {
         AccountEngineAccountSummary::export().unwrap();
         AccountEngineMention::export().unwrap();
         AccountEngineAccountActivity::export().unwrap();
+        NativeAudioCapabilities::export().unwrap();
+        NativeAudioAvailability::export().unwrap();
+        NativeAudioStartOptions::export().unwrap();
+        NativeAudioStartResult::export().unwrap();
+        NativeAudioEndMessage::export().unwrap();
 
         let base = std::path::Path::new("bindings/contracts");
         assert!(base.join("DesktopCapabilityManifest.ts").exists() || std::path::Path::new("contracts/DesktopCapabilityManifest.ts").exists());

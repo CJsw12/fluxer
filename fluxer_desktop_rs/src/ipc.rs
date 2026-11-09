@@ -59,6 +59,7 @@ pub fn handle_ipc_request(
     gateway: Option<&Arc<GatewayManager>>,
     account_engine: Option<&Arc<crate::account_engine::AccountEngineManager>>,
     input_hook: Option<&Arc<crate::input_hook::InputHookManager>>,
+    audio: Option<&Arc<crate::audio::AudioManager>>,
 ) -> Option<IpcResponse> {
     let id = req.id?;
 
@@ -813,38 +814,69 @@ pub fn handle_ipc_request(
         // 네이티브 오디오 캡처 서브시스템 API (nativeAudio)
         // =========================================================
         "nativeAudioGetAvailability" | "native-audio:get-availability" => {
-            IpcResponse::success(id, audio::get_availability())
+            let res = match audio {
+                Some(am) => am.get_availability(),
+                None => audio::get_availability(),
+            };
+            IpcResponse::success(id, res)
         }
 
         "nativeAudioListApplications" | "native-audio:list-applications" => {
-            IpcResponse::success(id, json!(audio::list_applications()))
+            let res = match audio {
+                Some(am) => am.list_applications(),
+                None => audio::list_applications(),
+            };
+            IpcResponse::success(id, json!(res))
         }
 
         "nativeAudioResolveRootPid" | "native-audio:resolve-root-pid" => {
             let source_id = req.payload.get("sourceId").and_then(Value::as_str)
                 .or_else(|| req.payload.as_str())
                 .unwrap_or("");
-            IpcResponse::success(id, json!(audio::resolve_root_pid(source_id)))
+            let res = match audio {
+                Some(am) => am.resolve_root_pid(source_id),
+                None => audio::resolve_root_pid(source_id),
+            };
+            IpcResponse::success(id, json!(res))
         }
 
         "nativeAudioListPlaybackDevices" | "native-audio:list-playback-devices" => {
-            IpcResponse::success(id, json!(audio::list_playback_devices()))
+            let res = match audio {
+                Some(am) => am.list_playback_devices(),
+                None => audio::list_playback_devices(),
+            };
+            IpcResponse::success(id, json!(res))
         }
 
         "nativeAudioStart" | "native-audio:start" => {
-            IpcResponse::success(id, audio::start_capture(&req.payload))
+            let res = match audio {
+                Some(am) => am.start_capture(&req.payload),
+                None => audio::start_capture(&req.payload),
+            };
+            IpcResponse::success(id, res)
         }
 
         "nativeAudioStop" | "native-audio:stop" => {
             let capture_id = req.payload.get("captureId").and_then(Value::as_str)
                 .or_else(|| req.payload.as_str())
                 .unwrap_or("");
-            audio::stop_capture(capture_id);
+            match audio {
+                Some(am) => am.stop_capture(capture_id),
+                None => audio::stop_capture(capture_id),
+            };
             IpcResponse::success(id, Value::Null)
         }
 
         "nativeAudioSetWinEndpoints" | "native-audio:set-win-endpoints" => {
-            IpcResponse::success(id, json!(true))
+            let capture_id = req.payload.get("captureId").and_then(Value::as_str).unwrap_or("");
+            let endpoints = req.payload.get("endpoints").and_then(Value::as_array).map(|arr| {
+                arr.iter().filter_map(Value::as_str).map(String::from).collect()
+            }).unwrap_or_default();
+            let ok = match audio {
+                Some(am) => am.set_win_endpoints(capture_id, endpoints),
+                None => audio::set_win_endpoints(capture_id, endpoints),
+            };
+            IpcResponse::success(id, json!(ok))
         }
 
         "nativeAudioSetRule" | "native-audio:set-rule" => {

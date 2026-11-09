@@ -11,11 +11,15 @@ resolver = "2"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+default = ["node"]
+node = ["dep:napi", "dep:napi-derive", "dep:napi-build"]
+
 [dependencies]
 fluxer_sample_pool = {path = "../sample-pool"}
 fluxer_rt_thread = {path = "../rt-thread"}
-napi = {version = "3.16.0", default-features = false, features = ["dyn-symbols", "napi8"]}
-napi-derive = "3.7.0"
+napi = { version = "3.16.0", default-features = false, features = ["dyn-symbols", "napi8"], optional = true }
+napi-derive = { version = "3.7.0", optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = {version = "0.62.2", features = [
@@ -38,4 +42,4 @@ windows = {version = "0.62.2", features = [
 windows-core = "0.62.2"
 
 [build-dependencies]
-napi-build = "2.6.0"
+napi-build = { version = "2.6.0", optional = true }

@@ -3549,6 +3549,7 @@ dependencies = [
  "anyhow",
  "arboard",
  "base64 0.22.1",
+ "fluxer_win_process_loopback",
  "fluxer_win_shell",
  "fluxer_windows_input_hook",
  "futures-util",
@@ -3578,6 +3579,28 @@ dependencies = [
  "criterion",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "fluxer_rt_thread"
+version = "0.0.0"
+dependencies = [
+ "libc",
+ "windows 0.62.2",
+]
+
+[[package]]
+name = "fluxer_sample_pool"
+version = "0.0.0"
+
+[[package]]
+name = "fluxer_win_process_loopback"
+version = "0.0.0"
+dependencies = [
+ "fluxer_rt_thread",
+ "fluxer_sample_pool",
+ "windows 0.62.2",
+ "windows-core 0.62.2",
 ]
 
 [[package]]

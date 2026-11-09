@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 pub const TARGET_SAMPLE_RATE: u32 = 48_000;

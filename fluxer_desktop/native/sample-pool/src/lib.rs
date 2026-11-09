@@ -303,6 +303,22 @@ impl<T: Copy + Default + Send + Sync, const CHECK_INVARIANTS: bool>
         cap
     }
 
+    pub fn as_slice(&self) -> &[T] {
+        pool_assert!(self.slot_index < self.pool.capacity as usize);
+        pool_assert!(self.filled_len <= self.pool.samples_per_slot as usize);
+        let cell = &self.pool.slots[self.slot_index];
+        let buf: &[T] = unsafe { &*cell.inner.get() };
+        &buf[..self.filled_len]
+    }
+
+    pub fn as_mut_slice(&mut self) -> &mut [T] {
+        pool_assert!(self.slot_index < self.pool.capacity as usize);
+        pool_assert!(self.filled_len <= self.pool.samples_per_slot as usize);
+        let cell = &self.pool.slots[self.slot_index];
+        let buf: &mut [T] = unsafe { &mut *cell.inner.get() };
+        &mut buf[..self.filled_len]
+    }
+
     pub fn as_mut_ptr(&mut self) -> *mut T {
         pool_assert!(self.slot_index < self.pool.capacity as usize);
         pool_assert!(self.filled_len <= self.pool.samples_per_slot as usize);

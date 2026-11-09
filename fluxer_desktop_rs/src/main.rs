@@ -138,24 +138,23 @@ pub fn trim_process_working_set() {
 pub fn trim_process_working_set() {}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // WebView2의 과도한 메모리 점유 및 다중 프로세스 분할(491MB)을 억제하기 위한 극한의 경량화 플래그 주입
-    // 1. --enable-low-end-device-mode: Skia 캔버스 및 텍스처 풀 40% 강제 축소
-    // 2. --disable-extensions & --disk-cache-size=1: 확장기능 완전 차단 및 디스크 캐시 극소화
-    // 3. --optimize-for-size & --max-semi-space-size=1: V8 JIT 코드 캐시 및 신생 영역 힙 극단적 축소
+    // WebView2의 과도한 메모리 점유(491MB)를 억제하면서도 V8 OOM 크래시를 원천 방지하는 정밀 플래그 주입
+    // 1. --disable-extensions & --disk-cache-size=1: 불필요한 확장기능 및 디스크 캐시 극소화
+    // 2. --optimize-for-size & --expose-gc: V8 코드 캐시 최소화 및 20초 주기 OS 작업 세트 동기 회수 파이프라인 가동
+    // 3. --max-old-space-size=256: 기존 64MB 및 semi-space=1로 인한 V8 Fatal Out of Memory 크래시 원천 차단
     if std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").is_err() {
         unsafe {
             std::env::set_var(
                 "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
                 "--renderer-process-limit=1 \
                  --in-process-gpu \
-                 --enable-low-end-device-mode \
                  --disable-extensions \
                  --disk-cache-size=1 \
                  --disable-background-networking \
                  --disable-gpu-shader-disk-cache \
                  --disable-component-update \
                  --disable-features=AudioServiceOutOfProcess,RendererCodeIntegrity,PreloadMediaEngagementData,AutofillServerCommunication,CalculateNativeWinOcclusion \
-                 --js-flags=\"--optimize-for-size --max-semi-space-size=1 --max-old-space-size=64 --expose-gc\"",
+                 --js-flags=\"--optimize-for-size --max-old-space-size=256 --expose-gc\"",
             );
         }
     }

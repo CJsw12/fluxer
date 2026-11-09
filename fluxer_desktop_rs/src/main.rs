@@ -14,6 +14,7 @@ use wry::WebViewBuilder;
 
 mod assets;
 mod audio;
+pub mod badge;
 mod bridge;
 mod config;
 pub mod contracts;
@@ -23,6 +24,7 @@ mod overlay;
 mod shortcuts;
 mod storage;
 mod stream_viewer;
+pub mod theme_watch;
 mod tray;
 
 use assets::AssetHandler;
@@ -462,6 +464,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "rendererGcComplete" => {
                     // 렌더러 V8 GC 완료 통지에 동기화하여 Windows OS 작업 세트 즉각 강제 회수
                     trim_process_working_set();
+                }
+                "setTaskbarBadge" => {
+                    let count = req.payload.get("count").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                    #[cfg(windows)]
+                    {
+                        use tao::platform::windows::WindowExtWindows;
+                        let hwnd = window.hwnd();
+                        badge::set_taskbar_badge(hwnd, count, false);
+                    }
+                }
+                "flashFrame" => {
+                    let flag = req.payload.get("flag").and_then(|v| v.as_bool()).unwrap_or(true);
+                    let attention = if flag {
+                        Some(tao::window::UserAttentionType::Critical)
+                    } else {
+                        None
+                    };
+                    window.request_user_attention(attention);
                 }
                 other => {
                     eprintln!("[IPC Warning] Unhandled one-way channel: '{other}'");

@@ -136,6 +136,51 @@ pub struct VoiceOverlayState {
     pub active_speakers: Vec<String>,
 }
 
+/// 테마 디렉터리 내 단일 CSS 파일 DTO (`packages/desktop_ipc/src/DesktopBridgeTypes.ts`)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "contracts/ThemeDirectoryCssFile.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct ThemeDirectoryCssFile {
+    pub file_name: String,
+    pub path: String,
+    pub css: String,
+}
+
+/// 테마 파일 이름 변경 기록 DTO (`packages/desktop_ipc/src/DesktopBridgeTypes.ts`)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "contracts/ThemeFolderRename.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct ThemeFolderRename {
+    pub from: String,
+    pub to: String,
+    pub file_name: String,
+}
+
+/// 테마 폴더 상태 열거형 (`packages/desktop_ipc/src/DesktopBridgeTypes.ts`)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "contracts/ThemeFolderStatus.ts")]
+#[serde(rename_all = "camelCase")]
+pub enum ThemeFolderStatus {
+    Live,
+    Missing,
+    NotAllowed,
+}
+
+/// 테마 디렉터리 변경 이벤트 DTO (`packages/desktop_ipc/src/DesktopBridgeTypes.ts`)
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "contracts/ThemeFolderChange.ts")]
+#[serde(rename_all = "camelCase")]
+pub struct ThemeFolderChange {
+    pub folder: String,
+    pub status: ThemeFolderStatus,
+    pub truncated: bool,
+    pub snapshot: bool,
+    pub added: Vec<ThemeDirectoryCssFile>,
+    pub changed: Vec<ThemeDirectoryCssFile>,
+    pub removed: Vec<String>,
+    pub renamed: Vec<ThemeFolderRename>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,6 +199,10 @@ mod tests {
         DesktopAccountCompareAndSwapRequest::export().unwrap();
         DesktopWindowBehaviorSettings::export().unwrap();
         VoiceOverlayState::export().unwrap();
+        ThemeDirectoryCssFile::export().unwrap();
+        ThemeFolderRename::export().unwrap();
+        ThemeFolderStatus::export().unwrap();
+        ThemeFolderChange::export().unwrap();
 
         let base = std::path::Path::new("bindings/contracts");
         assert!(base.join("DesktopCapabilityManifest.ts").exists() || std::path::Path::new("contracts/DesktopCapabilityManifest.ts").exists());

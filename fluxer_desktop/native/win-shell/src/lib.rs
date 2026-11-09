@@ -1,158 +1,129 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+#[cfg(feature = "node")]
 use napi::Task;
-use napi::bindgen_prelude::{AsyncTask, Env, Error, Result, Status};
+#[cfg(feature = "node")]
+use napi::bindgen_prelude::{AsyncTask, Env, Error as NapiError, Result as NapiResult, Status as NapiStatus};
+#[cfg(feature = "node")]
 use napi_derive::napi;
 
-#[napi(object)]
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+pub enum WinShellError {
+    #[error("Win32 error: {label} (code {status})")]
+    Win32 { label: &'static str, status: u32 },
+    #[error("HRESULT error: {label} (hr 0x{hr:08x})")]
+    HResult { label: &'static str, hr: u32 },
+    #[error("Invalid argument: {property} is required and must be non-empty")]
+    InvalidArg { property: &'static str },
+    #[error("Invalid UTF-16 in registry value")]
+    InvalidUtf16,
+    #[error("win-shell not supported on this platform")]
+    UnsupportedPlatform,
+}
+
+#[cfg(feature = "node")]
+impl From<WinShellError> for NapiError {
+    fn from(err: WinShellError) -> Self {
+        match err {
+            WinShellError::InvalidArg { property } => {
+                NapiError::new(NapiStatus::InvalidArg, format!("{property} is required and must be non-empty"))
+            }
+            other => NapiError::new(NapiStatus::GenericFailure, other.to_string()),
+        }
+    }
+}
+
+#[cfg_attr(feature = "node", napi(object))]
+#[derive(Debug, Clone, Default)]
 pub struct CreateShortcutOptions {
-    #[napi(js_name = "lnkPath")]
+    #[cfg_attr(feature = "node", napi(js_name = "lnkPath"))]
     pub lnk_path: Option<String>,
     pub target: Option<String>,
     pub args: Option<String>,
-    #[napi(js_name = "appUserModelId")]
+    #[cfg_attr(feature = "node", napi(js_name = "appUserModelId"))]
     pub app_user_model_id: Option<String>,
-    #[napi(js_name = "toastActivatorClsid")]
+    #[cfg_attr(feature = "node", napi(js_name = "toastActivatorClsid"))]
     pub toast_activator_clsid: Option<String>,
-    #[napi(js_name = "iconPath")]
+    #[cfg_attr(feature = "node", napi(js_name = "iconPath"))]
     pub icon_path: Option<String>,
-    #[napi(js_name = "iconIndex")]
+    #[cfg_attr(feature = "node", napi(js_name = "iconIndex"))]
     pub icon_index: Option<i32>,
-    #[napi(js_name = "workingDir")]
+    #[cfg_attr(feature = "node", napi(js_name = "workingDir"))]
     pub working_dir: Option<String>,
     pub description: Option<String>,
 }
 
-#[napi(object)]
-#[derive(Debug)]
+#[cfg_attr(feature = "node", napi(object))]
+#[derive(Debug, Clone, Default)]
 pub struct SetRunValueOptions {
     pub name: Option<String>,
     pub command: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct ShortcutOptions {
-    lnk_path: String,
-    target: String,
-    args: Option<String>,
-    app_user_model_id: Option<String>,
-    toast_activator_clsid: Option<String>,
-    icon_path: Option<String>,
-    icon_index: i32,
-    working_dir: Option<String>,
-    description: Option<String>,
+pub struct ShortcutOptions {
+    pub lnk_path: String,
+    pub target: String,
+    pub args: Option<String>,
+    pub app_user_model_id: Option<String>,
+    pub toast_activator_clsid: Option<String>,
+    pub icon_path: Option<String>,
+    pub icon_index: i32,
+    pub working_dir: Option<String>,
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct RunValueOptions {
-    name: String,
-    command: String,
+pub struct RunValueOptions {
+    pub name: String,
+    pub command: String,
 }
 
-pub struct CreateShortcutTask {
-    options: ShortcutOptions,
+// =========================================================================
+// 순수 Safe Rust 동기 공개 API (Electron / Node 의존성 없음)
+// =========================================================================
+
+pub fn create_shortcut_sync(opts: &ShortcutOptions) -> Result<(), WinShellError> {
+    platform::create_shortcut(opts)
 }
 
-pub struct SetRunValueTask {
-    options: RunValueOptions,
+pub fn set_current_user_run_value_sync(name: &str, command: &str) -> Result<(), WinShellError> {
+    if name.is_empty() {
+        return Err(WinShellError::InvalidArg { property: "name" });
+    }
+    if command.is_empty() {
+        return Err(WinShellError::InvalidArg { property: "command" });
+    }
+    platform::set_current_user_run_value(name, command)
 }
 
-pub struct DeleteRunValueTask {
-    name: String,
+pub fn delete_current_user_run_value_sync(name: &str) -> Result<(), WinShellError> {
+    if name.is_empty() {
+        return Err(WinShellError::InvalidArg { property: "name" });
+    }
+    platform::delete_current_user_run_value(name)
 }
 
-pub struct GetRunValueTask {
-    name: String,
+pub fn get_current_user_run_value_sync(name: &str) -> Result<Option<String>, WinShellError> {
+    if name.is_empty() {
+        return Err(WinShellError::InvalidArg { property: "name" });
+    }
+    platform::get_current_user_run_value(name)
 }
 
-#[napi(js_name = "createShortcut")]
-pub fn create_shortcut(opts: CreateShortcutOptions) -> Result<AsyncTask<CreateShortcutTask>> {
-    Ok(AsyncTask::new(CreateShortcutTask {
-        options: validate_options(opts)?,
-    }))
-}
-
-#[napi(js_name = "setCurrentUserRunValue")]
-pub fn set_current_user_run_value(opts: SetRunValueOptions) -> Result<AsyncTask<SetRunValueTask>> {
-    Ok(AsyncTask::new(SetRunValueTask {
-        options: validate_run_value_options(opts)?,
-    }))
-}
-
-#[napi(js_name = "deleteCurrentUserRunValue")]
-pub fn delete_current_user_run_value(name: String) -> Result<AsyncTask<DeleteRunValueTask>> {
-    Ok(AsyncTask::new(DeleteRunValueTask {
-        name: require_non_empty(Some(name), "name")?,
-    }))
-}
-
-#[napi(js_name = "getCurrentUserRunValue")]
-pub fn get_current_user_run_value(name: String) -> Result<AsyncTask<GetRunValueTask>> {
-    Ok(AsyncTask::new(GetRunValueTask {
-        name: require_non_empty(Some(name), "name")?,
-    }))
-}
-
-#[cfg(target_os = "windows")]
-#[napi(js_name = "getUserNotificationState")]
-pub fn get_user_notification_state() -> Result<String> {
+pub fn get_user_notification_state_sync() -> Result<String, WinShellError> {
     platform::get_user_notification_state()
 }
 
-impl Task for CreateShortcutTask {
-    type Output = ();
-    type JsValue = ();
-
-    fn compute(&mut self) -> Result<Self::Output> {
-        platform::create_shortcut(&self.options)
-    }
-
-    fn resolve(&mut self, _env: Env, _output: Self::Output) -> Result<Self::JsValue> {
-        Ok(())
-    }
+pub fn set_taskbar_overlay_icon_sync(
+    hwnd: isize,
+    icon_bytes: Option<&[u8]>,
+    description: &str,
+) -> Result<(), WinShellError> {
+    platform::set_taskbar_overlay_icon(hwnd, icon_bytes, description)
 }
 
-impl Task for SetRunValueTask {
-    type Output = ();
-    type JsValue = ();
-
-    fn compute(&mut self) -> Result<Self::Output> {
-        platform::set_current_user_run_value(&self.options.name, &self.options.command)
-    }
-
-    fn resolve(&mut self, _env: Env, _output: Self::Output) -> Result<Self::JsValue> {
-        Ok(())
-    }
-}
-
-impl Task for DeleteRunValueTask {
-    type Output = ();
-    type JsValue = ();
-
-    fn compute(&mut self) -> Result<Self::Output> {
-        platform::delete_current_user_run_value(&self.name)
-    }
-
-    fn resolve(&mut self, _env: Env, _output: Self::Output) -> Result<Self::JsValue> {
-        Ok(())
-    }
-}
-
-impl Task for GetRunValueTask {
-    type Output = Option<String>;
-    type JsValue = Option<String>;
-
-    fn compute(&mut self) -> Result<Self::Output> {
-        platform::get_current_user_run_value(&self.name)
-    }
-
-    fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {
-        Ok(output)
-    }
-}
-
-fn validate_options(opts: CreateShortcutOptions) -> Result<ShortcutOptions> {
+pub fn validate_shortcut_options(opts: CreateShortcutOptions) -> Result<ShortcutOptions, WinShellError> {
     Ok(ShortcutOptions {
         lnk_path: require_non_empty(opts.lnk_path, "lnkPath")?,
         target: require_non_empty(opts.target, "target")?,
@@ -166,31 +137,146 @@ fn validate_options(opts: CreateShortcutOptions) -> Result<ShortcutOptions> {
     })
 }
 
-fn validate_run_value_options(opts: SetRunValueOptions) -> Result<RunValueOptions> {
+pub fn validate_run_value_options(opts: SetRunValueOptions) -> Result<RunValueOptions, WinShellError> {
     Ok(RunValueOptions {
         name: require_non_empty(opts.name, "name")?,
         command: require_non_empty(opts.command, "command")?,
     })
 }
 
-fn require_non_empty(value: Option<String>, property: &'static str) -> Result<String> {
+fn require_non_empty(value: Option<String>, property: &'static str) -> Result<String, WinShellError> {
     match value {
         Some(value) if !value.is_empty() => Ok(value),
-        _ => Err(Error::new(
-            Status::InvalidArg,
-            format!("{property} is required and must be non-empty"),
-        )),
+        _ => Err(WinShellError::InvalidArg { property }),
     }
 }
 
+// =========================================================================
+// Electron Node.js N-API 호환 래퍼 계층 (`feature = "node"` 전용)
+// =========================================================================
+
+#[cfg(feature = "node")]
+pub struct CreateShortcutTask {
+    options: ShortcutOptions,
+}
+
+#[cfg(feature = "node")]
+pub struct SetRunValueTask {
+    options: RunValueOptions,
+}
+
+#[cfg(feature = "node")]
+pub struct DeleteRunValueTask {
+    name: String,
+}
+
+#[cfg(feature = "node")]
+pub struct GetRunValueTask {
+    name: String,
+}
+
+#[cfg(feature = "node")]
+#[napi(js_name = "createShortcut")]
+pub fn create_shortcut(opts: CreateShortcutOptions) -> NapiResult<AsyncTask<CreateShortcutTask>> {
+    let options = validate_shortcut_options(opts)?;
+    Ok(AsyncTask::new(CreateShortcutTask { options }))
+}
+
+#[cfg(feature = "node")]
+#[napi(js_name = "setCurrentUserRunValue")]
+pub fn set_current_user_run_value(opts: SetRunValueOptions) -> NapiResult<AsyncTask<SetRunValueTask>> {
+    let options = validate_run_value_options(opts)?;
+    Ok(AsyncTask::new(SetRunValueTask { options }))
+}
+
+#[cfg(feature = "node")]
+#[napi(js_name = "deleteCurrentUserRunValue")]
+pub fn delete_current_user_run_value(name: String) -> NapiResult<AsyncTask<DeleteRunValueTask>> {
+    let name = require_non_empty(Some(name), "name")?;
+    Ok(AsyncTask::new(DeleteRunValueTask { name }))
+}
+
+#[cfg(feature = "node")]
+#[napi(js_name = "getCurrentUserRunValue")]
+pub fn get_current_user_run_value(name: String) -> NapiResult<AsyncTask<GetRunValueTask>> {
+    let name = require_non_empty(Some(name), "name")?;
+    Ok(AsyncTask::new(GetRunValueTask { name }))
+}
+
+#[cfg(all(feature = "node", target_os = "windows"))]
+#[napi(js_name = "getUserNotificationState")]
+pub fn get_user_notification_state() -> NapiResult<String> {
+    get_user_notification_state_sync().map_err(Into::into)
+}
+
+#[cfg(feature = "node")]
+impl Task for CreateShortcutTask {
+    type Output = ();
+    type JsValue = ();
+
+    fn compute(&mut self) -> NapiResult<Self::Output> {
+        create_shortcut_sync(&self.options).map_err(Into::into)
+    }
+
+    fn resolve(&mut self, _env: Env, _output: Self::Output) -> NapiResult<Self::JsValue> {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "node")]
+impl Task for SetRunValueTask {
+    type Output = ();
+    type JsValue = ();
+
+    fn compute(&mut self) -> NapiResult<Self::Output> {
+        set_current_user_run_value_sync(&self.options.name, &self.options.command).map_err(Into::into)
+    }
+
+    fn resolve(&mut self, _env: Env, _output: Self::Output) -> NapiResult<Self::JsValue> {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "node")]
+impl Task for DeleteRunValueTask {
+    type Output = ();
+    type JsValue = ();
+
+    fn compute(&mut self) -> NapiResult<Self::Output> {
+        delete_current_user_run_value_sync(&self.name).map_err(Into::into)
+    }
+
+    fn resolve(&mut self, _env: Env, _output: Self::Output) -> NapiResult<Self::JsValue> {
+        Ok(())
+    }
+}
+
+#[cfg(feature = "node")]
+impl Task for GetRunValueTask {
+    type Output = Option<String>;
+    type JsValue = Option<String>;
+
+    fn compute(&mut self) -> NapiResult<Self::Output> {
+        get_current_user_run_value_sync(&self.name).map_err(Into::into)
+    }
+
+    fn resolve(&mut self, _env: Env, output: Self::Output) -> NapiResult<Self::JsValue> {
+        Ok(output)
+    }
+}
+
+// =========================================================================
+// Windows 플랫폼 실제 네이티브 구현부
+// =========================================================================
+
 #[cfg(target_os = "windows")]
 mod platform {
-    use super::ShortcutOptions;
-    use napi::bindgen_prelude::{Error, Result, Status};
+    use super::{ShortcutOptions, WinShellError};
     use std::ffi::c_void;
     use std::mem::ManuallyDrop;
+    use std::sync::Mutex;
     use windows::Win32::Foundation::{
-        ERROR_FILE_NOT_FOUND, ERROR_SUCCESS, PROPERTYKEY, WIN32_ERROR,
+        ERROR_FILE_NOT_FOUND, ERROR_SUCCESS, HWND, PROPERTYKEY, WIN32_ERROR,
     };
     use windows::Win32::System::Com::StructuredStorage::{
         PROPVARIANT, PROPVARIANT_0, PROPVARIANT_0_0, PROPVARIANT_0_0_0,
@@ -206,11 +292,16 @@ mod platform {
     use windows::Win32::System::Variant::{VT_CLSID, VT_LPWSTR};
     use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
     use windows::Win32::UI::Shell::{
-        IShellLinkW, QUNS_ACCEPTS_NOTIFICATIONS, QUNS_APP, QUNS_BUSY, QUNS_NOT_PRESENT,
+        IShellLinkW, ITaskbarList3, QUNS_ACCEPTS_NOTIFICATIONS, QUNS_APP, QUNS_BUSY, QUNS_NOT_PRESENT,
         QUNS_PRESENTATION_MODE, QUNS_QUIET_TIME, QUNS_RUNNING_D3D_FULL_SCREEN,
-        SHQueryUserNotificationState, ShellLink,
+        SHQueryUserNotificationState, ShellLink, TaskbarList,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        CreateIconFromResourceEx, DestroyIcon, HICON, LR_DEFAULTCOLOR,
     };
     use windows::core::{GUID, Interface, PCWSTR, PWSTR};
+
+    static LAST_OVERLAY_HICON: Mutex<isize> = Mutex::new(0);
 
     const CURRENT_USER_RUN_SUBKEY: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";
     const PKEY_APP_USER_MODEL_ID: PROPERTYKEY = PROPERTYKEY {
@@ -222,7 +313,7 @@ mod platform {
         pid: 26,
     };
 
-    pub(super) fn get_user_notification_state() -> Result<String> {
+    pub(super) fn get_user_notification_state() -> Result<String, WinShellError> {
         let state = unsafe { SHQueryUserNotificationState() }
             .map_err(|err| hresult_error("SHQueryUserNotificationState failed", err))?;
         let label = match state.0 {
@@ -238,7 +329,61 @@ mod platform {
         Ok(label.to_string())
     }
 
-    pub(super) fn create_shortcut(opts: &ShortcutOptions) -> Result<()> {
+    pub(super) fn set_taskbar_overlay_icon(
+        hwnd: isize,
+        icon_bytes: Option<&[u8]>,
+        description: &str,
+    ) -> Result<(), WinShellError> {
+        if hwnd == 0 {
+            return Ok(());
+        }
+
+        let _com = ComApartment::initialize()?;
+
+        unsafe {
+            let taskbar: ITaskbarList3 = CoCreateInstance(&TaskbarList, None, CLSCTX_INPROC_SERVER)
+                .map_err(|err| hresult_error("CoCreateInstance(CLSID_TaskbarList) failed", err))?;
+
+            taskbar
+                .HrInit()
+                .map_err(|err| hresult_error("ITaskbarList3::HrInit failed", err))?;
+
+            let mut last_hicon = LAST_OVERLAY_HICON.lock().unwrap();
+            if *last_hicon != 0 {
+                let _ = DestroyIcon(HICON(*last_hicon as *mut c_void));
+                *last_hicon = 0;
+            }
+
+            let Some(bytes) = icon_bytes else {
+                let _ = taskbar.SetOverlayIcon(
+                    HWND(hwnd as *mut c_void),
+                    HICON(std::ptr::null_mut()),
+                    PCWSTR::null(),
+                );
+                return Ok(());
+            };
+
+            let hicon = CreateIconFromResourceEx(
+                bytes,
+                true,
+                0x00030000,
+                16,
+                16,
+                LR_DEFAULTCOLOR,
+            )
+            .map_err(|err| hresult_error("CreateIconFromResourceEx failed", err))?;
+
+            *last_hicon = hicon.0 as isize;
+            let desc = wide_null(description);
+            taskbar
+                .SetOverlayIcon(HWND(hwnd as *mut c_void), hicon, PCWSTR(desc.as_ptr()))
+                .map_err(|err| hresult_error("ITaskbarList3::SetOverlayIcon failed", err))?;
+        }
+
+        Ok(())
+    }
+
+    pub(super) fn create_shortcut(opts: &ShortcutOptions) -> Result<(), WinShellError> {
         let _com = ComApartment::initialize()?;
 
         unsafe {
@@ -310,7 +455,7 @@ mod platform {
         Ok(())
     }
 
-    pub(super) fn set_current_user_run_value(name: &str, command: &str) -> Result<()> {
+    pub(super) fn set_current_user_run_value(name: &str, command: &str) -> Result<(), WinShellError> {
         let key = RunKey::create()?;
         let name = wide_null(name);
         let command = wide_null(command);
@@ -321,7 +466,7 @@ mod platform {
         check_win32(status, "RegSetValueExW(HKCU Run) failed")
     }
 
-    pub(super) fn delete_current_user_run_value(name: &str) -> Result<()> {
+    pub(super) fn delete_current_user_run_value(name: &str) -> Result<(), WinShellError> {
         let Some(key) = RunKey::open_for_set()? else {
             return Ok(());
         };
@@ -333,7 +478,7 @@ mod platform {
         check_win32(status, "RegDeleteValueW(HKCU Run) failed")
     }
 
-    pub(super) fn get_current_user_run_value(name: &str) -> Result<Option<String>> {
+    pub(super) fn get_current_user_run_value(name: &str) -> Result<Option<String>, WinShellError> {
         let subkey = wide_null(CURRENT_USER_RUN_SUBKEY);
         let name = wide_null(name);
         let mut value_type = REG_SZ;
@@ -376,13 +521,13 @@ mod platform {
         }
         String::from_utf16(&buffer[..code_units])
             .map(Some)
-            .map_err(|_| Error::new(Status::GenericFailure, "HKCU Run value is not valid UTF-16"))
+            .map_err(|_| WinShellError::InvalidUtf16)
     }
 
     struct RunKey(HKEY);
 
     impl RunKey {
-        fn create() -> Result<Self> {
+        fn create() -> Result<Self, WinShellError> {
             let subkey = wide_null(CURRENT_USER_RUN_SUBKEY);
             let mut key = HKEY::default();
             let status = unsafe {
@@ -402,7 +547,7 @@ mod platform {
             Ok(Self(key))
         }
 
-        fn open_for_set() -> Result<Option<Self>> {
+        fn open_for_set() -> Result<Option<Self>, WinShellError> {
             let subkey = wide_null(CURRENT_USER_RUN_SUBKEY);
             let mut key = HKEY::default();
             let status = unsafe {
@@ -437,7 +582,7 @@ mod platform {
     struct ComApartment;
 
     impl ComApartment {
-        fn initialize() -> Result<Self> {
+        fn initialize() -> Result<Self, WinShellError> {
             unsafe {
                 CoInitializeEx(None, COINIT_APARTMENTTHREADED)
                     .ok()
@@ -496,7 +641,7 @@ mod platform {
         key: &PROPERTYKEY,
         value: &str,
         label: &'static str,
-    ) -> Result<()> {
+    ) -> Result<(), WinShellError> {
         let mut wide = wide_null(value);
         unsafe {
             let prop = ManuallyDrop::new(propvariant_from_wide_string(&mut wide));
@@ -511,7 +656,7 @@ mod platform {
         key: &PROPERTYKEY,
         value: &str,
         label: &'static str,
-    ) -> Result<()> {
+    ) -> Result<(), WinShellError> {
         let wide = wide_null(value);
         unsafe {
             let mut guid = CLSIDFromString(PCWSTR(wide.as_ptr()))
@@ -523,59 +668,82 @@ mod platform {
         }
     }
 
-    fn hresult_error(label: &'static str, err: windows::core::Error) -> Error {
-        Error::new(
-            Status::GenericFailure,
-            format!("{label} (hr 0x{:x})", err.code().0 as u32),
-        )
-    }
-
-    fn check_win32(status: WIN32_ERROR, label: &'static str) -> Result<()> {
-        if status == ERROR_SUCCESS {
-            Ok(())
-        } else {
-            Err(win32_error(label, status))
+    fn hresult_error(label: &'static str, err: windows::core::Error) -> WinShellError {
+        WinShellError::HResult {
+            label,
+            hr: err.code().0 as u32,
         }
     }
 
-    fn win32_error(label: &'static str, status: WIN32_ERROR) -> Error {
-        Error::new(
-            Status::GenericFailure,
-            format!("{label} (win32 {})", status.0),
-        )
+    fn check_win32(status: WIN32_ERROR, label: &'static str) -> Result<(), WinShellError> {
+        if status == ERROR_SUCCESS {
+            Ok(())
+        } else {
+            Err(WinShellError::Win32 {
+                label,
+                status: status.0,
+            })
+        }
     }
 }
 
 #[cfg(not(target_os = "windows"))]
 mod platform {
-    use super::ShortcutOptions;
-    use napi::bindgen_prelude::{Error, Result, Status};
+    use super::{ShortcutOptions, WinShellError};
 
-    pub(super) fn create_shortcut(_opts: &ShortcutOptions) -> Result<()> {
-        Err(Error::new(
-            Status::GenericFailure,
-            "win-shell not supported on this platform",
-        ))
+    pub(super) fn create_shortcut(_opts: &ShortcutOptions) -> Result<(), WinShellError> {
+        Err(WinShellError::UnsupportedPlatform)
     }
 
-    pub(super) fn set_current_user_run_value(_name: &str, _command: &str) -> Result<()> {
-        Err(Error::new(
-            Status::GenericFailure,
-            "win-shell not supported on this platform",
-        ))
+    pub(super) fn set_current_user_run_value(_name: &str, _command: &str) -> Result<(), WinShellError> {
+        Err(WinShellError::UnsupportedPlatform)
     }
 
-    pub(super) fn delete_current_user_run_value(_name: &str) -> Result<()> {
-        Err(Error::new(
-            Status::GenericFailure,
-            "win-shell not supported on this platform",
-        ))
+    pub(super) fn delete_current_user_run_value(_name: &str) -> Result<(), WinShellError> {
+        Err(WinShellError::UnsupportedPlatform)
     }
 
-    pub(super) fn get_current_user_run_value(_name: &str) -> Result<Option<String>> {
-        Err(Error::new(
-            Status::GenericFailure,
-            "win-shell not supported on this platform",
-        ))
+    pub(super) fn get_current_user_run_value(_name: &str) -> Result<Option<String>, WinShellError> {
+        Err(WinShellError::UnsupportedPlatform)
+    }
+
+    pub(super) fn get_user_notification_state() -> Result<String, WinShellError> {
+        Err(WinShellError::UnsupportedPlatform)
+    }
+
+    pub(super) fn set_taskbar_overlay_icon(
+        _hwnd: isize,
+        _icon_bytes: Option<&[u8]>,
+        _description: &str,
+    ) -> Result<(), WinShellError> {
+        Err(WinShellError::UnsupportedPlatform)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validation_empty_property() {
+        let res = validate_shortcut_options(CreateShortcutOptions::default());
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_run_value_options_validation() {
+        let res = validate_run_value_options(SetRunValueOptions {
+            name: Some("FluxerTest".to_string()),
+            command: Some("C:\\Fluxer\\fluxer.exe".to_string()),
+        });
+        assert!(res.is_ok());
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn test_notification_state_query() {
+        let state = get_user_notification_state_sync();
+        assert!(state.is_ok());
+        println!("Current Windows notification state: {}", state.unwrap());
     }
 }

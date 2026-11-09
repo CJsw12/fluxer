@@ -216,9 +216,53 @@ pub fn handle_ipc_request(
         "checkMediaAccess" => IpcResponse::success(id, json!("granted")),
         "requestMediaAccess" => IpcResponse::success(id, json!(true)),
 
-        "autostartIsEnabled" => IpcResponse::success(id, json!(false)),
-        "autostartEnable" => IpcResponse::success(id, Value::Null),
-        "autostartDisable" => IpcResponse::success(id, Value::Null),
+        "autostartIsEnabled" => {
+            #[cfg(windows)]
+            {
+                let is_enabled = fluxer_win_shell::get_current_user_run_value_sync("Fluxer")
+                    .ok()
+                    .flatten()
+                    .is_some();
+                IpcResponse::success(id, json!(is_enabled))
+            }
+            #[cfg(not(windows))]
+            IpcResponse::success(id, json!(false))
+        }
+
+        "autostartEnable" => {
+            #[cfg(windows)]
+            {
+                if let Ok(exe_path) = std::env::current_exe() {
+                    let cmd = format!("\"{}\" --minimized", exe_path.display());
+                    let _ = fluxer_win_shell::set_current_user_run_value_sync("Fluxer", &cmd);
+                }
+                IpcResponse::success(id, Value::Null)
+            }
+            #[cfg(not(windows))]
+            IpcResponse::success(id, Value::Null)
+        }
+
+        "autostartDisable" => {
+            #[cfg(windows)]
+            {
+                let _ = fluxer_win_shell::delete_current_user_run_value_sync("Fluxer");
+                IpcResponse::success(id, Value::Null)
+            }
+            #[cfg(not(windows))]
+            IpcResponse::success(id, Value::Null)
+        }
+
+        "getUserNotificationState" => {
+            #[cfg(windows)]
+            {
+                match fluxer_win_shell::get_user_notification_state_sync() {
+                    Ok(state) => IpcResponse::success(id, json!(state)),
+                    Err(err) => IpcResponse::error(id, format!("Failed to query notification state: {err}")),
+                }
+            }
+            #[cfg(not(windows))]
+            IpcResponse::success(id, json!("unknown"))
+        }
 
         "passkeyIsSupported" => IpcResponse::success(id, json!(false)),
 
@@ -803,6 +847,36 @@ pub fn handle_ipc_request(
 
         "nativeAudioSetRule" | "native-audio:set-rule" => {
             IpcResponse::success(id, json!(true))
+        }
+
+        // =========================================================
+        // 테마 관리 API (desktopThemes)
+        // =========================================================
+        "importThemeDirectory" | "theme-directory:import" => {
+            let dir_path = req.payload.get("path").and_then(Value::as_str)
+                .or_else(|| req.payload.as_str())
+                .unwrap_or_default();
+            let files = crate::theme_watch::ThemeWatcher::scan_css_files(std::path::Path::new(dir_path));
+            IpcResponse::success(id, json!(files))
+        }
+
+        "readThemeLocalFiles" | "theme-files:read" => {
+            let paths: Vec<String> = req.payload.get("paths")
+                .or_else(|| req.payload.as_array().map(|_| &req.payload))
+                .and_then(Value::as_array)
+                .map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect())
+                .unwrap_or_default();
+
+            let mut results = Vec::new();
+            for p_str in paths {
+                let p = std::path::Path::new(&p_str);
+                let content = std::fs::read_to_string(p).unwrap_or_default();
+                results.push(json!({
+                    "path": p_str,
+                    "css": content
+                }));
+            }
+            IpcResponse::success(id, Value::Array(results))
         }
 
         unknown => {

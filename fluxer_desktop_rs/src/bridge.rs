@@ -903,18 +903,42 @@ pub fn get_initialization_script() -> &'static str {
         appendVoiceDebugEventSinkEntries: function(entries) {},
         setVoiceDebugEventSinkStatsHtml: function(html) {},
 
-        // 테마 관리
-        pickThemeLocalFiles: function() { return Promise.resolve([]); },
-        readThemeLocalFiles: function(paths) { return Promise.resolve([]); },
+        // 테마 관리 (실제 Rust 네이티브 테마 디렉터리 및 파일 리더 직결)
+        pickThemeLocalFiles: function() {
+            return invokeRust('importThemeDirectory');
+        },
+        readThemeLocalFiles: function(paths) {
+            return invokeRust('readThemeLocalFiles', { paths: paths || [] });
+        },
         clearThemeLocalFiles: function() { return Promise.resolve(); },
-        importThemeDirectory: function() { return Promise.resolve([]); },
-        pickThemeLinkedFiles: function(options) { return Promise.resolve([]); },
-        watchThemeLinkedFiles: function(paths) { return Promise.resolve(); },
+        importThemeDirectory: function() {
+            return invokeRust('importThemeDirectory');
+        },
+        pickThemeLinkedFiles: function(options) {
+            return invokeRust('importThemeDirectory');
+        },
+        watchThemeLinkedFiles: function(paths) {
+            return invokeRust('readThemeLocalFiles', { paths: paths || [] }).then(function() {});
+        },
         onThemeLinkedFileChange: function(callback) { return function() {}; },
-        importThemeFolder: function() { return Promise.resolve(null); },
-        watchThemeFolders: function(paths) { return Promise.resolve(); },
+        importThemeFolder: function() {
+            return invokeRust('importThemeDirectory').then(function(files) {
+                return { folder: '', files: Array.isArray(files) ? files : [], truncated: false };
+            });
+        },
+        watchThemeFolders: function(paths) {
+            return invokeRust('readThemeLocalFiles', { paths: paths || [] }).then(function() {});
+        },
         removeThemeFolder: function(path) { return Promise.resolve(); },
-        onThemeFolderChange: function(callback) { return function() {}; },
+        onThemeFolderChange: function(callback) {
+            var handler = function(e) {
+                if (e && e.detail && callback) callback(e.detail);
+            };
+            window.addEventListener('fluxer:theme-folder-change', handler);
+            return function() {
+                window.removeEventListener('fluxer:theme-folder-change', handler);
+            };
+        },
         themeFolderWatch: true,
 
         // 보이스 백그라운드 미디어 캐시
@@ -1348,11 +1372,19 @@ pub fn get_initialization_script() -> &'static str {
             sendRust('reportInstanceProductName', { instanceKey: key, productName: name });
         },
 
-        // 뱃지 및 작업표시줄
-        setBadgeCount: function() {},
-        setUnreadBadge: function() {},
-        flashFrame: function() {},
-        stopFlashFrame: function() {},
+        // 뱃지 및 작업표시줄 (Win32 ITaskbarList3 및 창 포커스 직결)
+        setBadgeCount: function(count) {
+            sendRust('setTaskbarBadge', { count: typeof count === 'number' ? count : 0 });
+        },
+        setUnreadBadge: function(count) {
+            sendRust('setTaskbarBadge', { count: typeof count === 'number' ? count : 0 });
+        },
+        flashFrame: function(flag) {
+            sendRust('flashFrame', { flag: flag !== false });
+        },
+        stopFlashFrame: function() {
+            sendRust('flashFrame', { flag: false });
+        },
         setTaskbarProgress: function() {},
         setZoomFactor: function() {},
 

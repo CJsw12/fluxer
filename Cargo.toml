@@ -18,6 +18,10 @@ members = [
 ]
 exclude = [
 	"packages/markdown_parser/rust/fuzz",
+	"fluxer_desktop/native/win-shell",
+	"fluxer_desktop/native/win-process-loopback",
+	"fluxer_desktop/native/win-game-capture",
+	"fluxer_desktop/native/windows-input-hook",
 ]
 resolver = "2"
 

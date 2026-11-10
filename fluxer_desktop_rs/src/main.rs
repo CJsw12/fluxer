@@ -150,20 +150,17 @@ pub fn trim_process_working_set() {}
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // WebView2의 안정성을 확보하고 V8 OOM(Out of Memory) 크래시를 원천 방지하는 정밀 플래그 주입
     // 1. --disable-extensions: 불필요한 Chromium 확장기능 관리 시스템 언로드
-    // 2. --renderer-process-limit=1: 렌더러 프로세스 단일화로 다중 프로세스 분할 억제
-    // 3. --max-old-space-size=2048 & --expose-gc: 복합 React SPA 및 실시간 미디어/채널 로딩 시 V8 Fatal OOM 크래시 완전 방지
-    // 4. 인프로세스 GPU(--in-process-gpu) 및 극단적 디스크 캐시 제한(--disk-cache-size=1) 배제로 렌더러 메모리 고갈 원천 차단
+    // 2. --js-flags=--max-old-space-size=4096: 대규모 React SPA, WebRTC 미디어 및 복합 채널 로딩 시 V8 OOM 크래시 영구 방지
+    // 3. 인위적인 단일 렌더러 제한(--renderer-process-limit=1) 및 셰이더 디스크 캐시 비활성화 배제로 렌더러 메모리 고갈 원천 차단
     if std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").is_err() {
         unsafe {
             std::env::set_var(
                 "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
-                "--renderer-process-limit=1 \
-                 --disable-extensions \
+                "--disable-extensions \
                  --disable-background-networking \
-                 --disable-gpu-shader-disk-cache \
                  --disable-component-update \
-                 --disable-features=AudioServiceOutOfProcess,RendererCodeIntegrity,PreloadMediaEngagementData,AutofillServerCommunication,CalculateNativeWinOcclusion \
-                 --js-flags=\"--max-old-space-size=2048 --expose-gc\"",
+                 --disable-features=AudioServiceOutOfProcess,RendererCodeIntegrity,PreloadMediaEngagementData,AutofillServerCommunication \
+                 --js-flags=--max-old-space-size=4096",
             );
         }
     }
@@ -259,14 +256,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }));
     });
 
-    // 6. 주기적 메모리 압축기: 기동 5초 후 초기 로딩 힙 즉각 회수, 이후 20초마다 모든 WebView2 자식/손자 프로세스 작업 세트를 전수 압축
+    // 6. 초기 로딩 잔여 워킹셋 회수: 기동 10초 후 1회 안전하게 초기 힙 워킹셋을 정리하며,
+    // 이후의 워킹셋 정리는 V8 페이징 쓰래싱 및 OOM 방지를 위해 창 비활성화(WindowEvent::Focused(false)) 시에만 수행합니다.
     std::thread::spawn(|| {
-        std::thread::sleep(Duration::from_secs(5));
+        std::thread::sleep(Duration::from_secs(10));
         trim_process_working_set();
-        loop {
-            std::thread::sleep(Duration::from_secs(20));
-            trim_process_working_set();
-        }
     });
 
     let asset_handler = AssetHandler::new();

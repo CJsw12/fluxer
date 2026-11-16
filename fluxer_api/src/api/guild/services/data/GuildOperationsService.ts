@@ -46,7 +46,7 @@ import {createLimitMatchContext} from '@app/api/limits/LimitMatchContextBuilder'
 import {getKVThreadAutoArchiveQueue} from '@app/api/middleware/ServiceSingletons';
 import {Guild} from '@app/api/models/Guild';
 import type {User} from '@app/api/models/User';
-import {getGuildSearchService} from '@app/api/SearchFactory';
+import {getGuildMemberSearchService, getGuildSearchService} from '@app/api/SearchFactory';
 import type {GuildDiscoveryContext} from '@app/api/search/guild/GuildSearchSerializer';
 import {deleteChannelMessageSearchDocuments} from '@app/api/search/MessageSearchIndexCleanup';
 import {deleteThreadSearchDocuments} from '@app/api/search/thread/ThreadSearchService';
@@ -166,6 +166,7 @@ const USER_TOGGLEABLE_GUILD_FEATURES: ReadonlySet<string> = new Set([
 	GuildFeatures.CLONE_STICKER_ENABLED,
 	GuildFeatures.HIDE_OWNER_CROWN,
 	GuildFeatures.VISITS_ENABLED,
+	GuildFeatures.MEMBER_DMS_DISABLED,
 ]);
 const SUPPORTED_SYSTEM_CHANNEL_FLAGS = SystemChannelFlags.SUPPRESS_JOIN_NOTIFICATIONS;
 const GUILD_SETTINGS_AUDIT_KEYS: ReadonlySet<string> = new Set([
@@ -427,6 +428,7 @@ export class GuildOperationsService {
 			members_indexed_at: null,
 			message_history_cutoff: null,
 			invites_paused_until: null,
+			planned_join_waves_until: null,
 			version: 1,
 		};
 		batch.addPrepared(Guilds.insert(guildData));
@@ -822,20 +824,36 @@ export class GuildOperationsService {
 		for (const feature of GUILD_DELETION_PENDING_FEATURES) {
 			features.add(feature);
 		}
-		await this.guildRepository.upsertPartial(guildId, {features}, guild.toRow());
+		const pending = await this.guildRepository.upsertPartial(guildId, {features}, guild.toRow());
+		await this.reloadGuildAfterDeletionChange(guildId);
+		try {
+			await this.workerService.addJob(
+				'guildProcessDeletion',
+				{guildId: guildId.toString(), copyMode},
+				{jobKey: `guild-deletion-${guildId}`},
+			);
+		} catch (error) {
+			if (await this.guildRepository.findUnique(guildId)) {
+				await this.guildRepository.upsertPartial(guildId, {features: new Set(guild.features)}, pending.toRow());
+				await this.reloadGuildAfterDeletionChange(guildId);
+			}
+			throw error;
+		}
+		await this.gatewayService
+			.dispatchGuild({
+				guildId,
+				event: 'GUILD_DELETE',
+				data: {id: guildId.toString()},
+			})
+			.catch((error) => {
+				Logger.warn({guildId, error}, 'Failed to dispatch GUILD_DELETE after scheduling deletion');
+			});
+	}
+
+	private async reloadGuildAfterDeletionChange(guildId: GuildID): Promise<void> {
 		await this.gatewayService.reloadGuild(guildId).catch((error) => {
-			Logger.warn({guildId, error}, 'Failed to reload guild after scheduling deletion');
+			Logger.warn({guildId, error}, 'Failed to reload guild after a deletion state change');
 		});
-		await this.gatewayService.dispatchGuild({
-			guildId,
-			event: 'GUILD_DELETE',
-			data: {id: guildId.toString()},
-		});
-		await this.workerService.addJob(
-			'guildProcessDeletion',
-			{guildId: guildId.toString(), copyMode},
-			{jobKey: `guild-deletion-${guildId}`},
-		);
 	}
 
 	async purgeGuild(guildId: GuildID, copyMode: ChannelFollowerRemovalCopyMode): Promise<void> {
@@ -907,6 +925,12 @@ export class GuildOperationsService {
 		if (guildSearchService) {
 			await guildSearchService.deleteGuild(guildId).catch((error) => {
 				Logger.error({guildId, error}, 'Failed to delete guild from search');
+			});
+		}
+		const guildMemberSearchService = getGuildMemberSearchService();
+		if (guildMemberSearchService) {
+			await guildMemberSearchService.deleteGuildMembers(guildId).catch((error) => {
+				Logger.error({guildId, error}, 'Failed to delete guild members from search');
 			});
 		}
 	}

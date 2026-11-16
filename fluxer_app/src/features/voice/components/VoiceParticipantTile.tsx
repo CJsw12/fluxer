@@ -3,10 +3,9 @@
 import Accessibility from '@app/features/accessibility/state/Accessibility';
 import {LongPressable} from '@app/features/app/components/LongPressable';
 import Channels from '@app/features/channel/state/Channels';
-import {WATCH_STREAM_DESCRIPTOR} from '@app/features/i18n/utils/CommonMessageDescriptors';
 import {isKeyboardActivationKey} from '@app/features/input/utils/KeyboardUtils';
+import GuildMembers from '@app/features/member/state/GuildMembers';
 import Permission from '@app/features/permissions/state/Permission';
-import {dimColor} from '@app/features/theme/utils/ColorUtils';
 import type {VoiceParticipantMenuSource} from '@app/features/ui/action_menu/items/VoiceParticipantMenuTypes';
 import {STREAM_VOLUME_DESCRIPTOR} from '@app/features/ui/action_menu/items/voice_participant_menu_data/shared';
 import {UserContextMenu} from '@app/features/ui/action_menu/UserContextMenu';
@@ -27,7 +26,7 @@ import {FeedHiddenOverlay} from '@app/features/voice/components/FeedHiddenOverla
 import {getPlaceholderAvatarColor} from '@app/features/voice/components/GetPlaceholderAvatarColor';
 import {MediaVerticalVolumeControl} from '@app/features/voice/components/media_player/components/MediaVerticalVolumeControl';
 import {
-	getOwnStreamHiddenState,
+	isOwnCameraFeedHidden,
 	useOwnScreenSharePreviewState,
 	useWindowFocus,
 } from '@app/features/voice/components/OwnStreamPreviewState';
@@ -92,7 +91,6 @@ import {
 	SHOW_CAMERA_DESCRIPTOR,
 	STREAM_BUFFERING_DESCRIPTOR,
 	STREAM_ENDED_DESCRIPTOR,
-	STREAM_HIDDEN_DESCRIPTOR,
 	TILE_AVATAR_BASE,
 	TILE_AVATAR_MEDIA_SIZE,
 	TILE_AVATAR_STYLE,
@@ -125,6 +123,7 @@ import {selectVoiceEngineV2AppEffectiveSelfMuteForVoiceStatePayload} from '@app/
 import ActiveScreenShareSource from '@app/features/voice/state/ActiveScreenShareSource';
 import CallMediaPrefs from '@app/features/voice/state/CallMediaPrefs';
 import LocalVoiceState from '@app/features/voice/state/LocalVoiceState';
+import {isStreamAudioPlaybackEnabled} from '@app/features/voice/state/ParticipantVolume';
 import PopoutWindowManager, {getVoiceTilePopoutKey} from '@app/features/voice/state/PopoutWindowManager';
 import {
 	getScreenShareWatchFailureForPublicationOperation,
@@ -342,11 +341,10 @@ const VoiceParticipantTileInner = observer(function VoiceParticipantTileInner({
 	const isInteractiveScreenShareTile = isScreenShare && !isFocusedPlaceholderTile;
 	const isOwnScreenShare = isScreenShare && isLocalParticipant;
 	const isOwnContent = isLocalParticipant && isCurrentUser;
-	const {isOwnScreenShareHidden, isOwnCameraHidden} = getOwnStreamHiddenState({
+	const isOwnCameraHidden = isOwnCameraFeedHidden({
 		isOwnContent,
 		isScreenShare,
 		showMyOwnCamera: VoiceSettings.showMyOwnCamera,
-		showMyOwnScreenShare: VoiceSettings.showMyOwnScreenShare,
 	});
 	const callId = MediaEngine.connectionId ?? '';
 	const streamKey = useMemo(() => getStreamKey(guildId, channelId, connectionId), [guildId, channelId, connectionId]);
@@ -387,6 +385,7 @@ const VoiceParticipantTileInner = observer(function VoiceParticipantTileInner({
 	});
 	const streamVolume = StreamAudioPrefs.getVolume(streamKey);
 	const isStreamMuted = StreamAudioPrefs.isMuted(streamKey);
+	const streamAudioPlaybackEnabled = isStreamAudioPlaybackEnabled(streamKey);
 	const hasStreamAudioPrefsEntry = StreamAudioPrefs.hasEntry(streamKey);
 	const isSubscribed = Boolean(publication?.isSubscribed);
 	const hasSubscribedScreenShareVideo = isSubscribed && hasVideo;
@@ -472,7 +471,7 @@ const VoiceParticipantTileInner = observer(function VoiceParticipantTileInner({
 		userWantsToWatch: isWatching,
 		videoLocallyDisabled: false,
 		isOwnScreenShare,
-		audioEnabled: !isStreamMuted,
+		audioEnabled: streamAudioPlaybackEnabled,
 		audioPublication: screenShareAudioPublication,
 		streamKey,
 		onVideoSubscriptionError: reportVideoSubscriptionError,
@@ -489,18 +488,16 @@ const VoiceParticipantTileInner = observer(function VoiceParticipantTileInner({
 		if (!isWatching) return;
 		const pub = screenShareAudioPublication;
 		if (!pub) return;
-		const shouldEnable = !isStreamMuted;
 		logger.debug('Applying runtime screen share audio enabled state', {
 			trackSid: pub.trackSid,
 			isWatching,
-			isStreamMuted,
-			shouldEnable,
+			streamAudioPlaybackEnabled,
 		});
 		syncScreenSharePublication({
 			publication: pub,
 			label: 'screen share audio publication',
 			shouldSubscribe: true,
-			shouldEnable,
+			shouldEnable: streamAudioPlaybackEnabled,
 			onError: (operation, label, err) => logger.error(`${operation} failed for ${label}`, err),
 		});
 		MediaEngine.applyLocalAudioPreferencesForUser(userId);
@@ -511,8 +508,7 @@ const VoiceParticipantTileInner = observer(function VoiceParticipantTileInner({
 		isFocusedPlaceholderTile,
 		isWatching,
 		screenShareAudioPublication,
-		streamVolume,
-		isStreamMuted,
+		streamAudioPlaybackEnabled,
 		userId,
 	]);
 	useEffect(() => {
@@ -636,11 +632,15 @@ const VoiceParticipantTileInner = observer(function VoiceParticipantTileInner({
 	const watchFailedTitle = i18n._(WATCHING_FAILED_DESCRIPTOR);
 	const watchFailedSubtext =
 		graphWatchFailure == null ? '' : i18n._(WATCHING_FAILED_ERROR_CODE_DESCRIPTOR, {code: graphWatchFailure.code});
+	const participantMember = guildId ? GuildMembers.getMember(guildId, participantUser?.id) : null;
 	const placeholderColor = useMemo(
-		() => getPlaceholderAvatarColor(participantUser, DEFAULT_ACCENT_COLOR),
-		[participantUser],
+		() => getPlaceholderAvatarColor(participantUser, participantMember, DEFAULT_ACCENT_COLOR),
+		[participantUser, participantMember],
 	);
-	const placeholderBackgroundColor = useMemo(() => dimColor(placeholderColor), [placeholderColor]);
+	const placeholderBackgroundColor = useMemo(
+		() => `color-mix(in srgb, ${placeholderColor} 40%, var(--voice-surface-1, #151517))`,
+		[placeholderColor],
+	);
 	const placeholderStyle = useMemo<React.CSSProperties>(
 		() => ({backgroundColor: placeholderBackgroundColor}),
 		[placeholderBackgroundColor],
@@ -779,8 +779,20 @@ const VoiceParticipantTileInner = observer(function VoiceParticipantTileInner({
 	const isFocusedOnThisTile =
 		VoiceCallLayout.pinnedParticipantIdentity === identity &&
 		(pinnedParticipantSource == null || pinnedParticipantSource === trackRef.source);
+	const handleWatch = useCallback(
+		(e?: React.SyntheticEvent) => {
+			e?.stopPropagation();
+			startWatching();
+			VoiceCallLayoutCommands.setPinnedParticipant(identity, VoiceTrackSource.ScreenShare);
+		},
+		[identity, startWatching],
+	);
 	const handleTileClick = useCallback(() => {
 		if (isInsideTilePopout) return;
+		if (showWatchStreamOverlay) {
+			handleWatch();
+			return;
+		}
 		const wasFocused =
 			VoiceCallLayout.pinnedParticipantIdentity === identity &&
 			(pinnedParticipantSource == null || pinnedParticipantSource === trackRef.source);
@@ -790,7 +802,15 @@ const VoiceParticipantTileInner = observer(function VoiceParticipantTileInner({
 			VoiceCallLayoutCommands.setPinnedParticipant(identity, asPinnableVoiceTrackSource(trackRef.source));
 			onClick?.(identity);
 		}
-	}, [identity, isInsideTilePopout, onClick, pinnedParticipantSource, trackRef.source]);
+	}, [
+		handleWatch,
+		identity,
+		isInsideTilePopout,
+		onClick,
+		pinnedParticipantSource,
+		showWatchStreamOverlay,
+		trackRef.source,
+	]);
 	const handleTileKeyDown = useCallback(
 		(event: React.KeyboardEvent<HTMLDivElement>) => {
 			if (!isKeyboardActivationKey(event.key)) return;
@@ -833,14 +853,6 @@ const VoiceParticipantTileInner = observer(function VoiceParticipantTileInner({
 		},
 		[streamKey, userId],
 	);
-	const handleWatch = useCallback(
-		(e?: React.SyntheticEvent) => {
-			e?.stopPropagation();
-			startWatching();
-			VoiceCallLayoutCommands.setPinnedParticipant(identity, VoiceTrackSource.ScreenShare);
-		},
-		[identity, startWatching],
-	);
 	const handleAddStream = useCallback(
 		(event: React.SyntheticEvent) => {
 			event.stopPropagation();
@@ -851,13 +863,11 @@ const VoiceParticipantTileInner = observer(function VoiceParticipantTileInner({
 	const handleRevealHiddenFeed = useCallback(
 		(e: React.SyntheticEvent) => {
 			e.stopPropagation();
-			if (isOwnScreenShareHidden) {
-				VoiceSettingsCommands.update({showMyOwnScreenShare: true});
-			} else if (isOwnCameraHidden) {
+			if (isOwnCameraHidden) {
 				VoiceSettingsCommands.update({showMyOwnCamera: true});
 			}
 		},
-		[isOwnScreenShareHidden, isOwnCameraHidden],
+		[isOwnCameraHidden],
 	);
 	const handleMouseEnter = useCallback(() => {
 		if (isFocusPresentationTile || !previewEnabled) return;
@@ -885,7 +895,6 @@ const VoiceParticipantTileInner = observer(function VoiceParticipantTileInner({
 	const showOwnScreenShareCapturePaused =
 		isOwnScreenShare &&
 		!isFocusedPlaceholderTile &&
-		!isOwnScreenShareHidden &&
 		!isOwnStreamPreviewPaused &&
 		isActiveLocalScreenShareConnection &&
 		LocalVoiceState.getSelfStream() &&
@@ -1131,14 +1140,6 @@ const VoiceParticipantTileInner = observer(function VoiceParticipantTileInner({
 							</div>
 						</div>
 					)}
-					{isOwnScreenShareHidden && !isFocusedPlaceholderTile && (
-						<FeedHiddenOverlay
-							message={i18n._(STREAM_HIDDEN_DESCRIPTOR)}
-							buttonLabel={i18n._(WATCH_STREAM_DESCRIPTOR)}
-							onReveal={handleRevealHiddenFeed}
-							data-flx="voice.voice-participant-tile.voice-participant-tile-inner.feed-hidden-overlay"
-						/>
-					)}
 					{isOwnCameraHidden && !isFocusedPlaceholderTile && (
 						<FeedHiddenOverlay
 							message={i18n._(CAMERA_HIDDEN_DESCRIPTOR)}
@@ -1147,7 +1148,7 @@ const VoiceParticipantTileInner = observer(function VoiceParticipantTileInner({
 							data-flx="voice.voice-participant-tile.voice-participant-tile-inner.feed-hidden-overlay--2"
 						/>
 					)}
-					{isOwnScreenShare && !isOwnScreenShareHidden && !isFocusedPlaceholderTile && isOwnStreamPreviewPaused && (
+					{isOwnScreenShare && !isFocusedPlaceholderTile && isOwnStreamPreviewPaused && (
 						<div
 							className={clsx(styles.selfStreamOverlay, styles.paused)}
 							data-flx="voice.voice-participant-tile.voice-participant-tile-inner.self-stream-overlay"
@@ -1208,7 +1209,6 @@ const VoiceParticipantTileInner = observer(function VoiceParticipantTileInner({
 					{isScreenShare &&
 						!isFocusPresentationTile &&
 						!isFocusedPlaceholderTile &&
-						!isOwnScreenShareHidden &&
 						!showStreamEnded &&
 						!showWatchFailed &&
 						!isOwnStreamPreviewPaused && (

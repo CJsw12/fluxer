@@ -63,15 +63,38 @@ COPY packages/snowflake/ ./packages/snowflake/
 COPY packages/voice_engine_v2/ ./packages/voice_engine_v2/
 COPY packages/fonts/css/ ./packages/fonts/css/
 COPY packages/fonts/files/ ./packages/fonts/files/
-COPY packages/fonts/NOTICE.md packages/fonts/LICENSE-IBM-PLEX.txt ./packages/fonts/
+COPY packages/fonts/NOTICE.md packages/fonts/LICENSE-IBM-PLEX.txt packages/fonts/LICENSE-NOTO-SANS-BENGALI.txt ./packages/fonts/
 COPY packages/markdown_parser/rust/Cargo.toml ./packages/markdown_parser/rust/
 COPY packages/markdown_parser/rust/.cargo/ ./packages/markdown_parser/rust/.cargo/
 COPY packages/markdown_parser/rust/benches/parser.rs ./packages/markdown_parser/rust/benches/
 COPY packages/markdown_parser/rust/src/ ./packages/markdown_parser/rust/src/
 COPY tools/ci/ ./tools/ci/
 COPY fluxer_app/index.html fluxer_app/lingui.config.js fluxer_app/package.json fluxer_app/postcss.config.js fluxer_app/rspack.config.mjs fluxer_app/tsconfig.base.json fluxer_app/tsconfig.json ./fluxer_app/
+COPY fluxer_app/inline_scripts/ ./fluxer_app/inline_scripts/
 COPY fluxer_app/pkgs/livekit-client/ ./fluxer_app/pkgs/livekit-client/
 COPY fluxer_app/rust/ ./fluxer_app/rust/
+COPY Cargo.lock ./
+RUN printf '%s\n' \
+	'[workspace]' \
+	'members = [' \
+	'    "fluxer_app/rust/libfluxcore",' \
+	'    "fluxer_app/rust/libfluxwebp",' \
+	'    "packages/markdown_parser/rust",' \
+	']' \
+	'exclude = [' \
+	'    "tools/ci",' \
+	']' \
+	'resolver = "2"' \
+	'' \
+	'[profile.wasm-release]' \
+	'inherits = "release"' \
+	'codegen-units = 1' \
+	'lto = true' \
+	'opt-level = "z"' \
+	'panic = "abort"' \
+	'strip = true' \
+	> Cargo.toml \
+	&& cargo update --workspace
 COPY fluxer_app/scripts/ ./fluxer_app/scripts/
 COPY fluxer_app/src/ ./fluxer_app/src/
 
@@ -105,12 +128,13 @@ RUN --mount=type=bind,from=app-dist,source=/dist,target=/dist \
 		esac; \
 		find /assets/assets -type f ! -name 'fonts-*.txt' -delete; \
 	fi \
+	&& find /assets/assets -type f -name '*.map' -delete \
 	&& /usr/local/bin/precompress_assets.sh /assets
 
 FROM --platform=${APP_ASSETS_PLATFORM} ${APP_ASSETS_REF} AS app-static
 
 # ---------- Stage 3: Build the Rust proxy binary ----------
-FROM rust:1-trixie AS rust-builder
+FROM rust:1.98.1-trixie@sha256:a8a5f0a1e5fe7dfe1d352591e4a1c7dd2c08fd70475cae872cf3458ba0df0546 AS rust-builder
 
 
 WORKDIR /usr/src/app

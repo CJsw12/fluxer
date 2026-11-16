@@ -3,7 +3,14 @@
 import crypto from 'node:crypto';
 import type {Readable} from 'node:stream';
 import type {ApiContext} from '@app/api/ApiContext';
-import {type ChannelID, createChannelID, createUserID, type MessageID, type UserID} from '@app/api/BrandedTypes';
+import {
+	type ChannelID,
+	createChannelID,
+	createUserID,
+	type GuildID,
+	type MessageID,
+	type UserID,
+} from '@app/api/BrandedTypes';
 import {Config} from '@app/api/Config';
 import type {ChannelRepository} from '@app/api/channel/ChannelRepository';
 import type {ChannelService} from '@app/api/channel/services/ChannelService';
@@ -59,7 +66,7 @@ import {UnknownGuildError} from '@fluxer/errors/src/domains/guild/UnknownGuildEr
 import {HarvestExpiredError} from '@fluxer/errors/src/domains/moderation/HarvestExpiredError';
 import {HarvestFailedError} from '@fluxer/errors/src/domains/moderation/HarvestFailedError';
 import {HarvestNotReadyError} from '@fluxer/errors/src/domains/moderation/HarvestNotReadyError';
-import {NsfwContentRequiresAgeVerificationError} from '@fluxer/errors/src/domains/moderation/NsfwContentRequiresAgeVerificationError';
+import {NsfwContentAgeRestrictedError} from '@fluxer/errors/src/domains/moderation/NsfwContentAgeRestrictedError';
 import {UnknownHarvestError} from '@fluxer/errors/src/domains/moderation/UnknownHarvestError';
 import type {MessageResponse} from '@fluxer/schema/src/domains/message/MessageResponseSchemas';
 import type {HarvestCreationResponse, HarvestStatusResponse} from '@fluxer/schema/src/domains/user/UserHarvestSchemas';
@@ -190,7 +197,7 @@ const isUnreachableEntityError = (error: unknown): boolean =>
 	error instanceof UnknownChannelError ||
 	error instanceof UnknownGuildError ||
 	error instanceof AccessDeniedError ||
-	error instanceof NsfwContentRequiresAgeVerificationError;
+	error instanceof NsfwContentAgeRestrictedError;
 
 export class UserContentService {
 	private readonly userRepository: UserRepository;
@@ -223,13 +230,22 @@ export class UserContentService {
 		roles: boolean;
 		guilds: boolean;
 		before?: MessageID;
+		guildId?: GuildID;
 	}): Promise<Array<Message>> {
-		const {userId, viewer, limit, everyone, roles, guilds, before} = params;
+		const {userId, viewer, limit, everyone, roles, guilds, before, guildId} = params;
 		const messages: Array<Message> = [];
 		let cursor = before;
 		let pageLimit = limit;
 		for (let refills = 0; ; refills++) {
-			const mentions = await this.userRepository.listRecentMentions(userId, everyone, roles, guilds, pageLimit, cursor);
+			const mentions = await this.userRepository.listRecentMentions(
+				userId,
+				everyone,
+				roles,
+				guilds,
+				pageLimit,
+				cursor,
+				guildId,
+			);
 			const messagesByChannel = await this.readMessagesByChannel(userId, viewer, mentions);
 			const hiddenChannelIds = await this.hiddenThreadChannelIds(viewer, messagesByChannel);
 			let hidden = 0;
@@ -693,15 +709,22 @@ export class UserContentService {
 		});
 		const harvestRepository = new UserHarvestRepository();
 		await harvestRepository.create(harvest);
-		await this.workerService.addJob('harvestUserData', {
-			userId: userId.toString(),
-			harvestId: harvestId.toString(),
-			...(filter
-				? {
-						filter: serializeSelfMessageFilter(filter),
-					}
-				: {}),
-		});
+		try {
+			await this.workerService.addJob('harvestUserData', {
+				userId: userId.toString(),
+				harvestId: harvestId.toString(),
+				...(filter
+					? {
+							filter: serializeSelfMessageFilter(filter),
+						}
+					: {}),
+			});
+		} catch (error) {
+			await harvestRepository
+				.markUnqueuedAsTerminallyFailed(harvest, 'Export job could not be queued')
+				.catch((markError) => Logger.error({err: markError, userId, harvestId}, 'Failed to close unqueued harvest'));
+			throw error;
+		}
 		return {
 			harvest_id: harvest.harvestId.toString(),
 			status: harvest.getStatus(),

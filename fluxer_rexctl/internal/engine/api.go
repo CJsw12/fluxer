@@ -37,6 +37,7 @@ type Engine struct {
 	Rootless   bool
 	Desktop    string
 	DataRoot   string
+	ImageRoot  string
 	Platform   string
 	TooOld     bool
 }
@@ -108,6 +109,9 @@ type HelperOptions struct {
 	Command    []string
 	Env        []string
 	Mounts     []Mount
+	Network    string
+	User       string
+	GroupAdd   []string
 	Stdin      io.Reader
 	Stdout     io.Writer
 	Stderr     io.Writer

@@ -10,6 +10,7 @@ const STATIC_CDN_ENDPOINT_PLACEHOLDER = '{{STATIC_CDN_ENDPOINT}}';
 const FONT_LICENSE_FILES = [
 	{source: 'NOTICE.md', asset: 'assets/fonts-NOTICE.txt'},
 	{source: 'LICENSE-IBM-PLEX.txt', asset: 'assets/fonts-LICENSE-IBM-PLEX.txt'},
+	{source: 'LICENSE-NOTO-SANS-BENGALI.txt', asset: 'assets/fonts-LICENSE-NOTO-SANS-BENGALI.txt'},
 ];
 
 const WASM_LICENSE_FILES = [
@@ -40,7 +41,7 @@ function generateManifest(staticCdnEndpoint) {
 		start_url: '/app',
 		display: 'standalone',
 		orientation: 'portrait-primary',
-		theme_color: '#4641D9',
+		theme_color: '#1a181e',
 		background_color: '#2b2d31',
 		categories: ['social', 'communication'],
 		lang: 'en',

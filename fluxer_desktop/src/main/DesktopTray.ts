@@ -18,12 +18,15 @@ import {
 	onAccountEngineSummaries,
 } from '@electron/main/AccountEngineHost';
 import {buildAccountMenuEntries, buildAccountMenuItems, createRefreshThrottle} from '@electron/main/AccountMenu';
+import {getAppResourcesPath} from '@electron/main/DesktopDistributionPath';
 import {getDesktopUpdateState, observeDesktopUpdateState} from '@electron/main/DesktopUpdateGate';
 import {checkForUpdatesFromShell, startDesktopUpdateFromShell} from '@electron/main/DesktopUpdatePrompt';
+import {readKdePanelDark, readKdePanelDarkSync, watchKdePanelTheme} from '@electron/main/KdePanelTheme';
 import {shouldDisableModuleUpdatesForLaunch} from '@electron/main/LaunchOptions';
 import {relaunchStableLaunchPath} from '@electron/main/LinuxLaunchPath';
+import {getLinuxDesktop} from '@electron/main/LinuxSession';
 import {onLocaleChange, t} from '@electron/main/MainI18n';
-import {renderTrayIcon, resolveTrayIconAppearance} from '@electron/main/TrayIconImage';
+import {renderTrayIcon, resolveTrayIconAppearance, trayIconFollowsSystemTheme} from '@electron/main/TrayIconImage';
 import {describeUnreadBadge} from '@electron/main/UnreadBadge';
 import {app, type BrowserWindow, clipboard, Menu, nativeImage, nativeTheme, Tray} from 'electron';
 
@@ -45,7 +48,6 @@ const TRAY_POSITION_GUID = TRAY_POSITION_GUIDS[BUILD_CHANNEL];
 interface DesktopTrayController {
 	createWindow: () => BrowserWindow;
 	getMainWindow: () => BrowserWindow | null;
-	isMainWindowTakenOver: () => boolean;
 	hideWindow: () => void;
 	setQuitting: (quitting: boolean) => void;
 	showWindow: () => void;
@@ -102,8 +104,11 @@ export function updateTrayRuntimeState(update: Partial<TrayRuntimeStatePayload>,
 	const privacyChanged =
 		typeof update.hidePersonalInformation === 'boolean' &&
 		update.hidePersonalInformation !== trayState.hidePersonalInformation;
+	const changed = (Object.keys(update) as Array<keyof TrayRuntimeStatePayload>).some(
+		(key) => update[key] !== trayState[key],
+	);
 	Object.assign(trayState, update);
-	refreshDesktopTrayMenu();
+	if (changed) refreshDesktopTrayMenu();
 	if (privacyChanged) {
 		for (const listener of Array.from(privacyListeners)) listener();
 	}
@@ -224,9 +229,9 @@ export function hasActiveDesktopTray(): boolean {
 
 function getCandidateIconDirs(): Array<string> {
 	const candidates = [
-		path.join(process.resourcesPath, 'icons'),
-		path.join(process.resourcesPath, ICON_DIR_NAME),
-		process.resourcesPath,
+		path.join(getAppResourcesPath(), 'icons'),
+		path.join(getAppResourcesPath(), ICON_DIR_NAME),
+		getAppResourcesPath(),
 		path.join(app.getAppPath(), 'build_resources', ICON_DIR_NAME),
 		path.resolve(process.cwd(), 'build_resources', ICON_DIR_NAME),
 		path.resolve(process.cwd(), 'fluxer_desktop', 'build_resources', ICON_DIR_NAME),
@@ -291,13 +296,42 @@ function createTrayIcon(): Electron.NativeImage | null {
 	return createTrayImage(['256x256.png', '512x512.png', '128x128.png', '64x64.png', '48x48.png', 'icon.png']);
 }
 
+let darkKdePanel: boolean | null | undefined;
+let kdePanelReadGeneration = 0;
+
+function isKdeSession(): boolean {
+	return process.platform === 'linux' && getLinuxDesktop() === 'kde';
+}
+
+function getDarkKdePanel(): boolean | null {
+	if (!isKdeSession()) return null;
+	if (darkKdePanel === undefined) darkKdePanel = readKdePanelDarkSync();
+	return darkKdePanel;
+}
+
+function refreshKdePanelTheme(): void {
+	if (!isKdeSession()) return;
+	const generation = ++kdePanelReadGeneration;
+	void readKdePanelDark()
+		.then((dark) => {
+			if (generation !== kdePanelReadGeneration) return;
+			darkKdePanel = dark;
+			syncTrayIcon(false);
+		})
+		.catch((error: unknown) => logger.warn('Could not read the KDE panel colours', {error}));
+}
+
 function resolveTrayIcon(): {key: string; image: Electron.NativeImage} | null {
 	trayBaseIcon ??= createTrayIcon();
 	if (!trayBaseIcon) return null;
+	const settings = getDesktopWindowBehaviorSettings();
 	const appearance = resolveTrayIconAppearance({
 		platform: process.platform,
-		coloredTrayIcon: getDesktopWindowBehaviorSettings().coloredTrayIcon,
-		darkSystemUI: nativeTheme.shouldUseDarkColorsForSystemIntegratedUI,
+		linuxDesktop: getLinuxDesktop(),
+		coloredTrayIcon: settings.coloredTrayIcon,
+		monochromeTone: settings.monochromeTrayIconTone,
+		darkWindowsTaskbar: nativeTheme.shouldUseDarkColorsForSystemIntegratedUI,
+		darkKdePanel: getDarkKdePanel(),
 	});
 	const indicator = trayUnreadBadge !== 0;
 	const key = `${appearance}:${indicator}`;
@@ -335,7 +369,7 @@ export function setDesktopTrayUnreadBadge(badge: number): void {
 function ensureMainWindowVisible(): void {
 	if (!controller) return;
 	const mainWindow = controller.getMainWindow();
-	if ((!mainWindow || mainWindow.isDestroyed()) && !controller.isMainWindowTakenOver()) {
+	if (!mainWindow || mainWindow.isDestroyed()) {
 		controller.createWindow();
 	}
 	controller.showWindow();
@@ -492,9 +526,12 @@ function buildTrayMenu(): Menu {
 			click: () => runTrayMenuAction(() => dispatchTrayAction({action: 'toggle-custom-css'})),
 		});
 	}
-	if (getDesktopUpdateState().available) {
+	const desktopUpdate = getDesktopUpdateState();
+	if (desktopUpdate.available) {
 		menuTemplate.push({
-			label: t('desktop.tray.updateNow', {appName: APP_NAME}),
+			label: t(desktopUpdate.replacesShell === true ? 'desktop.tray.restartToUpdate' : 'desktop.tray.reloadToUpdate', {
+				appName: APP_NAME,
+			}),
 			click: () => runTrayMenuAction(startDesktopUpdateFromShell),
 		});
 	}
@@ -645,8 +682,15 @@ export function initializeDesktopTray(nextController: DesktopTrayController): vo
 			}
 			refreshDesktopTrayMenu();
 		});
-		if (process.platform === 'win32') {
-			nativeTheme.on('updated', () => syncTrayIcon(false));
+		if (trayIconFollowsSystemTheme(process.platform, getLinuxDesktop())) {
+			nativeTheme.on('updated', () => {
+				syncTrayIcon(false);
+				refreshKdePanelTheme();
+			});
+		}
+		if (isKdeSession()) {
+			watchKdePanelTheme(refreshKdePanelTheme);
+			refreshKdePanelTheme();
 		}
 		observeDesktopUpdateState(refreshDesktopTrayMenu);
 		onAccountEngineSummaries(accountMenuRefresh.schedule);

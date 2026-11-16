@@ -8,6 +8,7 @@ import {
 	SystemChannelFlagsDescriptions,
 } from '@fluxer/constants/src/GuildConstants';
 import {
+	MAX_BIO_LENGTH_CEILING,
 	MAX_GUILD_ROLES,
 	MAX_GUILD_STICKER_TAGS,
 	MAX_TEMP_BAN_DURATION_SECONDS,
@@ -118,7 +119,7 @@ export const GuildUpdateRequest = z
 				'Complete desired feature set for the guild. Only user-toggleable features may differ from the current set; non-toggleable features must be preserved as-is.',
 			),
 		message_history_cutoff: z.iso
-			.datetime()
+			.datetime({offset: true})
 			.nullish()
 			.describe(
 				'ISO8601 timestamp controlling how far back members without Read Message History can access messages. Set to null to disable historical access.',
@@ -141,7 +142,9 @@ export const GuildMemberUpdateRequest = z.object({
 		.describe(`Array of role IDs to assign to the member (max ${MAX_GUILD_ROLES})`),
 	avatar: createBase64ImageType().nullish().describe('Base64-encoded image data for the member guild avatar'),
 	banner: createBase64ImageType().nullish().describe('Base64-encoded image data for the member guild banner'),
-	bio: createStringType(1, 320).nullish().describe('The member guild profile bio (1-320 characters)'),
+	bio: createStringType(1, MAX_BIO_LENGTH_CEILING)
+		.nullish()
+		.describe('The member guild profile bio, up to the instance max_bio_length limit (320 by default)'),
 	pronouns: createStringType(1, 40).nullish().describe('The member guild profile pronouns (1-40 characters)'),
 	accent_color: ColorType.nullish().describe('The accent color for the member guild profile as an integer'),
 	profile_flags: createBitflagInt32Type(
@@ -157,7 +160,7 @@ export const GuildMemberUpdateRequest = z.object({
 	mute: z.boolean().optional().describe('Whether the member is muted in voice channels'),
 	deaf: z.boolean().optional().describe('Whether the member is deafened in voice channels'),
 	communication_disabled_until: z
-		.preprocess(coerceBlankStringToNull, z.iso.datetime().nullish())
+		.preprocess(coerceBlankStringToNull, z.iso.datetime({offset: true}).nullish())
 		.describe('ISO8601 timestamp until which the member is timed out'),
 	timeout_reason: createStringType(1, 512)
 		.nullish()

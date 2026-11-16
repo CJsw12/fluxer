@@ -76,7 +76,7 @@ export function AccountSwitcherLoginStep({
 			forgotPasswordAction={forgotPasswordAction}
 			showTitle={onStepTitleChange == null}
 			title={title}
-			forceCredentials={purpose.type === AccountSwitcherAuthPurposeType.RELOGIN}
+			relogin={purpose.type === AccountSwitcherAuthPurposeType.RELOGIN}
 			initialIdentifier={getReloginIdentifier(purpose)}
 			runtimeTarget={runtimeTarget}
 			onBackActionChange={onBackActionChange}
@@ -86,6 +86,7 @@ export function AccountSwitcherLoginStep({
 			ssoRedirectPath={null}
 			suppressInlineBackButtons={true}
 			allowSsoAutoStart={false}
+			passkeyBridgePageAvailable={false}
 			onLoginComplete={onLoginComplete}
 			data-flx="auth.accounts.account-switcher-modal.account-switcher-login-step.auth-login-layout"
 		/>

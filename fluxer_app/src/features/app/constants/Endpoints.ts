@@ -7,6 +7,7 @@ export const Endpoints = {
 	INSTANCE_SETUP_ACCOUNT_IDENTITY: '/instance/setup/account-identity',
 	INSTANCE_SETUP_TOKEN_CHECKS: '/instance/setup/token-checks',
 	ATTACHMENTS_REFRESH_URLS: '/attachments/refresh-urls',
+	USER_ATTACHMENT_TOKEN: '/users/@me/attachment-token',
 	AUTH_LOGIN: '/auth/login',
 	AUTH_LOGIN_MFA_TOTP: '/auth/login/mfa/totp',
 	AUTH_LOGIN_MFA_WEBAUTHN_OPTIONS: '/auth/login/mfa/webauthn/authentication-options',
@@ -201,6 +202,7 @@ export const Endpoints = {
 	USER_ME: '/users/@me',
 	USER_TERMS_ACCEPTANCE: '/users/@me/terms-acceptance',
 	USER_DATE_OF_BIRTH: '/users/@me/date-of-birth',
+	USER_AGE_RANGE: '/users/@me/age-range',
 	USER_CLAIM: '/users/@me/claim',
 	USER_EMAIL_VERIFICATION_SEND: '/users/@me/email-verification/send',
 	USER_EMAIL_VERIFICATION_CONFIRM: '/users/@me/email-verification/confirm',
@@ -242,6 +244,7 @@ export const Endpoints = {
 	USER_PASSWORD: '/users/@me/password',
 	USER_RECOVERY_KIT: '/users/@me/recovery-kit',
 	USER_SSO_LINK_START: '/users/@me/sso/link/start',
+	USER_SSO_UNLINK: '/users/@me/sso',
 	USER_DISABLE: '/users/@me/disable',
 	USER_DELETE: '/users/@me/delete',
 	USER_BULK_DELETE_MY_MESSAGES: '/users/@me/messages/bulk-delete-mine',
@@ -295,4 +298,6 @@ export const Endpoints = {
 	BLUESKY_AUTHORIZE: '/users/@me/connections/bluesky/authorize',
 	CONNECTION: (type: string, connectionId: string) => `/users/@me/connections/${type}/${connectionId}`,
 	CONNECTIONS_REORDER: '/users/@me/connections/reorder',
+	CONNECTION_OAUTH_AUTHORIZE: (providerId: string) =>
+		`/users/@me/connections/oauth/${encodeURIComponent(providerId)}/authorize`,
 } as const;

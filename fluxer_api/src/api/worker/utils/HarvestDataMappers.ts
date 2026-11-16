@@ -2,6 +2,7 @@
 
 import type {GuildID, UserID} from '@app/api/BrandedTypes';
 import {Config} from '@app/api/Config';
+import {parseOAuthConnectionIdentifier} from '@app/api/connection/ConnectionProviders';
 import type {UserConnectionRow} from '@app/api/database/types/ConnectionTypes';
 import type {
 	OperatorPassCertificateRow,
@@ -35,8 +36,10 @@ import type {UserGuildSettings} from '@app/api/models/UserGuildSettings';
 import type {UserSettings} from '@app/api/models/UserSettings';
 import type {WebAuthnCredential} from '@app/api/models/WebAuthnCredential';
 import {mapStorePurchaseToResponse} from '@app/api/store_billing/StoreBillingMappers';
+import type {ExportedAppAttestKey} from '@app/api/user/AgeRange';
 import {resolveSessionClientInfo} from '@app/api/utils/SessionClientIdentity';
 import {getAnimatedAssetExtension} from '@app/api/worker/utils/AssetArchiveHelpers';
+import {ConnectionTypes} from '@fluxer/constants/src/ConnectionConstants';
 import {PremiumFlags} from '@fluxer/constants/src/UserConstants';
 import {
 	decodeSyncedPreferencesLenient,
@@ -89,6 +92,8 @@ interface ArchivedUserSettings {
 	}>;
 	afk_timeout: number;
 	time_format: UserSettings['timeFormat'];
+	regional_format: UserSettings['regionalFormat'];
+	timestamp_format: UserSettings['timestampFormat'];
 	suppress_unprivileged_self_mentions: boolean;
 	suppress_unprivileged_self_mentions_bypass_user_ids: Array<string>;
 	staff_dm_access_user_ids: Array<string>;
@@ -116,6 +121,7 @@ interface UserDataJsonParams {
 	webAuthnCredentials: Array<WebAuthnCredential>;
 	mfaBackupCodes: Array<MfaBackupCode>;
 	recoveryKitCreatedAt: Date | null;
+	appAttestKeys: Array<ExportedAppAttestKey>;
 	createdGiftCodes: Array<GiftCode>;
 	payments: Array<Payment>;
 	storePurchases: Array<StorePurchaseRow>;
@@ -251,6 +257,7 @@ export function buildUserDataJson(params: UserDataJsonParams) {
 		webAuthnCredentials,
 		mfaBackupCodes,
 		recoveryKitCreatedAt,
+		appAttestKeys,
 		createdGiftCodes,
 		payments,
 		storePurchases,
@@ -292,6 +299,8 @@ export function buildUserDataJson(params: UserDataJsonParams) {
 			pronouns: user.pronouns,
 			accent_color: user.accentColor,
 			date_of_birth: user.dateOfBirth,
+			age_range: user.attestedAgeFloor,
+			age_range_received_at: user.ageAttestedAt?.toISOString() ?? null,
 			locale: user.locale,
 			flags: user.flags.toString(),
 			premium_type: user.premiumType,
@@ -387,6 +396,8 @@ export function buildUserDataJson(params: UserDataJsonParams) {
 			})),
 			afk_timeout: userSettings.afkTimeout,
 			time_format: userSettings.timeFormat,
+			regional_format: userSettings.regionalFormat,
+			timestamp_format: userSettings.timestampFormat,
 			suppress_unprivileged_self_mentions: userSettings.suppressUnprivilegedSelfMentions,
 			suppress_unprivileged_self_mentions_bypass_user_ids: Array.from(
 				userSettings.suppressUnprivilegedSelfMentionBypassUserIds,
@@ -481,6 +492,13 @@ export function buildUserDataJson(params: UserDataJsonParams) {
 			transports: cred.transports ? Array.from(cred.transports) : [],
 			created_at: cred.createdAt.toISOString(),
 			last_used_at: cred.lastUsedAt?.toISOString() ?? null,
+		})),
+		app_attest_keys: appAttestKeys.map((key) => ({
+			key_id: key.key_id,
+			environment: key.environment,
+			counter: Number(key.counter),
+			created_at: key.created_at.toISOString(),
+			last_used_at: key.last_used_at?.toISOString() ?? null,
 		})),
 		mfa_backup_codes: {
 			total_count: mfaBackupCodes.length,
@@ -670,6 +688,10 @@ export function buildUserDataJson(params: UserDataJsonParams) {
 		connections: connections.map((connection) => ({
 			id: connection.connection_id,
 			type: connection.connection_type,
+			provider_id:
+				connection.connection_type === ConnectionTypes.OAUTH
+					? (parseOAuthConnectionIdentifier(connection.identifier)?.providerId ?? null)
+					: null,
 			identifier: connection.identifier,
 			name: connection.name,
 			verified: connection.verified,

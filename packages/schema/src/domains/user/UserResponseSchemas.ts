@@ -22,7 +22,7 @@ import {ConnectionResponse} from '@fluxer/schema/src/domains/connection/Connecti
 import {GuildMemberResponse} from '@fluxer/schema/src/domains/guild/GuildMemberSchemas';
 import {MessageResponseSchema} from '@fluxer/schema/src/domains/message/MessageResponseSchemas';
 import {ProfileBadgeListResponse} from '@fluxer/schema/src/domains/user/ProfileBadgeSchemas';
-import {LocaleSchema} from '@fluxer/schema/src/primitives/LocaleSchema';
+import {LocaleSchema, RegionalFormatSchema} from '@fluxer/schema/src/primitives/LocaleSchema';
 import {
 	createBitflagInt32Type,
 	createNamedStringLiteralUnion,
@@ -44,6 +44,7 @@ import {
 	SensitiveMediaGuildFilterLevelSchema,
 	StickerAnimationOptionsSchema,
 	TimeFormatTypesSchema,
+	TimestampFormatTypesSchema,
 	UserAuthenticatorTypesSchema,
 	UserNotificationSettingsSchema,
 	UserPremiumTypesSchema,
@@ -187,7 +188,12 @@ export const UserPrivateResponse = UserPartialResponse.extend({
 		.describe(
 			'Information about a pending bulk message deletion request. Only populated when the legacy delayed-deletion flow is in progress; the new immediate-deletion flow does not surface a pending state here.',
 		),
-	age_verified_adult: z.boolean().optional().describe('Whether the user has verified their age as an adult'),
+	mature_content_unlocked: z
+		.boolean()
+		.optional()
+		.describe(
+			'Whether mature content is unlocked for the account in regions where a date of birth typed in is not enough for mature content. It is true when the iOS or Android app sent an age range of 18 or over, when staff set it, or when the account already had mature content unlocked before. Never true from an age range on a self-hosted instance',
+		),
 	terms_agreed_at: z
 		.string()
 		.nullable()
@@ -215,6 +221,12 @@ export const UserPrivateResponse = UserPartialResponse.extend({
 		.boolean()
 		.optional()
 		.describe('Whether the account still has to enter its date of birth, which clients ask for before anything else'),
+	has_age_range: z
+		.boolean()
+		.optional()
+		.describe(
+			'Whether Fluxer keeps an age range for the account that the iOS or Android app sent from the Apple or Google account. The range itself is not included',
+		),
 	profile_restricted: z
 		.boolean()
 		.optional()
@@ -349,6 +361,7 @@ export const UserSettingsResponse = z.object({
 	status_resets_to: z.string().nullish().describe('The status to reset to after the scheduled reset'),
 	theme: z.string().describe('The UI theme preference'),
 	locale: LocaleSchema,
+	regional_format: RegionalFormatSchema,
 	restricted_guilds: z.array(SnowflakeStringType).describe('Guild IDs where direct messages are restricted'),
 	bot_restricted_guilds: z.array(SnowflakeStringType).describe('Guild IDs where bot direct messages are restricted'),
 	default_guilds_restricted: z.boolean().describe('Whether new guilds have DM restrictions by default'),
@@ -402,6 +415,7 @@ export const UserSettingsResponse = z.object({
 	custom_status: CustomStatusResponse.nullable().describe('The custom status set by the user'),
 	afk_timeout: Int32Type.describe('The idle timeout in seconds before going AFK'),
 	time_format: withFieldDescription(TimeFormatTypesSchema, 'The preferred time format setting'),
+	timestamp_format: withFieldDescription(TimestampFormatTypesSchema, 'The preferred timestamp format preset'),
 	developer_mode: z.boolean().describe('Whether developer mode is enabled'),
 	trusted_domains: z.array(z.string()).describe('List of trusted external link domains'),
 	default_hide_muted_channels: z.boolean().describe('Whether muted channels are hidden by default in new guilds'),
@@ -585,7 +599,7 @@ export interface UserPrivate extends UserPartial, UserProfile {
 	readonly has_ever_purchased: boolean;
 	readonly has_unread_gift_inventory: boolean;
 	readonly unread_gift_inventory_count: number;
-	readonly age_verified_adult?: boolean;
+	readonly mature_content_unlocked?: boolean;
 	readonly terms_agreed_at?: string | null;
 	readonly privacy_agreed_at?: string | null;
 	readonly traits: ReadonlyArray<string>;
@@ -594,6 +608,7 @@ export interface UserPrivate extends UserPartial, UserProfile {
 	readonly verification_need?: AccountVerificationNeed | null;
 	readonly has_password?: boolean;
 	readonly date_of_birth_required?: boolean;
+	readonly has_age_range?: boolean;
 	readonly profile_restricted?: boolean;
 }
 

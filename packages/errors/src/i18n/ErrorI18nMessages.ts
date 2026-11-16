@@ -1,28 +1,32 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 export const ERROR_I18N_MESSAGES = {
+	'account.age_range_not_adult': "An age range only counts here when it shows that you're 18 or older.",
+	'account.age_range_not_needed': "You don't need an age range where you are.",
+	'account.age_range_source_not_verified':
+		"An age you only entered yourself in your Google account doesn't count here. It counts once Google has checked it, for example with a card or an ID.",
 	'account.already_claimed': 'This account is already set up to sign in from other devices.',
-	'account.app_attest_assertion_invalid': "We couldn't confirm this age check from your device.",
+	'account.app_attest_assertion_invalid': "We couldn't confirm the age range your device sent.",
 	'account.app_attest_attestation_invalid': "We couldn't confirm this device key.",
 	'account.app_attest_challenge_invalid': 'This check has expired or was already used. Try again.',
 	'account.app_attest_key_in_use': 'This device key is already registered to another account.',
 	'account.app_attest_key_not_registered': "This device key isn't registered with your account.",
-	'account.app_attest_not_available': "Age checks from the app aren't available on this instance.",
-	'account.app_attest_request_invalid': "This age check request isn't valid.",
+	'account.app_attest_not_available': "This instance doesn't accept age ranges from the app.",
+	'account.app_attest_request_invalid': "This age range request isn't valid.",
 	'account.below_minimum_age': "You aren't old enough to have an account here.",
 	'account.date_of_birth_already_set': 'Your date of birth is already set.',
 	'account.date_of_birth_required': 'Enter your date of birth to continue.',
 	'account.password_required_to_claim':
 		"{reason, select, email_delivery_off {Set a password to keep this account. This instance can't send email codes.} local_credential_basis {Set a password to keep this account. This instance asks every account for a password or passkey.} other {Set a password to keep this account.}}",
 	'account.play_integrity_app_not_recognized':
-		'Install the app from Google Play and sign in to Google Play to check your age in the app.',
+		'Install the app from Google Play and sign in to Google Play so the app can send your age range.',
 	'account.play_integrity_challenge_invalid': 'This check has expired or was already used. Try again.',
 	'account.play_integrity_device_not_trusted':
-		"This device didn't pass the Google Play device check, so the app can't check your age on it.",
-	'account.play_integrity_not_available': "Age checks from the Android app aren't available on this instance.",
-	'account.play_integrity_request_invalid': "This age check request isn't valid.",
-	'account.play_integrity_token_invalid': "We couldn't confirm this age check from your device. Try again.",
-	'account.play_integrity_unavailable': "We couldn't connect to Google Play to check your age. Try again later.",
+		"This device didn't pass the Google Play device check, so the app can't send your age range from it.",
+	'account.play_integrity_not_available': "This instance doesn't accept age ranges from the Android app.",
+	'account.play_integrity_request_invalid': "This age range request isn't valid.",
+	'account.play_integrity_token_invalid': "We couldn't confirm the age range your device sent. Try again.",
+	'account.play_integrity_unavailable': "We couldn't connect to Google Play to get your age range. Try again later.",
 	'account.unclaimed_cannot_accept_friend_requests': 'Claim your account to accept friend requests.',
 	'account.unclaimed_cannot_add_reactions': 'Claim your account to add reactions.',
 	'account.unclaimed_cannot_create_applications': 'Claim your account to create applications.',
@@ -196,6 +200,8 @@ export const ERROR_I18N_MESSAGES = {
 	'auth_and_oauth.invalid_scope': "The requested scope isn't supported or you don't have permission to request it.",
 	'auth_and_oauth.invalid_sso_authorization_code': 'Invalid SSO authorization code.',
 	'auth_and_oauth.invalid_sso_token': 'Invalid SSO token.',
+	'auth_and_oauth.local_sign_in_method_required':
+		'Add another way to sign in, such as a password or passkey, before you disconnect single sign-on.',
 	'auth_and_oauth.missing_authorization': 'Missing or invalid authorization header.',
 	'auth_and_oauth.must_start_session_before_sending_messages': 'You must start a session before sending messages.',
 	'auth_and_oauth.origin_handoff_nonce_invalid': "This sign-in transfer doesn't match the one you started.",
@@ -393,6 +399,7 @@ export const ERROR_I18N_MESSAGES = {
 	'connections.invalid_type': 'The connection type is not supported.',
 	'connections.limit_reached': "You can't have more than {limit} connections.",
 	'connections.not_found': 'Unknown connection.',
+	'connections.unknown_provider': "This kind of connection isn't available on this instance.",
 	'connections.verification_failed':
 		'Connection verification failed. Make sure the verification token is correctly placed.',
 	'content_and_safety.content_blocked': 'This content was blocked by safety systems.',
@@ -494,6 +501,8 @@ export const ERROR_I18N_MESSAGES = {
 	'friends_and_dms.cannot_send_friend_request_to_blocked_user': "You can't send a friend request to a blocked user.",
 	'friends_and_dms.cannot_send_friend_request_to_self': "You can't send a friend request to yourself.",
 	'friends_and_dms.cannot_send_messages_to_user': "You can't send messages to this user.",
+	'friends_and_dms.community_member_dms_disabled':
+		"A community you share with this person has turned off direct messages between members who aren't friends.",
 	'friends_and_dms.duplicate_recipients_not_allowed': "Duplicate recipients aren't allowed.",
 	'friends_and_dms.friend_request_blocked': 'User does not accept friend requests at this time.',
 	'friends_and_dms.not_friends': "You're not friends with this user.",
@@ -724,6 +733,7 @@ export const ERROR_I18N_MESSAGES = {
 	'tos_and_age.must_be_minimum_age':
 		'You must be at least {minAge, plural, one {# year} other {# years}} old to create an account.',
 	'unknown_entities.unknown_badge': "Badge wasn't found.",
+	'unknown_entities.unknown_ban': "Ban wasn't found.",
 	'unknown_entities.unknown_channel': "Channel wasn't found.",
 	'unknown_entities.unknown_forum_tag': "Tag wasn't found.",
 	'unknown_entities.unknown_guild': "Community wasn't found.",

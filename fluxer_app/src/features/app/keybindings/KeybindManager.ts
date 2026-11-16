@@ -2,6 +2,7 @@
 
 import {organizeChannels} from '@app/features/app/components/layout/utils/ChannelOrganization';
 import {
+	isTextEditingShortcutEvent,
 	keyboardEventCanRecoverStaleMacMetaPress,
 	keyboardEventMatchesCombo,
 	keyboardEventReleasesComboModifier,
@@ -53,6 +54,7 @@ import {LOCAL_SHORTCUT_ACTION_PRIORITY} from '@app/features/app/keybindings/util
 import RuntimeConfig from '@app/features/app/state/RuntimeConfig';
 import {isAccountHandoffArrival} from '@app/features/auth/state/AccountHandoffCapture';
 import Authentication from '@app/features/auth/state/Authentication';
+import {afterBootReveal} from '@app/features/boot_state/BootReveal';
 import type {Channel} from '@app/features/channel/models/Channel';
 import Channels from '@app/features/channel/state/Channels';
 import type {Guild} from '@app/features/guild/models/Guild';
@@ -88,7 +90,7 @@ import KeyboardMode from '@app/features/ui/state/KeyboardMode';
 import {isWebReservedZoomShortcut} from '@app/features/ui/utils/AppZoomKeybindUtils';
 import {getElectronAPI, isNativeMacOS} from '@app/features/ui/utils/NativeUtils';
 import * as CallCommands from '@app/features/voice/commands/CallCommands';
-import MediaEngine from '@app/features/voice/engine/MediaEngineFacade';
+import VoiceRuntime from '@app/features/voice/engine/VoiceRuntime';
 import CallInitiator from '@app/features/voice/state/CallInitiator';
 import CallState from '@app/features/voice/state/CallState';
 import CompactVoiceCallHeight, {
@@ -435,7 +437,7 @@ class KeybindManager {
 		const currentUserId = Authentication.currentUserId;
 		if (!currentUserId) return null;
 		for (const call of CallState.getActiveCalls()) {
-			if (MediaEngine.connected && MediaEngine.channelId === call.channelId) continue;
+			if (VoiceRuntime.connected && VoiceRuntime.channelId === call.channelId) continue;
 			if (CallInitiator.hasInitiated(call.channelId)) continue;
 			if (CallState.isUserPendingRinging(call.channelId, currentUserId)) {
 				return call.channelId;
@@ -519,7 +521,9 @@ class KeybindManager {
 		this.initialized = true;
 		this.ensureCombokeys();
 		this.registerDefaultHandlers(i18n);
-		await Keybind.refreshKeyboardShortcutLayout();
+		afterBootReveal(() => {
+			void Keybind.refreshKeyboardShortcutLayout();
+		});
 		this.routeSuspended = !this.isAppRoute(Navigation.pathname);
 		this.refreshLocalShortcuts();
 		this.disposers.push(
@@ -540,7 +544,7 @@ class KeybindManager {
 				}),
 			);
 		}
-		this.disposers.push(reactToPushToTalkModeChanges(() => MediaEngine.handlePushToTalkModeChange()));
+		this.disposers.push(reactToPushToTalkModeChanges(() => VoiceRuntime.engine?.handlePushToTalkModeChange()));
 		this.disposers.push(
 			reaction(
 				() => ({entries: this.buildHoldBindingEntries(), routing: this.getGlobalHoldRouting()}),
@@ -697,8 +701,8 @@ class KeybindManager {
 		const pushToMuteEngaged = Keybind.pushToMuteHeld;
 		Keybind.resetPushToTalkState();
 		Keybind.resetPushToMuteState();
-		if (pushToTalkEngaged) MediaEngine.applyPushToTalkHold(false);
-		if (pushToMuteEngaged) MediaEngine.applyPushToMuteHold(false);
+		if (pushToTalkEngaged) VoiceRuntime.engine?.applyPushToTalkHold(false);
+		if (pushToMuteEngaged) VoiceRuntime.engine?.applyPushToMuteHold(false);
 	}
 
 	private buildGlobalShortcutsSyncPayload(): GlobalShortcutsSyncPayload {
@@ -1116,7 +1120,7 @@ class KeybindManager {
 			const id = this.localKeyboardShortcutId(entry);
 			if (type === 'release') {
 				if (!this.activeLocalShortcutPressIds.has(id)) continue;
-				if (!keyboardEventTriggerMatchesCombo(entry.combo, event)) {
+				if (!keyboardEventTriggerMatchesCombo(entry.combo, event, {isMacOS})) {
 					if (keyboardEventReleasesComboModifier(entry.combo, event, {isMacOS})) {
 						this.clearActiveLocalKeyboardShortcut(entry, id);
 					}
@@ -1777,7 +1781,7 @@ class KeybindManager {
 			});
 		}
 		if (!channel.isPrivate()) return false;
-		if (MediaEngine.channelId !== channel.id || !MediaEngine.connected) return false;
+		if (VoiceRuntime.channelId !== channel.id || !VoiceRuntime.connected) return false;
 		const call = CallState.getCall(channel.id);
 		if (!call) return false;
 		return isKeybindBlockedByCompactVoiceCallView({
@@ -1957,9 +1961,7 @@ class KeybindManager {
 		const handler = this.handlers.get(action);
 		if (!handler) return false;
 		if (isWebReservedZoomShortcut(action, combo)) return false;
-		const shortcuts = comboToCombokeysStrings(combo);
-		if (shortcuts.length === 0) return false;
-		return true;
+		return combo.modifierOnly === true || comboToCombokeysStrings(combo).length > 0;
 	}
 
 	private orderLocalShortcutGroup(entries: ReadonlyArray<RuntimeKeybind>): Array<RuntimeKeybind> {
@@ -1981,6 +1983,7 @@ class KeybindManager {
 		const target = event.target ?? null;
 		if (shouldSuppressLocalShortcutForModalFocus(entry, target)) return true;
 		if (!isEditableElement(target)) return false;
+		if (isTextEditingShortcutEvent(event)) return true;
 		if (this.shouldAllowLocalShortcutFromEditable(entry, target)) {
 			return false;
 		}
@@ -1998,7 +2001,6 @@ class KeybindManager {
 	}
 
 	private shouldPreserveEditableDefaultForShortcut(entry: RuntimeKeybind, event: KeyboardEvent): boolean {
-		if (entry.preventDefaultInEditable) return false;
 		const target = event.target ?? null;
 		return entry.section === 'voice_and_video' && isEditableElement(target);
 	}
@@ -2012,7 +2014,7 @@ class KeybindManager {
 		if (type === 'press' && event.repeat) return false;
 		if (this.suspended) return false;
 		if (!this.isActionAllowedForCurrentView(action)) return false;
-		if (!keyboardEventTriggerMatchesCombo(combo, event)) {
+		if (!keyboardEventTriggerMatchesCombo(combo, event, {isMacOS: isNativeMacOS()})) {
 			return false;
 		}
 		if (this.shouldIgnoreLocalShortcutEvent(entry, event)) return false;

@@ -17,6 +17,7 @@ import {modal} from '@app/features/ui/commands/ModalCommands';
 import {formatRoundedPercentage} from '@app/features/ui/utils/PercentageFormatting';
 import {AudioLevelMeter} from '@app/features/user/components/modals/tabs/components/AudioLevelMeter';
 import Users from '@app/features/user/state/Users';
+import {getFormattingLocale} from '@app/features/user/utils/LocaleUtils';
 import * as CallCommands from '@app/features/voice/commands/CallCommands';
 import * as VoiceCallLayoutCommands from '@app/features/voice/commands/VoiceCallLayoutCommands';
 import * as VoiceDebugEventSinkCommands from '@app/features/voice/commands/VoiceDebugEventSinkCommands';
@@ -73,6 +74,7 @@ import {
 	GearIcon,
 	GridFourIcon,
 	HandTapIcon,
+	MonitorIcon,
 	SpeakerSlashIcon,
 	UsersIcon,
 } from '@phosphor-icons/react';
@@ -294,7 +296,7 @@ const VoiceInputVolumeItems: React.FC = observer(() => {
 				minValue={0}
 				maxValue={VOICE_VOLUME_MAX_PERCENT}
 				onChange={(value) => VoiceSettingsCommands.update({inputVolume: value})}
-				onFormat={(value) => formatRoundedPercentage(i18n.locale, value)}
+				onFormat={(value) => formatRoundedPercentage(getFormattingLocale(), value)}
 				data-flx="voice.voice-settings-menus.input-volume"
 			/>
 			<VoiceInputLevelItem data-flx="voice.voice-settings-menus.voice-input-volume-items.voice-input-level-item" />
@@ -311,7 +313,7 @@ const VoiceOutputVolumeItem: React.FC = observer(() => {
 			minValue={0}
 			maxValue={VOICE_VOLUME_MAX_PERCENT}
 			onChange={(value) => VoiceSettingsCommands.update({outputVolume: value})}
-			onFormat={(value) => formatRoundedPercentage(i18n.locale, value)}
+			onFormat={(value) => formatRoundedPercentage(getFormattingLocale(), value)}
 			data-flx="voice.voice-settings-menus.output-volume"
 		/>
 	);
@@ -802,6 +804,20 @@ export const VoiceMoreOptionsMenu: React.FC<VoiceMoreOptionsMenuProps> = observe
 					data-flx="voice.voice-settings-menus.voice-more-options-menu.checkbox-item--2"
 				>
 					<Trans>Show my own camera</Trans>
+				</CheckboxItem>
+				<CheckboxItem
+					icon={
+						<MonitorIcon
+							weight="fill"
+							className={styles.icon}
+							data-flx="voice.voice-settings-menus.voice-more-options-menu.icon.show-my-screen-share"
+						/>
+					}
+					checked={voiceSettings.showMyOwnScreenShare}
+					onCheckedChange={(checked) => VoiceSettingsCommands.update({showMyOwnScreenShare: checked})}
+					data-flx="voice.voice-settings-menus.voice-more-options-menu.checkbox-item.show-my-screen-share"
+				>
+					<Trans>Show my screen share</Trans>
 				</CheckboxItem>
 				<CheckboxItem
 					icon={

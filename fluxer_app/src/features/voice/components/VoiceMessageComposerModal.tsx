@@ -14,13 +14,16 @@ import {isInsecureBrowserContext} from '@app/features/platform/utils/SecureConte
 import {remFromPx} from '@app/features/theme/layout/RemFromPx';
 import {Button} from '@app/features/ui/button/Button';
 import * as ModalCommands from '@app/features/ui/commands/ModalCommands';
+import {getFormattingLocale} from '@app/features/user/utils/LocaleUtils';
 import {AudioWaveform, computePeaks} from '@app/features/voice/components/AudioWaveform';
 import {LiveRecordingWaveform} from '@app/features/voice/components/LiveRecordingWaveform';
 import styles from '@app/features/voice/components/VoiceMessageComposerModal.module.css';
 import {resolveAudioContextConstructor} from '@app/features/voice/engine/VoiceSharedAudioContext';
+import VoiceSettings from '@app/features/voice/state/VoiceSettings';
 import {encodeAudioBufferSliceToWav} from '@app/features/voice/utils/AudioWavEncode';
 import {computeVoiceWaveformFromAudioBuffer} from '@app/features/voice/utils/VoiceMessageRecordingUtils';
 import {sendVoiceMessage} from '@app/features/voice/utils/VoiceMessageSendUtils';
+import {buildRecordingAudioConstraints} from '@app/features/voice/utils/VoiceProcessingProfile';
 import {VOICE_MESSAGE_MIN_SEND_DURATION_MS} from '@fluxer/constants/src/VoiceMessageConstants';
 import type {MessageDescriptor} from '@lingui/core';
 import {msg} from '@lingui/core/macro';
@@ -280,7 +283,7 @@ const VoiceMessageComposerModal: React.FC<VoiceMessageComposerModalProps> = obse
 			return;
 		}
 		try {
-			const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+			const stream = await navigator.mediaDevices.getUserMedia({audio: buildRecordingAudioConstraints(VoiceSettings)});
 			mediaStreamRef.current = stream;
 			const Ctor = resolveAudioContextConstructor();
 			if (Ctor) {
@@ -423,7 +426,7 @@ const VoiceMessageComposerModal: React.FC<VoiceMessageComposerModalProps> = obse
 
 	const formatSeconds = useCallback(
 		(value: number) =>
-			getCachedNumberFormat(i18n.locale, {
+			getCachedNumberFormat(getFormattingLocale(), {
 				style: 'unit',
 				unit: 'second',
 				unitDisplay: 'narrow',
@@ -490,7 +493,9 @@ const VoiceMessageComposerModal: React.FC<VoiceMessageComposerModalProps> = obse
 		if (selectionDuration < MIN_DURATION_SECONDS) {
 			setErrorMessage(
 				i18n._(TOO_SHORT_DESCRIPTOR, {
-					seconds: getCachedNumberFormat(i18n.locale, {maximumFractionDigits: 1}).format(MIN_DURATION_SECONDS),
+					seconds: getCachedNumberFormat(getFormattingLocale(), {maximumFractionDigits: 1}).format(
+						MIN_DURATION_SECONDS,
+					),
 				}),
 			);
 			return;

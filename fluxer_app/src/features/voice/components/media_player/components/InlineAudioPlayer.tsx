@@ -13,6 +13,7 @@ import {formatFileSize} from '@app/features/messaging/utils/FileUtils';
 import {remFromPx} from '@app/features/theme/layout/RemFromPx';
 import FocusRing from '@app/features/ui/focus_ring/FocusRing';
 import {Tooltip} from '@app/features/ui/tooltip/Tooltip';
+import {getFormattingLocale} from '@app/features/user/utils/LocaleUtils';
 import {MediaPlaybackRate} from '@app/features/voice/components/media_player/components/MediaPlaybackRate';
 import {MediaProgressBar} from '@app/features/voice/components/media_player/components/MediaProgressBar';
 import {MediaVolumeControl} from '@app/features/voice/components/media_player/components/MediaVolumeControl';
@@ -106,6 +107,7 @@ export function InlineAudioPlayer({
 	});
 	const {escalateToMetadata, sourceAttribute, preloadAttribute} = useMetadataPreload(src, hasStarted);
 	const displayDuration = duration > 0 ? duration : (initialDuration ?? 0);
+	const durationLabel = formatDuration(Math.ceil(displayDuration));
 	useLayoutEffect(() => {
 		const media = mediaRef.current;
 		return () => {
@@ -117,9 +119,9 @@ export function InlineAudioPlayer({
 	const {name: fileName, extension: fileExtension} = extension
 		? {name: title, extension: `.${extension}`}
 		: splitFilename(title);
-	const fileSizeString = fileSize ? formatFileSize(i18n.locale, fileSize) : '';
+	const fileSizeString = fileSize ? formatFileSize(getFormattingLocale(), fileSize) : '';
 	useEffect(() => {
-		if (hasStarted && pendingPlayRef.current) {
+		if (hasStarted && sourceAttribute !== undefined && pendingPlayRef.current) {
 			const timer = setTimeout(() => {
 				if (pendingPlayRef.current) {
 					pendingPlayRef.current = false;
@@ -129,7 +131,7 @@ export function InlineAudioPlayer({
 			return () => clearTimeout(timer);
 		}
 		return undefined;
-	}, [hasStarted, play]);
+	}, [hasStarted, play, sourceAttribute]);
 	const handlePlayToggle = useCallback(
 		(e: React.MouseEvent) => {
 			e.preventDefault();
@@ -308,7 +310,7 @@ export function InlineAudioPlayer({
 					transition={{duration: Accessibility.useReducedMotion ? 0 : 0.2, ease: 'easeOut'}}
 					data-flx="voice.media-player.inline-audio-player.mobile-timestamp"
 				>
-					{state.isPlaying ? formatDuration(currentTime) : formatDuration(displayDuration)}
+					{state.isPlaying ? formatDuration(currentTime) : durationLabel}
 				</motion.span>
 			</motion.div>
 		);
@@ -373,7 +375,7 @@ export function InlineAudioPlayer({
 						</span>
 					</p>
 					<p className={styles.fileMeta} data-flx="voice.media-player.inline-audio-player.file-meta">
-						{`${fileSizeString}${fileSizeString && displayDuration > 0 ? ' · ' : ''}${displayDuration > 0 ? formatDuration(displayDuration) : ''}`}
+						{`${fileSizeString}${fileSizeString && displayDuration > 0 ? ' · ' : ''}${displayDuration > 0 ? durationLabel : ''}`}
 					</p>
 				</div>
 			</div>
@@ -394,7 +396,7 @@ export function InlineAudioPlayer({
 					data-flx="voice.media-player.inline-audio-player.progress-bar"
 				/>
 				<span className={styles.time} data-flx="voice.media-player.inline-audio-player.time">
-					{formatDuration(currentTime)} / {formatDuration(displayDuration)}
+					{formatDuration(currentTime)} / {durationLabel}
 				</span>
 			</div>
 			<div className={styles.controls} data-flx="voice.media-player.inline-audio-player.controls">

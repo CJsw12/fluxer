@@ -36,6 +36,7 @@ use maud::{Markup, html};
 
 mod accounts;
 mod captcha;
+mod connections;
 mod experiments;
 mod integrations;
 mod media;
@@ -45,12 +46,15 @@ mod sso;
 use self::{
     accounts::{AccountsSectionInput, account_identity_section, accounts_section},
     captcha::captcha_section,
+    connections::connection_providers_section,
     experiments::{domain_migration_section, voice_p2p_section},
     integrations::integrations_config_section,
-    media::{HostingMode, media_config_section},
+    media::{HostingMode, media_access_section, media_config_section},
     policy::policy_config_section,
     sso::sso_config_section,
 };
+
+pub use self::connections::{CONNECTION_PROVIDER_COUNT_FIELD, connection_provider_field};
 
 pub const LOADED_CONFIG_FIELD: &str = "loaded_config";
 
@@ -251,6 +255,17 @@ pub fn instance_config_page(
                             &instance_config.app_public.branding.product_name,
                         ),
                 ))
+                @if instance_config.self_hosted {
+                    (config_group(
+                        "Profile connections",
+                        "OAuth 2.0 and OpenID Connect providers people can link to their profiles.",
+                        connection_providers_section(
+                                base,
+                                config_form,
+                                &instance_config.integrations.connection_providers,
+                            ),
+                    ))
+                }
                 (config_group(
                     "Push notifications",
                     "Consent for the relay that delivers official mobile app notifications.",
@@ -258,8 +273,9 @@ pub fn instance_config_page(
                 ))
                 (config_group(
                     "Media & retention",
-                    "Attachment expiry rules that can be changed without editing environment variables.",
-                    media_config_section(
+                    "Attachment expiry and access rules that can be changed without editing environment variables.",
+                    html! {
+                        (media_config_section(
                             base,
                             config_form,
                             &instance_config.media,
@@ -268,7 +284,9 @@ pub fn instance_config_page(
                             } else {
                                 HostingMode::Hosted
                             },
-                        ),
+                        ))
+                        (media_access_section(base, config_form, &instance_config.media))
+                    },
                 ))
                 (config_group(
                     "Infrastructure & limits",
@@ -869,9 +887,9 @@ pub(super) fn allowed_domains_input(name: &str, value: &str, hint: &str) -> Mark
 
 fn limit_config_section(base: &str, limit_config: &LimitConfigResponse) -> Markup {
     let description = if limit_config.self_hosted.unwrap_or(false) {
-        "Self-hosted instance with all premium features enabled by default. Configure user and guild limits."
+        "In this self-hosted instance, configure limit rules that control user and community limits or grant features based on traits and features."
     } else {
-        "Configure limit rules that control user and guild restrictions based on traits and features."
+        "Configure limit rules that control user and community limits based on traits and features."
     };
     section_card_simple(
         "Limit Configuration",

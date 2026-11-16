@@ -44,7 +44,7 @@ import type {GuildMember} from '@app/api/models/GuildMember';
 import type {User} from '@app/api/models/User';
 import type {UserGuildSettings} from '@app/api/models/UserGuildSettings';
 import type {UserSettings} from '@app/api/models/UserSettings';
-import {resolveOperatorPassJoinRoleIds} from '@app/api/operator_pass/OperatorPassLabsRole';
+import {finishOperatorPassJoin, resolveOperatorPassJoin} from '@app/api/operator_pass/OperatorPassLabsRole';
 import {assertAccountNotLimited} from '@app/api/user/AccountLimit';
 import type {TierContext} from '@app/api/user/AccountTier';
 import {assertTierAllows, NO_TIER_CONTEXT} from '@app/api/user/AccountTier';
@@ -421,15 +421,8 @@ export class GuildMemberOperationsService {
 	private async deleteKickedMember(targetMember: GuildMember, actorId: UserID): Promise<void> {
 		const {guildId, userId: targetId} = targetMember;
 		await this.snapshotMembershipMetadata(targetMember);
-		const guild = await this.guildRepository.findUnique(guildId);
 		await this.guildRepository.deleteMember(guildId, targetId);
-		if (guild) {
-			await this.guildRepository.upsertPartial(
-				guildId,
-				{member_count: Math.max(0, guild.memberCount - 1)},
-				guild.toRow(),
-			);
-		}
+		await this.guildRepository.syncMemberCount(guildId);
 		await this.gatewayService.leaveGuild({userId: targetId, guildId});
 		await emitGuildMemberRemoved({guildId, userId: targetId, actorId, kind: 'kicked'});
 	}
@@ -502,7 +495,7 @@ export class GuildMemberOperationsService {
 			metadata?.communication_disabled_until && metadata.communication_disabled_until.getTime() > Date.now()
 				? metadata.communication_disabled_until
 				: null;
-		const joinRoleIds = await resolveOperatorPassJoinRoleIds(guildId, user, this.guildRepository);
+		const labsJoin = await resolveOperatorPassJoin(guildId, user, this.guildRepository, this.userRepository);
 		const guildMember = await this.guildRepository.upsertMember({
 			guild_id: guildId,
 			user_id: userId,
@@ -519,20 +512,21 @@ export class GuildMemberOperationsService {
 			deaf: false,
 			mute: false,
 			communication_disabled_until: restoredTimeout,
-			role_ids: joinRoleIds,
+			role_ids: labsJoin?.roleIds ?? null,
 			is_premium_sanitized: null,
 			temporary: isTemporary,
 			profile_flags: null,
 			mention_flags: null,
 			version: 1,
 		});
-		await this.guildRepository.upsertPartial(guildId, {member_count: guild.memberCount + 1}, guild.toRow());
+		const syncedGuild = await this.guildRepository.syncMemberCount(guildId);
 		if (visit) {
 			await endGuildVisit({userId, guildId, reason: GuildVisitEndReasons.JOINED, notify: false});
 		}
 		await this.applyJoinUserSettings({userId, guildId, user, mentionsOnlyNotifications});
 		await eventService.dispatchGuildMemberAdd({member: guildMember, requestCache});
 		await this.gatewayService.joinGuild({userId, guildId});
+		await finishOperatorPassJoin(userId, labsJoin);
 		const includeDefault = guild.membersIndexedAt != null;
 		if (includeDefault) {
 			void this.searchIndexService.indexMember(guildMember, user, {includeDefault});
@@ -543,7 +537,7 @@ export class GuildMemberOperationsService {
 		void emitActivity('guild_joined', userId.toString(), {
 			user_id: userId.toString(),
 			guild_id: guildId.toString(),
-			member_count: guild.memberCount + 1,
+			member_count: syncedGuild?.memberCount ?? guild.memberCount + 1,
 			discoverable: guild.features.has(GuildFeatures.DISCOVERABLE),
 			invite_code: sourceInviteCode,
 			inviter_id: inviterId ? inviterId.toString() : null,
@@ -572,16 +566,12 @@ export class GuildMemberOperationsService {
 			throw InputValidationError.fromCode('guild_id', ValidationErrorCodes.CANNOT_LEAVE_GUILD_AS_OWNER);
 		}
 		const user = await this.userRepository.findUnique(userId);
-		const guild = await this.guildRepository.findUnique(guildId);
 		const leavingMember = await this.guildRepository.getMember(guildId, userId);
 		if (leavingMember) {
 			await this.snapshotMembershipMetadata(leavingMember);
 		}
 		await this.guildRepository.deleteMember(guildId, userId);
-		if (guild) {
-			const newMemberCount = Math.max(0, guild.memberCount - 1);
-			await this.guildRepository.upsertPartial(guildId, {member_count: newMemberCount}, guild.toRow());
-		}
+		await this.guildRepository.syncMemberCount(guildId);
 		if (user && !user.isBot) {
 			await removeGuildFromUserFolders({
 				userId,
@@ -845,6 +835,17 @@ export class GuildMemberOperationsService {
 				if (!bioRateLimit.allowed) {
 					const minutes = Math.ceil((bioRateLimit.retryAfter || 0) / 60);
 					throw InputValidationError.fromCode('bio', ValidationErrorCodes.BIO_CHANGED_TOO_MANY_TIMES, {minutes});
+				}
+				const maxBioLength = resolveLimitSafe(
+					this.limitConfigService.getConfigSnapshot(),
+					createLimitMatchContext({user: targetUser}),
+					'max_bio_length',
+					DEFAULT_STOCK_LIMITS.max_bio_length,
+				);
+				if (data.bio && data.bio.length > maxBioLength) {
+					throw InputValidationError.fromCode('bio', ValidationErrorCodes.CONTENT_EXCEEDS_MAX_LENGTH, {
+						maxLength: maxBioLength,
+					});
 				}
 				this.enforceProfileSubstringBlocklist(targetUser, 'bio', data.bio);
 				updateData.bio = data.bio;

@@ -3,6 +3,7 @@
 import {ensureActiveLocale, initI18n} from '@app/app/I18n';
 import {BootstrapErrorKind, classifyBootstrapError} from '@app/features/app/components/BootstrapErrorKind';
 import {type BootstrapAccounts, BootstrapErrorScreen} from '@app/features/app/components/BootstrapErrorScreen';
+import {notifyFirstContentPainted} from '@app/features/boot_state/BootDomFrame';
 import {AppI18nProvider} from '@app/features/i18n/components/AppI18nProvider';
 import {Logger} from '@app/features/platform/utils/AppLogger';
 import {i18n} from '@lingui/core';
@@ -21,6 +22,7 @@ async function loadBootstrapAccounts(): Promise<BootstrapAccounts | null> {
 				(account) => account.storageKey !== restoringAccountKey && account.isValid && account.instance !== undefined,
 			),
 			restoreOnNextStart: (accountKey) => SessionManager.restoreAccountOnNextStart(accountKey),
+			addAccountOnNextStart: () => SessionManager.startSignedOutOnNextStart(),
 		};
 	} catch (error) {
 		logger.warn('Failed to load the stored accounts for the bootstrap error screen:', error);
@@ -45,7 +47,7 @@ export async function reportBootstrapError(error: unknown): Promise<void> {
 			<BootstrapErrorScreen error={normalized} accounts={accounts} data-flx="index.bootstrap-error-screen" />
 		</AppI18nProvider>,
 	);
-	globalThis.window?.electron?.notifyFirstContentPainted?.();
+	notifyFirstContentPainted('other');
 	initI18n().catch((localeError: unknown) => {
 		logger.warn('Failed to load the locale for the bootstrap error screen:', localeError);
 	});

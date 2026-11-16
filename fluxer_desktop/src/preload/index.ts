@@ -20,6 +20,7 @@ import type {
 	DesktopWindowBehaviorSettings,
 	DisplayMediaPortalSurfacePreference,
 	DisplayMediaRequestInfo,
+	DownloadEntryEvent,
 	DownloadFileResult,
 	ElectronAPI,
 	GetDesktopSourcesOptions,
@@ -66,6 +67,8 @@ import type {
 	VirtmicNode,
 } from '@electron/common/Types';
 import {createAccountEnginePreloadAPI} from '@electron/preload/AccountEnginePreload';
+import {installBootFrame} from '@electron/preload/BootFramePreload';
+import {createBootStatePreloadAPI} from '@electron/preload/BootStatePreload';
 import {createBrowserHandoffPreloadAPI} from '@electron/preload/BrowserHandoffPreload';
 import {createDesktopStoragePreloadAPI} from '@electron/preload/DesktopStoragePreload';
 import {createFirstContentPaintSignal} from '@electron/preload/FirstContentPaint';
@@ -73,6 +76,7 @@ import {applyLegacyRawLocalStorage} from '@electron/preload/LegacyRawStorageSeed
 import {createLocalAppPreloadAPI} from '@electron/preload/LocalAppPreload';
 import {createNativeGatewayPreloadAPI} from '@electron/preload/NativeGatewayPreload';
 import {createOtherPlatformTemplatePreloadAPI} from '@electron/preload/OtherPlatformTemplatePreload';
+import {DESKTOP_API_ATTACHMENT_AUTHORIZATION_CHANNEL} from '@fluxer/desktop_ipc/src/ApiAttachmentAuthorizationContract';
 import type {DesktopCapabilityManifest} from '@fluxer/desktop_ipc/src/CapabilityManifest';
 import {DESKTOP_CAPABILITY_MANIFEST_CHANNEL} from '@fluxer/desktop_ipc/src/CapabilityManifest';
 import {DESKTOP_DIRECT_MESSAGES_AVAILABLE_CHANNEL} from '@fluxer/desktop_ipc/src/DirectMessagesContract';
@@ -393,6 +397,8 @@ function reportPrebootTheme(renderer: typeof ipcRenderer): void {
 	}
 }
 
+const releaseBootFrame = installBootFrame(ipcRenderer, (callback) => window.requestAnimationFrame(callback));
+
 applyStartupDesktopWindowClasses();
 
 applyLegacyRawLocalStorage(ipcRenderer);
@@ -419,14 +425,19 @@ const api: ElectronAPI = {
 	...createNativeGatewayPreloadAPI(ipcRenderer),
 	...createAccountEnginePreloadAPI(ipcRenderer),
 	...createOtherPlatformTemplatePreloadAPI(ipcRenderer),
+	...createBootStatePreloadAPI(ipcRenderer),
 	reportLastRoute: (routePath: string): void => {
 		ipcRenderer.send(DESKTOP_LAST_ROUTE_CHANNEL, routePath);
 	},
+	setApiAttachmentAuthorization: (apiEndpoint: string, token: string | null): Promise<boolean> =>
+		ipcRenderer.invoke(DESKTOP_API_ATTACHMENT_AUTHORIZATION_CHANNEL, {apiEndpoint, token}) as Promise<boolean>,
 	reportInstanceProductName: (instanceKey: string, productName: string): void => {
 		ipcRenderer.send(DESKTOP_INSTANCE_PRODUCT_NAME_CHANNEL, {instanceKey, productName});
 	},
-	notifyFirstContentPainted: createFirstContentPaintSignal(ipcRenderer, (callback) =>
-		window.requestAnimationFrame(callback),
+	notifyFirstContentPainted: createFirstContentPaintSignal(
+		ipcRenderer,
+		(callback) => window.requestAnimationFrame(callback),
+		releaseBootFrame,
 	),
 	getDesktopInfo: (): Promise<DesktopInfo> => ipcRenderer.invoke('get-desktop-info'),
 	getGpuInfo: (): Promise<GpuInfo> => ipcRenderer.invoke('get-gpu-info'),
@@ -489,7 +500,29 @@ const api: ElectronAPI = {
 		ipcRenderer.send('window-close');
 	},
 	windowIsMaximized: (): Promise<boolean> => ipcRenderer.invoke('window-is-maximized'),
-
+	onDownloadsChanged: (handler: (entries: Array<DownloadEntryEvent>) => void): (() => void) => {
+		const listener = (_event: Electron.IpcRendererEvent, entries: Array<DownloadEntryEvent>): void => handler(entries);
+		ipcRenderer.on('downloads-changed', listener);
+		return () => {
+			ipcRenderer.off('downloads-changed', listener);
+		};
+	},
+	downloadsList: (): Promise<Array<DownloadEntryEvent>> => ipcRenderer.invoke('downloads-list'),
+	downloadCancel: (id: string): void => {
+		ipcRenderer.send('download-cancel', id);
+	},
+	downloadOpen: (id: string): void => {
+		ipcRenderer.send('download-open', id);
+	},
+	downloadReveal: (id: string): void => {
+		ipcRenderer.send('download-reveal', id);
+	},
+	downloadDismiss: (id: string): void => {
+		ipcRenderer.send('download-dismiss', id);
+	},
+	downloadsClear: (): void => {
+		ipcRenderer.send('downloads-clear');
+	},
 	popoutSetAlwaysOnTop: (key: string, flag: boolean): Promise<boolean> =>
 		ipcRenderer.invoke('popout:set-always-on-top', key, flag),
 	popoutFocus: (key: string): Promise<boolean> => ipcRenderer.invoke('popout:focus', key),
@@ -644,6 +677,7 @@ const api: ElectronAPI = {
 		ipcRenderer.send('set-zoom-factor', factor);
 	},
 	getAccessibilitySupportEnabled: (): Promise<boolean> => ipcRenderer.invoke('get-accessibility-support-enabled'),
+	getSystemLocale: (): Promise<string> => ipcRenderer.invoke('system-locale-get'),
 	onAccessibilitySupportChanged: (callback: (enabled: boolean) => void): (() => void) => {
 		const handler = (_event: Electron.IpcRendererEvent, enabled: boolean): void => callback(enabled);
 		ipcRenderer.on('accessibility-support-changed', handler);

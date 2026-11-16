@@ -5,6 +5,8 @@ import {useMessageListPlaceholderSpecs} from '@app/features/app/components/skele
 import {ScrollFillerSkeleton} from '@app/features/app/components/skeleton/ScrollFillerSkeleton';
 import {reportSkeletonMessagePresentation} from '@app/features/app/components/skeleton/SkeletonLayoutMemory';
 import {measureSkeletonHeightPx, useSkeletonLayoutReport} from '@app/features/app/hooks/useSkeletonLayoutMemoryCapture';
+import Initialization from '@app/features/app/state/Initialization';
+import {registerChannelViewport} from '@app/features/boot_state/BootViewport';
 import {
 	type MessageFocusCandidate,
 	resolveBottommostFocusableMessageId,
@@ -45,12 +47,12 @@ import LocalUserSpamOverride from '@app/features/moderation/state/LocalUserSpamO
 import Navigation from '@app/features/navigation/state/Navigation';
 import SelectedChannel from '@app/features/navigation/state/SelectedChannel';
 import Permission from '@app/features/permissions/state/Permission';
+import {isDesktopLocalAppDocument} from '@app/features/platform/DesktopLocalAppRuntime';
 import {ComponentBus} from '@app/features/platform/utils/ComponentBus';
 import {useScrollManager} from '@app/features/platform/utils/ScrollManager';
 import * as ReadStateCommands from '@app/features/read_state/commands/ReadStateCommands';
 import ReadStates from '@app/features/read_state/state/ReadStates';
 import {shouldAutoAck} from '@app/features/read_state/utils/AutoAckPredicate';
-import {remFromPx} from '@app/features/theme/layout/RemFromPx';
 import ActiveComposer from '@app/features/threads/state/ActiveComposer';
 import {Button} from '@app/features/ui/button/Button';
 import {Scroller} from '@app/features/ui/components/Scroller';
@@ -62,6 +64,7 @@ import type {User} from '@app/features/user/models/User';
 import AdvancedSettings from '@app/features/user/state/AdvancedSettings';
 import UserSettings from '@app/features/user/state/UserSettings';
 import Users from '@app/features/user/state/Users';
+import VoiceRuntime from '@app/features/voice/engine/VoiceRuntime';
 import Window from '@app/features/window/state/Window';
 import {Permissions} from '@fluxer/constants/src/ChannelConstants';
 import {MAX_MESSAGES_PER_CHANNEL} from '@fluxer/constants/src/LimitConstants';
@@ -72,7 +75,7 @@ import {clsx} from 'clsx';
 import {runInAction} from 'mobx';
 import {observer, useLocalObservable} from 'mobx-react-lite';
 import type React from 'react';
-import {useCallback, useEffect, useMemo, useRef} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
 const MESSAGE_LIST_FOR_DESCRIPTOR = msg({
 	message: 'Message list for {channelName}',
@@ -128,8 +131,6 @@ interface MessagesProps {
 	allowAutoAck?: boolean;
 }
 
-type MessagesWrapperStyle = React.CSSProperties & {'--message-group-spacing': string};
-
 const readFromState = (channelId: string): MessagesStateSnapshot => {
 	const messages = MessagesState.getMessages(channelId);
 	const messageDisplayCompact = UserSettings.getMessageDisplayCompact();
@@ -152,6 +153,27 @@ const readFromState = (channelId: string): MessagesStateSnapshot => {
 		ackedManually: ReadStates.getIfExists(channelId)?.ackedManually ?? false,
 	};
 };
+
+interface ShownNewMessagesBar {
+	readonly unreadCount: number;
+	readonly oldestUnreadMessageTimestamp: number;
+	readonly isEstimated: boolean;
+}
+
+function useHeldWhileReconciling<T>(live: T, reconciling: boolean): T {
+	const shown = useRef(live);
+	if (!reconciling) {
+		shown.current = live;
+	}
+	return shown.current;
+}
+
+function bottomFadeClassName(isAtBottom: boolean): string {
+	if (!isAtBottom) {
+		return styles.bottomFadeStatusScrolled;
+	}
+	return isDesktopLocalAppDocument() ? styles.bottomFadeStatusAtBottomFullHeight : styles.bottomFadeStatusAtBottom;
+}
 
 function shallowEqual<T extends object>(a: T, b: T): boolean {
 	const aKeys = Object.keys(a);
@@ -182,6 +204,7 @@ const CachedMessages = observer(function CachedMessages({channel, allowAutoAck =
 		};
 	});
 	const windowId = Window.windowId;
+	const viewIsStale = Initialization.isStale;
 	const isWindowFocused = Window.isFocused();
 	const isModalOpen = Modal.hasModalOpen();
 	const isGatewayConnected = GatewaySessions.foregroundConnection.isConnected;
@@ -202,7 +225,7 @@ const CachedMessages = observer(function CachedMessages({channel, allowAutoAck =
 		hasMoreBefore: safeMessages.hasMoreBefore,
 		hasMoreAfter: safeMessages.hasMoreAfter,
 	});
-	const windowBar = selectChannelMessagesWindowBar(windowStatus);
+	const windowBar = selectChannelMessagesWindowBar(windowStatus, MessagesState.isRestoredWindowPending(channel.id));
 	const windowNeedsPage = windowStatus.needsPage;
 	const canAutoAck = shouldAutoAck({
 		channelActive: allowAutoAck,
@@ -271,6 +294,10 @@ const CachedMessages = observer(function CachedMessages({channel, allowAutoAck =
 			ChannelMessages.releaseRetainedChannel(channel.id);
 		};
 	}, [channel.id]);
+	useEffect(
+		() => registerChannelViewport(channel.id, () => scrollManager.ref.current?.getViewportElement() ?? null),
+		[channel.id, scrollManager],
+	);
 	const updateFromState = useCallback(() => {
 		const snapshot = readFromState(channel.id);
 		const previous = lastStateSnapshotRef.current;
@@ -525,11 +552,11 @@ const CachedMessages = observer(function CachedMessages({channel, allowAutoAck =
 		};
 	}, []);
 	useEffect(() => {
-		if (!canAutoAck || !state.isAtBottom || !state.messages?.ready || state.messages.loadingMore) return;
+		if (viewIsStale || !canAutoAck || !state.isAtBottom || !state.messages?.ready || state.messages.loadingMore) return;
 		if (ReadStates.hasUnread(channel.id)) {
 			ReadStateCommands.ackWithStickyUnread(channel.id);
 		}
-	}, [canAutoAck, state.isAtBottom, state.messages?.ready, state.messages?.loadingMore, channel.id]);
+	}, [viewIsStale, canAutoAck, state.isAtBottom, state.messages?.ready, state.messages?.loadingMore, channel.id]);
 	useEffect(() => {
 		return () => {
 			const readState = ReadStates.getIfExists(channel.id);
@@ -541,16 +568,18 @@ const CachedMessages = observer(function CachedMessages({channel, allowAutoAck =
 	}, [channel.id]);
 	const spammerOverrideVersion = LocalUserSpamOverride.version;
 	const hideBlocked = AdvancedSettings.hideBlockedMessages;
+	const reconcilingSeededWindow = MessagesState.isReconcilingSeededWindow(channel.id);
+	const dividerMessageId = useHeldWhileReconciling(state.visualUnreadMessageId, reconcilingSeededWindow);
 	const channelStream = useMemo<Array<ChannelStreamItem>>(() => {
 		if (!state.messages) return [];
 		return createChannelStream({
 			channel,
 			messages: state.messages,
-			oldestUnreadMessageId: state.visualUnreadMessageId,
+			oldestUnreadMessageId: dividerMessageId,
 			treatSpam: true,
 			hideBlocked,
 		});
-	}, [channel, state.messages, state.messageVersion, state.visualUnreadMessageId, spammerOverrideVersion, hideBlocked]);
+	}, [channel, state.messages, state.messageVersion, dividerMessageId, spammerOverrideVersion, hideBlocked]);
 	useEffect(() => {
 		const messages = state.messages;
 		if (!messages?.ready) {
@@ -558,6 +587,9 @@ const CachedMessages = observer(function CachedMessages({channel, allowAutoAck =
 		}
 		void MessageCommands.ensureMembersForMessages(messages.toArray());
 	}, [channel.id, state.messages?.ready, state.messageVersion]);
+	useEffect(() => {
+		if (state.messages?.ready && !viewIsStale) VoiceRuntime.noteChannelContentRendered();
+	}, [state.messages?.ready, viewIsStale]);
 	const immediateHighlightedMessageId = (() => {
 		const messages = state.messages;
 		if (!messages?.ready || !messages.hasJumped || !messages.jumpHighlight || !messages.jumpDestinationId) {
@@ -631,24 +663,27 @@ const CachedMessages = observer(function CachedMessages({channel, allowAutoAck =
 			/>
 		);
 	}
-	const showNewMessagesBar = Boolean(windowStatus.phase === 'stream' && state.unreadCount > 0);
 	const unreadTimestampMessageId = state.oldestUnreadMessageId ?? state.ackMessageId;
-	const topBar = showNewMessagesBar ? (
+	const newMessagesBar = useHeldWhileReconciling<ShownNewMessagesBar | null>(
+		windowStatus.phase === 'stream' && state.unreadCount > 0
+			? {
+					unreadCount: state.unreadCount,
+					oldestUnreadMessageTimestamp: unreadTimestampMessageId ? extractTimestamp(unreadTimestampMessageId) : 0,
+					isEstimated: state.isEstimated,
+				}
+			: null,
+		reconcilingSeededWindow,
+	);
+	const topBar = newMessagesBar ? (
 		<NewMessagesBar
-			unreadCount={state.unreadCount}
-			oldestUnreadMessageTimestamp={unreadTimestampMessageId ? extractTimestamp(unreadTimestampMessageId) : 0}
-			isEstimated={state.isEstimated}
+			unreadCount={newMessagesBar.unreadCount}
+			oldestUnreadMessageTimestamp={newMessagesBar.oldestUnreadMessageTimestamp}
+			isEstimated={newMessagesBar.isEstimated}
 			onJumpToOldestUnread={onJumpToOldestUnread}
 			onJumpToNewMessages={onScrollToPresentAndAck}
 			data-flx="channel.messages.new-messages-bar"
 		/>
 	) : null;
-	const messagesWrapperStyle = useMemo<MessagesWrapperStyle>(
-		() => ({
-			'--message-group-spacing': remFromPx(state.messageGroupSpacing),
-		}),
-		[state.messageGroupSpacing],
-	);
 	const compactAvatarsVisible = Accessibility.showUserAvatarsInCompactMode;
 	const messageGutter = Accessibility.messageGutter;
 	useSkeletonLayoutReport(
@@ -673,8 +708,11 @@ const CachedMessages = observer(function CachedMessages({channel, allowAutoAck =
 		scrollManagerInitialized: scrollManager.lifecycleIsInitialized(),
 		ready: safeMessages.ready,
 	});
-	const headFillerVisible = windowStatus.olderPageAvailable && topFillerVisible;
+	const deferredReserve = MessagesState.deferredOlderReserve(channel.id);
+	const headOlderAvailable = deferredReserve?.hasMoreBefore ?? windowStatus.olderPageAvailable;
+	const headFillerVisible = headOlderAvailable && topFillerVisible;
 	const tailFillerVisible = windowStatus.newerPageAvailable;
+	const restoredTailPx = tailFillerVisible ? MessagesState.restoredTailHeight(channel.id) : null;
 	const streamHasRows = streamMarkup != null && streamMarkup.length > 0;
 	const spacerFollowsFiller = tailFillerVisible || (headFillerVisible && !streamHasRows);
 	const scrollerInner = (
@@ -682,15 +720,26 @@ const CachedMessages = observer(function CachedMessages({channel, allowAutoAck =
 			{headFillerVisible && (
 				<ScrollFillerSkeleton data-flx="channel.messages.scroll-filler-skeleton" {...placeholderSpecs} />
 			)}
-			{windowStatus.olderPageAvailable && safeMessages.length > 0 && (
+			{headOlderAvailable && safeMessages.length > 0 && (
 				<div className={styles.fillerBuffer} data-flx="channel.messages.filler-buffer" />
 			)}
-			{!windowStatus.olderPageAvailable && (
+			{!headOlderAvailable && (
 				<ChannelWelcomeSection channel={channel} data-flx="channel.messages.channel-welcome-section" />
+			)}
+			{deferredReserve !== null && deferredReserve.heightPx > 0 && (
+				<ScrollFillerSkeleton
+					data-flx="channel.messages.deferred-reserve"
+					{...placeholderSpecs}
+					totalHeight={deferredReserve.heightPx}
+				/>
 			)}
 			{streamMarkup}
 			{tailFillerVisible && (
-				<ScrollFillerSkeleton data-flx="channel.messages.scroll-filler-skeleton--2" {...placeholderSpecs} />
+				<ScrollFillerSkeleton
+					data-flx="channel.messages.scroll-filler-skeleton--2"
+					{...placeholderSpecs}
+					totalHeight={restoredTailPx ?? placeholderSpecs.totalHeight}
+				/>
 			)}
 			<div
 				className={clsx(styles.scrollerSpacer, spacerFollowsFiller && styles.scrollerSpacerAfterFiller)}
@@ -699,7 +748,7 @@ const CachedMessages = observer(function CachedMessages({channel, allowAutoAck =
 		</>
 	);
 	return (
-		<div className={styles.messagesWrapper} style={messagesWrapperStyle} data-flx="channel.messages.messages-wrapper">
+		<div className={styles.messagesWrapper} data-flx="channel.messages.messages-wrapper">
 			<UploadManager
 				channel={channel}
 				canAttachFiles={canAttachFiles}
@@ -715,7 +764,7 @@ const CachedMessages = observer(function CachedMessages({channel, allowAutoAck =
 				<Scroller
 					fade={false}
 					scrollbar="regular"
-					hideThumbWhenWindowBlurred
+					hideThumbWhenWindowBlurred={isDesktopLocalAppDocument()}
 					ref={scrollManager.ref}
 					onScroll={scrollManager.scrollHandle}
 					onScrollIntent={scrollManager.scrollHandleUserIntent}
@@ -752,10 +801,7 @@ const CachedMessages = observer(function CachedMessages({channel, allowAutoAck =
 				</Scroller>
 				{composerStatusVisible && (
 					<div
-						className={clsx(
-							styles.bottomFade,
-							state.isAtBottom ? styles.bottomFadeStatusAtBottom : styles.bottomFadeStatusScrolled,
-						)}
+						className={clsx(styles.bottomFade, bottomFadeClassName(state.isAtBottom))}
 						aria-hidden="true"
 						data-flx="channel.messages.bottom-fade"
 					/>
@@ -775,6 +821,8 @@ export const Messages = observer(function Messages(props: MessagesProps) {
 		/>
 	);
 });
+const JUMP_START_TIMEOUT_MS = 1500;
+
 const JumpToPresentBar = observer(function JumpToPresentBar({
 	loadingMore,
 	landedAtLiveEdge,
@@ -785,7 +833,29 @@ const JumpToPresentBar = observer(function JumpToPresentBar({
 	onJumpToPresent: () => void;
 }) {
 	const {i18n} = useLingui();
-	const jumpIsActiveNow = loadingMore && landedAtLiveEdge;
+	const [pressed, setPressed] = useState(false);
+	const sawLoadRef = useRef(false);
+	useEffect(() => {
+		if (!pressed) return;
+		if (loadingMore) {
+			sawLoadRef.current = true;
+			return;
+		}
+		if (sawLoadRef.current) {
+			sawLoadRef.current = false;
+			setPressed(false);
+			return;
+		}
+		const timer = window.setTimeout(() => setPressed(false), JUMP_START_TIMEOUT_MS);
+		return () => window.clearTimeout(timer);
+	}, [pressed, loadingMore]);
+	const jumpIsActiveNow = pressed || (loadingMore && landedAtLiveEdge);
+	const handleJump = () => {
+		if (jumpIsActiveNow) return;
+		sawLoadRef.current = false;
+		setPressed(true);
+		onJumpToPresent();
+	};
 	return (
 		<div
 			className={[styles.newMessagesBar, styles.messageBottomPill, styles.jumpToPresentBar].join(' ')}
@@ -800,7 +870,7 @@ const JumpToPresentBar = observer(function JumpToPresentBar({
 				compact
 				fitContent
 				className={styles.newMessagesBarAction}
-				onClick={onJumpToPresent}
+				onClick={handleJump}
 				submitting={jumpIsActiveNow}
 				disabled={jumpIsActiveNow}
 				data-flx="channel.messages.jump-to-present-bar.new-messages-bar-action"

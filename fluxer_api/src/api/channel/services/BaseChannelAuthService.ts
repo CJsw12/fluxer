@@ -13,7 +13,6 @@ import {
 	ensurePersonalNotesChannelExists,
 	isPersonalNotesChannelId,
 } from '@app/api/channel/services/PersonalNotesChannelRepair';
-import {assertThreadAllowed} from '@app/api/channel/services/thread/ThreadDenials';
 import {
 	type ContentWarningChannelLike,
 	channelResponseToContentWarningView,
@@ -63,7 +62,7 @@ import {UnknownChannelError} from '@fluxer/errors/src/domains/channel/UnknownCha
 import {AccessDeniedError} from '@fluxer/errors/src/domains/core/AccessDeniedError';
 import {MissingPermissionsError} from '@fluxer/errors/src/domains/core/MissingPermissionsError';
 import {UnknownGuildError} from '@fluxer/errors/src/domains/guild/UnknownGuildError';
-import {NsfwContentRequiresAgeVerificationError} from '@fluxer/errors/src/domains/moderation/NsfwContentRequiresAgeVerificationError';
+import {NsfwContentAgeRestrictedError} from '@fluxer/errors/src/domains/moderation/NsfwContentAgeRestrictedError';
 import {UnknownUserError} from '@fluxer/errors/src/domains/user/UnknownUserError';
 import type {GuildMemberResponse} from '@fluxer/schema/src/domains/guild/GuildMemberSchemas';
 import type {GuildResponse} from '@fluxer/schema/src/domains/guild/GuildResponseSchemas';
@@ -369,12 +368,12 @@ export abstract class BaseChannelAuthService {
 			const allowed = await hasPermission(permission);
 			if (!allowed) throw new MissingPermissionsError();
 		};
-		await checkPermission(Permissions.VIEW_CHANNEL);
+		if (!(await hasPermission(Permissions.VIEW_CHANNEL))) throw new UnknownChannelError();
 		const parentCategory = await this.getParentCategoryContentWarningView({
 			channel,
 			parentChannel: authContextResult.parentChannel,
 		});
-		const requiresAgeVerification = computeEffectiveChannelNsfw(
+		const isAgeRestricted = computeEffectiveChannelNsfw(
 			channelToContentWarningView(channel),
 			parentCategory,
 			guildResponseToContentWarningView(guildDataResult),
@@ -387,12 +386,12 @@ export abstract class BaseChannelAuthService {
 				channel.type === ChannelTypes.GUILD_VOICE ||
 				channel.type === ChannelTypes.GUILD_LINK ||
 				THREAD_ONLY_CHANNEL_TYPES.has(channel.type)) &&
-			requiresAgeVerification
+			isAgeRestricted
 		) {
 			const user = await this.userRepository.findUnique(userId);
 			if (!user) throw new UnknownUserError();
 			if (!canUserAccessNsfwContent(user)) {
-				throw new NsfwContentRequiresAgeVerificationError();
+				throw new NsfwContentAgeRestrictedError();
 			}
 		}
 		return {
@@ -478,7 +477,7 @@ export abstract class BaseChannelAuthService {
 	}): Promise<AuthenticatedChannel> {
 		const context = await this.resolveThreadPermissionContext({thread: channel, userId});
 		const {guild, member, thread} = context;
-		assertThreadAllowed(canViewThread(thread.actor));
+		if (canViewThread(thread.actor) !== null) throw new UnknownChannelError();
 		const permissions = threadViewPermissions(thread.parentPermissions);
 		const hasPermission = async (permission: bigint): Promise<boolean> => {
 			const allowed = (permissions & permission) === permission;
@@ -493,16 +492,16 @@ export abstract class BaseChannelAuthService {
 				channel: thread.parent,
 				parentChannel: context.parentCategory,
 			});
-			const requiresAgeVerification = computeEffectiveChannelNsfw(
+			const isAgeRestricted = computeEffectiveChannelNsfw(
 				channelToContentWarningView(thread.parent),
 				parentCategory,
 				guildResponseToContentWarningView(guild),
 			);
-			if (requiresAgeVerification) {
+			if (isAgeRestricted) {
 				const user = await this.userRepository.findUnique(userId);
 				if (!user) throw new UnknownUserError();
 				if (!canUserAccessNsfwContent(user)) {
-					throw new NsfwContentRequiresAgeVerificationError();
+					throw new NsfwContentAgeRestrictedError();
 				}
 			}
 		}

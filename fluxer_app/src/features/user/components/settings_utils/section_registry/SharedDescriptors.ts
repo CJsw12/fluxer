@@ -48,6 +48,11 @@ export const ENABLE_FAVORITES_DESCRIPTOR = msg({
 	message: 'Enable favorites',
 	comment: 'Toggle label and settings search entry for controlling whether favorites are visible throughout the app.',
 });
+export const SHOW_PLUTONIUM_BUTTON_DESCRIPTOR = msg({
+	message: 'Show Plutonium button',
+	comment:
+		'Toggle label and settings search entry for showing the Plutonium button in the direct messages list. Plutonium is the product name.',
+});
 export const SHOW_HELP_CENTER_BUTTON_DESCRIPTOR = msg({
 	message: 'Show help center button',
 	comment: 'Toggle label and settings search entry for showing the help center button in the sidebar.',
@@ -565,6 +570,18 @@ export const PUSH_TO_TALK_DESCRIPTOR = msg({
 export const TIME_FORMAT_DESCRIPTOR = msg({
 	message: 'Time format',
 	comment: 'Settings search entry label. Also used as a search synonym in the settings search bar.',
+});
+
+export const REGIONAL_FORMAT_DESCRIPTOR = msg({
+	message: 'Regional format',
+	comment:
+		'Title of the language settings section that picks how dates, times and numbers are written, separately from the interface language. Also a settings search entry label.',
+});
+
+export const DATE_FORMAT_DESCRIPTOR = msg({
+	message: 'Date format',
+	comment:
+		'Title of the language settings section that picks a fixed order for numeric dates. Also a settings search entry label.',
 });
 
 export const TIME_DESCRIPTOR = msg({

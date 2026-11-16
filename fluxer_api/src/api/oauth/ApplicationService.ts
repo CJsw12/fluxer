@@ -5,6 +5,7 @@ import type {ApplicationID, UserID} from '@app/api/BrandedTypes';
 import {applicationIdToUserId} from '@app/api/BrandedTypes';
 import type {ApplicationRow} from '@app/api/database/types/OAuth2Types';
 import {EMPTY_USER_ROW, type UserRow} from '@app/api/database/types/UserTypes';
+import type {GuildRepository} from '@app/api/guild/repositories/GuildRepository';
 import {contentModerationService} from '@app/api/infrastructure/ContentModerationService';
 import type {DiscriminatorService} from '@app/api/infrastructure/DiscriminatorService';
 import type {EntityAssetService, PreparedAssetUpload} from '@app/api/infrastructure/EntityAssetService';
@@ -15,6 +16,7 @@ import type {Application} from '@app/api/models/Application';
 import type {User} from '@app/api/models/User';
 import type {BotAuthService} from '@app/api/oauth/BotAuthService';
 import type {ApplicationRepository} from '@app/api/oauth/repositories/ApplicationRepository';
+import {assertAccountNotLimited} from '@app/api/user/AccountLimit';
 import {assertTierAllows, NO_TIER_CONTEXT} from '@app/api/user/AccountTier';
 import {enforceFluxerTagChangeRateLimit} from '@app/api/user/FluxerTagChangeRateLimit';
 import {dispatchUserUpdate, hasPartialUserFieldsChanged} from '@app/api/user/UserMappers';
@@ -46,6 +48,7 @@ interface ApplicationServiceDeps {
 	botAuthService: BotAuthService;
 	entityAssetService: EntityAssetService;
 	userCacheService: UserCacheService;
+	guildRepository: GuildRepository;
 }
 
 const BOT_IMAGE_FIELDS = [
@@ -126,6 +129,7 @@ export class ApplicationService {
 			});
 		}
 		const owner = await this.apiContext.services.users.findUniqueAssert(args.ownerUserId);
+		assertAccountNotLimited(owner);
 		const botIsPublic = args.botPublic ?? true;
 		const botRequireCodeGrant = args.botRequireCodeGrant ?? false;
 		assertTierAllows(owner, TierGatedActions.APPLICATION_CREATE, NO_TIER_CONTEXT);
@@ -245,6 +249,8 @@ export class ApplicationService {
 			const guildIds = await this.apiContext.services.users.getUserGuildIds(botUserId);
 			await this.apiContext.services.users.deleteUserSecondaryIndices(botUserId);
 			await this.apiContext.services.users.removeFromAllGuilds(botUserId);
+			await this.apiContext.services.users.deleteAllRelationships(botUserId);
+			await this.deps.guildRepository.deleteAllBansForUser(botUserId);
 			for (const guildId of guildIds) {
 				try {
 					await this.apiContext.services.gateway.dispatchGuild({

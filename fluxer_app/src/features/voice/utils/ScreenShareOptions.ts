@@ -6,6 +6,7 @@ import type {
 	ScreenShareScalabilityModePreference,
 } from '@app/features/voice/utils/CodecCapabilityDetector';
 import {getH264HardwareProfilesSync} from '@app/features/voice/utils/GpuEncoderCapabilities';
+import type {VideoQualityCaps} from '@app/features/voice/utils/VideoQualityCaps';
 import {MAX_SCREEN_SHARE_BITRATE} from '@fluxer/constants/src/LimitConstants';
 import type {ScreenShareCaptureOptions, TrackPublishOptions, VideoCodec} from 'livekit-client';
 
@@ -56,6 +57,7 @@ const BITRATE_RUNGS = [
 ] as const satisfies ReadonlyArray<ScreenshareResolution>;
 
 export function resolveScreenShareFrameRate(frameRate: number): SupportedScreenShareFrameRate {
+	if (frameRate >= 120) return 120;
 	if (frameRate >= 60) return 60;
 	if (frameRate >= 30) return 30;
 	return 15;
@@ -105,16 +107,6 @@ const STREAMING_MODE_PRESETS: Record<
 > = {
 	gaming: {resolution: 'ultra', frameRate: 60},
 	screenshare: {resolution: 'high', frameRate: 30},
-};
-const FREE_STREAMING_MODE_PRESETS: Record<
-	Exclude<StreamingMode, 'custom'>,
-	{
-		resolution: ScreenshareResolution;
-		frameRate: SupportedScreenShareFrameRate;
-	}
-> = {
-	gaming: {resolution: 'medium', frameRate: 30},
-	screenshare: {resolution: 'medium', frameRate: 30},
 };
 
 export interface BuiltScreenShareOptions {
@@ -220,34 +212,43 @@ export function buildScreenShareOptions(config: ScreenShareBuildConfig): BuiltSc
 	};
 }
 
-const FREE_TIER_FALLBACK_RESOLUTION: ScreenshareResolution = 'medium';
-const FREE_TIER_RESOLUTIONS: ReadonlyArray<ScreenshareResolution> = ['low_480p', 'medium'];
-const FREE_TIER_MAX_FRAME_RATE: SupportedScreenShareFrameRate = 30;
-
-function isFreeTierResolution(resolution: ScreenshareResolution): boolean {
-	return FREE_TIER_RESOLUTIONS.includes(resolution);
+export function capsAllowScreenShareResolution(caps: VideoQualityCaps, resolution: ScreenshareResolution): boolean {
+	return DIMENSIONS[resolution].height <= caps.screenShareMaxHeight;
 }
 
-function clampToFreeTier(
+export function capsAllowScreenShareFrameRate(caps: VideoQualityCaps, frameRate: number): boolean {
+	return frameRate <= caps.screenShareMaxFrameRate;
+}
+
+export function capScreenShareResolution(
+	caps: VideoQualityCaps,
 	resolution: ScreenshareResolution,
+): ScreenshareResolution {
+	let capped: ScreenshareResolution = BITRATE_RUNGS[0];
+	for (const candidate of BITRATE_RUNGS.slice(0, BITRATE_RUNGS.indexOf(resolution) + 1)) {
+		if (capsAllowScreenShareResolution(caps, candidate)) capped = candidate;
+	}
+	return capped;
+}
+
+export function maxScreenShareResolution(caps: VideoQualityCaps): ScreenshareResolution {
+	return capScreenShareResolution(caps, 'source');
+}
+
+function capScreenShareFrameRate(
+	caps: VideoQualityCaps,
 	frameRate: SupportedScreenShareFrameRate,
-): {
-	resolution: ScreenshareResolution;
-	frameRate: SupportedScreenShareFrameRate;
-} {
-	const cappedResolution: ScreenshareResolution = isFreeTierResolution(resolution)
-		? resolution
-		: FREE_TIER_FALLBACK_RESOLUTION;
-	const cappedFrameRate: SupportedScreenShareFrameRate =
-		frameRate > FREE_TIER_MAX_FRAME_RATE ? FREE_TIER_MAX_FRAME_RATE : frameRate;
-	return {resolution: cappedResolution, frameRate: cappedFrameRate};
+): SupportedScreenShareFrameRate {
+	return capsAllowScreenShareFrameRate(caps, frameRate)
+		? frameRate
+		: resolveScreenShareFrameRate(caps.screenShareMaxFrameRate);
 }
 
 export function resolveStreamingModeSettings(
 	mode: StreamingMode,
 	customResolution: ScreenshareResolution,
 	customFrameRate: number,
-	hasHigherQuality: boolean,
+	caps: VideoQualityCaps,
 ): {
 	resolution: ScreenshareResolution;
 	frameRate: SupportedScreenShareFrameRate;
@@ -255,11 +256,11 @@ export function resolveStreamingModeSettings(
 	const resolved =
 		mode === 'custom'
 			? {resolution: customResolution, frameRate: resolveScreenShareFrameRate(customFrameRate)}
-			: (hasHigherQuality ? STREAMING_MODE_PRESETS : FREE_STREAMING_MODE_PRESETS)[mode];
-	if (hasHigherQuality) {
-		return resolved;
-	}
-	return clampToFreeTier(resolved.resolution, resolved.frameRate);
+			: STREAMING_MODE_PRESETS[mode];
+	return {
+		resolution: capScreenShareResolution(caps, resolved.resolution),
+		frameRate: capScreenShareFrameRate(caps, resolved.frameRate),
+	};
 }
 
 export type ScreenShareContext = 'display' | 'app' | 'device';
@@ -271,28 +272,13 @@ export function normaliseStreamingModeForContext(mode: StreamingMode, context: S
 	return mode;
 }
 
-export function normaliseResolutionForContext(
-	resolution: ScreenshareResolution,
-	context: ScreenShareContext,
-	hasHigherQuality: boolean,
-): ScreenshareResolution {
-	if (!hasHigherQuality && !isFreeTierResolution(resolution)) {
-		return FREE_TIER_FALLBACK_RESOLUTION;
-	}
-	if (context === 'device' && resolution === 'source') {
-		return hasHigherQuality ? 'ultra' : FREE_TIER_FALLBACK_RESOLUTION;
-	}
-	return resolution;
-}
-
-const PREMIUM_SCREEN_SHARE_RESOLUTIONS: ReadonlyArray<ScreenshareResolution> = ['high', 'ultra', 'source'];
 const SENT_PIXEL_FILL_RATIO = 0.98;
 
 export interface ScreenShareQualityInput {
 	mode: StreamingMode;
 	storedResolution: ScreenshareResolution;
 	storedFrameRate: number;
-	entitled: boolean;
+	caps: VideoQualityCaps;
 	context: ScreenShareContext;
 }
 
@@ -373,8 +359,7 @@ function resolveEffectiveScreenShareQuality(input: ScreenShareQualityInput): {
 	frameRate: SupportedScreenShareFrameRate;
 } {
 	const mode = normaliseStreamingModeForContext(input.mode, input.context);
-	const resolution = normaliseResolutionForContext(input.storedResolution, input.context, input.entitled);
-	const settings = resolveStreamingModeSettings(mode, resolution, input.storedFrameRate, input.entitled);
+	const settings = resolveStreamingModeSettings(mode, input.storedResolution, input.storedFrameRate, input.caps);
 	return {mode, resolution: settings.resolution, frameRate: settings.frameRate};
 }
 
@@ -425,10 +410,9 @@ export function resolveScreenShareTarget(input: ScreenShareTargetInput): ScreenS
 		softwareEncoderClamped: clamped,
 		presetOwned: effective.mode !== 'custom',
 		tierLimited:
-			!input.entitled &&
 			input.mode === 'custom' &&
-			(PREMIUM_SCREEN_SHARE_RESOLUTIONS.includes(input.storedResolution) ||
-				resolveScreenShareFrameRate(input.storedFrameRate) > FREE_TIER_MAX_FRAME_RATE),
+			(!capsAllowScreenShareResolution(input.caps, input.storedResolution) ||
+				!capsAllowScreenShareFrameRate(input.caps, resolveScreenShareFrameRate(input.storedFrameRate))),
 		deviceMapped:
 			effective.mode !== onDisplay.mode ||
 			effective.resolution !== onDisplay.resolution ||
@@ -439,6 +423,7 @@ export function resolveScreenShareTarget(input: ScreenShareTargetInput): ScreenS
 export interface ScreenShareLayeringInput {
 	codec: VideoCodec | undefined;
 	svcSetting: ScreenShareScalabilityModePreference | undefined;
+	hardwareEncoder: boolean;
 }
 
 export interface ScreenShareLayering {
@@ -450,9 +435,10 @@ export function resolveScreenShareLayering(input: ScreenShareLayeringInput): Scr
 	if (input.codec !== 'av1' && input.codec !== 'vp9') {
 		return {simulcast: false, scalabilityMode: undefined};
 	}
+	const singleLayer = input.svcSetting === 'single_layer' || (input.svcSetting === undefined && input.hardwareEncoder);
 	return {
 		simulcast: false,
-		scalabilityMode: input.svcSetting === 'single_layer' ? 'L1T1' : 'L1T3',
+		scalabilityMode: singleLayer ? 'L1T1' : 'L1T3',
 	};
 }
 
@@ -597,7 +583,7 @@ export function resolveScreenShareQualityPick(
 	const effective = resolveEffectiveScreenShareQuality(input);
 	const stored = resolveEffectiveScreenShareQuality({...input, mode: 'custom'});
 	if (pick.axis === 'resolution') {
-		if (normaliseResolutionForContext(pick.resolution, input.context, input.entitled) !== pick.resolution) return null;
+		if (!capsAllowScreenShareResolution(input.caps, pick.resolution)) return null;
 		if (pick.resolution === effective.resolution) return null;
 		return {
 			streamingMode: 'custom',
@@ -605,7 +591,7 @@ export function resolveScreenShareQualityPick(
 			...(stored.frameRate === effective.frameRate ? {} : {videoFrameRate: effective.frameRate}),
 		};
 	}
-	if (!input.entitled && pick.frameRate > FREE_TIER_MAX_FRAME_RATE) return null;
+	if (!capsAllowScreenShareFrameRate(input.caps, pick.frameRate)) return null;
 	if (pick.frameRate === effective.frameRate) return null;
 	return {
 		streamingMode: 'custom',

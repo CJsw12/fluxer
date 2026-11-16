@@ -2,6 +2,7 @@
 
 import type {DesktopAccountStorageAPI} from '@fluxer/desktop_ipc/src/AccountContract';
 import type {AccountEngineRendererAPI} from '@fluxer/desktop_ipc/src/AccountEngineContract';
+import type {DesktopBootStateAPI} from '@fluxer/desktop_ipc/src/BootStateContract';
 import type {DesktopHandoffAPI} from '@fluxer/desktop_ipc/src/BrowserHandoffContract';
 import type {DesktopCapabilityManifest} from '@fluxer/desktop_ipc/src/CapabilityManifest';
 import type {
@@ -100,10 +101,14 @@ export interface DesktopInfo {
 	chromiumRuntime: ChromiumRuntimeInfo;
 }
 
+export type MonochromeTrayIconTone = 'auto' | 'white' | 'black';
+
 export interface DesktopWindowBehaviorSettings {
 	showTrayIcon: boolean;
 	coloredTrayIcon?: boolean;
+	monochromeTrayIconTone?: MonochromeTrayIconTone;
 	darkTaskbarBadge?: boolean;
+	unreadLauncherBadge?: boolean;
 	minimizeToTray: boolean;
 	closeToTray: boolean;
 	startMinimized?: boolean;
@@ -223,6 +228,17 @@ export interface DownloadResult {
 	error?: string;
 }
 
+type DownloadEntryState = 'started' | 'progressing' | 'completed' | 'failed' | 'canceled';
+
+export interface DownloadEntryEvent {
+	id: string;
+	fileName: string;
+	state: DownloadEntryState;
+	receivedBytes: number;
+	totalBytes: number | null;
+	fileExists: boolean;
+}
+
 interface DesktopLocalAppUploadAPI {
 	subscribe: (listener: (progress: DesktopLocalAppUploadProgress) => void) => () => void;
 }
@@ -337,6 +353,7 @@ export interface ElectronAPI {
 	openMediaAccessSettings(type: MediaAccessType): Promise<void>;
 	onDisplayMediaRequested?(callback: (requestId: string, info: DisplayMediaRequestInfo) => void): () => void;
 	getAccessibilitySupportEnabled?(): Promise<boolean>;
+	getSystemLocale?(): Promise<string>;
 	onAccessibilitySupportChanged?(callback: (enabled: boolean) => void): () => void;
 	getLinuxAppearance?(): Promise<LinuxAppearanceSnapshot>;
 	setPrebootTheme?(theme: string): void;
@@ -376,6 +393,13 @@ export interface ElectronAPI {
 	windowMinimize?(): void;
 	windowMaximize?(): void;
 	windowClose?(): void;
+	onDownloadsChanged?(callback: (entries: Array<DownloadEntryEvent>) => void): () => void;
+	downloadsList?(): Promise<Array<DownloadEntryEvent>>;
+	downloadCancel?(id: string): void;
+	downloadOpen?(id: string): void;
+	downloadReveal?(id: string): void;
+	downloadDismiss?(id: string): void;
+	downloadsClear?(): void;
 	passkeyIsSupported?(): Promise<boolean>;
 	passkeyRegister?(
 		options: unknown,
@@ -400,12 +424,14 @@ export interface ElectronAPI {
 	desktopModules?: DesktopModuleAPI;
 	desktopUpdate?: DesktopUpdateAPI;
 	reportLastRoute?: (routePath: string) => void;
+	setApiAttachmentAuthorization?: (apiEndpoint: string, token: string | null) => Promise<boolean>;
 	reportInstanceProductName?: (instanceKey: string, productName: string) => void;
-	notifyFirstContentPainted?: () => void;
+	notifyFirstContentPainted?: (view?: 'restored') => void;
 	localAppUpload?: DesktopLocalAppUploadAPI;
 	localApp?: DesktopLocalAppInfo;
 	nativeGatewayTransport?: NativeGatewayTransportAPI;
 	accountEngine?: AccountEngineRendererAPI;
+	bootState?: DesktopBootStateAPI;
 	setZoomFactor(factor: number): void;
 }
 

@@ -22,6 +22,7 @@ import {OperatorPassCertificateService} from '@app/api/operator_pass/OperatorPas
 import {OperatorPassRepository} from '@app/api/operator_pass/OperatorPassRepository';
 import {buildStorePurchaseRow} from '@app/api/store_billing/tests/StoreBillingTestUtils';
 import {
+	AppAttestKeys,
 	GuildMembersByUserId,
 	Messages,
 	MessagesByAuthorV2,
@@ -34,6 +35,7 @@ import {HarvestedMessagesSchema, harvestUserArchive} from '@app/api/test/UserArc
 import {clearWorkerDependencies, setWorkerDependencies} from '@app/api/worker/WorkerContext';
 import {initializeWorkerDependencies, type WorkerDependencies} from '@app/api/worker/WorkerDependencies';
 import {AccountIdentityModes} from '@fluxer/constants/src/AccountIdentityConstants';
+import {AttestedAgeFloors} from '@fluxer/constants/src/AgeRangeConstants';
 import {makeBucket} from '@fluxer/snowflake/src/SnowflakeBuckets';
 import {afterAll, afterEach, beforeAll, beforeEach, describe, expect, it} from 'vitest';
 import {z} from 'zod';
@@ -326,6 +328,38 @@ describe('harvested user data', () => {
 		]);
 	});
 
+	it('exports the stored age range and the App Attest keys without the public key', async () => {
+		const user = await deps.userRepository.findUniqueAssert(AUTHOR);
+		await deps.userRepository.patchUpsert(
+			AUTHOR,
+			{attested_age_floor: AttestedAgeFloors.ADULT, age_attested_at: new Date('2026-11-01T08:00:00.000Z')},
+			user.toRow(),
+		);
+		await upsertOne(
+			AppAttestKeys.upsertAll({
+				user_id: AUTHOR,
+				key_id: 'key-1',
+				public_key: Buffer.from('public-key'),
+				environment: 'production',
+				app_id: 'TEAM.app.fluxer',
+				counter: 3n,
+				created_at: new Date('2026-10-30T08:00:00.000Z'),
+				last_used_at: new Date('2026-11-01T08:00:00.000Z'),
+			}),
+		);
+		const data = await exportUserData({});
+		expect(data.user).toMatchObject({age_range: 'adult', age_range_received_at: '2026-11-01T08:00:00.000Z'});
+		expect(data.app_attest_keys).toEqual([
+			{
+				key_id: 'key-1',
+				environment: 'production',
+				counter: 3,
+				created_at: '2026-10-30T08:00:00.000Z',
+				last_used_at: '2026-11-01T08:00:00.000Z',
+			},
+		]);
+	});
+
 	it('leaves the recovery kit out when the account has none', async () => {
 		const data = await exportUserData({});
 		expect('recovery_kit' in data).toBe(false);
@@ -397,6 +431,8 @@ describe('harvested user settings', () => {
 			],
 			afk_timeout: 300,
 			time_format: 1,
+			regional_format: 'de-DE',
+			timestamp_format: 1,
 			trusted_domains: new Set(['example.com']),
 			default_hide_muted_channels: false,
 			sensitive_content_friend_dm_filter: 0,
@@ -441,6 +477,8 @@ describe('harvested user settings', () => {
 			guild_folders: [{id: 4, name: 'Notes', color: 42, flags: 1, icon: 'folder', guild_ids: ['3000000000000000000']}],
 			afk_timeout: 300,
 			time_format: 1,
+			regional_format: 'de-DE',
+			timestamp_format: 1,
 			suppress_unprivileged_self_mentions: true,
 			suppress_unprivileged_self_mentions_bypass_user_ids: ['6000000000000000000'],
 			staff_dm_access_user_ids: ['7000000000000000000'],

@@ -363,6 +363,8 @@ html.platform-native.platform-macos {
 
 html {
 	--custom-zoom: 100;
+	--safe-area-inset-inline-start: env(safe-area-inset-left, 0px);
+	--safe-area-inset-inline-end: env(safe-area-inset-right, 0px);
 	background-color: var(--background-secondary);
 	color: var(--text-primary);
 	overflow: hidden;
@@ -373,6 +375,11 @@ html {
 	font-size: calc(var(--custom-zoom, 100) * 0.16px);
 	line-height: 1.5;
 	font-optical-sizing: auto;
+}
+
+html[dir='rtl'] {
+	--safe-area-inset-inline-start: env(safe-area-inset-right, 0px);
+	--safe-area-inset-inline-end: env(safe-area-inset-left, 0px);
 }
 
 html.allow-transparency,
@@ -424,6 +431,40 @@ html.platform-native.window-focus-activation-guard .fluxer-native-titlebar {
 
 .fluxer-native-titlebar__spacer {
 	flex: 1 1 auto;
+}
+
+.fluxer-native-titlebar__action {
+	-webkit-app-region: no-drag;
+	appearance: none;
+	box-sizing: border-box;
+	flex: 0 0 auto;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--text-secondary);
+	display: grid;
+	place-items: center;
+	cursor: pointer;
+	transition:
+		background-color 120ms ease,
+		color 120ms ease;
+}
+
+.fluxer-native-titlebar__action svg {
+	width: 18px;
+	height: 18px;
+}
+
+.fluxer-native-titlebar__action:hover {
+	background: var(--background-modifier-hover);
+	color: var(--text-primary);
+}
+
+.fluxer-native-titlebar__action:active {
+	background: var(--background-modifier-selected);
 }
 
 .fluxer-native-titlebar__controls {

@@ -12,7 +12,13 @@ import {
 	setUserACLs,
 	type TestAccount,
 	totpCodeNow,
+	unclaimAccount,
 } from '@app/api/auth/tests/AuthTestUtils';
+import {
+	createSudoWebAuthnBody,
+	createWebAuthnDevice,
+	registerWebAuthnCredential,
+} from '@app/api/auth/tests/WebAuthnTestUtils';
 import {createUserID} from '@app/api/BrandedTypes';
 import {Config} from '@app/api/Config';
 import {createChannelInvite, setupTestGuildWithMembers} from '@app/api/guild/tests/GuildTestUtils';
@@ -564,6 +570,117 @@ describe('Auth SSO flow', () => {
 				Config.instance.autoJoinInviteCode = originalAutoJoinInviteCode;
 			}
 		});
+		it('joins a provisioned user to the invite community from redirect_to', async () => {
+			const {owner, guild} = await setupTestGuildWithMembers(harness, 0);
+			const invite = await createChannelInvite(harness, owner.token, guild.system_channel_id!);
+			await enableSso(harness, admin.token);
+			const startData = await createBuilderWithoutAuth<SsoStartResponse>(harness)
+				.post('/auth/sso/start')
+				.body({redirect_to: `/invite/${invite.code}`})
+				.execute();
+			const completeData = await createBuilderWithoutAuth<SsoCompleteResponse>(harness)
+				.post('/auth/sso/complete')
+				.body({
+					code: `sso-invite-redirect-${Date.now()}@example.com`,
+					state: startData.state,
+					client_binding: startData.client_binding,
+				})
+				.execute();
+			await createBuilder(harness, owner.token)
+				.get(`/guilds/${guild.id}/members/${completeData.user_id}`)
+				.expect(200)
+				.execute();
+		});
+		it('joins both the redirect_to invite and the auto-join invite communities', async () => {
+			const invited = await setupTestGuildWithMembers(harness, 0);
+			const invitedInvite = await createChannelInvite(harness, invited.owner.token, invited.guild.system_channel_id!);
+			const operator = await setupTestGuildWithMembers(harness, 0);
+			const operatorInvite = await createChannelInvite(
+				harness,
+				operator.owner.token,
+				operator.guild.system_channel_id!,
+			);
+			await enableSso(harness, admin.token);
+			const originalAutoJoinInviteCode = Config.instance.autoJoinInviteCode;
+			Config.instance.autoJoinInviteCode = operatorInvite.code;
+			try {
+				const startData = await createBuilderWithoutAuth<SsoStartResponse>(harness)
+					.post('/auth/sso/start')
+					.body({redirect_to: `/invite/${invitedInvite.code}`})
+					.execute();
+				const completeData = await createBuilderWithoutAuth<SsoCompleteResponse>(harness)
+					.post('/auth/sso/complete')
+					.body({
+						code: `sso-invite-both-${Date.now()}@example.com`,
+						state: startData.state,
+						client_binding: startData.client_binding,
+					})
+					.execute();
+				await createBuilder(harness, invited.owner.token)
+					.get(`/guilds/${invited.guild.id}/members/${completeData.user_id}`)
+					.expect(200)
+					.execute();
+				await createBuilder(harness, operator.owner.token)
+					.get(`/guilds/${operator.guild.id}/members/${completeData.user_id}`)
+					.expect(200)
+					.execute();
+			} finally {
+				Config.instance.autoJoinInviteCode = originalAutoJoinInviteCode;
+			}
+		});
+		it('joins both communities when an SSO registration with an invite is approved', async () => {
+			const reviewer = await setUserACLs(harness, await createTestAccount(harness), [
+				AdminACLs.AUTHENTICATE,
+				AdminACLs.REGISTRATION_REVIEW,
+			]);
+			const invited = await setupTestGuildWithMembers(harness, 0);
+			const invitedInvite = await createChannelInvite(harness, invited.owner.token, invited.guild.system_channel_id!);
+			const operator = await setupTestGuildWithMembers(harness, 0);
+			const operatorInvite = await createChannelInvite(
+				harness,
+				operator.owner.token,
+				operator.guild.system_channel_id!,
+			);
+			await enableSso(harness, admin.token);
+			await getInstanceConfigRepository().setRegistrationConfig({mode: 'approval'});
+			const originalAutoJoinInviteCode = Config.instance.autoJoinInviteCode;
+			Config.instance.autoJoinInviteCode = operatorInvite.code;
+			try {
+				const startData = await createBuilderWithoutAuth<SsoStartResponse>(harness)
+					.post('/auth/sso/start')
+					.body({redirect_to: `/invite/${invitedInvite.code}`})
+					.execute();
+				await createBuilderWithoutAuth(harness)
+					.post('/auth/sso/complete')
+					.body({
+						code: `sso-invite-both-approval-${Date.now()}@example.com`,
+						state: startData.state,
+						client_binding: startData.client_binding,
+					})
+					.expect(403, 'REGISTRATION_PENDING_APPROVAL')
+					.execute();
+				const listed = await createBuilder<PendingRegistrationListResponse>(harness, reviewer.token)
+					.get('/admin/instance/pending-registrations')
+					.expect(200)
+					.execute();
+				const pendingUserId = listed.pending_registrations[0]!.user_id;
+				await createBuilder(harness, reviewer.token)
+					.patch(`/admin/instance/pending-registrations/${pendingUserId}`)
+					.body({status: 'approved'})
+					.expect(200)
+					.execute();
+				await createBuilder(harness, invited.owner.token)
+					.get(`/guilds/${invited.guild.id}/members/${pendingUserId}`)
+					.expect(200)
+					.execute();
+				await createBuilder(harness, operator.owner.token)
+					.get(`/guilds/${operator.guild.id}/members/${pendingUserId}`)
+					.expect(200)
+					.execute();
+			} finally {
+				Config.instance.autoJoinInviteCode = originalAutoJoinInviteCode;
+			}
+		});
 		it('replays the auto-join invite when an SSO registration is approved', async () => {
 			const reviewer = await setUserACLs(harness, await createTestAccount(harness), [
 				AdminACLs.AUTHENTICATE,
@@ -1020,6 +1137,96 @@ describe('Auth SSO flow', () => {
 				providerCode(createUniqueEmail('sso-link-again'), sub),
 			);
 			expect(signedIn.user_id).toBe(account.userId);
+		});
+
+		it('lets a regular user disconnect SSO', async () => {
+			const account = await createTestAccount(harness);
+			await enableSso(harness, admin.token, {enforced: false});
+			const sub = `itest-sso-unlink-${Date.now()}`;
+			await complete(await startLink(account), providerCode(createUniqueEmail('sso-unlink'), sub));
+			expect(await new SsoIdentityRepository().listForUser(createUserID(BigInt(account.userId)))).toHaveLength(1);
+
+			await createBuilder(harness, account.token)
+				.delete('/users/@me/sso')
+				.body({password: account.password})
+				.expect(204)
+				.execute();
+
+			expect(await new SsoIdentityRepository().listForUser(createUserID(BigInt(account.userId)))).toHaveLength(0);
+		});
+
+		it('lets a user disconnect a stale SSO link after the instance turns SSO off', async () => {
+			const account = await createTestAccount(harness);
+			await enableSso(harness, admin.token, {enforced: false});
+			const sub = `itest-sso-unlink-disabled-${Date.now()}`;
+			await complete(await startLink(account), providerCode(createUniqueEmail('sso-unlink-disabled'), sub));
+			await disableSso(harness, admin.token);
+
+			await createBuilder(harness, account.token)
+				.delete('/users/@me/sso')
+				.body({password: account.password})
+				.expect(204)
+				.execute();
+
+			expect(await new SsoIdentityRepository().listForUser(createUserID(BigInt(account.userId)))).toHaveLength(0);
+			const user = await createBuilder<{traits: Array<string>}>(harness, account.token).get('/users/@me').execute();
+			expect(user.traits).not.toContain('sso');
+			expect(user.traits.some((trait) => trait.startsWith('sso_identity:'))).toBe(false);
+		});
+
+		it('does not allow users to disconnect SSO while the instance enforces it', async () => {
+			const account = await accountThenSso();
+			await enableSso(harness, admin.token, {enforced: true});
+			const sub = `itest-sso-unlink-enforced-${Date.now()}`;
+			await complete(await startLink(account), providerCode(createUniqueEmail('sso-unlink-enforced'), sub));
+			await createBuilder(harness, account.token)
+				.delete('/users/@me/sso')
+				.body({password: account.password})
+				.expect(403, 'SSO_REQUIRED')
+				.execute();
+		});
+
+		it('refuses to disconnect SSO when the account has no local sign-in method', async () => {
+			const account = await accountThenSso();
+			await enableSso(harness, admin.token, {enforced: false});
+			const sub = `itest-sso-unlink-no-local-${Date.now()}`;
+			await complete(await startLink(account), providerCode(createUniqueEmail('sso-unlink-no-local'), sub));
+			await unclaimAccount(harness, account.userId);
+			await createBuilder(harness, account.token)
+				.delete('/users/@me/sso')
+				.body({})
+				.expect(403, 'LOCAL_SIGN_IN_METHOD_REQUIRED')
+				.execute();
+		});
+
+		it('allows disconnecting SSO when the account has only a passkey', async () => {
+			const account = await accountThenSso();
+			await enableSso(harness, admin.token, {enforced: false});
+			const device = createWebAuthnDevice();
+			await registerWebAuthnCredential(harness, account.token, device, () => ({
+				password: account.password,
+			}));
+			const sub = `itest-sso-unlink-passkey-${Date.now()}`;
+			await complete(await startLink(account), providerCode(createUniqueEmail('sso-unlink-passkey'), sub));
+			await unclaimAccount(harness, account.userId);
+			const user = await createBuilder<{
+				email: string | null;
+				has_password: boolean;
+				traits: Array<string>;
+			}>(harness, account.token)
+				.get('/users/@me')
+				.execute();
+			expect(user.email).toBeNull();
+			expect(user.has_password).toBe(false);
+			expect(user.traits).toContain('passkey');
+			const sudoBody = await createSudoWebAuthnBody(harness, account.token, device);
+			await createBuilder(harness, account.token).delete('/users/@me/sso').body(sudoBody).expect(204).execute();
+			expect(await new SsoIdentityRepository().listForUser(createUserID(BigInt(account.userId)))).toHaveLength(0);
+			const updatedUser = await createBuilder<{traits: Array<string>}>(harness, account.token)
+				.get('/users/@me')
+				.execute();
+			expect(updatedUser.traits).not.toContain('sso');
+			expect(updatedUser.traits).toContain('passkey');
 		});
 
 		it('refuses to connect an identity another account already uses', async () => {

@@ -6,6 +6,7 @@ import styles from '@app/features/channel/components/embeds/media/VoiceMessagePl
 import {useMaybeMessageViewContext} from '@app/features/channel/components/MessageViewContext';
 import {PAUSE_DESCRIPTOR, PLAY_DESCRIPTOR} from '@app/features/i18n/utils/CommonMessageDescriptors';
 import {getCachedNumberFormat} from '@app/features/i18n/utils/IntlCache';
+import {useApiAttachmentPlaybackSrc} from '@app/features/messaging/hooks/useApiAttachmentSources';
 import {resolveDesktopCrossOriginMediaURL} from '@app/features/messaging/utils/DesktopResourceUrl';
 import {buildMediaProxyURL} from '@app/features/messaging/utils/MediaProxyUtils';
 import {Logger} from '@app/features/platform/utils/AppLogger';
@@ -13,11 +14,13 @@ import {remFromPx} from '@app/features/theme/layout/RemFromPx';
 import {MediaContextMenu} from '@app/features/ui/action_menu/MediaContextMenu';
 import * as ContextMenuCommands from '@app/features/ui/commands/ContextMenuCommands';
 import MobileLayout from '@app/features/ui/state/MobileLayout';
+import {getFormattingLocale} from '@app/features/user/utils/LocaleUtils';
 import {MediaPlaybackRate} from '@app/features/voice/components/media_player/components/MediaPlaybackRate';
 import {MediaVerticalVolumeControl} from '@app/features/voice/components/media_player/components/MediaVerticalVolumeControl';
 import {useMediaPlayer} from '@app/features/voice/components/media_player/hooks/useMediaPlayer';
 import {useMediaProgress} from '@app/features/voice/components/media_player/hooks/useMediaProgress';
 import {useMediaVolume} from '@app/features/voice/components/media_player/hooks/useMediaVolume';
+import {resolveStoredMediaDuration} from '@app/features/voice/components/media_player/utils/MediaSeekUtils';
 import type {MessageAttachment} from '@fluxer/schema/src/domains/message/MessageResponseSchemas';
 import {msg} from '@lingui/core/macro';
 import {useLingui} from '@lingui/react/macro';
@@ -122,6 +125,7 @@ const VoiceMessagePlayer: React.FC<VoiceMessagePlayerProps> = observer(
 		const effectiveSrc = buildMediaProxyURL(src);
 		const [hasStarted, setHasStarted] = useState(false);
 		const [wantsMetadata, setWantsMetadata] = useState(false);
+		const playbackSrc = useApiAttachmentPlaybackSrc(hasStarted || wantsMetadata ? effectiveSrc : undefined);
 		const [prePlayCurrentTime, setPrePlayCurrentTime] = useState(0);
 		const pendingPlayRef = useRef(false);
 		const pendingSeekPercentageRef = useRef<number | null>(null);
@@ -132,6 +136,7 @@ const VoiceMessagePlayer: React.FC<VoiceMessagePlayerProps> = observer(
 		const {currentTime, duration, progress, seekToPercentage} = useMediaProgress({
 			mediaRef,
 			initialDuration: initialDuration ?? 0,
+			preferInitialDuration: true,
 		});
 		const {volume, isMuted, setVolume, toggleMute} = useMediaVolume({
 			mediaRef,
@@ -179,7 +184,7 @@ const VoiceMessagePlayer: React.FC<VoiceMessagePlayerProps> = observer(
 			}
 		}, [state.isPlaying]);
 		useEffect(() => {
-			if (hasStarted && pendingPlayRef.current) {
+			if (hasStarted && playbackSrc !== undefined && pendingPlayRef.current) {
 				const timer = setTimeout(() => {
 					if (pendingPlayRef.current) {
 						pendingPlayRef.current = false;
@@ -189,7 +194,7 @@ const VoiceMessagePlayer: React.FC<VoiceMessagePlayerProps> = observer(
 				return () => clearTimeout(timer);
 			}
 			return undefined;
-		}, [hasStarted, play]);
+		}, [hasStarted, play, playbackSrc]);
 		useEffect(() => {
 			if (!hasStarted || pendingSeekPercentageRef.current === null) {
 				return;
@@ -202,7 +207,8 @@ const VoiceMessagePlayer: React.FC<VoiceMessagePlayerProps> = observer(
 				if (pendingSeekPercentageRef.current === null || !Number.isFinite(media.duration) || media.duration <= 0) {
 					return;
 				}
-				const seekTime = (pendingSeekPercentageRef.current / 100) * media.duration;
+				const seekTime =
+					(pendingSeekPercentageRef.current / 100) * resolveStoredMediaDuration(media.duration, initialDuration ?? 0);
 				media.currentTime = seekTime;
 				setPrePlayCurrentTime(seekTime);
 				pendingSeekPercentageRef.current = null;
@@ -214,7 +220,7 @@ const VoiceMessagePlayer: React.FC<VoiceMessagePlayerProps> = observer(
 				media.removeEventListener('loadedmetadata', applyPendingSeek);
 				media.removeEventListener('durationchange', applyPendingSeek);
 			};
-		}, [hasStarted, mediaRef]);
+		}, [hasStarted, initialDuration, mediaRef]);
 		const handleContainerMouseEnter = useCallback(() => {
 			setWantsMetadata(true);
 		}, []);
@@ -304,7 +310,7 @@ const VoiceMessagePlayer: React.FC<VoiceMessagePlayerProps> = observer(
 		const remainingSeconds = Math.max(0, Math.ceil(displayDuration - displayCurrentTime));
 		const readoutText =
 			displayDuration > 0
-				? formatTime(hasBegunPlayback ? remainingSeconds : Math.ceil(displayDuration), i18n.locale)
+				? formatTime(hasBegunPlayback ? remainingSeconds : Math.ceil(displayDuration), getFormattingLocale())
 				: '--:--';
 		const isMobile = MobileLayout.enabled;
 		return (
@@ -323,7 +329,7 @@ const VoiceMessagePlayer: React.FC<VoiceMessagePlayerProps> = observer(
 			>
 				<audio
 					ref={mediaRef as React.RefObject<HTMLAudioElement>}
-					src={hasStarted || wantsMetadata ? resolveDesktopCrossOriginMediaURL(effectiveSrc) : undefined}
+					src={resolveDesktopCrossOriginMediaURL(playbackSrc)}
 					preload={wantsMetadata ? 'metadata' : 'none'}
 					data-flx="channel.embeds.media.voice-message-player.audio"
 				>
@@ -386,7 +392,7 @@ const VoiceMessagePlayer: React.FC<VoiceMessagePlayerProps> = observer(
 					aria-valuemax={100}
 					aria-valuetext={
 						displayDuration > 0
-							? `${formatTime(displayCurrentTime, i18n.locale)} / ${formatTime(displayDuration, i18n.locale)}`
+							? `${formatTime(displayCurrentTime, getFormattingLocale())} / ${formatTime(Math.ceil(displayDuration), getFormattingLocale())}`
 							: undefined
 					}
 					data-flx="channel.embeds.media.voice-message-player.waveform-container.waveform-click"

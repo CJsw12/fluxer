@@ -267,7 +267,7 @@
 
 .markup pre {
 	direction: ltr;
-	text-align: left;
+	text-align: start;
 	font-family: var(--font-mono);
 	font-size: 0.75em;
 	line-height: 1.333333;
@@ -354,6 +354,14 @@
 	padding: 0.25rem 0;
 	width: 100%;
 	color: var(--text-chat-muted);
+}
+
+.markup .blockquoteContent > :first-child {
+	margin-top: 0;
+}
+
+.markup .blockquoteContent > :last-child {
+	margin-bottom: 0;
 }
 
 .markup .blockquoteEmptyContent {
@@ -468,6 +476,7 @@
 	padding-block: 0.375rem;
 	padding-inline: 1rem 0.75rem;
 	margin-top: 0.25rem;
+	margin-bottom: 0.25rem;
 	border-radius: var(--radius-md);
 	background: transparent;
 }

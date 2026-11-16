@@ -53,7 +53,7 @@ import {Avatar} from '@app/features/ui/components/Avatar';
 import FocusRing from '@app/features/ui/focus_ring/FocusRing';
 import Users from '@app/features/user/state/Users';
 import * as AvatarUtils from '@app/features/user/utils/AvatarUtils';
-import {getCurrentLocale} from '@app/features/user/utils/LocaleUtils';
+import {getFormattingLocale} from '@app/features/user/utils/LocaleUtils';
 import {msg} from '@lingui/core/macro';
 import {Plural, Trans, useLingui} from '@lingui/react/macro';
 import {QuestionIcon} from '@phosphor-icons/react';
@@ -122,7 +122,7 @@ const createTitleKeyDownHandler = (callback: () => void) => (event: React.Keyboa
 };
 
 function formatInviteCount(value: number): string {
-	return formatNumber(value, getCurrentLocale());
+	return formatNumber(value, getFormattingLocale());
 }
 
 interface InviteEmbedProps {
@@ -189,7 +189,7 @@ const InviteEmbedInner = observer(function InviteEmbedInner({
 		prevLoadingRef.current = isLoading;
 	}, [isLoading, currentChannelId]);
 	useEffect(() => {
-		if (!inviteState) {
+		if (!inviteState || Invites.isPreviewOnly(code, instanceTarget)) {
 			void InviteCommands.fetchWithCoalescing(code, instanceTarget).catch(() => {});
 		}
 	}, [code, instanceTarget, inviteState]);
@@ -400,7 +400,7 @@ const InviteEmbedInner = observer(function InviteEmbedInner({
 	}
 	const handleContextMenu = (event: React.MouseEvent) => {
 		const channelId = invite && (isGuildInvite(invite) || isGroupDmInvite(invite)) ? invite.channel.id : null;
-		const guildForMenu = guild ? {id: guild.id, name: guild.name} : null;
+		const guildForMenu = guild ? {id: guild.id, name: guild.name, icon: guild.icon} : null;
 		if (!message && !guildForMenu && !channelId) return;
 		event.preventDefault();
 		event.stopPropagation();
@@ -410,6 +410,7 @@ const InviteEmbedInner = observer(function InviteEmbedInner({
 				sourceChannel={sourceChannel}
 				linkUrl={`${RuntimeConfig.inviteEndpoint}/${code}`}
 				guild={guildForMenu}
+				inviteCode={code}
 				channelId={channelId}
 				onDelete={onDelete}
 				onClose={props.onClose}

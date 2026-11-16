@@ -73,7 +73,7 @@ export const UserFlags = {
 	ACCOUNT_LIMITED: 1n << 50n,
 	HAS_DISMISSED_PREMIUM_ONBOARDING: 1n << 51n,
 	APP_STORE_REVIEWER: 1n << 53n,
-	AGE_VERIFIED_ADULT: 1n << 60n,
+	MATURE_CONTENT_UNLOCKED: 1n << 60n,
 	LIMIT_EXEMPT: 1n << 62n,
 } as const;
 export const UserFlagsDescriptions: Record<keyof typeof UserFlags, string> = {
@@ -91,11 +91,12 @@ export const UserFlagsDescriptions: Record<keyof typeof UserFlags, string> = {
 	HAS_SESSION_STARTED: 'User has started a session',
 	RATE_LIMIT_BYPASS: 'User can bypass rate limits',
 	REPORT_BANNED: 'User is banned from reporting',
-	VERIFIED_NOT_UNDERAGE: 'User is verified as not underage',
+	VERIFIED_NOT_UNDERAGE: 'Marks an account as not under the minimum age. Only staff can set it',
 	ACCOUNT_LIMITED: 'User account is limited',
 	HAS_DISMISSED_PREMIUM_ONBOARDING: 'User has dismissed premium onboarding',
 	APP_STORE_REVIEWER: 'User is an app store reviewer',
-	AGE_VERIFIED_ADULT: 'User has verified their age as an adult',
+	MATURE_CONTENT_UNLOCKED:
+		'User can see mature content in regions where a date of birth is not enough. Staff can set it, and accounts that already had mature content unlocked before keep it',
 	LIMIT_EXEMPT: 'User is permanently exempt from account limitation',
 };
 export const PremiumFlags = {
@@ -243,6 +244,22 @@ export const TimeFormatTypesDescriptions: Record<keyof typeof TimeFormatTypes, s
 	AUTO: 'Automatically detect time format based on locale',
 	TWELVE_HOUR: 'Use 12-hour time format (AM/PM)',
 	TWENTY_FOUR_HOUR: 'Use 24-hour time format',
+};
+
+export const TimestampFormatTypes = {
+	AUTO: 0,
+	ISO_8601: 1,
+	DAY_MONTH_YEAR: 2,
+	MONTH_DAY_YEAR: 3,
+} as const;
+
+export type TimestampFormatType = ValueOf<typeof TimestampFormatTypes>;
+
+export const TimestampFormatTypesDescriptions: Record<keyof typeof TimestampFormatTypes, string> = {
+	AUTO: 'Write dates the way the regional format does',
+	ISO_8601: 'Write dates as year-month-day, such as 2026-11-06 21:23',
+	DAY_MONTH_YEAR: 'Write dates as day/month/year, such as 06/11/2026',
+	MONTH_DAY_YEAR: 'Write dates as month/day/year, such as 11/06/2026',
 };
 export const StickerAnimationOptions = {
 	ALWAYS_ANIMATE: 0,

@@ -40,7 +40,7 @@ const CURRENT_USER_PRIVATE_WIRE_KEYS = [
 	'has_ever_purchased',
 	'has_unread_gift_inventory',
 	'unread_gift_inventory_count',
-	'age_verified_adult',
+	'mature_content_unlocked',
 	'terms_agreed_at',
 	'privacy_agreed_at',
 	'traits',
@@ -122,13 +122,15 @@ class Users {
 		return this.usersList;
 	}
 
-	handleGatewayReady(accountKey: string, currentUser: UserPrivate): void {
+	handleGatewayReady(accountKey: string, currentUser: UserPrivate, options: {keepRestoredUsers: boolean}): void {
 		this.assertCurrentAccountIdentity(accountKey, currentUser.id);
-		const userRecord = new User(currentUser);
-		this.users = {
-			[currentUser.id]: userRecord,
-		};
-		this.userCount = 1;
+		const keepRestored = options.keepRestoredUsers && this.hydratedAccountKey === accountKey;
+		const restored = keepRestored ? this.users : {};
+		const next = new User(currentUser);
+		const existing = restored[currentUser.id];
+		if (!keepRestored) this.users = {};
+		if (existing === undefined || !existing.equals(next)) this.users[currentUser.id] = next;
+		this.userCount = Object.keys(this.users).length;
 		this.hydratedAccountKey = accountKey;
 		this.viewAccountKey = accountKey;
 	}

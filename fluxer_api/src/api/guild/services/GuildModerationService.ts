@@ -28,6 +28,7 @@ import {Permissions} from '@fluxer/constants/src/ChannelConstants';
 import {ValidationErrorCodes} from '@fluxer/constants/src/ValidationErrorCodes';
 import {InputValidationError} from '@fluxer/errors/src/domains/core/InputValidationError';
 import {MissingPermissionsError} from '@fluxer/errors/src/domains/core/MissingPermissionsError';
+import {UnknownGuildBanError} from '@fluxer/errors/src/domains/guild/UnknownGuildBanError';
 import {UnknownGuildError} from '@fluxer/errors/src/domains/guild/UnknownGuildError';
 import {UnknownGuildMemberError} from '@fluxer/errors/src/domains/guild/UnknownGuildMemberError';
 import {UnknownUserError} from '@fluxer/errors/src/domains/user/UnknownUserError';
@@ -154,7 +155,7 @@ export class GuildModerationService {
 				seconds: effectiveDeleteMessageSeconds,
 			});
 		}
-		const targetIp = isIpBanExempt(targetUser.lastActiveIp) ? null : targetUser.lastActiveIp || null;
+		const targetIp = isIpBanExempt(targetUser.moderationIp) ? null : targetUser.moderationIp || null;
 		const targetEmail = targetUser.email?.toLowerCase() || null;
 		let expiresAt: Date | null = null;
 		if (banDurationSeconds && banDurationSeconds > 0) {
@@ -206,14 +207,7 @@ export class GuildModerationService {
 		await onGuildBanAdded({guildId, targetUserId: targetId, targetIp, gateway: this.gatewayService});
 		if (targetMember) {
 			await this.guildRepository.deleteMember(guildId, targetId);
-			const guild = await this.guildRepository.findUnique(guildId);
-			if (guild) {
-				await this.guildRepository.upsertPartial(
-					guildId,
-					{member_count: Math.max(0, guild.memberCount - 1)},
-					guild.toRow(),
-				);
-			}
+			await this.guildRepository.syncMemberCount(guildId);
 			await this.dispatchGuildMemberRemove({guildId, userId: targetId});
 			await this.gatewayService.leaveGuild({userId: targetId, guildId});
 			const guildForSearch = await this.guildRepository.findUnique(guildId);
@@ -235,6 +229,21 @@ export class GuildModerationService {
 		await this.checkModerationPermission({guildId, userId, permission: Permissions.BAN_MEMBERS});
 		const bans = await this.guildRepository.listBans(guildId);
 		return await mapGuildBansToResponse(bans, this.userCacheService, requestCache);
+	}
+
+	async getBan(params: {
+		userId: UserID;
+		guildId: GuildID;
+		targetId: UserID;
+		requestCache: RequestCache;
+	}): Promise<GuildBanResponse> {
+		const {userId, guildId, targetId, requestCache} = params;
+		await this.checkModerationPermission({guildId, userId, permission: Permissions.BAN_MEMBERS});
+		const ban = await this.guildRepository.getBan(guildId, targetId);
+		if (!ban) throw new UnknownGuildBanError();
+		const [response] = await mapGuildBansToResponse([ban], this.userCacheService, requestCache);
+		if (!response) throw new UnknownGuildBanError();
+		return response;
 	}
 
 	async unbanMember(

@@ -5,6 +5,7 @@ import {
 	type DesktopTroubleshootingSettings,
 	type DesktopWindowBehaviorSettings,
 	getDesktopWindowBehaviorSettings,
+	isMonochromeTrayIconTone,
 	rememberInstanceProductName,
 	setDesktopWindowBehaviorSettings,
 	setPrebootTheme,
@@ -30,7 +31,7 @@ import {
 	updateTrayRuntimeState,
 } from '@electron/main/DesktopTray';
 import {getDesktopUpdateState, observeDesktopUpdateState, startDesktopUpdate} from '@electron/main/DesktopUpdateGate';
-import {DownloadChecksumError, downloadFile} from '@electron/main/FileDownloads';
+import {DownloadChecksumError} from '@electron/main/FileDownloads';
 import {getGatewayOriginRegistry} from '@electron/main/GatewayOriginRegistry';
 import {retryBlockedGlobalShortcutHooks} from '@electron/main/GlobalShortcutsIpc';
 import {setDirectMessagesAvailable} from '@electron/main/JumpList';
@@ -71,6 +72,7 @@ import {
 	releaseStreamingPriority,
 } from '@electron/main/StreamingPriority';
 import {registerThemeLocalFileHandlers} from '@electron/main/ThemeLocalFiles';
+import {downloadTrackedFile, registerTrackedDownloadsIpcHandlers} from '@electron/main/TrackedDownloads';
 import {
 	relaunchAndExit,
 	setHardwareAccelerationDisabled,
@@ -131,8 +133,14 @@ function normalizeDesktopWindowBehaviorUpdate(value: unknown): Partial<DesktopWi
 	if (typeof value.coloredTrayIcon === 'boolean') {
 		update.coloredTrayIcon = value.coloredTrayIcon;
 	}
+	if (isMonochromeTrayIconTone(value.monochromeTrayIconTone)) {
+		update.monochromeTrayIconTone = value.monochromeTrayIconTone;
+	}
 	if (typeof value.darkTaskbarBadge === 'boolean') {
 		update.darkTaskbarBadge = value.darkTaskbarBadge;
+	}
+	if (typeof value.unreadLauncherBadge === 'boolean') {
+		update.unreadLauncherBadge = value.unreadLauncherBadge;
 	}
 	if (typeof value.minimizeToTray === 'boolean') {
 		update.minimizeToTray = value.minimizeToTray;
@@ -169,13 +177,21 @@ function getActiveMiddleClickAutoscroll(): boolean {
 	return process.platform === 'linux' && hasEnabledBlinkFeature(MIDDLE_CLICK_AUTOSCROLL_BLINK_FEATURE);
 }
 
+let lastUnreadBadge = 0;
+
+function launcherBadgeCount(badge: number): number {
+	if (badge !== UNREAD_BADGE_DOT) return badge;
+	return getDesktopWindowBehaviorSettings().unreadLauncherBadge ? 1 : 0;
+}
+
 function applyUnreadBadge(badge: number): void {
+	lastUnreadBadge = badge;
 	if (process.platform === 'win32') {
 		setWindowsBadgeOverlay(getMainWindow(), badge);
 	} else if (process.platform === 'darwin' && badge === UNREAD_BADGE_DOT) {
 		app.dock?.setBadge('•');
 	} else {
-		app.setBadgeCount(Math.max(badge, 0));
+		app.setBadgeCount(launcherBadgeCount(badge));
 	}
 	setDesktopTrayUnreadBadge(badge);
 }
@@ -335,6 +351,7 @@ export function registerIpcHandlers(): void {
 		const nextSettings = setDesktopWindowBehaviorSettings(normalizeDesktopWindowBehaviorUpdate(settings));
 		applyDesktopWindowBehaviorSettings();
 		refreshWindowsBadgeOverlay(getMainWindow());
+		if (process.platform === 'linux') app.setBadgeCount(launcherBadgeCount(lastUnreadBadge));
 		if (!nextSettings.showTrayIcon) {
 			const mainWindow = getMainWindow();
 			if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
@@ -451,7 +468,10 @@ export function registerIpcHandlers(): void {
 					return {success: false, canceled: true};
 				}
 				const filePath = withDefaultExtension(result.filePath, options.defaultPath);
-				await downloadFile(options.url, filePath, {sha256: options.sha256});
+				const outcome = await downloadTrackedFile(event.sender, options.url, filePath, options.sha256);
+				if (outcome === 'canceled') {
+					return {success: false, canceled: true};
+				}
 				return {success: true, path: filePath};
 			} catch (error) {
 				if (error instanceof DownloadChecksumError) {
@@ -461,12 +481,10 @@ export function registerIpcHandlers(): void {
 			}
 		},
 	);
+	registerTrackedDownloadsIpcHandlers();
 	ipcMain.handle('check-media-access', async (_event, type: MediaAccessType): Promise<string> => {
 		if (process.platform !== 'darwin') {
 			return 'granted';
-		}
-		if (type === 'audio-capture') {
-			return 'not-determined';
 		}
 		if (type === 'screen') {
 			return refreshTccStatus('screen-recording');
@@ -476,9 +494,6 @@ export function registerIpcHandlers(): void {
 	ipcMain.handle('request-media-access', async (_event, type: MediaAccessType): Promise<boolean> => {
 		if (process.platform !== 'darwin') {
 			return true;
-		}
-		if (type === 'audio-capture') {
-			return false;
 		}
 		if (type === 'screen') {
 			return (await refreshTccStatus('screen-recording')) === 'granted';
@@ -493,7 +508,6 @@ export function registerIpcHandlers(): void {
 			microphone: 'Privacy_Microphone',
 			camera: 'Privacy_Camera',
 			screen: 'Privacy_ScreenCapture',
-			'audio-capture': 'Privacy_AudioCapture',
 		};
 		await shell.openExternal(`x-apple.systempreferences:com.apple.preference.security?${privacyKeys[type]}`);
 	});
@@ -526,6 +540,7 @@ export function registerIpcHandlers(): void {
 		}
 	});
 	ipcMain.handle('get-accessibility-support-enabled', (): boolean => app.accessibilitySupportEnabled);
+	ipcMain.handle('system-locale-get', (): string => app.getSystemLocale());
 	app.on('accessibility-support-changed', (_event, accessibilitySupportEnabled) => {
 		const mainWindow = getMainWindow();
 		if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -606,6 +621,10 @@ export function registerGatewayTransportHandlers(): void {
 	for (const [channel, handler] of Object.entries(nativeGatewayTransport.ipcRoutes())) {
 		ipcMain.handle(channel, handler);
 	}
+}
+
+export function warmGatewayTransport(): void {
+	nativeGatewayTransport?.warm();
 }
 
 export function cleanupGatewayTransportHandlers(): void {

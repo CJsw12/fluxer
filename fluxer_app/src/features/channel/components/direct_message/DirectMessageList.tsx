@@ -25,11 +25,18 @@ import SelectedChannel from '@app/features/navigation/state/SelectedChannel';
 import {useLocation} from '@app/features/platform/components/router/RouterReact';
 import {Logger} from '@app/features/platform/utils/AppLogger';
 import * as PremiumModalCommands from '@app/features/premium/commands/PremiumModalCommands';
-import {getPremiumProductName, shouldShowPremiumFeatures} from '@app/features/premium/utils/PremiumUtils';
+import HiddenPlutoniumButton from '@app/features/premium/state/HiddenPlutoniumButton';
+import {
+	getPremiumProductName,
+	shouldShowFluxerPremiumIcon,
+	shouldShowPremiumFeatures,
+} from '@app/features/premium/utils/PremiumUtils';
 import {AddFriendSheet} from '@app/features/relationship/components/modals/AddFriendSheet';
 import Relationships from '@app/features/relationship/state/Relationships';
 import QuickSwitcher from '@app/features/search/state/QuickSwitcher';
-import {DeleteIcon} from '@app/features/ui/action_menu/ContextMenuIcons';
+import {DeleteIcon, HideIcon} from '@app/features/ui/action_menu/ContextMenuIcons';
+import {MenuGroup} from '@app/features/ui/action_menu/MenuGroup';
+import {MenuItem} from '@app/features/ui/action_menu/MenuItem';
 import {PersonalNotesContextMenu} from '@app/features/ui/action_menu/PersonalNotesContextMenu';
 import * as ContextMenuCommands from '@app/features/ui/commands/ContextMenuCommands';
 import * as LayoutCommands from '@app/features/ui/commands/LayoutCommands';
@@ -54,6 +61,7 @@ import {msg} from '@lingui/core/macro';
 import {Trans, useLingui} from '@lingui/react/macro';
 import {
 	AtomIcon,
+	CrownIcon,
 	MagnifyingGlassIcon,
 	NotePencilIcon,
 	PaperPlaneIcon,
@@ -259,12 +267,34 @@ export const DMList = observer(() => {
 		}
 		return null;
 	})();
+	const showFluxerPremiumIcon = shouldShowFluxerPremiumIcon();
 	const shouldHighlightPersonalNotes =
 		currentUserId != null &&
 		(routeDmChannelId === currentUserId || (isMobileDmIndexRoute && lastSelectedDmChannelId === currentUserId));
-	const showPremiumFeatures = shouldShowPremiumFeatures();
+	const showPremiumFeatures = shouldShowPremiumFeatures() && !HiddenPlutoniumButton.hidden;
 	const showMobilePlutoniumButton = showPremiumFeatures && !isMobile;
 	const personalNotesVisible = currentUserId != null && RuntimeConfig.personalNotesEnabled;
+	const handlePlutoniumContextMenu = (event: React.MouseEvent) => {
+		event.preventDefault();
+		event.stopPropagation();
+		const productName = getPremiumProductName();
+		ContextMenuCommands.openFromEvent(event, ({onClose}) => (
+			<MenuGroup data-flx="channel.direct-message.dm-list.plutonium-context-menu.menu-group">
+				<MenuItem
+					icon={<HideIcon data-flx="channel.direct-message.dm-list.plutonium-context-menu.menu-icon" />}
+					onClick={() => {
+						HiddenPlutoniumButton.hide();
+						onClose();
+					}}
+					data-flx="channel.direct-message.dm-list.plutonium-context-menu.menu-item.hide-plutonium-button"
+				>
+					<Trans comment="Context menu item on the Plutonium button in the direct messages list. Hides the button. productName is the premium product name, Plutonium on fluxer.com.">
+						Hide {productName} button
+					</Trans>
+				</MenuItem>
+			</MenuGroup>
+		));
+	};
 	const displayedDmChannelCount = filteredDmChannels.length;
 	const dmRowsContainerRef = useRef<HTMLDivElement | null>(null);
 	const dmChannelListRef = useMergeRefs<HTMLDivElement>([dmListNavigationRef, dmRowsContainerRef]);
@@ -306,6 +336,21 @@ export const DMList = observer(() => {
 		if (MobileLayout.isMobileLayout()) {
 			LayoutCommands.updateMobileLayoutState(false, true);
 		}
+	};
+	const renderPremiumIcon = () => {
+		return showFluxerPremiumIcon ? (
+			<AtomIcon
+				weight="fill"
+				className={styles.iconSize5}
+				data-flx="channel.direct-message.direct-message-list.render-premium-icon.icon-size5"
+			/>
+		) : (
+			<CrownIcon
+				weight="fill"
+				className={styles.iconSize5}
+				data-flx="channel.direct-message.direct-message-list.render-premium-icon.icon-size5--2"
+			/>
+		);
 	};
 	if (isMobile) {
 		return (
@@ -438,11 +483,7 @@ export const DMList = observer(() => {
 											className={styles.mobileSpecialButtonIcon}
 											data-flx="channel.direct-message.dm-list.mobile-special-button-icon--2"
 										>
-											<AtomIcon
-												weight="fill"
-												className={styles.iconSize5}
-												data-flx="channel.direct-message.dm-list.icon-size5--3"
-											/>
+											{renderPremiumIcon()}
 										</div>
 										<div
 											className={styles.mobileSpecialButtonText}
@@ -606,6 +647,7 @@ export const DMList = observer(() => {
 						<ClickableItem
 							isSelected={location.pathname === Routes.PLUTONIUM}
 							onClick={() => PremiumModalCommands.open()}
+							onContextMenu={handlePlutoniumContextMenu}
 							data-flx="channel.direct-message.dm-list.clickable-item.open"
 						>
 							<div
@@ -616,11 +658,7 @@ export const DMList = observer(() => {
 									className={styles.clickableItemIcon}
 									data-flx="channel.direct-message.dm-list.clickable-item-icon--3"
 								>
-									<AtomIcon
-										weight="fill"
-										className={styles.iconSize5}
-										data-flx="channel.direct-message.dm-list.icon-size5--6"
-									/>
+									{renderPremiumIcon()}
 								</div>
 								<span
 									className={styles.clickableItemText}

@@ -564,6 +564,42 @@ func (e CleanupModeSchema) Valid() bool {
 	}
 }
 
+// Defines values for ConnectionProviderConfigResponseKind.
+const (
+	ConnectionProviderConfigResponseKindOAUTH2 ConnectionProviderConfigResponseKind = "oauth2"
+	ConnectionProviderConfigResponseKindOIDC   ConnectionProviderConfigResponseKind = "oidc"
+)
+
+// Valid indicates whether the value is a known member of the ConnectionProviderConfigResponseKind enum.
+func (e ConnectionProviderConfigResponseKind) Valid() bool {
+	switch e {
+	case ConnectionProviderConfigResponseKindOAUTH2:
+		return true
+	case ConnectionProviderConfigResponseKindOIDC:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ConnectionProviderUpdateKind.
+const (
+	ConnectionProviderUpdateKindOAUTH2 ConnectionProviderUpdateKind = "oauth2"
+	ConnectionProviderUpdateKindOIDC   ConnectionProviderUpdateKind = "oidc"
+)
+
+// Valid indicates whether the value is a known member of the ConnectionProviderUpdateKind enum.
+func (e ConnectionProviderUpdateKind) Valid() bool {
+	switch e {
+	case ConnectionProviderUpdateKindOAUTH2:
+		return true
+	case ConnectionProviderUpdateKindOIDC:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DateOfBirthPolicySchema.
 const (
 	DateOfBirthPolicySchemaASK                DateOfBirthPolicySchema = "ask"
@@ -1799,6 +1835,88 @@ type CaptchaProviderSchema string
 // CleanupModeSchema Whether a cleanup policy deletes accounts
 type CleanupModeSchema string
 
+// ConnectionProviderConfigResponse defines model for ConnectionProviderConfigResponse.
+type ConnectionProviderConfigResponse struct {
+	AuthorizationUrl *string `json:"authorization_url"`
+
+	// CallbackUrl Redirect URL to register at the provider
+	CallbackUrl     string                   `json:"callback_url"`
+	ClientId        string                   `json:"client_id"`
+	ClientSecretSet bool                     `json:"client_secret_set"`
+	Enabled         bool                     `json:"enabled"`
+	IconUrl         *string                  `json:"icon_url"`
+	Id              ConnectionProviderIdType `json:"id"`
+
+	// IdPath oauth2 path to the account id in the user object
+	IdPath *string `json:"id_path"`
+
+	// Issuer Issuer URL, required for oidc
+	Issuer *string `json:"issuer"`
+
+	// Kind How Fluxer signs in to a connection provider
+	Kind ConnectionProviderConfigResponseKind `json:"kind"`
+
+	// Name Name shown to people
+	Name string `json:"name"`
+
+	// NameClaim oidc claim with the account name, preferred_username when null
+	NameClaim *string `json:"name_claim"`
+
+	// NamePath oauth2 path to the account name in the user object
+	NamePath *string `json:"name_path"`
+
+	// ProfileUrlTemplate HTTPS link to the account with {id} and {name} placeholders after the host
+	ProfileUrlTemplate *string `json:"profile_url_template"`
+
+	// Scope Space-separated scopes. OpenID Connect providers need openid
+	Scope       string  `json:"scope"`
+	TokenUrl    *string `json:"token_url"`
+	UserinfoUrl *string `json:"userinfo_url"`
+}
+
+// ConnectionProviderConfigResponseKind How Fluxer signs in to a connection provider
+type ConnectionProviderConfigResponseKind string
+
+// ConnectionProviderIdType Connection provider id: lowercase letters, digits, hyphens and underscores, up to 32 characters
+type ConnectionProviderIdType = string
+
+// ConnectionProviderUpdate defines model for ConnectionProviderUpdate.
+type ConnectionProviderUpdate struct {
+	AuthorizationUrl *string `json:"authorization_url,omitempty"`
+	ClientId         string  `json:"client_id"`
+
+	// ClientSecret Leave out to keep the saved secret of the provider with the same id
+	ClientSecret *string                  `json:"client_secret,omitempty"`
+	Enabled      bool                     `json:"enabled"`
+	IconUrl      *string                  `json:"icon_url,omitempty"`
+	Id           ConnectionProviderIdType `json:"id"`
+
+	// IdPath Dot path into the JSON user object, for example data.0.login
+	IdPath *string `json:"id_path,omitempty"`
+	Issuer *string `json:"issuer,omitempty"`
+
+	// Kind How Fluxer signs in to a connection provider
+	Kind ConnectionProviderUpdateKind `json:"kind"`
+
+	// Name Name shown to people
+	Name string `json:"name"`
+
+	// NameClaim Dot path into the JSON user object, for example data.0.login
+	NameClaim *string `json:"name_claim,omitempty"`
+
+	// NamePath Dot path into the JSON user object, for example data.0.login
+	NamePath           *string `json:"name_path,omitempty"`
+	ProfileUrlTemplate *string `json:"profile_url_template,omitempty"`
+
+	// Scope Space-separated scopes. OpenID Connect providers need openid
+	Scope       string  `json:"scope"`
+	TokenUrl    *string `json:"token_url,omitempty"`
+	UserinfoUrl *string `json:"userinfo_url,omitempty"`
+}
+
+// ConnectionProviderUpdateKind How Fluxer signs in to a connection provider
+type ConnectionProviderUpdateKind string
+
 // CreateRegistrationUrlRequest defines model for CreateRegistrationUrlRequest.
 type CreateRegistrationUrlRequest struct {
 	ApprovalRequired *bool      `json:"approval_required,omitempty"`
@@ -1892,6 +2010,9 @@ type CreateVoiceRegionRequest struct {
 
 	// Emoji Emoji representing the region
 	Emoji string `json:"emoji"`
+
+	// Hidden Whether to leave the region out of the region lists clients show, while placement still uses it
+	Hidden *bool `json:"hidden,omitempty"`
 
 	// Id Unique identifier for the voice region
 	Id string `json:"id"`
@@ -2400,7 +2521,10 @@ type InstanceConfigResponse struct {
 			PolicyUri        *string `json:"policy_uri"`
 			TosUri           *string `json:"tos_uri"`
 		} `json:"bluesky"`
-		Email struct {
+
+		// ConnectionProviders Profile connection providers. Always empty outside self-hosted instances
+		ConnectionProviders []ConnectionProviderConfigResponse `json:"connection_providers"`
+		Email               struct {
 			// Delivery Saved delivery mode, or null to use the environment
 			Delivery                           *EmailDeliveryModeSchema `json:"delivery"`
 			DeliveryState                      EmailDeliveryStateSchema `json:"delivery_state"`
@@ -2465,6 +2589,7 @@ type InstanceConfigResponse struct {
 			RenewThresholdDays *int     `json:"renew_threshold_days"`
 			RenewWindowDays    *int     `json:"renew_window_days"`
 		} `json:"attachment_decay"`
+		ProxyAttachmentsThroughApi bool `json:"proxy_attachments_through_api"`
 	} `json:"media"`
 
 	// Notice Notice shown to everyone on the instance, or null
@@ -2633,7 +2758,10 @@ type InstanceConfigUpdateRequest struct {
 			PolicyUri *string `json:"policy_uri,omitempty"`
 			TosUri    *string `json:"tos_uri,omitempty"`
 		} `json:"bluesky,omitempty"`
-		Email *struct {
+
+		// ConnectionProviders Replaces the whole provider list. Only self-hosted instances can have providers
+		ConnectionProviders *[]ConnectionProviderUpdate `json:"connection_providers,omitempty"`
+		Email               *struct {
 			// Delivery How the instance sends email, or null to use the environment
 			Delivery                  *EmailDeliveryModeSchema `json:"delivery,omitempty"`
 			DisableNewIpAuthorization *bool                    `json:"disable_new_ip_authorization,omitempty"`
@@ -2677,6 +2805,9 @@ type InstanceConfigUpdateRequest struct {
 			RenewThresholdDays *int     `json:"renew_threshold_days,omitempty"`
 			RenewWindowDays    *int     `json:"renew_window_days,omitempty"`
 		} `json:"attachment_decay,omitempty"`
+
+		// ProxyAttachmentsThroughApi Whether attachment links point at the API, which checks that the viewer can read the message before it hands over the file
+		ProxyAttachmentsThroughApi *bool `json:"proxy_attachments_through_api,omitempty"`
 	} `json:"media,omitempty"`
 
 	// Notice Notice shown to everyone on the instance, such as planned maintenance
@@ -2907,6 +3038,9 @@ type ListVoiceRegionsResponse struct {
 
 		// Emoji Emoji representing the region
 		Emoji string `json:"emoji"`
+
+		// Hidden Whether the region is left out of the region lists clients show, while placement still uses it
+		Hidden bool `json:"hidden"`
 
 		// Id Unique identifier for the voice region
 		Id string `json:"id"`
@@ -3327,6 +3461,9 @@ type VoiceRegionAdminResponse struct {
 
 	// Emoji Emoji representing the region
 	Emoji string `json:"emoji"`
+
+	// Hidden Whether the region is left out of the region lists clients show, while placement still uses it
+	Hidden bool `json:"hidden"`
 
 	// Id Unique identifier for the voice region
 	Id string `json:"id"`

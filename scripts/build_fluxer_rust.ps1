@@ -65,7 +65,7 @@ if (-not (Test-Path $DistIndex)) {
 # 3. Rust 셸 릴리스 바이너리 빌드
 Write-Host "`n[Step 3/4] Rust 네이티브 셸 릴리스 빌드 중 (cargo build --release)..." -ForegroundColor Yellow
 $CargoStart = Get-Date
-cargo build -p fluxer_desktop_rs --release
+cargo build --release --manifest-path (Join-Path $WorkspaceRoot "fluxer_desktop_rs\Cargo.toml") --target-dir (Join-Path $WorkspaceRoot "target")
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Rust 셸 컴파일 실패 (Exit code: $LASTEXITCODE)"

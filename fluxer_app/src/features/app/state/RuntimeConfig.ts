@@ -56,6 +56,7 @@ import type {
 	InstanceAppPublic,
 	InstanceBuiltInGuildBadgeImages,
 	InstanceCommunity,
+	InstanceConnectionProvider,
 	InstanceFeatures,
 	InstanceGuildBadge,
 	InstanceHiddenBuiltInGuildBadges,
@@ -691,7 +692,6 @@ class RuntimeConfig {
 			customBadgesVersion: resolution.snapshot.customBadgesVersion,
 			builtInGuildBadgeImages: resolution.snapshot.builtInGuildBadgeImages,
 			hiddenBuiltInGuildBadges: resolution.snapshot.hiddenBuiltInGuildBadges,
-			hiddenRoleIds: resolution.snapshot.hiddenRoleIds,
 			limits: resolution.snapshot.limits,
 		});
 		this.activeRuntime = {...runtime, snapshot: usable};
@@ -760,6 +760,7 @@ class RuntimeConfig {
 				gif_enabled: config.policy.services_resolved.gif_enabled,
 				youtube_enabled: config.policy.services_resolved.youtube_enabled,
 				bluesky_enabled: config.policy.services_resolved.bluesky_enabled,
+				connection_providers: current.services.connection_providers,
 			},
 			appPublic,
 			notice: config.notice,
@@ -945,16 +946,16 @@ class RuntimeConfig {
 		return this.activeRuntime?.snapshot.hiddenBuiltInGuildBadges ?? [];
 	}
 
-	get hiddenRoleIds(): ReadonlyArray<string> {
-		return this.activeRuntime?.snapshot.hiddenRoleIds ?? [];
-	}
-
 	get gifEnabled(): boolean {
 		return this.services.gif_enabled;
 	}
 
 	get blueskyConnectionsEnabled(): boolean {
 		return this.services.bluesky_enabled;
+	}
+
+	get connectionProviders(): ReadonlyArray<InstanceConnectionProvider> {
+		return this.services.connection_providers;
 	}
 
 	get marketingHost(): string {

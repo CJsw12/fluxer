@@ -7,6 +7,7 @@ import {useContextMenuHoverState} from '@app/features/app/hooks/useContextMenuHo
 import {useSkeletonLayoutReport} from '@app/features/app/hooks/useSkeletonLayoutMemoryCapture';
 import RuntimeConfig from '@app/features/app/state/RuntimeConfig';
 import {Limits} from '@app/features/app/utils/UserLimits';
+import {registerBootFrameComposer} from '@app/features/boot_state/BootDomFrame';
 import {fetchSlowmodeState} from '@app/features/channel/commands/ChannelCommands';
 import {ChannelAttachmentArea} from '@app/features/channel/components/ChannelAttachmentArea';
 import {
@@ -104,7 +105,9 @@ import {
 	resolveTypedEmojiShortcodes,
 	resolveTypedEmojiToken,
 } from '@app/features/messaging/utils/TypedEmojiShortcodeUtils';
+import {AppStorageKey} from '@app/features/platform/state/AppStorageKeys';
 import {ComponentBus} from '@app/features/platform/utils/ComponentBus';
+import {awaitHydration} from '@app/features/platform/utils/MobXPersistence';
 import {useSlowmode} from '@app/features/slowmode/hooks/useSlowmode';
 import {openCreateThread} from '@app/features/threads/commands/ThreadNavigation';
 import ActiveComposer from '@app/features/threads/state/ActiveComposer';
@@ -170,6 +173,7 @@ export const LexicalChannelTextareaContent = observer(
 		bare = false,
 		controlsRef,
 		onValueChange,
+		onFocus,
 	}: {
 		accountKey: string | null;
 		channel: Channel;
@@ -188,6 +192,7 @@ export const LexicalChannelTextareaContent = observer(
 		bare?: boolean;
 		controlsRef?: React.MutableRefObject<ChannelTextareaControls | null>;
 		onValueChange?: (value: string) => void;
+		onFocus?: () => void;
 	}) => {
 		const {i18n} = useLingui();
 		const composerKey = draftChannelId ?? channel.id;
@@ -238,6 +243,29 @@ export const LexicalChannelTextareaContent = observer(
 				? containerRef.current.querySelector<HTMLDivElement>('[data-channel-textarea]')
 				: null;
 		}, []);
+		const bootFrameDraftRef = useRef(false);
+		useLayoutEffect(() => {
+			let active = true;
+			bootFrameDraftRef.current = false;
+			const unregister = registerBootFrameComposer(
+				() => handleRef.current,
+				(text) => {
+					bootFrameDraftRef.current = true;
+					DraftCommands.createDraft(accountKey, composerKey, text);
+					void awaitHydration(AppStorageKey.MESSAGING_DRAFTS).then(() => {
+						const handle = handleRef.current;
+						if (active && handle !== null) {
+							DraftCommands.createDraft(accountKey, composerKey, handle.getDisplayValue(), handle.getSegments());
+							bootFrameDraftRef.current = false;
+						}
+					});
+				},
+			);
+			return () => {
+				active = false;
+				unregister();
+			};
+		}, [accountKey, composerKey]);
 		useChannelComposerDraftFocusRestore({
 			handleRef,
 			editableRef,
@@ -960,6 +988,7 @@ export const LexicalChannelTextareaContent = observer(
 			return true;
 		}, [channel.id, enableEditLast]);
 		useTextareaDraftAndTyping({
+			bootFrameDraftRef,
 			draftOwner: accountKey,
 			channelId: draftChannelId ?? channel.id,
 			value,
@@ -1118,6 +1147,7 @@ export const LexicalChannelTextareaContent = observer(
 					plusButton,
 					() => (
 						<TextareaPlusMenu
+							giftChannelId={draftChannelId == null ? channel.id : undefined}
 							onUploadFile={handleFileButtonClick}
 							canAttachFiles={canAttachFilesInChannel(channel)}
 							canSendMessages={!textareaInputDisabled}
@@ -1216,7 +1246,7 @@ export const LexicalChannelTextareaContent = observer(
 		const isMobileEditBarVisible = editingMessage && mobileLayout.enabled;
 		const isReplyBarVisible = !isMobileEditBarVisible && referencedMessage != null;
 		const presentableTypingUsers = usePresentableTypingUsers(channel);
-		const isTypingStatusVisible = !isAutocompleteVisible && presentableTypingUsers.length > 0;
+		const isTypingStatusVisible = draftChannelId == null && !isAutocompleteVisible && presentableTypingUsers.length > 0;
 		const isSlowmodeIndicatorVisible = isSlowmodeEnabled;
 		const hasLeadingStatusContent = isMobileEditBarVisible || isReplyBarVisible || isSlashParamBarVisible;
 		let shouldReplyMention = false;
@@ -1292,10 +1322,12 @@ export const LexicalChannelTextareaContent = observer(
 										/>
 									</flx-channel-textarea-typing-slot>
 								)}
-								<TypingAnnouncer
-									channel={channel}
-									data-flx="channel.lexical-channel-textarea-content.typing-announcer"
-								/>
+								{draftChannelId == null && (
+									<TypingAnnouncer
+										channel={channel}
+										data-flx="channel.lexical-channel-textarea-content.typing-announcer"
+									/>
+								)}
 							</flx-channel-textarea-status-rail-left>
 							{isSlowmodeIndicatorVisible && (
 								<flx-channel-textarea-slowmode-slot
@@ -1400,7 +1432,8 @@ export const LexicalChannelTextareaContent = observer(
 										maxWireLength={maxMessageLength}
 										silentMessagePrefix={!isEditingMessageOnMobile}
 										focusRingTarget={containerRef}
-										focusRingEnabled={!textareaInputDisabled && Accessibility.showTextareaFocusRing}
+										focusRingEnabled={!inputSuppressed && Accessibility.showTextareaFocusRing}
+										tabIndex={disabled ? 0 : undefined}
 										className={lexicalStyles.composerEditable}
 										autocompleteOptions={autocompleteOptions}
 										autocompleteType={autocompleteType}
@@ -1420,6 +1453,7 @@ export const LexicalChannelTextareaContent = observer(
 											setIsFocused(true);
 											setIsInputAreaFocused(true);
 											ChannelSearch.setInputFocused(channel.id, false);
+											onFocus?.();
 										}}
 										onBlur={() => {
 											setIsFocused(false);
@@ -1479,6 +1513,7 @@ export const LexicalChannelTextareaContent = observer(
 							data-flx="channel.lexical-channel-textarea-content.expression-picker-sheet"
 						/>
 						<MobileTextareaPlusBottomSheet
+							giftChannelId={draftChannelId == null ? channel.id : undefined}
 							isOpen={mobilePlusSheetOpen}
 							onClose={handleCloseMobilePlusSheet}
 							onUploadFile={handleFileButtonClick}

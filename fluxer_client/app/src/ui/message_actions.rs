@@ -13,6 +13,7 @@ use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::{AnyElement, App, ClipboardItem, ElementId, IntoElement, SharedString, Window, div, prelude::*, px};
 
 use crate::theme::Theme;
+use crate::ui::l10n;
 
 /// What a button of the action bar asks for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -147,16 +148,16 @@ pub fn action_bar(
         .into_any_element()
 }
 
-fn tooltip(action: MessageAction, target: &ActionTarget) -> &'static str {
+fn tooltip(action: MessageAction, target: &ActionTarget) -> String {
     match action {
-        MessageAction::SuppressEmbeds if target.embeds_suppressed => "Unsuppress Embeds",
-        MessageAction::SuppressEmbeds => "Suppress Embeds",
-        MessageAction::React => "Add Reaction",
-        MessageAction::Reply => "Reply",
-        MessageAction::Edit => "Edit",
-        MessageAction::Delete | MessageAction::DeleteNow => "Delete",
-        MessageAction::CopyText => "Copy Text",
-        MessageAction::CopyId => "Copy Message ID",
+        MessageAction::SuppressEmbeds if target.embeds_suppressed => l10n::tr("Unsuppress embeds"),
+        MessageAction::SuppressEmbeds => l10n::tr("Suppress embeds"),
+        MessageAction::React => l10n::tr("Add reaction"),
+        MessageAction::Reply => l10n::tr("Reply"),
+        MessageAction::Edit => l10n::tr("Edit"),
+        MessageAction::Delete | MessageAction::DeleteNow => l10n::tr("Delete"),
+        MessageAction::CopyText => l10n::tr("Copy text"),
+        MessageAction::CopyId => l10n::tr("Copy message ID"),
     }
 }
 
@@ -272,16 +273,16 @@ pub fn confirm_delete(
         let on_confirm = on_confirm.clone();
         alert
             .confirm()
-            .title("Delete Message")
+            .title(l10n::tr("Delete message"))
             .description(
                 div()
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child("Are you sure you want to delete this message? This cannot be undone.")
+                    .child(l10n::tr("Delete this message? Can't be undone."))
                     .when(!preview.is_empty(), |d| d.child(div().italic().line_clamp(3).child(preview.clone()))),
             )
-            .ok_text("Delete")
+            .ok_text(l10n::tr("Delete"))
             .ok_variant(ButtonVariant::Danger)
             .on_ok(move |_, window, cx| {
                 on_confirm(window, cx);
@@ -328,7 +329,7 @@ mod tests {
         let pending = ActionTarget { can_suppress_embeds: true, ..target(true, true, false, "hi") };
         assert!(!available_actions(&pending).contains(&SuppressEmbeds));
         let suppressed = ActionTarget { embeds_suppressed: true, ..with_embeds };
-        assert_eq!(tooltip(SuppressEmbeds, &suppressed), "Unsuppress Embeds");
+        assert_eq!(tooltip(SuppressEmbeds, &suppressed), "Unsuppress embeds");
     }
 
     struct Empty;

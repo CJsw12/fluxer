@@ -11,15 +11,16 @@ use super::message_row::{self, RowBar};
 use crate::client_view::ClientView;
 use crate::format::SystemIcon;
 use crate::theme::Theme;
+use crate::ui::l10n;
 use crate::view_model::{MessageRow, SystemRow};
 
 /// `handle` is `view`'s own entity: row clicks (reactions, reply jumps,
 /// the action bar) go to it.
 pub fn render(view: &ClientView, handle: WeakEntity<ClientView>, theme: &Theme) -> AnyElement {
     let placeholder = if view.selected_channel.is_none() {
-        Some("Select a channel")
+        Some(l10n::tr("Select a channel"))
     } else if view.loading_history && view.rows.borrow().is_empty() {
-        Some("Loading messages…")
+        Some(l10n::tr("Loading…"))
     } else {
         None
     };
@@ -170,9 +171,12 @@ fn channel_start(name: &SharedString, theme: &Theme) -> AnyElement {
                 .text_color(theme.foreground)
                 .text_size(px(28.))
                 .font_weight(FontWeight::BOLD)
-                .child(format!("Welcome to {name}")),
+                .child(l10n::tr_args("Welcome to {channelDisplayName}", &[("channelDisplayName", name.as_ref())])),
         )
-        .child(div().text_color(theme.muted_foreground).child(format!("This is the start of {name}.")))
+        .child(div().text_color(theme.muted_foreground).child(l10n::tr_args(
+            "This is the start of {channelDisplayName}.",
+            &[("channelDisplayName", name.as_ref())],
+        )))
         .into_any_element()
 }
 
@@ -195,7 +199,7 @@ fn divider(label: Option<SharedString>, new: bool, theme: &Theme) -> AnyElement 
                 .text_color(theme.on_fill)
                 .text_size(px(10.))
                 .font_weight(FontWeight::BOLD)
-                .child("NEW"),
+                .child(l10n::tr("New")),
         );
     }
     row.into_any_element()

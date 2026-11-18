@@ -59,11 +59,13 @@ impl Toaster for OsToaster {
         let events = self.events.clone();
         let spawned = std::thread::Builder::new().name("fluxer-toast".to_owned()).spawn(move || {
             let _slot = slot;
-            let shown = notify_rust::Notification::new()
-                .appname("Fluxer")
-                .summary(&toast.title)
-                .body(&toast.body)
-                .show();
+            let mut notification = notify_rust::Notification::new();
+            notification.appname("Fluxer");
+            // Windows attributes the toast to this AUMID; the process AUMID and
+            // the Start menu shortcut carry the same value (see platform.rs).
+            #[cfg(target_os = "windows")]
+            notification.app_id(crate::platform::APP_USER_MODEL_ID);
+            let shown = notification.summary(&toast.title).body(&toast.body).show();
             let handle = match shown {
                 Ok(handle) => handle,
                 Err(err) => {

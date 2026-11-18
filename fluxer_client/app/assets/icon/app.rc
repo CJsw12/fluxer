@@ -1,0 +1,35 @@
+// Icon and version information only.
+// Do not add RT_MANIFEST here: gpui-pre already embeds a manifest (asInvoker,
+// PerMonitorV2, SegmentHeap, Common-Controls 6.0) and a duplicate fails the
+// link with "CVT1100 duplicate resource type:MANIFEST".
+
+1 ICON "assets/icon/icon.ico"
+
+1 VERSIONINFO
+FILEVERSION 0,1,0,0
+PRODUCTVERSION 0,1,0,0
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x0L
+FILEOS 0x40004L
+FILETYPE 0x1L
+FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName", "Fluxer Platform AB"
+            VALUE "FileDescription", "Fluxer"
+            VALUE "FileVersion", "0.1.0"
+            VALUE "InternalName", "fluxer_client"
+            VALUE "LegalCopyright", "Copyright (C) Fluxer Platform AB. Licensed under AGPL-3.0-or-later."
+            VALUE "OriginalFilename", "fluxer_client.exe"
+            VALUE "ProductName", "Fluxer"
+            VALUE "ProductVersion", "0.1.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

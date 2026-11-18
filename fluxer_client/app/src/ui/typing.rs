@@ -8,6 +8,7 @@ use gpui_kit::{AnyElement, Context, FontWeight, SharedString, Task, div, prelude
 
 use crate::backend::Backend;
 use crate::theme::Theme;
+use crate::ui::l10n;
 use crate::ui::reply::member_name;
 
 /// Height of the indicator row, kept when nobody types so the layout does
@@ -19,21 +20,32 @@ const ROW_HEIGHT: f32 = 20.;
 pub fn typing_text(names: &[String]) -> Option<String> {
     match names {
         [] => None,
-        [a] => Some(format!("{a} is typing…")),
-        [a, b] => Some(format!("{a} and {b} are typing…")),
-        [a, b, c] => Some(format!("{a}, {b} and {c} are typing…")),
-        more => Some(tier_text(more.len()).to_owned()),
+        [a] => Some(ellipsis(l10n::tr_args("{a} is typing...", &[("a", a.as_str())]))),
+        [a, b] => Some(ellipsis(l10n::tr_args(
+            "{a} and {b} are typing...",
+            &[("a", a.as_str()), ("b", b.as_str())],
+        ))),
+        [a, b, c] => Some(ellipsis(l10n::tr_args(
+            "{a}, {b} and {c} are typing...",
+            &[("a", a.as_str()), ("b", b.as_str()), ("c", c.as_str())],
+        ))),
+        more => Some(tier_text(more.len())),
     }
 }
 
-/// `getTypingTierText` (en-US).
-fn tier_text(count: usize) -> &'static str {
+/// The catalogs write the typing suffix as ASCII `...`; the UI shows `…`.
+fn ellipsis(text: String) -> String {
+    text.replace("...", "…")
+}
+
+/// `getTypingTierText` (en-US); only the general tier is in the catalogs.
+fn tier_text(count: usize) -> String {
     match count {
-        0..=4 => "Several people are typing…",
-        5..=9 => "A handful of keyboard warriors are assembling...",
-        10..=14 => "A symphony of clacking keys is underway...",
-        15..=19 => "It's a full-blown typing fiesta in here",
-        _ => "Whoa, it's a typing apocalypse",
+        0..=4 => ellipsis(l10n::tr("Several people are typing...")),
+        5..=9 => "A handful of keyboard warriors are assembling...".to_owned(),
+        10..=14 => "A symphony of clacking keys is underway...".to_owned(),
+        15..=19 => "It's a full-blown typing fiesta in here".to_owned(),
+        _ => "Whoa, it's a typing apocalypse".to_owned(),
     }
 }
 

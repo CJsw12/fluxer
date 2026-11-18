@@ -14,7 +14,7 @@ use gpui_kit::{
 use crate::client_view::ClientView;
 use crate::format::DEFAULT_AVATAR_COLORS;
 use crate::theme::Theme;
-use crate::ui::{embed, message_actions, reactions, reply};
+use crate::ui::{embed, l10n, message_actions, reactions, reply};
 use crate::view_model::MessageRow;
 
 /// Revealed spoilers per message. Kept app-wide so a reveal survives the
@@ -80,7 +80,7 @@ pub fn render(
         (MessageState::Sent, _) => None,
         (MessageState::Sending, Some(percent)) => Some((format!("Uploading… {percent}%").into(), muted_fg)),
         (MessageState::Sending, None) => Some(("sending…".into(), muted_fg)),
-        (MessageState::Failed, _) => Some(("failed to send".into(), theme.danger)),
+        (MessageState::Failed, _) => Some((l10n::tr("Failed to send message.").into(), theme.danger)),
     };
     let mut content = div().flex().flex_col().flex_1().min_w_0();
     if row.group_start {

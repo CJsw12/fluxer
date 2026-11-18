@@ -19,6 +19,7 @@ use crate::backend::{Backend, connect_instance, instance_from_endpoints};
 use crate::client_view::{ClientEvent, ClientView};
 use crate::frecency::{self, FrecencyStore};
 use crate::login::{Authenticated, LoginEvent, LoginView, describe_rest_error};
+use crate::ui::l10n;
 
 pub(crate) enum Screen {
     Login(Entity<LoginView>),
@@ -92,7 +93,7 @@ impl AppRoot {
             Err(SessionError::Locked { .. }) => root.screen = Screen::AlreadyRunning,
             Err(err) => {
                 tracing::warn!(%err, "session store unavailable");
-                let message = format!("Logins will not be saved: {err}");
+                let message = l10n::tr_args("{appName} cannot open its local data", &[("appName", "Fluxer")]);
                 root.show_login(Some(message.into()), window, cx);
             }
         }
@@ -110,22 +111,27 @@ impl AppRoot {
         cx: &mut Context<Self>,
     ) -> Self {
         let job = runtime.spawn(async move {
-            let instance = connect_instance(&instance, allow_insecure_loopback)
-                .await
-                .map_err(|err| format!("Could not reach the instance: {err:#}"))?;
+            let domain = instance.clone();
+            let instance = connect_instance(&instance, allow_insecure_loopback).await.map_err(|err| {
+                tracing::warn!(%err, "instance discovery failed");
+                l10n::tr_args("Couldn't connect to {domain}. Try again.", &[("domain", &domain)])
+            })?;
             instance.rest.set_token(Some(token.clone())).await;
-            let user = instance
-                .rest
-                .get_me()
-                .await
-                .map_err(|err| format!("The token was rejected: {}", describe_rest_error(err)))?;
+            let user = instance.rest.get_me().await.map_err(|err| {
+                let detail = describe_rest_error(err);
+                tracing::warn!(%detail, "token check rejected");
+                l10n::tr("Couldn't complete sign-in. Try again.")
+            })?;
             let user_id = user.get("id").and_then(Value::as_str).unwrap_or_default().to_owned();
             Ok::<_, String>(Authenticated { instance, token, user_id, user })
         });
         let task = cx.spawn_in(window, async move |this, cx| {
             let result = match job.await {
                 Ok(result) => result,
-                Err(err) => Err(format!("Token check failed: {err}")),
+                Err(err) => {
+                    tracing::warn!(%err, "token check failed");
+                    Err(l10n::tr("Something went wrong. Try again."))
+                }
             };
             let _ = this.update_in(cx, |root, window, cx| match result {
                 Ok(auth) => root.start_client(auth, window, cx),
@@ -133,7 +139,7 @@ impl AppRoot {
             });
         });
         let mut root = Self::empty(runtime, allow_insecure_loopback);
-        root.screen = Screen::Checking("Checking the saved token…".into());
+        root.screen = Screen::Checking(l10n::tr("Checking the sign-in request…").into());
         root._task = Some(task);
         root
     }
@@ -162,11 +168,14 @@ impl AppRoot {
         self._task = Some(cx.spawn_in(window, async move |this, cx| {
             let result = match job.await {
                 Ok(result) => result,
-                Err(err) => Err(ResumeError::Unreachable(format!("Sign-in failed: {err}"))),
+                Err(err) => {
+                    tracing::warn!(%err, "sign-in failed");
+                    Err(ResumeError::Unreachable(l10n::tr("Couldn't complete sign-in. Try again.")))
+                }
             };
             let _ = this.update_in(cx, |root, window, cx| root.finish_resume(result, window, cx));
         }));
-        self.screen = Screen::Checking("Signing in…".into());
+        self.screen = Screen::Checking(l10n::tr("Signing in…").into());
         cx.notify();
     }
 
@@ -189,7 +198,7 @@ impl AppRoot {
                 if let Some(key) = self.account_key.take() {
                     self.forget(&key);
                 }
-                self.show_login(Some("Your saved login has expired. Log in again.".into()), window, cx);
+                self.show_login(Some(l10n::tr("Session expired").into()), window, cx);
             }
             Err(ResumeError::Unreachable(message)) => {
                 self._rediscover = None;
@@ -306,7 +315,10 @@ impl AppRoot {
                 self.screen = Screen::Client(client);
                 cx.notify();
             }
-            Err(err) => self.show_login(Some(format!("Could not connect: {err:#}").into()), window, cx),
+            Err(err) => {
+                tracing::warn!(%err, "client start failed");
+                self.show_login(Some(l10n::tr("Connection failed").into()), window, cx)
+            }
         }
     }
 
@@ -331,12 +343,16 @@ async fn resume_session(
     user_id: String,
     allow_insecure_loopback: bool,
 ) -> Result<Authenticated, ResumeError> {
+    let unreachable = |err: anyhow::Error| {
+        tracing::warn!(%err, "saved instance unreachable");
+        ResumeError::Unreachable(l10n::tr_args(
+            "Couldn't connect to {domain}. Try again.",
+            &[("domain", &origin)],
+        ))
+    };
     let instance = match cached {
-        Some(endpoints) => instance_from_endpoints(endpoints, allow_insecure_loopback)
-            .map_err(|err| ResumeError::Unreachable(format!("Could not use the saved instance: {err:#}")))?,
-        None => connect_instance(&origin, allow_insecure_loopback)
-            .await
-            .map_err(|err| ResumeError::Unreachable(format!("Could not reach the instance: {err:#}")))?,
+        Some(endpoints) => instance_from_endpoints(endpoints, allow_insecure_loopback).map_err(unreachable)?,
+        None => connect_instance(&origin, allow_insecure_loopback).await.map_err(unreachable)?,
     };
     instance.rest.set_token(Some(token.clone())).await;
     let user = match instance.rest.get_me().await {
@@ -367,16 +383,22 @@ impl Render for AppRoot {
                         .flex_col()
                         .items_center()
                         .gap_3()
-                        .child(div().text_size(px(20.)).font_weight(FontWeight::BOLD).child("Fluxer is already running"))
                         .child(
                             div()
-                                .text_color(cx.theme().muted_foreground)
-                                .child("Close the other Fluxer window first, then start it again."),
+                                .text_size(px(20.))
+                                .font_weight(FontWeight::BOLD)
+                                .child(l10n::tr_args("{appName} cannot open its local data", &[("appName", "Fluxer")])),
+                        )
+                        .child(
+                            div().text_color(cx.theme().muted_foreground).child(l10n::tr_args(
+                                "Quit {appName}, make sure no other copy is running, and open it again.",
+                                &[("appName", "Fluxer")],
+                            )),
                         )
                         .child(
                             Button::new("already-running-quit")
                                 .primary()
-                                .label("Quit")
+                                .label(l10n::tr("Quit"))
                                 .on_click(|_, _, cx| cx.quit()),
                         ),
                 )

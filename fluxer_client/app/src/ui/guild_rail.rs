@@ -6,6 +6,7 @@ use gpui_kit::{Context, Div, ElementId, FontWeight, SharedString, Stateful, div,
 use super::badge;
 use crate::client_view::ClientView;
 use crate::theme::Theme;
+use crate::ui::l10n;
 use crate::view_model::Place;
 
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> impl IntoElement {
@@ -27,7 +28,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         home_selected,
         view.home_unread,
         theme,
-        rail_button("home", "DM".into(), home_selected, view.home_unread, theme)
+        rail_button("home", l10n::tr("DM").into(), home_selected, view.home_unread, theme)
             .on_click(cx.listener(|this, _, _, cx| this.select_place(Place::Home, cx))),
     ));
     for g in &view.guilds {

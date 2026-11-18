@@ -16,6 +16,7 @@ use serde_json::Value;
 use tokio::runtime::Handle;
 
 use crate::backend::{Instance, connect_instance};
+use crate::ui::l10n;
 
 pub const DEFAULT_INSTANCE: &str = "fluxer.app";
 
@@ -42,34 +43,40 @@ pub struct Credentials {
     pub password: Secret,
 }
 
-pub fn validate_credentials(instance: &str, email: &str, password: &str) -> Result<Credentials, &'static str> {
+pub fn validate_credentials(instance: &str, email: &str, password: &str) -> Result<Credentials, String> {
     let instance = instance.trim();
     if instance.is_empty() {
-        return Err("Enter the instance address.");
+        return Err(l10n::tr_or_en("Enter an instance URL", "Enter the instance address."));
     }
     if resolve_instance_input(instance, ReleaseChannel::Stable).is_err() {
-        return Err("The instance address is not valid.");
+        return Err(l10n::tr_args(
+            "That doesn't look like an instance address. Try a domain such as {exampleInstanceDomain}.",
+            &[("exampleInstanceDomain", instance)],
+        ));
     }
     let email = email.trim();
     if email.is_empty() {
-        return Err("Enter your e-mail address.");
+        return Err(l10n::tr_or_en("Enter an email address.", "Enter your e-mail address."));
     }
     if !email.contains('@') {
-        return Err("The e-mail address is not valid.");
+        return Err(l10n::tr_or_en("Enter a valid email address.", "The e-mail address is not valid."));
     }
     if password.is_empty() {
-        return Err("Enter your password.");
+        return Err(l10n::tr("Enter your password."));
     }
     Ok(Credentials { instance: instance.to_owned(), email: email.to_owned(), password: Secret::new(password) })
 }
 
 /// TOTP codes are 6 digits; spaces are tolerated.
-pub fn validate_totp(code: &str) -> Result<Secret, &'static str> {
+pub fn validate_totp(code: &str) -> Result<Secret, String> {
     let digits: String = code.chars().filter(|c| !c.is_whitespace()).collect();
     if digits.len() == 6 && digits.bytes().all(|b| b.is_ascii_digit()) {
         Ok(Secret::new(digits))
     } else {
-        Err("Enter the 6-digit code from your authenticator app.")
+        Err(l10n::tr_args(
+            "Enter the {digitCount}-digit code from your authenticator app or a backup code.",
+            &[("digitCount", "6")],
+        ))
     }
 }
 
@@ -109,13 +116,16 @@ impl LoginView {
         cx: &mut Context<Self>,
     ) -> Self {
         let instance_input = cx.new(|cx| {
-            let mut s = InputState::new(window, cx).placeholder("Instance (e.g. fluxer.app)");
+            let mut s = InputState::new(window, cx).placeholder(l10n::tr_args(
+                "Enter self-hosted instance URL (e.g. {exampleInstanceDomain})",
+                &[("exampleInstanceDomain", DEFAULT_INSTANCE)],
+            ));
             s.set_value(DEFAULT_INSTANCE, window, cx);
             s
         });
-        let email_input = cx.new(|cx| InputState::new(window, cx).placeholder("E-mail"));
-        let password_input = cx.new(|cx| InputState::new(window, cx).placeholder("Password").masked(true));
-        let code_input = cx.new(|cx| InputState::new(window, cx).placeholder("6-digit code"));
+        let email_input = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Email")));
+        let password_input = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Password")).masked(true));
+        let code_input = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("6-digit code")));
         let mut subscriptions = Vec::new();
         for input in [&instance_input, &email_input, &password_input, &code_input] {
             subscriptions.push(cx.subscribe_in(input, window, |this: &mut Self, _, ev: &InputEvent, window, cx| {
@@ -166,7 +176,10 @@ impl LoginView {
         self.request = Some(cx.spawn_in(window, async move |this, cx| {
             let result = match job.await {
                 Ok(result) => result,
-                Err(err) => Err(format!("Login task failed: {err}")),
+                Err(err) => {
+                    tracing::warn!(%err, "login task failed");
+                    Err(l10n::tr("Something went wrong. Try again."))
+                }
             };
             let _ = this.update_in(cx, |view, window, cx| view.finish(result, window, cx));
         }));
@@ -223,33 +236,33 @@ impl Render for LoginView {
             .rounded(px(8.));
         form = match &self.step {
             Step::Credentials => form
-                .child(div().text_size(px(20.)).font_weight(FontWeight::BOLD).child("Log in to Fluxer"))
+                .child(div().text_size(px(20.)).font_weight(FontWeight::BOLD).child(l10n::tr("Welcome back")))
                 .child(Input::new(&self.instance_input).disabled(busy))
                 .child(Input::new(&self.email_input).disabled(busy))
                 .child(Input::new(&self.password_input).mask_toggle().disabled(busy))
                 .child(
                     Button::new("login-submit")
                         .primary()
-                        .label("Log in")
+                        .label(l10n::tr("Sign in"))
                         .loading(busy)
                         .disabled(busy)
                         .on_click(cx.listener(|this, _, window, cx| this.submit(window, cx))),
                 ),
             Step::Totp { .. } => form
-                .child(div().text_size(px(20.)).font_weight(FontWeight::BOLD).child("Two-factor authentication"))
-                .child(div().text_color(muted_fg).child("Enter the code from your authenticator app."))
+                .child(div().text_size(px(20.)).font_weight(FontWeight::BOLD).child(l10n::tr("Two-factor authentication")))
+                .child(div().text_color(muted_fg).child(l10n::tr("Enter the code from your authenticator app.")))
                 .child(Input::new(&self.code_input).disabled(busy))
                 .child(
                     Button::new("mfa-submit")
                         .primary()
-                        .label("Verify")
+                        .label(l10n::tr("Verify"))
                         .loading(busy)
                         .disabled(busy)
                         .on_click(cx.listener(|this, _, window, cx| this.submit(window, cx))),
                 )
                 .child(
                     Button::new("mfa-back")
-                        .label("Back")
+                        .label(l10n::tr("Back"))
                         .disabled(busy)
                         .on_click(cx.listener(|this, _, _, cx| this.back(cx))),
                 ),
@@ -270,22 +283,24 @@ impl Render for LoginView {
 }
 
 async fn login_with_password(creds: Credentials, allow_insecure_loopback: bool) -> Result<Next, String> {
-    let instance = connect_instance(&creds.instance, allow_insecure_loopback)
-        .await
-        .map_err(|err| format!("Could not reach the instance: {err:#}"))?;
+    let domain = creds.instance.clone();
+    let instance = connect_instance(&creds.instance, allow_insecure_loopback).await.map_err(|err| {
+        tracing::warn!(%err, "instance discovery failed");
+        l10n::tr_args("Couldn't connect to {domain}. Try again.", &[("domain", &domain)])
+    })?;
     let outcome = instance.rest.login(&creds.email, &creds.password).await.map_err(describe_rest_error)?;
-    interpret(instance, outcome).await
+    interpret(instance, outcome, Some(&creds.email)).await
 }
 
 async fn login_with_totp(instance: Instance, ticket: Secret, code: Secret) -> Result<Next, String> {
     let outcome = instance.rest.login_mfa_totp(&ticket, &code).await.map_err(describe_rest_error)?;
     match outcome {
         LoginOutcome::Mfa { .. } => Err("The server asked for another second factor.".to_owned()),
-        other => interpret(instance, other).await,
+        other => interpret(instance, other, None).await,
     }
 }
 
-async fn interpret(instance: Instance, outcome: LoginOutcome) -> Result<Next, String> {
+async fn interpret(instance: Instance, outcome: LoginOutcome, email: Option<&str>) -> Result<Next, String> {
     match outcome {
         LoginOutcome::Token(success) => {
             instance.rest.set_token(Some(success.token.clone())).await;
@@ -309,9 +324,15 @@ async fn interpret(instance: Instance, outcome: LoginOutcome) -> Result<Next, St
              log in once from the web or desktop app, then try again."
                 .to_owned(),
         ),
-        LoginOutcome::IpAuthorizationRequired { .. } => Err(
-            "New login location: approve it from the e-mail Fluxer sent you, then log in again.".to_owned(),
-        ),
+        LoginOutcome::IpAuthorizationRequired { .. } => match email.filter(|email| !email.is_empty()) {
+            Some(email) => Err(l10n::tr_args(
+                "Check your inbox at {emailAddress} for the authorization link.",
+                &[("emailAddress", email)],
+            )),
+            None => Err(
+                "New login location: approve it from the e-mail Fluxer sent you, then log in again.".to_owned(),
+            ),
+        },
     }
 }
 
@@ -336,10 +357,13 @@ mod tests {
 
     #[test]
     fn credentials_validation() {
-        assert_eq!(validate_credentials("", "a@b.c", "pw").err(), Some("Enter the instance address."));
-        assert_eq!(validate_credentials("fluxer.app", " ", "pw").err(), Some("Enter your e-mail address."));
-        assert_eq!(validate_credentials("fluxer.app", "nobody", "pw").err(), Some("The e-mail address is not valid."));
-        assert_eq!(validate_credentials("fluxer.app", "a@b.c", "").err(), Some("Enter your password."));
+        assert_eq!(validate_credentials("", "a@b.c", "pw").err().as_deref(), Some("Enter the instance address."));
+        assert_eq!(validate_credentials("fluxer.app", " ", "pw").err().as_deref(), Some("Enter your e-mail address."));
+        assert_eq!(
+            validate_credentials("fluxer.app", "nobody", "pw").err().as_deref(),
+            Some("The e-mail address is not valid.")
+        );
+        assert_eq!(validate_credentials("fluxer.app", "a@b.c", "").err().as_deref(), Some("Enter your password."));
         let ok = validate_credentials(" fluxer.app ", " a@b.c ", "pw").expect("valid");
         assert_eq!(ok.instance, "fluxer.app");
         assert_eq!(ok.email, "a@b.c");

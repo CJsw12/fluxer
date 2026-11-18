@@ -31,6 +31,7 @@ use crate::ui::composer::{
     last_own_message,
 };
 use crate::ui::composer_text;
+use crate::ui::l10n;
 use crate::ui::overlay::Overlay;
 use crate::ui::member_list::{self, MemberListSubscriptions, MemberPanel};
 use crate::ui::message_actions::{self, ActionTarget, MessageAction};
@@ -154,7 +155,7 @@ impl ClientView {
         cx: &mut Context<Self>,
     ) -> Self {
         let scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
-        let composer = cx.new(|cx| InputState::new(window, cx).placeholder("Select a channel"));
+        let composer = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Select a channel")));
         composer.update(cx, |s, cx| s.set_disabled(true, cx));
         let subscriptions = vec![
             cx.subscribe_in(&composer, window, |this: &mut Self, _, ev: &InputEvent, window, cx| match ev {
@@ -216,7 +217,7 @@ impl ClientView {
             unread_anchor: None,
             loading_history: false,
             can_send: false,
-            status: "Connecting…".into(),
+            status: l10n::tr("Connecting…").into(),
             connection: Connection::Connecting,
             user: None,
             error: None,
@@ -274,10 +275,14 @@ impl ClientView {
                         GatewayStatus::Closed { .. } => Connection::Offline,
                     };
                     self.status = match status {
-                        GatewayStatus::Connecting => "Connecting…".into(),
-                        GatewayStatus::Ready => "Connected".into(),
-                        GatewayStatus::Reconnecting { attempt } => format!("Reconnecting (attempt {attempt})…").into(),
-                        GatewayStatus::Closed { reason } => format!("Disconnected: {reason}").into(),
+                        GatewayStatus::Connecting => l10n::tr("Connecting…").into(),
+                        GatewayStatus::Ready => l10n::tr("Connected").into(),
+                        GatewayStatus::Reconnecting { attempt } => {
+                            format!("{} ({attempt})", l10n::tr("Reconnecting…")).into()
+                        }
+                        GatewayStatus::Closed { reason } => {
+                            format!("{}: {reason}", l10n::tr("Disconnected")).into()
+                        }
                     };
                 }
                 UiEvent::HistoryLoaded { channel_id, error } => {
@@ -286,12 +291,13 @@ impl ClientView {
                     if Some(channel_id) == self.selected_channel {
                         self.loading_history = false;
                         if let Some(error) = error {
-                            self.error = Some(format!("Could not load messages: {error}").into());
+                            self.error =
+                                Some(format!("{}: {error}", l10n::tr("Messages failed to load")).into());
                         }
                     }
                 }
                 UiEvent::SendFailed { error } => {
-                    self.error = Some(format!("Message not sent: {error}").into());
+                    self.error = Some(format!("{}: {error}", l10n::tr("Failed to send message.")).into());
                 }
                 UiEvent::ActionFailed { error } => {
                     self.error = Some(error.into());
@@ -653,9 +659,7 @@ impl ClientView {
         // The server counts UTF-16 units; an over-long message keeps the
         // draft instead of failing after the input was cleared.
         if ui::attachments::is_long_text(text.trim()) {
-            self.error = Some(
-                format!("Messages are limited to {} characters.", ui::attachments::MAX_MESSAGE_LENGTH).into(),
-            );
+            self.error = Some(l10n::tr("Message is too long").into());
             cx.notify();
             return;
         }
@@ -706,7 +710,7 @@ impl ClientView {
     }
 
     pub(crate) fn not_ready(&mut self, cx: &mut Context<Self>) {
-        self.error = Some("Not ready to send yet (waiting for the gateway).".into());
+        self.error = Some(l10n::tr("Check your connection and try again.").into());
         cx.notify();
     }
 

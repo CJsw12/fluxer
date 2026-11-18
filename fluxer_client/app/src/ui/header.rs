@@ -9,6 +9,7 @@ use gpui_kit::{Context, FontWeight, div, prelude::*};
 
 use crate::client_view::ClientView;
 use crate::theme::Theme;
+use crate::ui::l10n;
 
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> impl IntoElement {
     let glyph = view.channel_glyph;
@@ -31,7 +32,11 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .ghost()
                 .small()
                 .icon(if enabled { IconName::Bell } else { IconName::BellOff })
-                .tooltip(if enabled { "Mute Notifications" } else { "Unmute Notifications" })
+                .tooltip(if enabled {
+                    l10n::tr("Mute notifications")
+                } else {
+                    l10n::tr("Enable notifications")
+                })
                 .on_click(cx.listener(|this, _, _, cx| this.toggle_notifications(cx)))
         })
         .when(view.member_target.is_some(), |d| {
@@ -41,7 +46,11 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     .small()
                     .icon(IconName::Users)
                     .selected(open)
-                    .tooltip(if open { "Hide Member List" } else { "Show Member List" })
+                    .tooltip(if open {
+                        l10n::tr("Hide members")
+                    } else {
+                        l10n::tr("Show members")
+                    })
                     .on_click(cx.listener(|this, _, _, cx| this.toggle_member_list(cx))),
             )
         })

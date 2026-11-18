@@ -1974,7 +1974,9 @@ dependencies = [
  "anyhow",
  "bytes",
  "chrono",
+ "embed-resource",
  "fluxer_client_core",
+ "fluxer_client_i18n",
  "fluxer_client_markdown",
  "gpui-kit",
  "gpui-pre",
@@ -1985,6 +1987,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "windows 0.62.2",
 ]
 
 [[package]]

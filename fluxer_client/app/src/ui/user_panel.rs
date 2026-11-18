@@ -6,6 +6,7 @@ use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::{Context, FontWeight, SharedString, div, prelude::*, px};
 
+use super::l10n;
 use super::member_list::{status_color, status_label};
 use super::message_row::avatar;
 use crate::client_view::{ClientView, Connection};
@@ -16,7 +17,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     let (dot, label): (_, SharedString) = match view.connection {
         Connection::Online => (status_color(view.own_status, theme), status_label(view.own_status).into()),
         Connection::Connecting => (theme.status_connecting, view.status.clone()),
-        Connection::Offline => (theme.status_offline, "Offline".into()),
+        Connection::Offline => (theme.status_offline, l10n::tr("Offline").into()),
     };
     let (picture, name) = match &view.user {
         Some(user) => (
@@ -75,7 +76,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             Button::new("log-out")
                 .ghost()
                 .small()
-                .label("Log out")
+                .label(l10n::tr("Log out"))
                 .on_click(cx.listener(|this, _, _, cx| this.log_out(cx))),
         )
 }

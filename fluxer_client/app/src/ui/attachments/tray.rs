@@ -10,6 +10,7 @@ use gpui_kit::{AnyElement, Context, ObjectFit, StyledImage as _, div, img, prelu
 use super::{PendingAttachment, Preview, format_size};
 use crate::client_view::ClientView;
 use crate::theme::Theme;
+use crate::ui::l10n;
 
 const CHIP_WIDTH: f32 = 148.;
 const THUMB_HEIGHT: f32 = 84.;
@@ -74,19 +75,19 @@ fn chip(file: &PendingAttachment, theme: &Theme, cx: &mut Context<ClientView>) -
             .text_xs()
             .font_weight(gpui_kit::FontWeight::BOLD)
             .text_color(theme.foreground)
-            .child("SPOILER")
+            .child(l10n::tr("Spoiler"))
     });
     let spoiler = Button::new(("attachment-spoiler", id))
         .ghost()
         .xsmall()
         .icon(if file.spoiler { IconName::EyeOff } else { IconName::Eye })
-        .tooltip(if file.spoiler { "Remove spoiler" } else { "Mark as spoiler" })
+        .tooltip(if file.spoiler { l10n::tr("Remove spoiler") } else { l10n::tr("Mark as spoiler") })
         .on_click(cx.listener(move |view, _, _, cx| view.toggle_attachment_spoiler(id, cx)));
     let remove = Button::new(("attachment-remove", id))
         .ghost()
         .xsmall()
         .icon(IconName::Close)
-        .tooltip("Remove attachment")
+        .tooltip(l10n::tr("Remove attachment"))
         .on_click(cx.listener(move |view, _, _, cx| view.remove_attachment(id, cx)));
     div()
         .flex()
@@ -125,5 +126,5 @@ fn file_glyph(name: &str) -> String {
     name.rsplit_once('.')
         .map(|(_, ext)| ext.to_ascii_uppercase())
         .filter(|ext| !ext.is_empty() && ext.len() <= 5)
-        .unwrap_or_else(|| "FILE".to_owned())
+        .unwrap_or_else(|| l10n::tr("File"))
 }

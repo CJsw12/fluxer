@@ -5,6 +5,7 @@ pub mod channel_list;
 pub mod composer;
 pub mod guild_rail;
 pub mod header;
+pub mod l10n;
 pub mod message_list;
 pub mod message_row;
 pub mod user_panel;

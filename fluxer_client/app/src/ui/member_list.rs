@@ -22,6 +22,7 @@ use super::message_row::avatar;
 use crate::client_view::ClientView;
 use crate::format::{default_avatar_index, initials};
 use crate::theme::Theme;
+use crate::ui::l10n;
 use crate::view_model::avatar_url;
 
 /// Panel width (`ChannelMembers.module.css`: 15rem).
@@ -108,13 +109,13 @@ pub fn next_status(status: Status) -> Status {
     }
 }
 
-pub fn status_label(status: Status) -> &'static str {
+pub fn status_label(status: Status) -> String {
     match status {
-        Status::Online => "Online",
-        Status::Idle => "Idle",
-        Status::Dnd => "Do Not Disturb",
-        Status::Invisible => "Invisible",
-        Status::Offline => "Offline",
+        Status::Online => l10n::tr("Online"),
+        Status::Idle => l10n::tr("Idle"),
+        Status::Dnd => l10n::tr("Do not disturb"),
+        Status::Invisible => l10n::tr("Invisible"),
+        Status::Offline => l10n::tr("Offline"),
     }
 }
 
@@ -176,8 +177,8 @@ pub fn member_panel(state: &ClientState, guild_id: Snowflake, channel_id: Snowfl
             let view = match row {
                 MemberListRow::Group(group) => {
                     let name = match group.id.as_str() {
-                        "online" => "Online".to_owned(),
-                        "offline" => "Offline".to_owned(),
+                        "online" => l10n::tr("Online"),
+                        "offline" => l10n::tr("Offline"),
                         id => id
                             .parse::<u64>()
                             .ok()

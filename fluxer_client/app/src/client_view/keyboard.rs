@@ -12,6 +12,7 @@ use crate::accounts::now_ms;
 use crate::nav::{self, ChannelFilter, place_key};
 use crate::ui::autocomplete;
 use crate::ui::composer_text;
+use crate::ui::l10n;
 use crate::ui::overlay::Overlay;
 use crate::ui::quick_switcher::QuickSwitcher;
 use crate::view_model::Place;
@@ -124,7 +125,9 @@ impl ClientView {
 
     pub(crate) fn open_quick_switcher(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.autocomplete = None;
-        let input = cx.new(|cx| InputState::new(window, cx).placeholder("Where would you like to go?"));
+        let input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(l10n::tr("Search for channels, people, or communities"))
+        });
         let subscription = cx.subscribe_in(&input, window, |this: &mut Self, _, ev: &InputEvent, _, cx| {
             if let InputEvent::Change = ev {
                 this.quick_switcher_query_changed(cx);

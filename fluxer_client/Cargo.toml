@@ -10,8 +10,10 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 
 [profile.release]
+# Size + speed: one codegen unit and thin LTO without fat-LTO link times.
 lto = "thin"
-codegen-units = 16
+codegen-units = 1
+strip = "symbols"
 
 # Dependencies (gpui, gpui-kit, tokio...) need no debuginfo; this shrinks link time and target size.
 [profile.dev]

@@ -7,6 +7,8 @@ use std::ops::Range;
 use chrono::{DateTime, TimeZone};
 use fluxer_client_core::state::{MESSAGE_TYPE_REPLY, Message, Snowflake};
 
+use crate::ui::l10n;
+
 /// `MessageFlags.SUPPRESS_NOTIFICATIONS`.
 const FLAG_SUPPRESS_NOTIFICATIONS: u64 = 1 << 12;
 /// `MessageGroupingUtils.ts` `MESSAGE_GROUP_TIMEOUT`.
@@ -66,11 +68,11 @@ where
 {
     let day = at.date_naive();
     let today = now.with_timezone(&at.timezone()).date_naive();
-    let time = at.format("%H:%M");
+    let time = at.format("%H:%M").to_string();
     if day == today {
-        format!("Today at {time}")
+        l10n::tr_args("Today at {timeString}", &[("timeString", &time)])
     } else if today.pred_opt() == Some(day) {
-        format!("Yesterday at {time}")
+        l10n::tr_args("Yesterday at {timeString}", &[("timeString", &time)])
     } else {
         at.format("%Y-%m-%d %H:%M").to_string()
     }
@@ -148,26 +150,26 @@ impl SystemIcon {
     }
 }
 
-/// `SystemMessageUtils.getGuildJoinMessagesPlaintext` (en-US), in order;
-/// `{0}` is the username.
+/// `SystemMessageUtils.getGuildJoinMessagesPlaintext` (en-US catalogs), in
+/// order; `{username}` is the join actor.
 const GUILD_JOIN_MESSAGES: [&str; 17] = [
-    "Glad you're here, {0}!",
-    "Welcome, {0}! Make yourself at home.",
-    "Hello, {0}! Nice to have you here.",
-    "Hello, {0}! Jump in whenever you're ready.",
-    "Hey {0}, great to see you here!",
-    "Hey there, {0}! Hope you enjoy your stay.",
-    "Hey, {0}, welcome aboard!",
-    "Glad you made it, {0}!",
-    "Welcome in, {0}!",
-    "Welcome, {0}!",
-    "Welcome, {0}! We're glad you're here.",
-    "Welcome, {0}! Hope you enjoy your time here.",
-    "Welcome, {0}! Your next conversation starts here.",
-    "Welcome, {0}. We're happy to have you here.",
-    "Great to see you, {0}! Welcome in.",
-    "You're here, {0}! Good to have you with us.",
-    "You've arrived, {0}! Let's get started.",
+    "Glad you're here, {username}!",
+    "Welcome, {username}! Make yourself at home.",
+    "Hello, {username}! Nice to have you here.",
+    "Hello, {username}! Jump in whenever you're ready.",
+    "Hey {username}, great to see you here!",
+    "Hey there, {username}! Hope you enjoy your stay.",
+    "Hey, {username}, welcome aboard!",
+    "Glad you made it, {username}!",
+    "Welcome in, {username}!",
+    "Welcome, {username}!",
+    "Welcome, {username}! We're glad you're here.",
+    "Welcome, {username}! Hope you enjoy your time here.",
+    "Welcome, {username}! Your next conversation starts here.",
+    "Welcome, {username}. We're happy to have you here.",
+    "Great to see you, {username}! Welcome in.",
+    "You're here, {username}! Good to have you with us.",
+    "You've arrived, {username}! Let's get started.",
 ];
 
 /// The guild-join template for a message id: `extractTimestamp(id) % 17`.
@@ -185,16 +187,19 @@ pub struct SystemText {
     pub bold: Vec<Range<usize>>,
 }
 
-/// Fills `{0}`, `{1}`... with `args`, recording each argument's range.
-fn fill(icon: SystemIcon, template: &str, args: &[&str]) -> SystemText {
+/// Translates `id` and fills its `{name}` placeholders with `args`,
+/// recording each argument's range.
+fn fill(icon: SystemIcon, id: &str, args: &[(&str, &str)]) -> SystemText {
+    let template = l10n::current().t(id);
     let mut text = String::with_capacity(template.len());
     let mut bold = Vec::new();
-    let mut rest = template;
+    let mut rest = template.as_ref();
     while let Some(open) = rest.find('{') {
         let Some(len) = rest[open..].find('}') else { break };
         let close = open + len;
         text.push_str(&rest[..open]);
-        match rest[open + 1..close].parse::<usize>().ok().and_then(|ix| args.get(ix)) {
+        let name = rest[open + 1..close].trim();
+        match args.iter().find(|(key, _)| *key == name).map(|(_, value)| *value) {
             Some(arg) => {
                 let start = text.len();
                 text.push_str(arg);
@@ -216,29 +221,57 @@ pub fn system_text(m: &Message, author: &str, mentioned: Option<&str>) -> Option
     use message_type::*;
     let content = m.content.as_str();
     let text = match (m.kind, mentioned) {
-        (USER_JOIN, _) => fill(SystemIcon::Join, guild_join_template(m.id), &[author]),
-        (CHANNEL_PINNED_MESSAGE, _) => fill(SystemIcon::Pin, "{0} pinned a message to this channel.", &[author]),
-        (RECIPIENT_ADD, Some(other)) => fill(SystemIcon::Join, "{0} added {1} to the group.", &[author, other]),
-        (RECIPIENT_ADD, None) => fill(SystemIcon::Join, "{0} added someone to the group.", &[author]),
+        (USER_JOIN, _) => fill(SystemIcon::Join, guild_join_template(m.id), &[("username", author)]),
+        (CHANNEL_PINNED_MESSAGE, _) => fill(
+            SystemIcon::Pin,
+            "{username} pinned a message to this channel.",
+            &[("username", author)],
+        ),
+        (RECIPIENT_ADD, Some(other)) => fill(
+            SystemIcon::Join,
+            "{username} added {userName} to the group.",
+            &[("username", author), ("userName", other)],
+        ),
+        (RECIPIENT_ADD, None) => fill(
+            SystemIcon::Join,
+            "{username} added someone to the group.",
+            &[("username", author)],
+        ),
         (RECIPIENT_REMOVE, _) if m.mentions.first().is_some_and(|u| u.id == m.author.id) => {
-            fill(SystemIcon::Leave, "{0} has left the group.", &[author])
+            fill(SystemIcon::Leave, "{username} has left the group.", &[("username", author)])
         }
-        (RECIPIENT_REMOVE, Some(other)) => {
-            fill(SystemIcon::Leave, "{0} removed {1} from the group.", &[author, other])
+        (RECIPIENT_REMOVE, Some(other)) => fill(
+            SystemIcon::Leave,
+            "{username} removed {userName} from the group.",
+            &[("username", author), ("userName", other)],
+        ),
+        (RECIPIENT_REMOVE, None) => fill(
+            SystemIcon::Leave,
+            "{username} removed someone from the group.",
+            &[("username", author)],
+        ),
+        (CHANNEL_NAME_CHANGE, _) if !content.is_empty() => fill(
+            SystemIcon::Edit,
+            "{username} changed the channel name to {newName}.",
+            &[("username", author), ("newName", content)],
+        ),
+        (CHANNEL_NAME_CHANGE, _) => {
+            fill(SystemIcon::Edit, "{username} changed the channel name.", &[("username", author)])
         }
-        (RECIPIENT_REMOVE, None) => fill(SystemIcon::Leave, "{0} removed someone from the group.", &[author]),
-        (CHANNEL_NAME_CHANGE, _) if !content.is_empty() => {
-            fill(SystemIcon::Edit, "{0} changed the channel name to {1}.", &[author, content])
+        (CHANNEL_ICON_CHANGE, _) => {
+            fill(SystemIcon::Edit, "{username} changed the channel icon.", &[("username", author)])
         }
-        (CHANNEL_NAME_CHANGE, _) => fill(SystemIcon::Edit, "{0} changed the channel name.", &[author]),
-        (CHANNEL_ICON_CHANGE, _) => fill(SystemIcon::Edit, "{0} changed the channel icon.", &[author]),
-        (CALL, _) => fill(SystemIcon::Call, "{0} started a call.", &[author]),
+        (CALL, _) => fill(SystemIcon::Call, "{username} started a call.", &[("username", author)]),
         (CHANNEL_FOLLOW_ADD, _) => fill(
             SystemIcon::Follow,
-            "{0} followed {1} into this channel. Messages published there will appear here.",
-            &[author, content],
+            "{username} followed {name} into this channel. Messages published there will appear here.",
+            &[("username", author), ("name", content)],
         ),
-        (THREAD_CREATED, _) => fill(SystemIcon::Thread, "{0} started a thread: {1}", &[author, content]),
+        (THREAD_CREATED, _) => fill(
+            SystemIcon::Thread,
+            "{username} started a thread: {threadName}",
+            &[("username", author), ("threadName", content)],
+        ),
         _ => return None,
     };
     Some(text)

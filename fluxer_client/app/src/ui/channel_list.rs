@@ -6,11 +6,12 @@ use gpui_kit::{AnyElement, Context, FontWeight, SharedString, div, prelude::*, p
 use super::{badge, user_panel};
 use crate::client_view::ClientView;
 use crate::theme::Theme;
+use crate::ui::l10n;
 use crate::view_model::{ChannelItem, Place};
 
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> impl IntoElement {
     let heading: SharedString = match view.place {
-        Place::Home => "Direct Messages".into(),
+        Place::Home => l10n::tr("Direct messages").into(),
         Place::Guild(id) => view.guilds.iter().find(|g| g.id == id).map(|g| g.name.clone()).unwrap_or_default(),
     };
     let mut list = div()

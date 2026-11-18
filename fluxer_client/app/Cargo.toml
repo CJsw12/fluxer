@@ -11,6 +11,8 @@ path = "src/main.rs"
 
 [dependencies]
 fluxer_client_core = { path = "../core" }
+# Official Fluxer Lingui catalogs (44 locales) for the UI.
+fluxer_client_i18n = { path = "../i18n" }
 # Fluxer message markdown (Fluxer parser + TextView rendering, mentions, spoilers).
 fluxer_client_markdown = { path = "../markdown" }
 gpui-kit = "=0.10.0"
@@ -30,6 +32,23 @@ bytes = "1"
 notify-rust = "4.19"
 # Message sounds (bundled mp3/ogg from fluxer_app/src/media/sounds).
 rodio = { version = "0.23", default-features = false, features = ["playback", "mp3", "vorbis"] }
+
+# Win32 AUMID, Start menu shortcut and fatal-error dialog. The version is the
+# copy already in the lockfile (transitive via gpui-pre).
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_PropertiesSystem",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+[build-dependencies]
+# Icon + VERSIONINFO embedding; also already in the lockfile (gpui-pre).
+embed-resource = "3.0"
 
 [dev-dependencies]
 # Headless UI tests (TestAppContext, #[gpui_kit::test]). Same pin as gpui-kit's

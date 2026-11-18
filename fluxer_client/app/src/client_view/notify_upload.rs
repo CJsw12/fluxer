@@ -11,6 +11,7 @@ use crate::backend::Backend;
 use crate::notify::{Notification, Notifier, Outcome};
 use crate::ui::attachments::{self, NewFile, PendingAttachment};
 use crate::ui::composer::ComposerMode;
+use crate::ui::l10n;
 
 impl ClientView {
     /// The OS toaster and sound player; silent in tests.
@@ -79,7 +80,8 @@ impl ClientView {
             return;
         }
         if !self.backend.state().can_attach_files(channel_id) {
-            self.error = Some("You do not have permission to attach files in this channel.".into());
+            self.error =
+                Some(l10n::tr("You do not have permission to attach files in this channel.").into());
             cx.notify();
             return;
         }
@@ -110,7 +112,7 @@ impl ClientView {
             files: true,
             directories: false,
             multiple: true,
-            prompt: Some("Upload".into()),
+            prompt: Some(l10n::tr("Upload").into()),
         });
         cx.spawn(async move |this, cx| {
             let paths = match picked.await {
@@ -199,9 +201,7 @@ impl ClientView {
     ) {
         let content = text.trim().to_owned();
         if attachments::is_long_text(&content) {
-            self.error = Some(
-                format!("Messages are limited to {} characters.", attachments::MAX_MESSAGE_LENGTH).into(),
-            );
+            self.error = Some(l10n::tr("Message is too long").into());
             cx.notify();
             return;
         }

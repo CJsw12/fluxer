@@ -10,6 +10,7 @@ use gpui_kit::{AnyElement, Context, Entity, FontWeight, ScrollHandle, Subscripti
 use crate::client_view::ClientView;
 use crate::shortcuts::{SwitcherNext, SwitcherPrev};
 use crate::theme::Theme;
+use crate::ui::l10n;
 use crate::ui::overlay;
 
 /// Key context of the modal (Ctrl+N / Ctrl+P bindings).
@@ -75,15 +76,15 @@ pub fn next_selectable(items: &[SwitcherItem], current: Option<usize>, delta: i3
     current
 }
 
-fn header_text(header: SwitcherHeader) -> &'static str {
+fn header_text(header: SwitcherHeader) -> String {
     match header {
-        SwitcherHeader::Previous => "Previous channels",
-        SwitcherHeader::Mentions => "Mentions",
-        SwitcherHeader::Unread => "Unread channels",
-        SwitcherHeader::Searching(QueryMode::Users { .. }) => "Searching users",
-        SwitcherHeader::Searching(QueryMode::TextChannels) => "Searching text channels",
-        SwitcherHeader::Searching(QueryMode::VoiceChannels) => "Searching voice channels",
-        SwitcherHeader::Searching(QueryMode::Guilds) => "Searching communities",
+        SwitcherHeader::Previous => l10n::tr("Previous channels"),
+        SwitcherHeader::Mentions => l10n::tr("Mentions"),
+        SwitcherHeader::Unread => l10n::tr("Unread channels"),
+        SwitcherHeader::Searching(QueryMode::Users { .. }) => l10n::tr("Searching all users"),
+        SwitcherHeader::Searching(QueryMode::TextChannels) => l10n::tr("Searching text channels"),
+        SwitcherHeader::Searching(QueryMode::VoiceChannels) => l10n::tr("Searching voice channels"),
+        SwitcherHeader::Searching(QueryMode::Guilds) => l10n::tr("Searching communities"),
     }
 }
 
@@ -135,7 +136,7 @@ pub fn render(sw: &QuickSwitcher, theme: &Theme, cx: &mut Context<ClientView>) -
         list = list.child(row);
     }
     let empty = sw.items.is_empty().then(|| {
-        div().px_4().py_3().text_color(theme.muted_foreground).child("No results")
+        div().px_4().py_3().text_color(theme.muted_foreground).child(l10n::tr("No results"))
     });
     let content = div()
         .key_context(CONTEXT)

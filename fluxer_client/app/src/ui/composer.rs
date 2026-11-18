@@ -13,6 +13,7 @@ use gpui_kit::{AnyElement, App, Context, Div, SharedString, Window, div, prelude
 
 use crate::client_view::ClientView;
 use crate::theme::Theme;
+use crate::ui::l10n;
 use crate::ui::reply::ReplyingTo;
 
 /// The last error, the autocomplete popup (`ui::autocomplete::render`)
@@ -40,7 +41,7 @@ pub fn render_with(
             .ghost()
             .compact()
             .icon(IconName::Plus)
-            .tooltip("Upload a file")
+            .tooltip(l10n::tr("Upload a file"))
             .on_click(cx.listener(|v, _, _, cx| v.pick_files(cx)))
     });
     let input = div()
@@ -62,11 +63,17 @@ pub fn render_with(
 /// Placeholder for the current channel and send permission.
 pub fn placeholder(view: &ClientView) -> SharedString {
     if view.selected_channel.is_none() {
-        "Select a channel".into()
+        l10n::tr("Select a channel").into()
     } else if view.can_send {
-        format!("Message {}{}", view.channel_glyph, view.channel_title).into()
+        let name = view.channel_title.as_ref();
+        match view.channel_glyph {
+            "#" | "📢" | "🧵" | "💬" => l10n::tr_args("Message #{channelName}", &[("channelName", name)]),
+            "@" => l10n::tr_args("Message @{userName}", &[("userName", name)]),
+            _ => l10n::tr_args("Message {groupName}", &[("groupName", name)]),
+        }
+        .into()
     } else {
-        "You do not have permission to send messages here".into()
+        l10n::tr("You can't send messages in this channel.").into()
     }
 }
 
@@ -379,13 +386,13 @@ pub fn editing_bar(theme: &Theme, on_cancel: impl Fn(&mut Window, &mut App) + 's
         .bg(theme.muted)
         .text_sm()
         .text_color(theme.muted_foreground)
-        .child(div().flex_1().min_w_0().truncate().child("Editing message · escape to cancel · enter to save"))
+        .child(div().flex_1().min_w_0().truncate().child(l10n::tr("Editing message")))
         .child(
             Button::new("edit-bar-cancel")
                 .ghost()
                 .compact()
                 .icon(IconName::CircleX)
-                .tooltip("Cancel editing")
+                .tooltip(l10n::tr("Cancel editing message"))
                 .on_click(move |_, window, cx| on_cancel(window, cx)),
         )
         .into_any_element()

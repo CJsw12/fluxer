@@ -16,6 +16,7 @@ use gpui_kit::{AnyElement, Context, FontWeight, div, prelude::*, px};
 use crate::client_view::ClientView;
 use crate::theme::Theme;
 use crate::ui::composer_text::Insert;
+use crate::ui::l10n;
 
 /// `MENTION_RESULT_LIMIT`.
 pub const MENTION_RESULT_LIMIT: usize = 10;
@@ -372,9 +373,9 @@ pub fn emoji_suggestions(
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> Option<AnyElement> {
     let ac = view.autocomplete.as_ref()?;
     let heading = match ac.trigger {
-        Trigger::Mention => "Members",
-        Trigger::Channel => "Channels",
-        Trigger::Emoji => "Emoji",
+        Trigger::Mention => l10n::tr("Members"),
+        Trigger::Channel => l10n::tr("Channels"),
+        Trigger::Emoji => l10n::tr("Emoji"),
     };
     let mut list = div()
         .id("autocomplete")

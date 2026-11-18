@@ -21,6 +21,8 @@ use fluxer_client_core::rest::{DEFAULT_MAX_ATTACHMENT_FILE_SIZE, MAX_ATTACHMENTS
 use fluxer_client_core::state::{ATTACHMENT_FLAG_SPOILER, Snowflake};
 use gpui_kit::Image;
 
+use crate::ui::l10n;
+
 pub mod tray;
 
 /// `MAX_MESSAGE_LENGTH_NON_PREMIUM`: longer pasted text becomes a file.
@@ -82,9 +84,15 @@ impl fmt::Display for AttachError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::TooMany { max } => write!(f, "You can only attach up to {max} files per message."),
-            Self::TooLarge { name, size, limit } => {
-                write!(f, "{name} is too large ({}; the limit is {}).", format_size(*size), format_size(*limit))
-            }
+            Self::TooLarge { name, size, limit } => write!(
+                f,
+                "{}",
+                l10n::tr_args_or_en(
+                    "One or more files you're trying to upload exceed the maximum size limit of {maxSizeFormatted} per file.",
+                    &format!("{name} is too large ({}; the limit is {}).", format_size(*size), format_size(*limit)),
+                    &[("maxSizeFormatted", &format_size(*limit))],
+                )
+            ),
             Self::Unreadable { name, error } => write!(f, "Could not read {name}: {error}"),
         }
     }

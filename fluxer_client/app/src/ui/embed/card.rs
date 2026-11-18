@@ -7,6 +7,7 @@ use fluxer_client_markdown::MessageMarkdown;
 use gpui_kit::{AnyElement, App, FontWeight, ObjectFit, SharedString, StyledImage as _, div, img, prelude::*, px, rgb};
 
 use super::{AuthorView, CardMedia, CardView, EmbedCx, EmbedText, FooterView, LinkText, gallery, media, open_url};
+use crate::ui::l10n;
 use crate::ui::message_row::markdown_style;
 
 /// Author icon side; the footer icon is 20.
@@ -213,7 +214,7 @@ pub fn render(card: &CardView, hidden: bool, ecx: &EmbedCx, cx: &mut App) -> Any
                     .text_xs()
                     .font_weight(FontWeight::BOLD)
                     .cursor_pointer()
-                    .child("SPOILER")
+                    .child(l10n::tr("Spoiler"))
                     .on_click(ecx.reveal_handler()),
             )
         })

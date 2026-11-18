@@ -1,13 +1,18 @@
 //! Replies: the preview line above a reply (`ReplyPreview.tsx`) and the
 //! "Replying to X" bar above the composer (`ChannelReplyBar.tsx`).
 
+use std::ops::Range;
+
 use fluxer_client_core::state::{ClientState, Message, ReplyPreview, Snowflake, User};
 use gpui_kit::component::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::{AnyElement, App, ElementId, FontWeight, SharedString, Window, div, prelude::*, px};
+use gpui_kit::{
+    AnyElement, App, ElementId, FontWeight, HighlightStyle, SharedString, StyledText, Window, div, prelude::*, px,
+};
 
 use crate::format::{default_avatar_index, initials};
 use crate::theme::Theme;
+use crate::ui::l10n;
 use crate::ui::message_row::avatar;
 use crate::view_model::avatar_url;
 
@@ -148,7 +153,7 @@ pub fn reply_preview_line(
             Some((target.channel_id, target.message_id))
         }
         ReplyLine::Deleted => {
-            row = row.child(div().italic().child("Original message was deleted"));
+            row = row.child(div().italic().child(l10n::tr("Original message was deleted")));
             None
         }
         ReplyLine::NotLoaded { channel_id, message_id } => {
@@ -164,6 +169,37 @@ pub fn reply_preview_line(
             .into_any_element(),
         None => row.into_any_element(),
     }
+}
+
+/// "Replying to X" with the catalog's `<0>...</0>` markup around the
+/// author, which is highlighted; falls back to finding the name.
+fn reply_bar_text(author: &str) -> (String, Range<usize>) {
+    let full = l10n::tr_args("Replying to <0>{authorNickname}</0>", &[("authorNickname", author)]);
+    let mut text = String::with_capacity(full.len());
+    let mut range = 0..0;
+    let mut rest = full.as_str();
+    while let Some(open) = rest.find('<') {
+        text.push_str(&rest[..open]);
+        let after = &rest[open..];
+        if let Some(inner) = after.strip_prefix("<0>")
+            && let Some(close) = inner.find("</0>")
+        {
+            let start = text.len();
+            text.push_str(&inner[..close]);
+            range = start..text.len();
+            rest = &inner[close + 4..];
+        } else {
+            text.push('<');
+            rest = &after[1..];
+        }
+    }
+    text.push_str(rest);
+    if range.is_empty()
+        && let Some(start) = text.find(author)
+    {
+        range = start..start + author.len();
+    }
+    (text, range)
 }
 
 /// The message the composer replies to.
@@ -205,8 +241,9 @@ pub fn replying_to_bar(
     on_cancel: impl Fn(&mut Window, &mut App) + 'static,
 ) -> AnyElement {
     let (channel_id, message_id) = (target.channel_id, target.message_id);
-    let mention_label = if target.mention { "@ ON" } else { "@ OFF" };
+    let mention_label = format!("@ {}", l10n::tr(if target.mention { "On" } else { "Off" }));
     let mention_color = if target.mention { theme.mention_fg } else { theme.muted_foreground };
+    let (reply_text, author_range) = reply_bar_text(target.author.as_ref());
     div()
         .flex()
         .flex_row()
@@ -226,13 +263,19 @@ pub fn replying_to_bar(
                 .truncate()
                 .cursor_pointer()
                 .on_click(move |_, window, cx| on_jump(channel_id, message_id, window, cx))
-                .child("Replying to ")
-                .child(
-                    div()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme.foreground)
-                        .child(target.author.clone()),
-                ),
+                .child({
+                    let style = HighlightStyle {
+                        color: Some(theme.foreground),
+                        font_weight: Some(FontWeight::SEMIBOLD),
+                        ..Default::default()
+                    };
+                    let text = StyledText::new(reply_text);
+                    if author_range.is_empty() {
+                        text.into_any_element()
+                    } else {
+                        text.with_highlights([(author_range, style)]).into_any_element()
+                    }
+                }),
         )
         .when(target.can_mention, |bar| {
             bar.child(
@@ -252,7 +295,7 @@ pub fn replying_to_bar(
                 .ghost()
                 .compact()
                 .icon(IconName::CircleX)
-                .tooltip("Cancel reply")
+                .tooltip(l10n::tr("Cancel reply"))
                 .on_click(move |_, window, cx| on_cancel(window, cx)),
         )
         .into_any_element()

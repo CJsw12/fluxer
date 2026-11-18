@@ -381,7 +381,7 @@
         },
         {
           "name": "앱 UI 번역 적용",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "언어 전환 UI",
@@ -407,15 +407,15 @@
         },
         {
           "name": "릴리스 exe·아이콘",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "콘솔 창 제거",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "시작 메뉴·AUMID",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "트레이·자동 시작",
@@ -423,7 +423,7 @@
         },
         {
           "name": "파일 로그",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "자동 업데이트",

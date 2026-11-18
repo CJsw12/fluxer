@@ -24,6 +24,7 @@ use gpui_kit::{
 };
 
 use super::{EmbedCx, MediaKind, MediaView, open_url};
+use crate::ui::l10n;
 
 /// Decoded embed images kept beyond this are dropped, least recently drawn
 /// first (frames x width x height x 4 bytes).
@@ -236,7 +237,7 @@ fn play_button() -> AnyElement {
 }
 
 /// A block of `width`x`height` with a centred label; `on_click` reveals.
-fn cover(id: SharedString, width: f32, height: f32, label: &'static str, ecx: &EmbedCx) -> AnyElement {
+fn cover(id: SharedString, width: f32, height: f32, label: &str, ecx: &EmbedCx) -> AnyElement {
     div()
         .id(id)
         .debug_selector(|| "embed-cover".to_owned())
@@ -252,14 +253,14 @@ fn cover(id: SharedString, width: f32, height: f32, label: &'static str, ecx: &E
         .text_xs()
         .font_weight(FontWeight::BOLD)
         .cursor_pointer()
-        .child(label)
+        .child(label.to_owned())
         .on_click(ecx.reveal_handler())
         .into_any_element()
 }
 
 /// A spoilered media-only embed: nothing loads until it is revealed.
 pub fn spoiler_cover(width: f32, height: f32, ecx: &EmbedCx) -> AnyElement {
-    cover(ecx.id("spoiler"), width, height, "SPOILER", ecx)
+    cover(ecx.id("spoiler"), width, height, &l10n::tr("Spoiler"), ecx)
 }
 
 /// One media item. Mature media shows a cover (and loads nothing) until
@@ -269,7 +270,8 @@ pub fn render(media: &MediaView, id: &SharedString, ecx: &EmbedCx, cx: &mut App)
         return audio_row(media, id.clone(), ecx);
     }
     if media.explicit && !ecx.revealed(cx) {
-        return cover(id.clone(), media.width, media.height, "NSFW · Click to reveal", ecx);
+        let label = format!("NSFW · {}", l10n::tr("Click to reveal"));
+        return cover(id.clone(), media.width, media.height, &label, ecx);
     }
     let cache = image_cache(cx);
     let placeholder = ecx.theme.image_placeholder;
@@ -312,7 +314,7 @@ pub fn render(media: &MediaView, id: &SharedString, ecx: &EmbedCx, cx: &mut App)
 /// `EmbedAudio` without a player: the title as a link to the file.
 fn audio_row(media: &MediaView, id: SharedString, ecx: &EmbedCx) -> AnyElement {
     let theme = ecx.theme;
-    let label = media.label.clone().unwrap_or_else(|| "Audio".into());
+    let label = media.label.clone().unwrap_or_else(|| l10n::tr("Audio").into());
     let open = media.open_url.clone();
     div()
         .id(id)

@@ -17,6 +17,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use fluxer_client_core::state::{ChannelKind, ClientState, Message, NotificationKind, Snowflake, should_notify};
 use serde_json::Value;
 
+use crate::ui::l10n;
 use crate::ui::reply::{excerpt, member_name};
 use crate::view_model::channel_name;
 
@@ -123,9 +124,12 @@ pub fn toast_body(state: &ClientState, guild_id: Option<Snowflake>, message: &Me
         return body;
     }
     match message.attachments.len() {
-        0 if !message.embeds.is_empty() => "Sent an embed".to_owned(),
+        0 if !message.embeds.is_empty() => l10n::tr_args(
+            "{length, plural, one {# embed} other {# embeds}}",
+            &[("length", &message.embeds.len().to_string())],
+        ),
         0 => String::new(),
-        1 => "Sent an attachment".to_owned(),
+        1 => l10n::tr("Sent an attachment"),
         n => format!("Sent {n} attachments"),
     }
 }
@@ -185,7 +189,7 @@ fn resolve_token(state: &ClientState, guild_id: Option<Snowflake>, message: &Mes
         let name = guild_id
             .and_then(|g| state.guilds.get(&g))
             .and_then(|g| g.roles.get(&role))
-            .map_or_else(|| "deleted-role".to_owned(), |r| r.name.clone());
+            .map_or_else(|| l10n::tr("deleted-role"), |r| r.name.clone());
         return Some(format!("@{name}"));
     }
     if let Some(user) = token.strip_prefix('@') {
@@ -194,12 +198,12 @@ fn resolve_token(state: &ClientState, guild_id: Option<Snowflake>, message: &Mes
             .mentions
             .iter()
             .find(|u| u.id == user)
-            .map_or_else(|| "unknown-user".to_owned(), |u| member_name(state, guild_id, u));
+            .map_or_else(|| l10n::tr("unknown user"), |u| member_name(state, guild_id, u));
         return Some(format!("@{name}"));
     }
     if let Some(channel) = token.strip_prefix('#') {
         let channel = id(channel)?;
-        let name = state.channels.get(&channel).map_or_else(|| "deleted-channel".to_owned(), channel_name);
+        let name = state.channels.get(&channel).map_or_else(|| l10n::tr("deleted-channel"), channel_name);
         return Some(format!("#{name}"));
     }
     // `:name:id` / `a:name:id` custom emoji.

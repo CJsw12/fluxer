@@ -1,3 +1,4 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 //! Fluxer desktop client (GPUI). Usage:
 //!
 //! ```text
@@ -24,6 +25,7 @@ mod icons;
 mod login;
 mod nav;
 mod notify;
+mod platform;
 mod root;
 mod shortcuts;
 mod theme;
@@ -69,7 +71,18 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args> {
     Ok(out)
 }
 
-fn main() -> Result<()> {
+fn main() {
+    platform::init();
+    if let Err(err) = run() {
+        let message = format!("{err:#}");
+        tracing::error!(error = %message, "fatal error");
+        platform::show_fatal_error(&format!("{} could not start.\n\n{message}", platform::APP_DISPLAY_NAME));
+        std::process::exit(1);
+    }
+    tracing::info!("Fluxer client stopped");
+}
+
+fn run() -> Result<()> {
     let args = parse_args(std::env::args().skip(1))?;
     let token = match &args.token_env {
         Some(var) => {

@@ -1,0 +1,25 @@
+# Standalone workspace.
+[workspace]
+
+[package]
+name = "gpui_kit_spike"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+gpui-kit = "=0.10.0"
+anyhow = "1.0"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_ProcessStatus",
+    "Win32_System_Threading",
+] }
+
+[dev-dependencies]
+# 헤드리스 UI 테스트(가상 창, 마우스 드래그 시뮬레이션)용. gpui-kit가 쓰는 gpui-pre와 같은 버전으로 고정해
+# test-support(TestAppContext, #[gpui::test])만 켠다. gpui-kit의 test-support 기능은 선택적 의존성
+# gpui-fast-platform까지 해석하게 되어 wgpu 버전(=30.0.1 vs 30.0.2)이 충돌하므로 쓰지 않는다.
+gpui = { package = "gpui-pre", version = "=0.3.12", features = ["test-support"] }

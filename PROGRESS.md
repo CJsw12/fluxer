@@ -545,3 +545,14 @@
 - **P1**: 이모지 피커·프로필 팝업, 간단 설정(테마·알림·로그아웃), 한국어 UI(i18n 연결), 트레이·자동 시작.
 - **P2**: 친구/DM 관리, 초대, 검색, 이후 음성·화면 공유.
 - 원칙: 앱 빌드 워커 1개, 빌드 비필요 조사는 병렬 가능. 검증은 자체 서버.
+
+## 인계 (2026-11-19, 다음 에이전트용 — 이 절부터 읽을 것)
+- **기준**: `desktop-rs` HEAD `95d8ba99`(origin과 동일), 워킹 트리 깨끗함. 미공개 유지 파일(커밋 금지): `RUST_*_PLAN.md`, `RUST_MIGRATION_REFERENCE_REVIEW.md`, `RUST_PORT_RESEARCH_*`, `IPC_M0_FINDINGS.md`, `tools/h265_livekit_probe/`.
+- **현재 주력**: 네이티브 GPUI 클라이언트 `fluxer_client/`(core, app, markdown, i18n, devserver). `cd fluxer_client && CARGO_TARGET_DIR=../target/fc-root cargo test --workspace -- --test-threads=2` → 420 통과(app 139, core 232, markdown 36, i18n 10, devserver 3).
+- **우선순위(P0, 사용자 승인)**: ① 알림·첨부 ✔(코드) ② 임베드 ✔(코드) ③ 릴리스 exe — `scripts/package_fluxer_client.ps1`(산출 `dist/fluxer_client/`), **아직 빌드 못 함**: 메모리 부족(Unity 사용 중)으로 중단됨. 사용자 확인 후 실행 ④ 안정성 실기(재연결·장시간 메모리·한글 IME). 이후 P1: 이모지 피커, 프로필 팝업, 설정 화면(지침 `docs/rust_client_core/NEXT_BRIEFS.md` 8~10절), 트레이·자동 시작.
+- **실기 미확인**: GIF 애니메이션 수정, 유튜브 카드 중복 수정, Windows 토스트·알림음(사용자 PC가 방해 금지 모드), 첨부 업로드 실서버, 한국어 UI 화면, 릴리스 exe·AUMID 바로가기.
+- **테스트 환경**: 자체 테스트 서버 `fluxer-dev.home.arpa`(SSH 443 터널). 접속·계정·도구는 저장소 밖 `../Logs/fluxer-dev/LOCAL_ACCESS.md`. **친구 서버와 사용자 개인 계정은 테스트에 쓰지 말 것**(개인 정보). 메시지 전송 시험은 자체 서버에서만.
+- **PC 부하 규칙**(사용자 PC가 여러 번 멈춤): `fluxer_client/.cargo/config.toml` `build.jobs=4` 유지, 동시에 빌드하는 작업 최대 2개, 앱 테스트는 항상 `timeout 300 … -- --test-threads=2`, 빌드 디렉터리는 `target/fc-root`만(추가로 만들었으면 끝나고 삭제). 헤드리스 GPUI 테스트가 무한 루프로 CPU를 먹은 전례(uniform_list의 0..1 측정 호출) — 렌더/레이아웃 콜백에서 상태 변경·notify 금지.
+- **GUI 실기**: `tools/agents/gui.ps1`는 다른 창이 대상 창을 가리면 입력을 거부한다(사용자가 PC 사용 중일 수 있음). 마우스 대신 키보드(Ctrl+K 등) 위주로 확인.
+- **커밋 규칙**: 기능 단위로 커밋 후 `git push origin desktop-rs`. push 전 `git fetch`, 사용자가 GitHub에서 README를 직접 고치므로 `git pull --rebase`로 올리고 그 문장은 되돌리지 말 것. 커밋 전 `docs/progress/progress.json` 갱신 + `python scripts/progress_svg.py`. 서버 IP·키 경로·친구 서버 도메인·사용자 홈 경로를 커밋에 넣지 말 것.
+- **위임 규칙(사용자 지시)**: Codex 금지. DeepSeek은 `deepseek/deepseek-flash`(V4.1 Flash 1017)만, 다른 DeepSeek 모델 금지. 백그라운드 작업은 완료 알림을 받을 수 있게 작업마다 따로 실행.

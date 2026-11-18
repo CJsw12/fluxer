@@ -1,8 +1,6 @@
 # Fluxer Rust 데스크톱 이주
 
-이 프로젝트의 목표는 [Fluxer](https://github.com/fluxerapp/fluxer)의 Windows 데스크톱 클라이언트를 UI, 음성·영상, 화면 공유와 운영체제 연동까지 Rust로 이주하는 것입니다. 기존 Fluxer 인스턴스와 호환되는 실제 클라이언트를 만들고, **H.265 화면 공유가 실제 음성 채널에서 동작하도록 하는 것**을 핵심 목표로 삼습니다.
-
-현재 이주는 진행 중입니다. Rust 데스크톱 셸은 전환기에 WebView2와 기존 웹 UI를 사용합니다. 최종적으로 대체 기능을 검증한 뒤 데스크톱 실행 경로에서 WebView2와 Electron, Node.js 및 JavaScript UI 런타임을 제거할 계획입니다. 기존 웹 프론트엔드 원본은 보존합니다. 서버와 Windows 외 플랫폼의 완전한 Rust 이주는 이 계획의 완료 범위에 포함하지 않습니다.
+이 프로젝트의 목표는 [Fluxer](https://github.com/fluxerapp/fluxer)의 Windows 데스크톱 클라이언트를 UI, 음성·영상, 화면 공유와 운영체제 연동까지 Rust로 이주하는 것입니다.
 
 ## 현황
 

@@ -1,0 +1,418 @@
+//! Per-channel message windows (`messaging/state/ChannelMessages.ts`,
+//! `ChannelMessagesLoadStateMachine.ts`, `ChannelIncomingMessageStateMachine.ts`).
+//! Jump/around loads and the before/after side buffers are not ported:
+//! trimmed messages are dropped and must be re-fetched.
+
+use std::collections::HashMap;
+
+use serde::Serialize;
+
+use super::ids::Snowflake;
+use super::model::{Message, MessageState, User, overlay};
+
+/// `MAX_MESSAGES_PER_CHANNEL`: REST page size.
+pub const PAGE_SIZE: usize = 50;
+/// `MAX_LOADED_MESSAGES`: window size that triggers a trim.
+pub const MAX_LOADED_MESSAGES: usize = 200;
+/// `TRUNCATED_MESSAGE_VIEW_SIZE`: window size after a trim (desktop value).
+pub const TRUNCATED_MESSAGE_VIEW_SIZE: usize = 100;
+/// Channel windows kept in memory (`ChannelMessages.ts:256-258`).
+pub const MAX_CACHED_CHANNELS: usize = 50;
+
+/// How a REST page is applied.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoadMode {
+    /// Latest page (`GET .../messages?limit=50`): replace the window.
+    Replace,
+    /// Older page (`?before=<oldest id>`): prepend.
+    Before,
+    /// Newer page (`?after=<newest id>`): append.
+    After,
+}
+
+/// One channel's loaded messages, oldest first.
+#[derive(Debug, Clone, Default, PartialEq, Serialize)]
+pub struct MessageWindow {
+    pub messages: Vec<Message>,
+    pub has_more_before: bool,
+    pub has_more_after: bool,
+    /// A page has been applied since the window was created or invalidated.
+    /// Incoming gateway messages are ignored until then.
+    pub ready: bool,
+    /// The view is scrolled to the newest message (TS
+    /// `Dimension.channelPinnedToEnd`). Incoming messages trim the oldest
+    /// side only while pinned; otherwise the window grows up to
+    /// `MAX_LOADED_MESSAGES`. Defaults to true.
+    pub pinned_to_end: bool,
+}
+
+impl MessageWindow {
+    fn new() -> Self {
+        Self {
+            has_more_before: true,
+            pinned_to_end: true,
+            ..Self::default()
+        }
+    }
+
+    fn position(&self, id: Snowflake) -> Option<usize> {
+        self.messages.iter().position(|m| m.id == id)
+    }
+
+    /// Insert or replace by id, keeping id order.
+    fn merge(&mut self, records: Vec<Message>) {
+        for record in records {
+            match self.position(record.id) {
+                Some(i) => self.messages[i] = record,
+                None => self.messages.push(record),
+            }
+        }
+        self.messages.sort_by_key(|m| m.id);
+    }
+
+    /// TS `trimOldest`: keep the newest `max` messages.
+    fn trim_oldest(&mut self, max: usize) {
+        if self.messages.len() > max {
+            let overflow = self.messages.len() - max;
+            self.messages.drain(..overflow);
+            self.has_more_before = true;
+        }
+    }
+
+    /// TS `trimNewest`: keep the oldest `max` messages.
+    fn trim_newest(&mut self, max: usize) {
+        if self.messages.len() > max {
+            self.messages.truncate(max);
+            self.has_more_after = true;
+        }
+    }
+
+    /// Unsent messages to keep across a replace (`collectUnsentMessages`):
+    /// a loaded record that is new to the window and has the same author,
+    /// reply target and content (`unsentCorrelationKey`) consumes one match.
+    fn take_unsent(&mut self, records: &[Message]) -> Vec<Message> {
+        let mut unmatched: Vec<&Message> = records
+            .iter()
+            .filter(|r| self.position(r.id).is_none())
+            .collect();
+        let reply_to = |m: &Message| m.message_reference.as_ref().and_then(|r| r.message_id);
+        let mut kept = Vec::new();
+        for m in self.messages.drain(..) {
+            if m.state == MessageState::Sent {
+                continue;
+            }
+            let hit = unmatched.iter().position(|r| {
+                r.author.id == m.author.id && reply_to(r) == reply_to(&m) && r.content == m.content
+            });
+            match hit {
+                Some(i) => {
+                    unmatched.swap_remove(i);
+                }
+                None => kept.push(m),
+            }
+        }
+        kept
+    }
+}
+
+/// All channel windows plus LRU bookkeeping.
+#[derive(Debug, Clone, Default)]
+pub struct MessageStore {
+    windows: HashMap<Snowflake, MessageWindow>,
+    /// Least recently used first.
+    lru: Vec<Snowflake>,
+    selected: Option<Snowflake>,
+}
+
+impl MessageStore {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn window(&self, channel_id: Snowflake) -> Option<&MessageWindow> {
+        self.windows.get(&channel_id)
+    }
+
+    /// Mark the channel the user is viewing; it is never evicted.
+    pub fn select(&mut self, channel_id: Option<Snowflake>) {
+        self.selected = channel_id;
+        if let Some(id) = channel_id {
+            self.touch(id);
+        }
+    }
+
+    /// Apply a REST page fetched with `limit = PAGE_SIZE`. `newest_first` is
+    /// the response order of `GET /channels/{id}/messages`.
+    ///
+    /// `hasMore*` follows `MessagePageStateMachine.getBasePageState`; the
+    /// merge follows `ChannelMessagesLoadStateMachine`: a window that is not
+    /// ready is replaced whatever `mode` says, but unsent messages survive
+    /// only a real latest-page replace (`isWindowReplacement`). Before/after
+    /// merges keep the other side's flag and trim the far side to
+    /// `TRUNCATED_MESSAGE_VIEW_SIZE` once over `MAX_LOADED_MESSAGES`.
+    pub fn load(&mut self, channel_id: Snowflake, newest_first: Vec<Message>, mode: LoadMode) {
+        let full_page = newest_first.len() == PAGE_SIZE;
+        let page_more_before = full_page && mode != LoadMode::After;
+        let page_more_after = full_page && mode == LoadMode::After;
+        let mut records = newest_first;
+        records.reverse();
+        let window = self.entry(channel_id);
+        let effective = if window.ready { mode } else { LoadMode::Replace };
+        match effective {
+            LoadMode::Replace => {
+                let unsent = if mode == LoadMode::Replace {
+                    window.take_unsent(&records)
+                } else {
+                    Vec::new()
+                };
+                window.messages.clear();
+                window.merge(records);
+                window.merge(unsent);
+                window.has_more_before = page_more_before;
+                window.has_more_after = page_more_after;
+            }
+            LoadMode::Before => {
+                window.merge(records);
+                if window.messages.len() > MAX_LOADED_MESSAGES {
+                    window.trim_newest(TRUNCATED_MESSAGE_VIEW_SIZE);
+                }
+                window.has_more_before = page_more_before;
+            }
+            LoadMode::After => {
+                window.merge(records);
+                if window.messages.len() > MAX_LOADED_MESSAGES {
+                    window.trim_oldest(TRUNCATED_MESSAGE_VIEW_SIZE);
+                }
+                window.has_more_after = page_more_after;
+            }
+        }
+        window.ready = true;
+    }
+
+    /// Record whether the channel's view is scrolled to the newest message.
+    pub fn set_pinned_to_end(&mut self, channel_id: Snowflake, pinned: bool) {
+        if let Some(window) = self.windows.get_mut(&channel_id) {
+            window.pinned_to_end = pinned;
+        }
+    }
+
+    /// Optimistic send (`createOptimistic`): a `Sending` message whose id is
+    /// the nonce. Create the nonce with `Snowflake::from_unix_ms(now_ms)` and
+    /// send it as `nonce` in `POST /channels/{id}/messages`.
+    pub fn insert_pending(
+        &mut self,
+        channel_id: Snowflake,
+        nonce: Snowflake,
+        content: String,
+        author: User,
+    ) {
+        let message = Message {
+            id: nonce,
+            channel_id,
+            guild_id: None,
+            author,
+            content,
+            timestamp: String::new(),
+            edited_timestamp: None,
+            kind: 0,
+            flags: 0,
+            pinned: false,
+            mention_everyone: false,
+            mentions: Vec::new(),
+            mention_roles: Vec::new(),
+            attachments: Vec::new(),
+            embeds: Vec::new(),
+            stickers: Vec::new(),
+            reactions: Vec::new(),
+            message_reference: None,
+            referenced_message: None,
+            webhook_id: None,
+            nonce: Some(nonce.to_string()),
+            state: MessageState::Sending,
+        };
+        self.entry(channel_id).merge(vec![message]);
+    }
+
+    /// A server message from `MESSAGE_CREATE` or the `POST` response.
+    /// Returns true if the window changed.
+    ///
+    /// Order (`ChannelIncomingMessageStateMachine`): a pending message with
+    /// id == nonce and the same author is replaced; otherwise ignored if the
+    /// window is not ready or newer pages exist (`has_more_after`);
+    /// otherwise appended (`appendIncomingMessage`). While pinned to the
+    /// end the window is trimmed to `TRUNCATED_MESSAGE_VIEW_SIZE` from the
+    /// top; when scrolled up and already over `MAX_LOADED_MESSAGES` it is
+    /// trimmed from the bottom instead.
+    ///
+    /// Deviation: TS ignores a nonce match when the window is not ready
+    /// (`MessagingMessages.handleIncomingMessage`); here the pending message
+    /// is still confirmed so it does not linger as `Sending`.
+    pub fn apply_incoming(&mut self, mut message: Message) -> bool {
+        message.state = MessageState::Sent;
+        let channel_id = message.channel_id;
+        let Some(window) = self.windows.get_mut(&channel_id) else {
+            return false;
+        };
+        if let Some(nonce) = message.nonce_id()
+            && let Some(i) = window.position(nonce)
+            && window.messages[i].author.id == message.author.id
+        {
+            // Re-sort: the server id may differ from the nonce's position.
+            window.messages.remove(i);
+            window.merge(vec![message]);
+            return true;
+        }
+        if !window.ready || window.has_more_after {
+            return false;
+        }
+        let previous_len = window.messages.len();
+        window.merge(vec![message]);
+        if window.pinned_to_end {
+            window.trim_oldest(TRUNCATED_MESSAGE_VIEW_SIZE);
+        } else if previous_len > MAX_LOADED_MESSAGES {
+            window.trim_newest(TRUNCATED_MESSAGE_VIEW_SIZE);
+        }
+        true
+    }
+
+    /// Send failed: `Sending` -> `Failed`. Returns the channel to redraw.
+    pub fn mark_failed(&mut self, nonce: Snowflake) -> Option<Snowflake> {
+        self.set_pending_state(nonce, MessageState::Sending, MessageState::Failed)
+    }
+
+    /// Retry: `Failed` -> `Sending`. Returns the channel to redraw.
+    pub fn mark_sending(&mut self, nonce: Snowflake) -> Option<Snowflake> {
+        self.set_pending_state(nonce, MessageState::Failed, MessageState::Sending)
+    }
+
+    /// Drop a local pending/failed message (user discarded it).
+    pub fn remove_pending(&mut self, channel_id: Snowflake, nonce: Snowflake) -> bool {
+        let Some(window) = self.windows.get_mut(&channel_id) else {
+            return false;
+        };
+        match window.position(nonce) {
+            Some(i) if window.messages[i].state != MessageState::Sent => {
+                window.messages.remove(i);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// `MESSAGE_UPDATE`: shallow merge of a possibly partial payload.
+    pub(crate) fn apply_update(&mut self, channel_id: Snowflake, id: Snowflake, patch: &serde_json::Value) -> bool {
+        let Some(window) = self.windows.get_mut(&channel_id) else {
+            return false;
+        };
+        let Some(i) = window.position(id) else {
+            return false;
+        };
+        match overlay(&window.messages[i], patch) {
+            Ok(mut merged) => {
+                merged.state = MessageState::Sent;
+                window.messages[i] = merged;
+                true
+            }
+            Err(err) => {
+                tracing::debug!(%id, %err, "MESSAGE_UPDATE merge failed");
+                false
+            }
+        }
+    }
+
+    /// Removes `ids` from the channel's window. Replies left in the window
+    /// whose target was removed get `referenced_message: null` (target gone).
+    pub(crate) fn remove(&mut self, channel_id: Snowflake, ids: &[Snowflake]) -> bool {
+        let Some(window) = self.windows.get_mut(&channel_id) else {
+            return false;
+        };
+        let before = window.messages.len();
+        window.messages.retain(|m| !ids.contains(&m.id));
+        let mut changed = window.messages.len() != before;
+        // The target may be gone even when it was not loaded itself.
+        for m in &mut window.messages {
+            if m.reply_to().is_some_and(|target| ids.contains(&target)) && m.referenced_message != Some(None) {
+                m.referenced_message = Some(None);
+                changed = true;
+            }
+        }
+        changed
+    }
+
+    /// Runs `edit` on one loaded message; returns its result (true = changed).
+    pub(crate) fn edit_message(
+        &mut self,
+        channel_id: Snowflake,
+        id: Snowflake,
+        edit: impl FnOnce(&mut Message) -> bool,
+    ) -> bool {
+        let Some(window) = self.windows.get_mut(&channel_id) else {
+            return false;
+        };
+        match window.messages.iter_mut().find(|m| m.id == id) {
+            Some(message) => edit(message),
+            None => false,
+        }
+    }
+
+    /// A loaded message by id.
+    pub fn message(&self, channel_id: Snowflake, id: Snowflake) -> Option<&Message> {
+        self.windows.get(&channel_id)?.messages.iter().find(|m| m.id == id)
+    }
+
+    pub(crate) fn remove_channel(&mut self, channel_id: Snowflake) {
+        self.windows.remove(&channel_id);
+        self.lru.retain(|id| *id != channel_id);
+    }
+
+    /// New gateway session: drop everything (`MessagingMessages.ts:676-702`).
+    pub(crate) fn clear(&mut self) {
+        self.windows.clear();
+        self.lru.clear();
+    }
+
+    /// Same session reconnected: keep messages but require a reload
+    /// before incoming messages apply (`ready:false`, `:703-755`).
+    pub(crate) fn invalidate(&mut self) {
+        for window in self.windows.values_mut() {
+            window.ready = false;
+        }
+    }
+
+    fn set_pending_state(&mut self, nonce: Snowflake, from: MessageState, to: MessageState) -> Option<Snowflake> {
+        for (channel_id, window) in &mut self.windows {
+            if let Some(m) = window.messages.iter_mut().find(|m| m.id == nonce && m.state == from) {
+                m.state = to;
+                return Some(*channel_id);
+            }
+        }
+        None
+    }
+
+    fn touch(&mut self, channel_id: Snowflake) {
+        self.lru.retain(|id| *id != channel_id);
+        self.lru.push(channel_id);
+    }
+
+    /// Get or create a window, update LRU, evict over `MAX_CACHED_CHANNELS`.
+    fn entry(&mut self, channel_id: Snowflake) -> &mut MessageWindow {
+        self.touch(channel_id);
+        if !self.windows.contains_key(&channel_id) {
+            self.windows.insert(channel_id, MessageWindow::new());
+            while self.windows.len() > MAX_CACHED_CHANNELS {
+                let victim = self
+                    .lru
+                    .iter()
+                    .position(|id| Some(*id) != self.selected && *id != channel_id);
+                match victim {
+                    Some(i) => {
+                        let id = self.lru.remove(i);
+                        self.windows.remove(&id);
+                    }
+                    None => break,
+                }
+            }
+        }
+        self.windows.entry(channel_id).or_insert_with(MessageWindow::new)
+    }
+}

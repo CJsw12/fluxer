@@ -1,0 +1,21 @@
+# Rust desktop client (GPUI + gpui-kit UI, pure-Rust client core).
+# Standalone workspace: gpui-kit pins gpui-pre/wgpu versions that must not
+# resolve together with the upstream root workspace or fluxer_desktop_rs (gpui 0.2.2).
+[workspace]
+members = ["core", "app", "devserver", "markdown", "i18n"]
+resolver = "2"
+
+[workspace.package]
+edition = "2024"
+license = "AGPL-3.0-or-later"
+
+[profile.release]
+lto = "thin"
+codegen-units = 16
+
+# Dependencies (gpui, gpui-kit, tokio...) need no debuginfo; this shrinks link time and target size.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false

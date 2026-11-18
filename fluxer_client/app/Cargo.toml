@@ -1,0 +1,38 @@
+[package]
+name = "fluxer_client_app"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "fluxer_client"
+path = "src/main.rs"
+
+[dependencies]
+fluxer_client_core = { path = "../core" }
+# Fluxer message markdown (Fluxer parser + TextView rendering, mentions, spoilers).
+fluxer_client_markdown = { path = "../markdown" }
+gpui-kit = "=0.10.0"
+anyhow = "1"
+serde_json = "1"
+tokio = { version = "1.54", features = ["rt-multi-thread", "sync", "time"] }
+url = "2.5"
+tracing = "0.1"
+# Local time for message timestamps (already in the lockfile via gpui).
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+# HTTP client for gpui `img()` (attachment previews, avatars); same version and
+# TLS setup (rustls + platform verifier) as fluxer_client_core.
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls"] }
+# In-memory attachment bodies (`UploadSource::Bytes`); same crate as core.
+bytes = "1"
+# Desktop toasts (Windows: WinRT toast via tauri-winrt-notification).
+notify-rust = "4.19"
+# Message sounds (bundled mp3/ogg from fluxer_app/src/media/sounds).
+rodio = { version = "0.23", default-features = false, features = ["playback", "mp3", "vorbis"] }
+
+[dev-dependencies]
+# Headless UI tests (TestAppContext, #[gpui_kit::test]). Same pin as gpui-kit's
+# gpui-pre; gpui-kit's own test-support feature is not used because it pulls
+# gpui-fast-platform and a conflicting wgpu (see tools/gpui_kit_spike).
+gpui = { package = "gpui-pre", version = "=0.3.12", features = ["test-support"] }

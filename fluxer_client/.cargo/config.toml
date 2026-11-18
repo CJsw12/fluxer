@@ -1,0 +1,8 @@
+# Faster dev builds for the GPUI client: bundled LLD linker and less debug info for dependencies.
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
+
+
+# Several agents build at once; cap per-build parallelism so the desktop stays responsive.
+[build]
+jobs = 4

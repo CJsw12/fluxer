@@ -1,0 +1,26 @@
+[package]
+name = "fluxer_devserver"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "Local fixture instance (discovery, REST, gateway) for exercising the Rust client without a real account. Dev/test only; binds 127.0.0.1."
+
+[[bin]]
+name = "fluxer_devserver"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+serde_json = "1"
+tokio = { version = "1.54", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["handshake"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+zstd = "0.13"
+httparse = "1"
+url = "2.5"
+
+[dev-dependencies]
+fluxer_client_core = { path = "../core" }
+tokio-tungstenite = { version = "0.30", default-features = false, features = ["connect"] }
+url = "2.5"

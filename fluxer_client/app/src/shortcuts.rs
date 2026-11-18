@@ -1,0 +1,117 @@
+//! Global keyboard shortcuts of the client layout (`InputKeybind.ts`
+//! defaults, Windows/Linux keys; no user remapping).
+//!
+//! Every binding is registered for the `ClientView` context and again for
+//! `ClientView > Composer > Input`, so it also works while the composer has
+//! focus: the input's own bindings sit deeper in the context stack and
+//! would otherwise win (Ctrl+Alt+Up/Down add cursors there on Windows).
+//! Other inputs (the quick switcher's, a modal) do not get them, like the
+//! web client's modal suppression; only Ctrl+K works in any input. Plain
+//! Esc is the exception: inside the composer it reaches
+//! `ClientView::on_escape` through the input's `Escape` action, which first
+//! dismisses the composer's own affordances.
+
+use gpui_kit::{Action, App, Context, Div, KeyBinding, NoAction, prelude::*};
+
+use crate::client_view::ClientView;
+use crate::nav::ChannelFilter;
+use crate::ui::quick_switcher;
+
+gpui_kit::actions!(
+    fluxer,
+    [
+        ChannelPrev,
+        ChannelNext,
+        UnreadChannelPrev,
+        UnreadChannelNext,
+        MentionChannelPrev,
+        MentionChannelNext,
+        GuildPrev,
+        GuildNext,
+        ToggleQuickSwitcher,
+        MarkChannelRead,
+        MarkGuildRead,
+        SwitcherPrev,
+        SwitcherNext,
+    ]
+);
+
+/// Key context of the client layout's root element.
+pub const CONTEXT: &str = "ClientView";
+const IN_INPUT: &str = "ClientView > Input";
+const IN_COMPOSER: &str = "ClientView > Composer > Input";
+
+/// Binds `keys` in the layout and inside the composer, and disables them
+/// inside the quick switcher (whose input would otherwise fall back to
+/// the layout's binding).
+fn both<A: Action + Clone>(out: &mut Vec<KeyBinding>, keys: &'static str, action: A) {
+    out.push(KeyBinding::new(keys, action.clone(), Some(CONTEXT)));
+    out.push(KeyBinding::new(keys, action, Some(IN_COMPOSER)));
+    out.push(KeyBinding::new(keys, NoAction, Some(quick_switcher::CONTEXT)));
+}
+
+/// Every shortcut binding of the client layout.
+fn bindings() -> Vec<KeyBinding> {
+    let mut out = Vec::new();
+    both(&mut out, "alt-up", ChannelPrev);
+    both(&mut out, "alt-down", ChannelNext);
+    both(&mut out, "alt-shift-up", UnreadChannelPrev);
+    both(&mut out, "alt-shift-down", UnreadChannelNext);
+    both(&mut out, "ctrl-alt-shift-up", MentionChannelPrev);
+    both(&mut out, "ctrl-alt-shift-down", MentionChannelNext);
+    both(&mut out, "ctrl-alt-up", GuildPrev);
+    both(&mut out, "ctrl-alt-down", GuildNext);
+    // Ctrl+K also closes the switcher from its own input.
+    out.push(KeyBinding::new("ctrl-k", ToggleQuickSwitcher, Some(CONTEXT)));
+    out.push(KeyBinding::new("ctrl-k", ToggleQuickSwitcher, Some(IN_INPUT)));
+    both(&mut out, "shift-escape", MarkGuildRead);
+    out.push(KeyBinding::new("escape", MarkChannelRead, Some(CONTEXT)));
+    out.push(KeyBinding::new("ctrl-p", SwitcherPrev, Some(quick_switcher::CONTEXT)));
+    out.push(KeyBinding::new("ctrl-n", SwitcherNext, Some(quick_switcher::CONTEXT)));
+    out
+}
+
+/// Registers the bindings; call after `gpui_kit::init` so they take
+/// precedence over the input's bindings of the same keys.
+pub fn bind_keys(cx: &mut App) {
+    cx.bind_keys(bindings());
+}
+
+/// Hooks the action handlers onto the layout root.
+pub fn on_actions(root: Div, cx: &mut Context<ClientView>) -> Div {
+    root.key_context(CONTEXT)
+        .on_action(cx.listener(|v, _: &ChannelPrev, _, cx| v.cycle_channel(-1, cx)))
+        .on_action(cx.listener(|v, _: &ChannelNext, _, cx| v.cycle_channel(1, cx)))
+        .on_action(cx.listener(|v, _: &UnreadChannelPrev, _, cx| v.cycle_filtered(ChannelFilter::Unread, -1, cx)))
+        .on_action(cx.listener(|v, _: &UnreadChannelNext, _, cx| v.cycle_filtered(ChannelFilter::Unread, 1, cx)))
+        .on_action(cx.listener(|v, _: &MentionChannelPrev, _, cx| v.cycle_filtered(ChannelFilter::Mentioned, -1, cx)))
+        .on_action(cx.listener(|v, _: &MentionChannelNext, _, cx| v.cycle_filtered(ChannelFilter::Mentioned, 1, cx)))
+        .on_action(cx.listener(|v, _: &GuildPrev, _, cx| v.cycle_guild(-1, cx)))
+        .on_action(cx.listener(|v, _: &GuildNext, _, cx| v.cycle_guild(1, cx)))
+        .on_action(cx.listener(|v, _: &ToggleQuickSwitcher, window, cx| v.toggle_quick_switcher(window, cx)))
+        .on_action(cx.listener(|v, _: &MarkChannelRead, window, cx| {
+            if v.overlay.is_open() {
+                v.close_quick_switcher(window, cx);
+            } else {
+                v.mark_channel_read(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MarkGuildRead, _, cx| v.mark_guild_read(cx)))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeSet;
+
+    use super::*;
+
+    #[test]
+    fn no_duplicate_keystrokes_per_context() {
+        let mut seen = BTreeSet::new();
+        for b in bindings() {
+            let key = (format!("{:?}", b.keystrokes()), b.predicate().map(|p| p.to_string()));
+            assert!(seen.insert(key.clone()), "{key:?} bound twice");
+        }
+        assert_eq!(seen.len(), 32);
+    }
+}

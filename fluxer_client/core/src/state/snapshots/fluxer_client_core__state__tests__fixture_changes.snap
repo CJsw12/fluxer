@@ -1,0 +1,90 @@
+---
+source: core/src/state/tests.rs
+expression: changes
+---
+[
+  {
+    "ReadStateChanged": {
+      "channel_id": "2001"
+    }
+  },
+  {
+    "MessagesChanged": {
+      "channel_id": "2001"
+    }
+  },
+  {
+    "ChannelUpserted": {
+      "channel_id": "2006",
+      "guild_id": "1000"
+    }
+  },
+  {
+    "PermissionsChanged": {
+      "guild_id": "1000"
+    }
+  },
+  {
+    "MessagesChanged": {
+      "channel_id": "2001"
+    }
+  },
+  {
+    "MessagesChanged": {
+      "channel_id": "2001"
+    }
+  },
+  {
+    "ReadStateChanged": {
+      "channel_id": "2003"
+    }
+  },
+  {
+    "GuildRemoved": {
+      "guild_id": "6000",
+      "unavailable": false
+    }
+  },
+  {
+    "ReadStateChanged": {
+      "channel_id": "2001"
+    }
+  },
+  {
+    "MessagesChanged": {
+      "channel_id": "2001"
+    }
+  },
+  {
+    "MessagesChanged": {
+      "channel_id": "2001"
+    }
+  },
+  {
+    "MessagesChanged": {
+      "channel_id": "2001"
+    }
+  },
+  {
+    "TypingChanged": {
+      "channel_id": "2001"
+    }
+  },
+  {
+    "PresenceUpdated": {
+      "user_id": "200"
+    }
+  },
+  {
+    "RelationshipChanged": {
+      "user_id": "200"
+    }
+  },
+  {
+    "MemberListChanged": {
+      "guild_id": "1000",
+      "list_id": "everyone",
+      "channel_id": "2001"
+    }
+  }
+]

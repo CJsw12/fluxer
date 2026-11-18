@@ -1,0 +1,23 @@
+[package]
+name = "fluxer_client_markdown"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+# Fluxer's own message markdown parser (same semantics as the web client's WASM build).
+fluxer_markdown_parser = { path = "../../packages/markdown_parser/rust" }
+gpui-kit = "=0.10.0"
+# Only to turn on gpui-component's syntect highlighter (pure Rust, no C
+# grammars): TextView then highlights fenced code blocks by language.
+gpui-component = { version = "=0.10.0", default-features = false, features = ["syntect"] }
+# Local time for <t:unix:style> timestamps (already in the lockfile via gpui).
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "std"] }
+
+[dev-dependencies]
+# The Markdown parser gpui-kit's TextView runs (same version), to check the
+# written source parses back to the intended text.
+markdown = "=1.0.0"
+# Headless UI tests; same pin as gpui-kit's gpui-pre (see fluxer_client/app/Cargo.toml).
+gpui = { package = "gpui-pre", version = "=0.3.12", features = ["test-support"] }

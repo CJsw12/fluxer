@@ -1,0 +1,461 @@
+{
+  "updated": "2026-11-18",
+  "areas": [
+    {
+      "key": "core",
+      "name": "코어(게이트웨이·상태·REST·세션)",
+      "items": [
+        {
+          "name": "게이트웨이 연결·하트비트",
+          "status": "done"
+        },
+        {
+          "name": "zstd 스트림 수신",
+          "status": "done"
+        },
+        {
+          "name": "상태 디스패치·모델 확장",
+          "status": "done"
+        },
+        {
+          "name": "REST 클라이언트·레이트리밋",
+          "status": "done"
+        },
+        {
+          "name": "세션 저장(DPAPI·잠금)",
+          "status": "done"
+        },
+        {
+          "name": "op14 멤버 목록",
+          "status": "done"
+        },
+        {
+          "name": "op3 프레즌스 갱신",
+          "status": "partial"
+        },
+        {
+          "name": "재연결·장시간 안정성",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "key": "auth",
+      "name": "로그인·계정",
+      "items": [
+        {
+          "name": "인스턴스 로그인",
+          "status": "done"
+        },
+        {
+          "name": "캡차 자동 풀이",
+          "status": "done"
+        },
+        {
+          "name": "TOTP 2단계 인증",
+          "status": "partial"
+        },
+        {
+          "name": "로그인 유지·자동 로그인",
+          "status": "done"
+        },
+        {
+          "name": "로그아웃",
+          "status": "partial"
+        },
+        {
+          "name": "패스키·보안 키",
+          "status": "todo"
+        },
+        {
+          "name": "다중 계정 전환",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "key": "channels",
+      "name": "채널·메시지 표시",
+      "items": [
+        {
+          "name": "길드·채널 트리",
+          "status": "done"
+        },
+        {
+          "name": "안읽음 배지·pill",
+          "status": "done"
+        },
+        {
+          "name": "메시지 그룹핑·구분선",
+          "status": "done"
+        },
+        {
+          "name": "마크다운 렌더",
+          "status": "done"
+        },
+        {
+          "name": "코드 블록 강조",
+          "status": "done"
+        },
+        {
+          "name": "멘션 pill·시스템 메시지",
+          "status": "done"
+        },
+        {
+          "name": "멤버 목록 사이드바",
+          "status": "done"
+        },
+        {
+          "name": "이전 메시지 페이지",
+          "status": "done"
+        },
+        {
+          "name": "인라인 이미지 표시",
+          "status": "done"
+        },
+        {
+          "name": "반응 pill 표시",
+          "status": "partial"
+        }
+      ]
+    },
+    {
+      "key": "composer",
+      "name": "메시지 작성·상호작용",
+      "items": [
+        {
+          "name": "텍스트 전송·낙관적 표시",
+          "status": "done"
+        },
+        {
+          "name": "메시지 수정·저장",
+          "status": "done"
+        },
+        {
+          "name": "멘션 자동완성",
+          "status": "done"
+        },
+        {
+          "name": "이모지 단축코드",
+          "status": "done"
+        },
+        {
+          "name": "답장·미리보기",
+          "status": "partial"
+        },
+        {
+          "name": "삭제 확인",
+          "status": "partial"
+        },
+        {
+          "name": "반응 추가·토글",
+          "status": "partial"
+        },
+        {
+          "name": "입력 중 표시",
+          "status": "partial"
+        },
+        {
+          "name": "이모지 피커",
+          "status": "todo"
+        },
+        {
+          "name": "첨부 업로드",
+          "status": "partial"
+        },
+        {
+          "name": "드래프트 보존",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "key": "navigation",
+      "name": "탐색·단축키",
+      "items": [
+        {
+          "name": "Ctrl+K 빠른 전환",
+          "status": "done"
+        },
+        {
+          "name": "단축키 등록·처리",
+          "status": "done"
+        },
+        {
+          "name": "길드·채널 순회",
+          "status": "done"
+        },
+        {
+          "name": "안읽음·멘션 점프",
+          "status": "partial"
+        },
+        {
+          "name": "딥링크(fluxer://)",
+          "status": "todo"
+        },
+        {
+          "name": "방문 기록·앞뒤 이동",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "key": "notify",
+      "name": "알림·첨부",
+      "items": [
+        {
+          "name": "음소거·알림 레벨 로직",
+          "status": "done"
+        },
+        {
+          "name": "데스크톱 토스트",
+          "status": "partial"
+        },
+        {
+          "name": "알림 소리",
+          "status": "partial"
+        },
+        {
+          "name": "첨부 업로드 UI",
+          "status": "partial"
+        },
+        {
+          "name": "비이미지 첨부 표시",
+          "status": "partial"
+        },
+        {
+          "name": "클립보드·드래그 업로드",
+          "status": "partial"
+        }
+      ]
+    },
+    {
+      "key": "embeds",
+      "name": "임베드·미디어",
+      "items": [
+        {
+          "name": "임베드 모델(core)",
+          "status": "done"
+        },
+        {
+          "name": "임베드 카드 렌더",
+          "status": "done"
+        },
+        {
+          "name": "GIF·동영상 미리보기",
+          "status": "partial"
+        },
+        {
+          "name": "미디어 뷰어",
+          "status": "todo"
+        },
+        {
+          "name": "스포일러·NSFW 가림",
+          "status": "partial"
+        },
+        {
+          "name": "신뢰 도메인 경고",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "key": "settings",
+      "name": "설정·개인화",
+      "items": [
+        {
+          "name": "다크 테마",
+          "status": "done"
+        },
+        {
+          "name": "라이트 테마",
+          "status": "partial"
+        },
+        {
+          "name": "사용자 설정 모델·REST",
+          "status": "partial"
+        },
+        {
+          "name": "사용자 패널",
+          "status": "partial"
+        },
+        {
+          "name": "설정 화면",
+          "status": "todo"
+        },
+        {
+          "name": "글꼴·밀도·확대",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "key": "social",
+      "name": "소셜(친구·DM·프로필)",
+      "items": [
+        {
+          "name": "DM 목록·대화",
+          "status": "partial"
+        },
+        {
+          "name": "DM 열기·생성",
+          "status": "partial"
+        },
+        {
+          "name": "친구 목록",
+          "status": "todo"
+        },
+        {
+          "name": "프로필 팝업",
+          "status": "todo"
+        },
+        {
+          "name": "차단·관계 관리",
+          "status": "todo"
+        },
+        {
+          "name": "그룹 DM",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "key": "guilds",
+      "name": "서버 관리",
+      "items": [
+        {
+          "name": "초대 참가",
+          "status": "todo"
+        },
+        {
+          "name": "길드 탈퇴",
+          "status": "todo"
+        },
+        {
+          "name": "채널 생성·편집",
+          "status": "todo"
+        },
+        {
+          "name": "역할·권한 편집",
+          "status": "todo"
+        },
+        {
+          "name": "멤버 관리(킥·밴)",
+          "status": "todo"
+        },
+        {
+          "name": "채널 음소거",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "key": "search",
+      "name": "검색",
+      "items": [
+        {
+          "name": "메시지 검색(REST)",
+          "status": "todo"
+        },
+        {
+          "name": "검색 결과 화면",
+          "status": "todo"
+        },
+        {
+          "name": "메시지로 점프",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "key": "i18n",
+      "name": "다국어·접근성",
+      "items": [
+        {
+          "name": "i18n 크레이트·카탈로그",
+          "status": "done"
+        },
+        {
+          "name": "날짜·숫자 현지화",
+          "status": "partial"
+        },
+        {
+          "name": "앱 UI 번역 적용",
+          "status": "todo"
+        },
+        {
+          "name": "언어 전환 UI",
+          "status": "todo"
+        },
+        {
+          "name": "접근성 설정",
+          "status": "todo"
+        },
+        {
+          "name": "스크린리더 라벨",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "key": "desktop",
+      "name": "데스크톱 통합·배포",
+      "items": [
+        {
+          "name": "단일 인스턴스",
+          "status": "partial"
+        },
+        {
+          "name": "릴리스 exe·아이콘",
+          "status": "todo"
+        },
+        {
+          "name": "콘솔 창 제거",
+          "status": "todo"
+        },
+        {
+          "name": "시작 메뉴·AUMID",
+          "status": "todo"
+        },
+        {
+          "name": "트레이·자동 시작",
+          "status": "todo"
+        },
+        {
+          "name": "파일 로그",
+          "status": "todo"
+        },
+        {
+          "name": "자동 업데이트",
+          "status": "todo"
+        }
+      ]
+    },
+    {
+      "key": "voice",
+      "name": "음성·화면 공유",
+      "items": [
+        {
+          "name": "음성 채널 참가",
+          "status": "todo"
+        },
+        {
+          "name": "화면 공유 송신",
+          "status": "todo"
+        },
+        {
+          "name": "화면 공유 수신",
+          "status": "todo"
+        },
+        {
+          "name": "오디오 장치·볼륨",
+          "status": "todo"
+        },
+        {
+          "name": "음성 UI",
+          "status": "todo"
+        }
+      ]
+    }
+  ]
+}

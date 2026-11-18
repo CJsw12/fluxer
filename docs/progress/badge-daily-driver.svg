@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="104" height="20" role="img" aria-label="일상 사용: 55%">
+  <title>일상 사용: 55%</title>
+  <clipPath id="round"><rect width="104" height="20" rx="3"/></clipPath>
+  <g clip-path="url(#round)">
+    <rect width="64" height="20" fill="#555555"/>
+    <rect x="64" width="40" height="20" fill="#d29922"/>
+  </g>
+  <g fill="#ffffff" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="11" text-anchor="middle">
+    <text x="32.0" y="14">일상 사용</text>
+    <text x="84.0" y="14" font-weight="600">55%</text>
+  </g>
+</svg>

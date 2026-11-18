@@ -45,6 +45,7 @@ impl ClientState {
         }
         self.load_ready_read_states(d);
         self.load_ready_relationships(d);
+        self.load_ready_notes(d);
         self.load_ready_presences(d);
         self.load_ready_user_settings(d);
         self.load_ready_guild_settings(d);

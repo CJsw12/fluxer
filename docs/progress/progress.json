@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-18",
+  "updated": "2026-11-19",
   "areas": [
     {
       "key": "core",
@@ -157,7 +157,7 @@
         },
         {
           "name": "이모지 피커",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "첨부 업로드",
@@ -269,11 +269,11 @@
         },
         {
           "name": "라이트 테마",
-          "status": "partial"
+          "status": "done"
         },
         {
           "name": "사용자 설정 모델·REST",
-          "status": "partial"
+          "status": "done"
         },
         {
           "name": "사용자 패널",
@@ -281,7 +281,7 @@
         },
         {
           "name": "설정 화면",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "글꼴·밀도·확대",
@@ -307,7 +307,7 @@
         },
         {
           "name": "프로필 팝업",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "차단·관계 관리",
@@ -385,7 +385,7 @@
         },
         {
           "name": "언어 전환 UI",
-          "status": "todo"
+          "status": "done"
         },
         {
           "name": "접근성 설정",

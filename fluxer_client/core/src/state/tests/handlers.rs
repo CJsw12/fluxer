@@ -402,6 +402,47 @@ fn relationships_load_merge_and_remove() {
     assert_eq!(state.relationship_kind(sf(600)), None);
 }
 
+// ---- notes ----------------------------------------------------------------
+
+#[test]
+fn ready_notes_load_skips_invalid_keys_and_empty_notes() {
+    let mut payload = ready_payload();
+    payload["notes"] = json!({
+        OTHER.to_string(): "remember",
+        "not-a-number": "skipped",
+        "999": "",
+        "1000": "also kept",
+    });
+    let mut state = ClientState::new();
+    state.apply(&dispatch("READY", payload));
+    assert_eq!(state.note(sf(OTHER)), Some("remember"));
+    assert_eq!(state.note(sf(999)), None);
+    assert_eq!(state.note(sf(1000)), Some("also kept"));
+}
+
+#[test]
+fn user_note_update_sets_clears_and_local_note_echoes() {
+    let mut state = ready_state();
+    assert_eq!(
+        state.apply(&dispatch("USER_NOTE_UPDATE", json!({"id": OTHER.to_string(), "note": "hi"}))),
+        vec![StateChange::NotesChanged]
+    );
+    assert_eq!(state.note(sf(OTHER)), Some("hi"));
+
+    assert_eq!(
+        state.apply(&dispatch("USER_NOTE_UPDATE", json!({"id": OTHER.to_string(), "note": null}))),
+        vec![StateChange::NotesChanged]
+    );
+    assert_eq!(state.note(sf(OTHER)), None);
+
+    state.set_local_note(sf(OTHER), Some("local".into()));
+    assert_eq!(state.note(sf(OTHER)), Some("local"));
+    state.set_local_note(sf(OTHER), Some(String::new()));
+    assert_eq!(state.note(sf(OTHER)), None);
+
+    assert!(state.apply(&dispatch("USER_NOTE_UPDATE", json!({"note": "no id"}))).is_empty());
+}
+
 // ---- settings -------------------------------------------------------------
 
 #[test]

@@ -3,9 +3,10 @@
 //! by `crate::ui`.
 
 use std::cell::{Cell, RefCell};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 
+use fluxer_client_core::rest::UserProfileFull;
 use fluxer_client_core::state::{MessageState, PartialEmoji, Snowflake, Status, Unread};
 use gpui_kit::component::input::{InputContent, InputEvent, InputState};
 use gpui_kit::component::message_scroller::MessageScrollerState;
@@ -21,8 +22,9 @@ use crate::backend::{Backend, GatewayStatus, TypingSender, UiEvent};
 use crate::frecency::FrecencyStore;
 use crate::nav;
 use crate::notify::Notifier;
+use crate::prefs::PrefsStore;
 use crate::shortcuts;
-use crate::theme::Theme;
+use crate::theme::{self, Theme, ThemeKind};
 use crate::ui;
 use crate::ui::attachments::AttachmentTray;
 use crate::ui::autocomplete::Autocomplete;
@@ -57,7 +59,7 @@ pub enum ClientEvent {
 }
 
 pub struct ClientView {
-    backend: Backend,
+    pub(crate) backend: Backend,
     pub(crate) place: Place,
     pub(crate) selected_channel: Option<Snowflake>,
     pub(crate) guilds: Vec<GuildItem>,
@@ -81,6 +83,7 @@ pub struct ClientView {
     unread_anchor: Option<Snowflake>,
     pub(crate) loading_history: bool,
     pub(crate) can_send: bool,
+    pub(crate) gateway_status: GatewayStatus,
     pub(crate) status: SharedString,
     pub(crate) connection: Connection,
     /// The logged-in user (user panel); `None` before READY.
@@ -117,8 +120,14 @@ pub struct ClientView {
     pub(crate) member_scroll: UniformListScrollHandle,
     /// Member list LAZY_REQUEST bookkeeping (tests swap the sink).
     pub(crate) member_subscriptions: MemberListSubscriptions,
-    /// The modal slot (quick switcher).
+    /// The modal / popover slot (quick switcher, emoji picker, profile, settings).
     pub(crate) overlay: Overlay,
+    /// Fetched user profiles keyed by `(user_id, guild_id)`.
+    pub(crate) profile_cache: BTreeMap<(Snowflake, Option<Snowflake>), UserProfileFull>,
+    /// In-flight profile fetches to coalesce duplicate opens.
+    pub(crate) profile_in_flight: BTreeSet<(Snowflake, Option<Snowflake>)>,
+    /// Device-local settings persisted next to the session store.
+    pub(crate) prefs: PrefsStore,
     /// Opened channels, most recent first (quick switcher "Previous").
     pub(crate) recent_visits: Vec<Snowflake>,
     /// Last opened channel per place (`None` = Home), reopened when the
@@ -169,6 +178,12 @@ impl ClientView {
             cx.observe_window_activation(window, |this: &mut Self, window, cx| {
                 this.window_activation_changed(window.is_window_active(), cx);
             }),
+            cx.observe_window_appearance(window, |_, window, cx| {
+                if theme::kind(cx) == ThemeKind::System {
+                    theme::apply(ThemeKind::System, window, cx);
+                    cx.notify();
+                }
+            }),
             cx.observe(&scroller, |this: &mut Self, scroller, cx| {
                 let s = scroller.read(cx);
                 let scrolled_up = s.is_scrolled_up();
@@ -217,6 +232,7 @@ impl ClientView {
             unread_anchor: None,
             loading_history: false,
             can_send: false,
+            gateway_status: GatewayStatus::Connecting,
             status: l10n::tr("Connecting…").into(),
             connection: Connection::Connecting,
             user: None,
@@ -238,6 +254,9 @@ impl ClientView {
             member_scroll,
             member_subscriptions,
             overlay: Overlay::None,
+            profile_cache: BTreeMap::new(),
+            profile_in_flight: BTreeSet::new(),
+            prefs: PrefsStore::default(),
             recent_visits: Vec::new(),
             last_channel: BTreeMap::new(),
             autocomplete: None,
@@ -257,6 +276,61 @@ impl ClientView {
         view
     }
 
+    /// Applies device-local preferences loaded from the session directory.
+    pub(crate) fn apply_prefs(&mut self, prefs: PrefsStore, window: &mut Window, cx: &mut Context<Self>) {
+        self.notifier.enabled = prefs.data.notifications;
+        self.notifier.sounds_enabled = prefs.data.sounds;
+        if std::env::var_os("FLUXER_THEME").is_none() {
+            theme::set_kind(prefs.data.theme, cx);
+            theme::apply(prefs.data.theme, window, cx);
+        }
+        if std::env::var_os("FLUXER_LOCALE").is_none() {
+            l10n::set_locale(&prefs.data.locale);
+            self.refresh_status_text();
+        }
+        self.prefs = prefs;
+        self.refresh(cx);
+    }
+
+    pub(crate) fn current_guild_id(&self) -> Option<Snowflake> {
+        match self.place {
+            Place::Guild(id) => Some(id),
+            Place::Home => None,
+        }
+    }
+
+    pub(crate) fn prepare_overlay_replace(&mut self, cx: &mut Context<Self>) {
+        if matches!(self.overlay, Overlay::Profile(_)) {
+            self.save_profile_note(cx);
+        }
+    }
+
+    pub(crate) fn close_overlay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.overlay.is_open() {
+            return;
+        }
+        self.prepare_overlay_replace(cx);
+        let restore_composer = matches!(self.overlay, Overlay::QuickSwitcher(_) | Overlay::EmojiPicker(_));
+        self.overlay = Overlay::None;
+        if restore_composer {
+            self.focus_composer(window, cx);
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn refresh_status_text(&mut self) {
+        self.status = match &self.gateway_status {
+            GatewayStatus::Connecting => l10n::tr("Connecting…").into(),
+            GatewayStatus::Ready => l10n::tr("Connected").into(),
+            GatewayStatus::Reconnecting { attempt } => {
+                format!("{} ({attempt})", l10n::tr("Reconnecting…")).into()
+            }
+            GatewayStatus::Closed { reason } => {
+                format!("{}: {reason}", l10n::tr("Disconnected")).into()
+            }
+        };
+    }
+
     pub(crate) fn handle_events(&mut self, batch: Vec<UiEvent>, cx: &mut Context<Self>) {
         let mut connected = false;
         for event in batch {
@@ -274,16 +348,8 @@ impl ClientView {
                         GatewayStatus::Connecting | GatewayStatus::Reconnecting { .. } => Connection::Connecting,
                         GatewayStatus::Closed { .. } => Connection::Offline,
                     };
-                    self.status = match status {
-                        GatewayStatus::Connecting => l10n::tr("Connecting…").into(),
-                        GatewayStatus::Ready => l10n::tr("Connected").into(),
-                        GatewayStatus::Reconnecting { attempt } => {
-                            format!("{} ({attempt})", l10n::tr("Reconnecting…")).into()
-                        }
-                        GatewayStatus::Closed { reason } => {
-                            format!("{}: {reason}", l10n::tr("Disconnected")).into()
-                        }
-                    };
+                    self.gateway_status = status;
+                    self.refresh_status_text();
                 }
                 UiEvent::HistoryLoaded { channel_id, error } => {
                     // A page of a channel left meanwhile neither ends this
@@ -311,6 +377,15 @@ impl ClientView {
                     self.uploads.insert(nonce, percent);
                 }
                 UiEvent::UploadEnded { nonce } => self.upload_ended(nonce),
+                UiEvent::ProfileLoaded { user_id, guild_id, result } => {
+                    self.profile_loaded(user_id, guild_id, result, cx);
+                }
+                UiEvent::NoteSaved { user_id, error } => {
+                    if let Some(error) = error {
+                        self.error = Some(error.into());
+                        self.sync_profile_note_from_state(user_id);
+                    }
+                }
             }
         }
         if connected {
@@ -989,6 +1064,11 @@ impl Render for ClientView {
         let composer = self.render_composer(&theme, cx);
         let overlay = match &self.overlay {
             Overlay::QuickSwitcher(sw) => Some(ui::quick_switcher::render(sw, &theme, cx)),
+            Overlay::EmojiPicker(picker) => {
+                Some(ui::emoji_picker::render(picker, self.backend.media(), &theme, cx))
+            }
+            Overlay::Profile(pop) => Some(ui::profile_popout::render(pop, &theme, cx)),
+            Overlay::Settings(modal) => Some(ui::settings::render(self, modal, &theme, cx)),
             Overlay::None => None,
         };
         // Every image below without its own cache (avatars, custom emoji,

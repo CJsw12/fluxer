@@ -82,15 +82,32 @@ pub fn render(
         (MessageState::Sending, None) => Some(("sending…".into(), muted_fg)),
         (MessageState::Failed, _) => Some((l10n::tr("Failed to send message.").into(), theme.danger)),
     };
+    let author_id = row.author_id;
     let mut content = div().flex().flex_col().flex_1().min_w_0();
     if row.group_start {
+        let view_author = view.clone();
         content = content.child(
             div()
                 .flex()
                 .flex_row()
                 .items_baseline()
                 .gap_2()
-                .child(div().text_color(fg).font_weight(FontWeight::SEMIBOLD).child(row.author.clone()))
+                .child(
+                    div()
+                        .id(("msg-author", row.id.0))
+                        .cursor_pointer()
+                        .text_color(fg)
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .on_click(move |ev, window, cx| {
+                            if !ev.modifiers().shift {
+                                let pos = ev.position();
+                                let _ = view_author.update(cx, |v, cx| {
+                                    v.open_profile(author_id, v.current_guild_id(), pos, window, cx);
+                                });
+                            }
+                        })
+                        .child(row.author.clone()),
+                )
                 .child(div().text_color(muted_fg).text_xs().child(row.time.clone()))
                 .children(state_label.map(|(label, color)| div().text_color(color).text_xs().child(label))),
         );
@@ -140,7 +157,20 @@ pub fn render(
         }));
     }
     let gutter = if row.group_start {
-        avatar(row.avatar_url.clone(), row.default_avatar, row.initials.clone(), sizes.avatar, theme)
+        let view_avatar = view.clone();
+        div()
+            .id(("msg-avatar", row.id.0))
+            .cursor_pointer()
+            .on_click(move |ev, window, cx| {
+                if !ev.modifiers().shift {
+                    let pos = ev.position();
+                    let _ = view_avatar.update(cx, |v, cx| {
+                        v.open_profile(author_id, v.current_guild_id(), pos, window, cx);
+                    });
+                }
+            })
+            .child(avatar(row.avatar_url.clone(), row.default_avatar, row.initials.clone(), sizes.avatar, theme))
+            .into_any_element()
     } else {
         div().into_any_element()
     };
@@ -170,10 +200,20 @@ pub fn render(
     let bar = match bar {
         RowBar::None => None,
         RowBar::QuickReactions => {
-            let view = view.clone();
-            Some(message_actions::quick_reactions(row.id.0, theme, move |emoji, _, cx| {
-                let _ = view.update(cx, |v, cx| v.pick_reaction(channel_id, message_id, emoji, cx));
-            }))
+            let view_pick = view.clone();
+            let view_more = view.clone();
+            Some(message_actions::quick_reactions(
+                row.id.0,
+                theme,
+                move |emoji, _, cx| {
+                    let _ = view_pick.update(cx, |v, cx| v.pick_reaction(channel_id, message_id, emoji, cx));
+                },
+                move |pos, window, cx| {
+                    let _ = view_more.update(cx, |v, cx| {
+                        v.open_reaction_emoji_picker(channel_id, message_id, pos, window, cx);
+                    });
+                },
+            ))
         }
         RowBar::Actions => {
             let view = view.clone();

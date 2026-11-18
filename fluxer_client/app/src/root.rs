@@ -19,6 +19,7 @@ use crate::backend::{Backend, connect_instance, instance_from_endpoints};
 use crate::client_view::{ClientEvent, ClientView};
 use crate::frecency::{self, FrecencyStore};
 use crate::login::{Authenticated, LoginEvent, LoginView, describe_rest_error};
+use crate::prefs::{self, PrefsStore};
 use crate::ui::l10n;
 
 pub(crate) enum Screen {
@@ -303,7 +304,11 @@ impl AppRoot {
                 // `--token-env`, which does not open the store).
                 if let Some(dir) = self.store.as_ref().map(|s| s.dir().to_path_buf()) {
                     let store = FrecencyStore::open(dir.join(frecency::FILE_NAME), now_ms());
-                    client.update(cx, |v, _| v.frecency = store);
+                    let prefs = PrefsStore::open(dir.join(prefs::FILE_NAME));
+                    client.update(cx, |v, cx| {
+                        v.frecency = store;
+                        v.apply_prefs(prefs, window, cx);
+                    });
                 }
                 let focus = client.read(cx).composer.read(cx).focus_handle(cx);
                 window.focus(&focus, cx);

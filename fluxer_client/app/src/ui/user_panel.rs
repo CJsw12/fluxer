@@ -2,9 +2,10 @@
 //! status dot, display name, status text and a "Log out" button. Clicking
 //! the dot cycles the own status (online, idle, dnd, invisible).
 
+use gpui_kit::assets::IconName;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::{Context, FontWeight, SharedString, div, prelude::*, px};
+use gpui_kit::{Context, FontWeight, MouseButton, SharedString, div, prelude::*, px};
 
 use super::l10n;
 use super::member_list::{status_color, status_label};
@@ -35,6 +36,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             SharedString::new_static("…"),
         ),
     };
+    let self_id = view.user.as_ref().map(|u| u.id);
     let dot_size = sizes.status_dot;
     div()
         .id("user-panel")
@@ -52,7 +54,11 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 div()
                     .id("user-status-dot")
                     .cursor_pointer()
-                    .on_click(cx.listener(|this, _, _, cx| this.cycle_status(cx)))
+                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        cx.stop_propagation();
+                        this.cycle_status(cx);
+                    }))
                     .absolute()
                     .right(px(-1.))
                     .bottom(px(-1.))
@@ -65,12 +71,29 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         )
         .child(
             div()
+                .id("user-panel-profile")
                 .flex()
                 .flex_col()
                 .flex_1()
                 .min_w_0()
+                .when(self_id.is_some(), |d| d.cursor_pointer())
+                .on_click(cx.listener(move |this, ev: &gpui_kit::ClickEvent, window, cx| {
+                    if let Some(id) = self_id
+                        && !ev.modifiers().shift
+                    {
+                        this.open_profile(id, None, ev.position(), window, cx);
+                    }
+                }))
                 .child(div().truncate().font_weight(FontWeight::SEMIBOLD).child(name))
                 .child(div().truncate().text_xs().text_color(theme.muted_foreground).child(label)),
+        )
+        .child(
+            Button::new("open-settings")
+                .ghost()
+                .small()
+                .icon(IconName::Settings)
+                .tooltip(l10n::tr("Settings"))
+                .on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx))),
         )
         .child(
             Button::new("log-out")

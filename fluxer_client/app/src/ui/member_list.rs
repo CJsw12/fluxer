@@ -230,13 +230,16 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     let theme = *theme;
     let visible = view.member_visible.clone();
     let weak = cx.entity().downgrade();
+    let guild_id = view.member_target.map(|(g, _)| g);
     let list = uniform_list("member-list", count, move |range, _window, cx| {
         report_visible(&visible, &weak, range.clone(), count, cx);
         let panel = panel.borrow();
         range
             .map(|ix| {
                 let row = if panel.loaded { u32::try_from(ix).ok().and_then(|i| panel.rows.get(&i)) } else { None };
-                render_row(row, &theme).debug_selector(|| format!("member-row-{ix}")).into_any_element()
+                render_row(ix, row, guild_id, &weak, &theme)
+                    .debug_selector(|| format!("member-row-{ix}"))
+                    .into_any_element()
             })
             .collect()
     })
@@ -283,8 +286,14 @@ fn report_visible(
     });
 }
 
-fn render_row(row: Option<&MemberRowView>, theme: &Theme) -> gpui_kit::Div {
-    let base = div().h(px(ROW_HEIGHT)).w_full().flex().flex_row().px_2();
+fn render_row(
+    ix: usize,
+    row: Option<&MemberRowView>,
+    guild_id: Option<Snowflake>,
+    view: &WeakEntity<ClientView>,
+    theme: &Theme,
+) -> gpui_kit::Stateful<gpui_kit::Div> {
+    let base = div().id(("member-item", ix)).h(px(ROW_HEIGHT)).w_full().flex().flex_row().px_2();
     match row {
         Some(MemberRowView::Group { label }) => base
             .items_end()
@@ -306,9 +315,18 @@ fn render_row(row: Option<&MemberRowView>, theme: &Theme) -> gpui_kit::Div {
                 .border_2()
                 .border_color(theme.background)
                 .bg(status_color(m.status, theme));
+            let user_id = m.user_id;
+            let view = view.clone();
             base.items_center()
                 .gap_3()
+                .cursor_pointer()
                 .when(offline, |d| d.opacity(0.4))
+                .on_click(move |ev, window, cx| {
+                    if !ev.modifiers().shift {
+                        let pos = ev.position();
+                        let _ = view.update(cx, |v, cx| v.open_profile(user_id, guild_id, pos, window, cx));
+                    }
+                })
                 .child(div().relative().flex_none().child(picture).child(dot))
                 .child(
                     div()

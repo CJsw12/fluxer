@@ -44,13 +44,32 @@ pub fn render_with(
             .tooltip(l10n::tr("Upload a file"))
             .on_click(cx.listener(|v, _, _, cx| v.pick_files(cx)))
     });
+    let emoji = view.can_send.then(|| {
+        Button::new("composer-emoji")
+            .ghost()
+            .compact()
+            .icon(gpui_kit::assets::IconName::FaceSlightlySmilingPlus)
+            .tooltip(l10n::tr("Add emoji"))
+            .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
+                v.open_emoji_picker(crate::ui::emoji_picker::sections::PickerTarget::Composer, ev.position(), window, cx);
+            }))
+    });
     let input = div()
         .flex()
         .flex_col()
         .children(popup)
         .children(tray)
         .children(top_bar)
-        .child(div().flex().flex_row().items_center().gap_1().children(upload).child(div().flex_1().child(field)));
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_1()
+                .children(upload)
+                .child(div().flex_1().child(field))
+                .children(emoji),
+        );
     div()
         .flex()
         .flex_col()

@@ -10,7 +10,7 @@ use anyhow::{Context as _, Result};
 use fluxer_client_core::gateway::{self, Compression, GatewayConfig, GatewayEvent, GatewayHandle, IdentifyProperties};
 use fluxer_client_core::rest::{
     AckRequest, ClientIdentity, DiscoveryOptions, Endpoints, MessageQuery, RestClient, RestConfig, SecretToken,
-    SendMessageRequest, TransportPolicy, discover_with,
+    SendMessageRequest, TransportPolicy, UserProfileFull, UserSettingsPatch, discover_with,
 };
 use fluxer_client_core::state::{ClientState, LoadMode, Message, PAGE_SIZE, Snowflake};
 use serde_json::{Value, json};
@@ -42,6 +42,14 @@ pub enum UiEvent {
     UploadProgress { nonce: Snowflake, percent: u8 },
     /// The upload of `nonce` finished (sent or failed).
     UploadEnded { nonce: Snowflake },
+    /// A user profile fetch finished.
+    ProfileLoaded {
+        user_id: Snowflake,
+        guild_id: Option<Snowflake>,
+        result: Result<UserProfileFull, String>,
+    },
+    /// A user note save finished (error is `Some` on failure after rollback).
+    NoteSaved { user_id: Snowflake, error: Option<String> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -90,6 +98,8 @@ mod actions;
 pub use actions::TypingSender;
 mod members;
 mod navigation;
+mod profile;
+mod settings;
 mod upload;
 
 /// A logged-in session. Cloning shares the same connection and state.
@@ -105,6 +115,10 @@ pub struct Backend {
     media: Option<Arc<str>>,
     /// Window focus and viewed channel for the notification decision.
     focus: Arc<NotifyFocus>,
+    /// Monotonic sequence counters so overlapping note/settings saves never
+    /// roll back a newer change on an older failure.
+    note_seq: Arc<AtomicU64>,
+    settings_seq: Arc<AtomicU64>,
     /// Every `POST .../messages` body, in order (tests check what the
     /// composer sent; the test runtime never runs the request).
     #[cfg(test)]
@@ -118,6 +132,12 @@ pub struct Backend {
     /// Every message page requested: channel, mode, anchor id (tests).
     #[cfg(test)]
     pub(crate) page_loads: Arc<Mutex<Vec<(Snowflake, LoadMode, Option<Snowflake>)>>>,
+    /// Saved user notes `(user_id, note)` (tests).
+    #[cfg(test)]
+    pub(crate) saved_notes: Arc<Mutex<Vec<(Snowflake, Option<String>)>>>,
+    /// Sent `PATCH /users/@me/settings` payloads (tests).
+    #[cfg(test)]
+    pub(crate) sent_settings: Arc<Mutex<Vec<UserSettingsPatch>>>,
 }
 
 impl Backend {
@@ -175,6 +195,8 @@ impl Backend {
             last_nonce: Arc::new(AtomicU64::new(0)),
             media: None,
             focus: Arc::default(),
+            note_seq: Arc::new(AtomicU64::new(0)),
+            settings_seq: Arc::new(AtomicU64::new(0)),
             #[cfg(test)]
             sent: Arc::default(),
             #[cfg(test)]
@@ -183,6 +205,10 @@ impl Backend {
             sent_uploads: Arc::default(),
             #[cfg(test)]
             page_loads: Arc::default(),
+            #[cfg(test)]
+            saved_notes: Arc::default(),
+            #[cfg(test)]
+            sent_settings: Arc::default(),
         };
         (backend, rx)
     }

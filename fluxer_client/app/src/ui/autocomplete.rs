@@ -449,6 +449,8 @@ mod tests {
             discriminator: Some("0042".into()),
             global_name: Some("Annie".into()),
             avatar: None,
+            banner: None,
+            avatar_color: None,
             bot: false,
         };
         let p = Person { user: &user, nick: Some("Captain") };

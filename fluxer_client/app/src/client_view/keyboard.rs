@@ -124,6 +124,7 @@ impl ClientView {
     }
 
     pub(crate) fn open_quick_switcher(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.prepare_overlay_replace(cx);
         self.autocomplete = None;
         let input = cx.new(|cx| {
             InputState::new(window, cx).placeholder(l10n::tr("Search for channels, people, or communities"))
@@ -148,12 +149,7 @@ impl ClientView {
     }
 
     pub(crate) fn close_quick_switcher(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.overlay.is_open() {
-            return;
-        }
-        self.overlay = Overlay::None;
-        self.focus_composer(window, cx);
-        cx.notify();
+        self.close_overlay(window, cx);
     }
 
     fn switcher_results(&self, query: &str) -> Vec<SwitcherItem> {
@@ -224,7 +220,7 @@ impl ClientView {
 /// Composer autocomplete.
 impl ClientView {
     /// Recomputes the popup from the text up to the cursor (input changes).
-    pub(super) fn update_autocomplete(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn update_autocomplete(&mut self, cx: &mut Context<Self>) {
         let next = self.selected_channel.and_then(|channel_id| {
             let text = composer_text::text_before_cursor(self.composer.read(cx));
             let state = self.backend.state();

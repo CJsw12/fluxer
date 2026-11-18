@@ -69,6 +69,13 @@ pub fn replace_range(input: &Entity<InputState>, range: Range<usize>, insert: &I
     });
 }
 
+/// Inserts `insert` at the current selection (or cursor) with trailing space
+/// handling. Used by the emoji picker.
+pub fn insert_at_cursor(input: &Entity<InputState>, insert: &Insert, window: &mut Window, cx: &mut App) {
+    let range = input.read(cx).selected_range();
+    replace_range(input, range, insert, window, cx);
+}
+
 /// `text` with every token range replaced by its wire form. `tokens` are
 /// (byte range, wire) in any order; ranges outside `text` are ignored.
 pub fn to_wire(text: &str, tokens: &[(Range<usize>, &str)]) -> String {

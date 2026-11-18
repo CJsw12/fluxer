@@ -7,6 +7,7 @@ mod guild_membership;
 mod guilds;
 mod invites;
 mod messages;
+mod notes;
 mod reactions;
 mod read_states;
 mod relationships;

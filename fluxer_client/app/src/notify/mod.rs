@@ -267,19 +267,24 @@ pub enum Outcome {
 pub struct Notifier {
     toaster: Box<dyn Toaster>,
     sounds: Box<dyn SoundPlayer>,
-    /// The header's bell toggle: toasts and sounds on/off (not persisted).
+    /// The header's bell toggle and settings switch: toasts (and sounds when enabled).
     pub enabled: bool,
+    /// Separate settings switch gating notification sounds.
+    pub sounds_enabled: bool,
     recent: VecDeque<Snowflake>,
 }
 
 impl Notifier {
     pub fn new(toaster: Box<dyn Toaster>, sounds: Box<dyn SoundPlayer>) -> Self {
-        Self { toaster, sounds, enabled: true, recent: VecDeque::new() }
+        Self { toaster, sounds, enabled: true, sounds_enabled: true, recent: VecDeque::new() }
     }
 
     /// Plays the sound and shows the toast `n` asks for.
     pub fn handle(&mut self, n: &Notification) -> Outcome {
         if !self.enabled || self.recent.contains(&n.message_id) {
+            return Outcome::Nothing;
+        }
+        if n.kind == NotificationKind::SameChannelSound && !self.sounds_enabled {
             return Outcome::Nothing;
         }
         if self.recent.len() == RECENT_IDS {
@@ -290,7 +295,9 @@ impl Notifier {
             self.sounds.play(Sound::SameChannel);
             return Outcome::SoundOnly;
         }
-        self.sounds.play(Sound::Message);
+        if self.sounds_enabled {
+            self.sounds.play(Sound::Message);
+        }
         self.toaster.show(Toast {
             guild_id: n.guild_id,
             channel_id: n.channel_id,

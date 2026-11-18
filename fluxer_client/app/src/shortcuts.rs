@@ -29,6 +29,8 @@ gpui_kit::actions!(
         GuildPrev,
         GuildNext,
         ToggleQuickSwitcher,
+        ToggleEmojiPicker,
+        OpenSettings,
         MarkChannelRead,
         MarkGuildRead,
         SwitcherPrev,
@@ -64,6 +66,8 @@ fn bindings() -> Vec<KeyBinding> {
     // Ctrl+K also closes the switcher from its own input.
     out.push(KeyBinding::new("ctrl-k", ToggleQuickSwitcher, Some(CONTEXT)));
     out.push(KeyBinding::new("ctrl-k", ToggleQuickSwitcher, Some(IN_INPUT)));
+    both(&mut out, "ctrl-e", ToggleEmojiPicker);
+    both(&mut out, "ctrl-,", OpenSettings);
     both(&mut out, "shift-escape", MarkGuildRead);
     out.push(KeyBinding::new("escape", MarkChannelRead, Some(CONTEXT)));
     out.push(KeyBinding::new("ctrl-p", SwitcherPrev, Some(quick_switcher::CONTEXT)));
@@ -89,9 +93,11 @@ pub fn on_actions(root: Div, cx: &mut Context<ClientView>) -> Div {
         .on_action(cx.listener(|v, _: &GuildPrev, _, cx| v.cycle_guild(-1, cx)))
         .on_action(cx.listener(|v, _: &GuildNext, _, cx| v.cycle_guild(1, cx)))
         .on_action(cx.listener(|v, _: &ToggleQuickSwitcher, window, cx| v.toggle_quick_switcher(window, cx)))
+        .on_action(cx.listener(|v, _: &ToggleEmojiPicker, window, cx| v.toggle_emoji_picker(window, cx)))
+        .on_action(cx.listener(|v, _: &OpenSettings, window, cx| v.open_settings(window, cx)))
         .on_action(cx.listener(|v, _: &MarkChannelRead, window, cx| {
             if v.overlay.is_open() {
-                v.close_quick_switcher(window, cx);
+                v.close_overlay(window, cx);
             } else {
                 v.mark_channel_read(cx);
             }
@@ -112,6 +118,6 @@ mod tests {
             let key = (format!("{:?}", b.keystrokes()), b.predicate().map(|p| p.to_string()));
             assert!(seen.insert(key.clone()), "{key:?} bound twice");
         }
-        assert_eq!(seen.len(), 32);
+        assert_eq!(seen.len(), 38);
     }
 }

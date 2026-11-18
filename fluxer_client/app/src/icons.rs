@@ -53,6 +53,7 @@ mod tests {
             IconName::Hash,
             IconName::Pencil,
             IconName::Reply,
+            IconName::Settings,
             IconName::Trash,
             IconName::Users,
         ];

@@ -3,15 +3,18 @@
 
 pub mod channel_list;
 pub mod composer;
+pub mod emoji_picker;
 pub mod guild_rail;
 pub mod header;
 pub mod l10n;
 pub mod message_list;
 pub mod message_row;
+pub mod profile_popout;
 pub mod user_panel;
 pub mod reactions;
 pub mod reply;
 pub mod message_actions;
+pub mod settings;
 pub mod typing;
 pub mod member_list;
 pub mod attachments;

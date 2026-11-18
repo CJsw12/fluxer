@@ -26,7 +26,10 @@ mod login;
 mod nav;
 mod notify;
 mod platform;
+mod prefs;
+mod profile;
 mod root;
+mod settings_model;
 mod shortcuts;
 mod theme;
 mod ui;
@@ -35,9 +38,15 @@ mod view_model;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_emoji_picker;
+#[cfg(test)]
 mod tests_keyboard;
 #[cfg(test)]
 mod tests_notify_upload;
+#[cfg(test)]
+mod tests_profile;
+#[cfg(test)]
+mod tests_settings;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -113,6 +122,23 @@ fn run() -> Result<()> {
         Some(_) => None,
         None => Some(accounts::open_store(insecure)),
     };
+    let initial_prefs = match &store {
+        Some(Ok(s)) => Some(prefs::PrefsStore::open(s.dir().join(prefs::FILE_NAME))),
+        _ => None,
+    };
+    if let Some(prefs) = &initial_prefs
+        && std::env::var_os("FLUXER_LOCALE").is_none()
+    {
+        ui::l10n::set_locale(&prefs.data.locale);
+    }
+    let initial_theme = if std::env::var_os("FLUXER_THEME").is_some() {
+        theme::ThemeKind::from_env()
+    } else {
+        initial_prefs
+            .as_ref()
+            .map(|p| p.data.theme)
+            .unwrap_or_else(theme::ThemeKind::from_env)
+    };
 
     let open_error: Rc<RefCell<Option<String>>> = Rc::default();
     let open_error_slot = open_error.clone();
@@ -120,6 +146,7 @@ fn run() -> Result<()> {
     gpui_kit::application().with_assets(icons::AppAssets).run(move |cx: &mut App| {
         gpui_kit::init(cx);
         shortcuts::bind_keys(cx);
+        theme::set_kind(initial_theme, cx);
         // `img()` loads attachment previews and avatars through this client.
         cx.set_http_client(Arc::new(images));
         let bounds = Bounds::centered(None, size(px(1200.), px(800.)), cx);
@@ -130,7 +157,7 @@ fn run() -> Result<()> {
         };
         let opened = gpui_kit::open_window(options, cx, |window, cx| {
             // Make the gpui-kit widgets (inputs, buttons, scrollbars) follow the app theme.
-            theme::apply(theme::ThemeKind::from_env(), window, cx);
+            theme::apply(initial_theme, window, cx);
             cx.new(|cx| match (token, store) {
                 (Some(token), _) => AppRoot::new_with_token(handle, insecure, instance, token, window, cx),
                 (None, Some(store)) => AppRoot::new_session(handle, insecure, store, window, cx),

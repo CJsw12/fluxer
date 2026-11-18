@@ -10,6 +10,7 @@ pub(super) mod guilds;
 pub(super) mod member_list;
 pub(super) mod members;
 pub(super) mod messages;
+pub(super) mod notes;
 pub(super) mod presence;
 pub(super) mod reactions;
 pub(super) mod read_states;

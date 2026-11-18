@@ -1,0 +1,429 @@
+//! User profile popover (`UserProfilePopout.tsx`): banner, avatar, bio,
+//! guild roles, mutual guilds, private note editor and "Message" DM action.
+
+use fluxer_client_core::rest::UserProfileFull;
+use fluxer_client_core::state::{ChannelKind, ClientState, Snowflake};
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
+use gpui_kit::{
+    AnyElement, AppContext as _, Context, Entity, FontWeight, ObjectFit, Pixels, Point, SharedString, Subscription,
+    Window, div, img, prelude::*, px, rgb,
+};
+
+use crate::client_view::ClientView;
+use crate::profile::{ProfileCard, build_profile_card};
+use crate::theme::Theme;
+use crate::ui::message_row::avatar;
+use crate::ui::overlay::Overlay;
+use crate::ui::{l10n, overlay};
+use crate::view_model::Place;
+
+pub const CONTEXT: &str = "ProfilePopout";
+const POPOUT_WIDTH: f32 = 300.;
+const BANNER_HEIGHT: f32 = 105.;
+const AVATAR_SIZE: f32 = 80.;
+const MAX_NOTE_CHARS: usize = 256;
+
+pub struct ProfilePopout {
+    pub user_id: Snowflake,
+    pub guild_id: Option<Snowflake>,
+    pub anchor: Point<Pixels>,
+    pub card: ProfileCard,
+    pub error: Option<String>,
+    pub note_input: Entity<InputState>,
+    pub saved_note: String,
+    pub confirm_blocked_dm: bool,
+    pub _subscription: Subscription,
+}
+
+fn find_1on1_dm(state: &ClientState, user_id: Snowflake) -> Option<Snowflake> {
+    state
+        .dm_channels()
+        .into_iter()
+        .find(|c| c.kind == ChannelKind::Dm && c.recipients.len() == 1 && c.recipients[0].id == user_id)
+        .map(|c| c.id)
+}
+
+fn normalized_note(raw: &str) -> String {
+    let trimmed = raw.trim();
+    let mut utf16 = 0usize;
+    let mut end = 0usize;
+    for (idx, ch) in trimmed.char_indices() {
+        let next = utf16 + ch.len_utf16();
+        if next > MAX_NOTE_CHARS {
+            break;
+        }
+        utf16 = next;
+        end = idx + ch.len_utf8();
+    }
+    trimmed[..end].to_owned()
+}
+
+impl ClientView {
+    pub(crate) fn open_profile(
+        &mut self,
+        user_id: Snowflake,
+        guild_id: Option<Snowflake>,
+        anchor: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.prepare_overlay_replace(cx);
+        self.autocomplete = None;
+        let card = {
+            let state = self.backend.state();
+            let fetched = self.profile_cache.get(&(user_id, guild_id));
+            build_profile_card(&state, self.backend.media(), user_id, guild_id, fetched)
+        };
+        let initial_note = card.note.clone();
+        let note_input = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Click to add a note")));
+        if !initial_note.is_empty() {
+            note_input.update(cx, |s, cx| s.set_value(initial_note.clone(), window, cx));
+        }
+        let subscription = cx.subscribe_in(&note_input, window, |this: &mut Self, _, ev: &InputEvent, _, cx| match ev {
+            InputEvent::Blur | InputEvent::PressEnter { shift: false, .. } => this.save_profile_note(cx),
+            _ => {}
+        });
+        self.overlay = Overlay::Profile(ProfilePopout {
+            user_id,
+            guild_id,
+            anchor,
+            card,
+            error: None,
+            note_input,
+            saved_note: initial_note,
+            confirm_blocked_dm: false,
+            _subscription: subscription,
+        });
+        if self.profile_in_flight.insert((user_id, guild_id)) {
+            self.backend.request_profile(user_id, guild_id);
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn profile_loaded(
+        &mut self,
+        user_id: Snowflake,
+        guild_id: Option<Snowflake>,
+        result: Result<UserProfileFull, String>,
+        cx: &mut Context<Self>,
+    ) {
+        self.profile_in_flight.remove(&(user_id, guild_id));
+        match result {
+            Ok(full) => {
+                self.profile_cache.insert((user_id, guild_id), full);
+            }
+            Err(err) => {
+                tracing::warn!(%user_id, %err, "profile fetch failed");
+                if let Overlay::Profile(pop) = &mut self.overlay
+                    && pop.user_id == user_id
+                    && pop.guild_id == guild_id
+                {
+                    pop.card.loaded = true;
+                    pop.error = Some(err);
+                    cx.notify();
+                }
+                return;
+            }
+        }
+        if let Overlay::Profile(pop) = &mut self.overlay
+            && pop.user_id == user_id
+            && pop.guild_id == guild_id
+        {
+            let state = self.backend.state();
+            let fetched = self.profile_cache.get(&(user_id, guild_id));
+            pop.card = build_profile_card(&state, self.backend.media(), user_id, guild_id, fetched);
+            pop.error = None;
+            cx.notify();
+        }
+    }
+
+    /// Resyncs `saved_note` after a failed save rollback so the user can retry.
+    pub(crate) fn sync_profile_note_from_state(&mut self, user_id: Snowflake) {
+        if let Overlay::Profile(pop) = &mut self.overlay
+            && pop.user_id == user_id
+        {
+            pop.saved_note = self.backend.state().note(user_id).unwrap_or_default().to_owned();
+        }
+    }
+
+    pub(crate) fn save_profile_note(&mut self, cx: &mut Context<Self>) {
+        let (user_id, next_note) = {
+            let Overlay::Profile(pop) = &mut self.overlay else { return };
+            let raw = pop.note_input.read(cx).value().to_string();
+            let capped = normalized_note(&raw);
+            if capped == pop.saved_note {
+                return;
+            }
+            pop.saved_note = capped.clone();
+            (pop.user_id, (!capped.is_empty()).then_some(capped))
+        };
+        self.backend.save_note(user_id, next_note);
+    }
+
+    pub(crate) fn profile_message(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let user_id = {
+            let Overlay::Profile(pop) = &mut self.overlay else { return };
+            if pop.card.is_blocked && !pop.confirm_blocked_dm {
+                pop.confirm_blocked_dm = true;
+                cx.notify();
+                return;
+            }
+            pop.user_id
+        };
+        self.close_overlay(window, cx);
+        let existing = find_1on1_dm(&self.backend.state(), user_id);
+        match existing {
+            Some(channel_id) => self.open_channel(None, channel_id, cx),
+            None => self.backend.open_dm(user_id),
+        }
+    }
+
+    pub(crate) fn profile_open_guild(&mut self, guild_id: Snowflake, window: &mut Window, cx: &mut Context<Self>) {
+        self.close_overlay(window, cx);
+        self.select_place(Place::Guild(guild_id), cx);
+    }
+}
+
+pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+    let card = &pop.card;
+    let banner = div()
+        .relative()
+        .w_full()
+        .h(px(BANNER_HEIGHT))
+        .rounded_t(px(8.))
+        .overflow_hidden()
+        .bg(rgb(card.banner_color))
+        .children(card.banner_url.clone().map(|url| {
+            img(url)
+                .id(SharedString::from(format!("profile-banner-{}", card.user_id.0)))
+                .size_full()
+                .object_fit(ObjectFit::Cover)
+        }));
+
+    let avatar_el = div()
+        .absolute()
+        .left(px(12.))
+        .top(px(BANNER_HEIGHT - AVATAR_SIZE * 0.55))
+        .p(px(4.))
+        .rounded_full()
+        .bg(theme.background_secondary)
+        .child(avatar(
+            card.avatar_url.clone().map(SharedString::from),
+            card.default_avatar,
+            SharedString::from(card.initials.clone()),
+            AVATAR_SIZE,
+            theme,
+        ));
+
+    let header_block = div()
+        .relative()
+        .w_full()
+        .pb(px(AVATAR_SIZE * 0.45 + 8.))
+        .child(banner)
+        .child(avatar_el);
+
+    let mut body = div()
+        .px_4()
+        .pb_4()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(2.))
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_2()
+                        .child(div().text_base().font_weight(FontWeight::BOLD).child(card.display_name.clone()))
+                        .when(card.bot, |d| {
+                            d.child(
+                                div()
+                                    .px_1()
+                                    .rounded(px(3.))
+                                    .bg(theme.brand)
+                                    .text_xs()
+                                    .text_color(theme.on_fill)
+                                    .child("BOT"),
+                            )
+                        }),
+                )
+                .child(div().text_xs().text_color(theme.muted_foreground).child(card.username_tag.clone()))
+                .children(
+                    card.pronouns
+                        .as_ref()
+                        .filter(|p| !p.trim().is_empty())
+                        .map(|p| div().text_xs().text_color(theme.muted_foreground).child(p.clone())),
+                ),
+        );
+
+    if !card.is_self {
+        let label = if pop.confirm_blocked_dm {
+            l10n::tr("Open DM")
+        } else {
+            l10n::tr("Message")
+        };
+        body = body.child(
+            Button::new("profile-message-btn")
+                .primary()
+                .small()
+                .label(label)
+                .on_click(cx.listener(|this, _, window, cx| this.profile_message(window, cx))),
+        );
+    }
+
+    if let Some(bio) = card.bio.as_ref().filter(|b| !b.trim().is_empty()) {
+        body = body.child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(theme.muted_foreground)
+                        .child(l10n::tr("About Me")),
+                )
+                .child(div().text_sm().child(bio.clone())),
+        );
+    }
+
+    if card.guild_id.is_some() {
+        let roles_content = if card.roles.is_empty() {
+            div()
+                .text_xs()
+                .text_color(theme.muted_foreground)
+                .child(l10n::tr("This user has no roles in this community."))
+                .into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_row()
+                .flex_wrap()
+                .gap_1()
+                .children(card.roles.iter().map(|role| {
+                    let dot_color = role.color.map(|c| rgb(c).into()).unwrap_or(theme.muted_foreground);
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_1()
+                        .px_2()
+                        .py(px(2.))
+                        .rounded(px(4.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background)
+                        .text_xs()
+                        .child(div().size(px(8.)).rounded_full().bg(dot_color))
+                        .child(role.name.clone())
+                }))
+                .into_any_element()
+        };
+        body = body.child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(theme.muted_foreground)
+                        .child(l10n::tr("Roles")),
+                )
+                .child(roles_content),
+        );
+    }
+
+    if !card.mutual_guilds.is_empty() {
+        body = body.child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(theme.muted_foreground)
+                        .child(l10n::tr("Mutual Communities")),
+                )
+                .children(card.mutual_guilds.iter().map(|g| {
+                    let guild_id = g.id;
+                    div()
+                        .id(("profile-mutual-guild", guild_id.0))
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_2()
+                        .px_2()
+                        .py_1()
+                        .rounded(px(4.))
+                        .cursor_pointer()
+                        .hover(|s| s.bg(theme.muted))
+                        .on_click(cx.listener(move |this, _, window, cx| this.profile_open_guild(guild_id, window, cx)))
+                        .child(
+                            div()
+                                .size(px(22.))
+                                .rounded(px(6.))
+                                .bg(theme.muted)
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .text_xs()
+                                .child(g.initials.clone()),
+                        )
+                        .child(div().text_sm().truncate().child(g.name.clone()))
+                })),
+        );
+    }
+
+    body = body.child(
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(theme.muted_foreground)
+                    .child(l10n::tr("Note")),
+            )
+            .child(Input::new(&pop.note_input)),
+    );
+
+    if !card.loaded {
+        body = body.child(div().text_xs().text_color(theme.muted_foreground).child(l10n::tr("Loading…")));
+    } else if let Some(err) = &pop.error {
+        body = body.child(div().text_xs().text_color(theme.danger).child(err.clone()));
+    }
+
+    let content = div()
+        .id("profile-popout")
+        .key_context(CONTEXT)
+        .w(px(POPOUT_WIDTH))
+        .max_h(px(540.))
+        .overflow_y_scroll()
+        .flex()
+        .flex_col()
+        .capture_action(cx.listener(|this, _: &Escape, window, cx| {
+            cx.stop_propagation();
+            this.close_overlay(window, cx);
+        }))
+        .child(header_block)
+        .child(body);
+
+    let view = cx.weak_entity();
+    overlay::popover(content, pop.anchor, theme, move |window, cx| {
+        let _ = view.update(cx, |v, cx| v.close_overlay(window, cx));
+    })
+}

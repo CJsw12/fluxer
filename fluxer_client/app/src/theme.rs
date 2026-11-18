@@ -11,7 +11,24 @@
 //! official `dark_legacy` palette and `Black` is the official `coal` palette.
 
 use gpui_kit::component::{Theme as KitTheme, ThemeMode};
-use gpui_kit::{App, Hsla, Window, WindowAppearance, hsla, rgb};
+use gpui_kit::{App, Global, Hsla, Window, WindowAppearance, hsla, rgb};
+
+/// App-wide selected theme kind (`Theme::current` reads this global).
+#[derive(Debug, Clone, Copy)]
+pub struct Selected(pub ThemeKind);
+
+impl Global for Selected {}
+
+/// The active [`ThemeKind`], falling back to `FLUXER_THEME` / Dark.
+pub fn kind(cx: &App) -> ThemeKind {
+    cx.try_global::<Selected>().map_or_else(ThemeKind::from_env, |s| s.0)
+}
+
+/// Switches the active theme kind at runtime and redraws windows.
+pub fn set_kind(kind: ThemeKind, cx: &mut App) {
+    cx.set_global(Selected(kind));
+    cx.refresh_windows();
+}
 
 /// Which palette to use.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,6 +55,17 @@ impl ThemeKind {
             "black" | "coal" | "amoled" => Some(Self::Black),
             "system" | "auto" => Some(Self::System),
             _ => None,
+        }
+    }
+
+    /// Official settings string (`dark`, `dark_legacy`, `coal`, `light`, `system`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Light => "light",
+            Self::Dark => "dark",
+            Self::Darker => "dark_legacy",
+            Self::Black => "coal",
+            Self::System => "system",
         }
     }
 
@@ -311,9 +339,9 @@ impl Palette {
 }
 
 impl Theme {
-    /// The theme in use: `FLUXER_THEME`, Dark by default.
+    /// The theme in use: the `Selected` global, else `FLUXER_THEME`, else Dark.
     pub fn current(cx: &App) -> Self {
-        Self::for_kind(ThemeKind::from_env(), cx)
+        Self::for_kind(kind(cx), cx)
     }
 
     pub fn for_kind(kind: ThemeKind, cx: &App) -> Self {

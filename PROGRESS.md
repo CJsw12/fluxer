@@ -546,11 +546,32 @@
 - **P2**: 친구/DM 관리, 초대, 검색, 이후 음성·화면 공유.
 - 원칙: 앱 빌드 워커 1개, 빌드 비필요 조사는 병렬 가능. 검증은 자체 서버.
 
+## P1 구현: 이모지 피커·프로필 팝업·최소 설정 화면 (2026-11-19)
+- **Baseline**: `desktop-rs` `f1479c61d` 기반(`fluxer_client/` 420 테스트 통과 상태). `docs/rust_client_core/NEXT_BRIEFS.md` 8~10절 사양 구현.
+- **Done**:
+  - **Core (`fluxer_client/core`)**: `search/emoji.rs`(`PICKER_FRECENT_LIMIT = 42`, `EmojiChoice`, `frecency_choices`, `custom_choices_by_guild`, `normalize_picker_query`, `picker_search_choices`), `state/model.rs`(`User.banner`, `User.avatar_color`), `rest/profile.rs`(`UserProfileFull`, `ProfileUser`, `UserProfileData`, `GuildMemberSummary`, `MutualGuild`, `PROFILE_FLAG_*`), `rest/api/notes.rs`(`PUT /users/@me/notes/{user_id}`), `state/handlers/notes.rs`(`USER_NOTE_UPDATE`, `READY.notes`, `NotesChanged`).
+  - **App (`fluxer_client/app`)**:
+    - 이모지 피커(`ui/emoji_picker/{mod.rs, sections.rs, view.rs}`): 자주 쓰는 이모지·길드 커스텀·유니코드 8카테고리 9열 `uniform_list`, 검색, 피부색(`0..=5`), Shift 유지·반응 추가, `ctrl-e`, 컴포저/메시지 액션 버튼 연결.
+    - 프로필 팝업(`profile.rs`, `backend/profile.rs`, `ui/profile_popout.rs`): 길드 오버라이드·역할·배너 폴백, UTF-16 256코드유닛 노트 편집/자동 저장(단조 시퀀스 가드), 차단 확인 포함 DM 열기, 공통 서버 이동, 메시지/멤버/유저 패널 클릭 연결.
+    - 설정 화면(`prefs.rs`, `settings_model.rs`, `backend/settings.rs`, `ui/settings.rs`, `theme.rs`, `ui/l10n.rs`, `notify/mod.rs`): 런타임 테마(`System`/`Dark`/`Light`), 알림·알림음 토글, 44개 공식 로케일 전환, 로그아웃 확인, `prefs.json` 원자적 저장, `ctrl-,`·유저 패널 톱니 버튼 연결.
+  - **검증·진행도**: `cd fluxer_client; $env:CARGO_TARGET_DIR = "../target/fc-root"; cargo test --workspace -- --test-threads=2` → **454 passed, 0 failed, 0 warnings** (`app`: 163, `core`: 242, `i18n`: 10, `markdown`: 36 [+1 existing ignored doctest], `devserver`: 3). DeepSeek `#max`(`fluxer-helper-p1-review`) 교차 검토 P0 0건 및 P1 #2·P2 #1~#9 수정 완료 후 재검증. `docs/progress/progress.json` + `python scripts/progress_svg.py` 갱신(`overall: 52%`, `daily driver: 62%`).
+- **Decisions**:
+  - 기존 알림 테스트(`tests_notify_upload.rs:46`, `notify/tests.rs:208`) 호환성을 위해 `notifier.enabled`를 마스터 게이트로 유지하고 `sounds_enabled`는 `enabled == true`일 때 효과음을 개별 제어하도록 둠.
+  - 헤드리스 병렬 테스트에서 로케일 전환 레이스를 막기 위해 `ui/l10n.rs`에 `#[cfg(test)]` `thread_local!` 저장소(`TEST_TRANSLATOR`) 적용.
+  - `uniform_list` 렌더/레이아웃 클로저 내부 상태 변경·`cx.notify()` 금지 원칙 준수.
+- **Blockers**:
+  - 릴리스 패키지 빌드(`scripts/package_fluxer_client.ps1`)는 PC 여유 메모리 제약으로 사용자 확인 전 보류.
+  - P1 UI 3종(이모지 피커·프로필 팝업·설정/한국어 UI) 및 기존 실기 미확인 항목은 테스트 서버 실기 확인 미수행.
+- **Next Steps**:
+  1. 사용자 승인 시 릴리스 빌드(`scripts/package_fluxer_client.ps1`) 및 실기 검증(P0③~④).
+  2. 자체 테스트 서버(`fluxer-dev.home.arpa`)에서 P1 UI(이모지 피커·프로필 팝업·노트/설정 저장·테마/로케일 전환) 실기 확인.
+  3. 남은 P1 트레이·자동 시작 구현 착수.
+
 ## 인계 (2026-11-19, 다음 에이전트용 — 이 절부터 읽을 것)
-- **기준**: `desktop-rs` HEAD `95d8ba99`(origin과 동일), 워킹 트리 깨끗함. 미공개 유지 파일(커밋 금지): `RUST_*_PLAN.md`, `RUST_MIGRATION_REFERENCE_REVIEW.md`, `RUST_PORT_RESEARCH_*`, `IPC_M0_FINDINGS.md`, `tools/h265_livekit_probe/`.
-- **현재 주력**: 네이티브 GPUI 클라이언트 `fluxer_client/`(core, app, markdown, i18n, devserver). `cd fluxer_client && CARGO_TARGET_DIR=../target/fc-root cargo test --workspace -- --test-threads=2` → 420 통과(app 139, core 232, markdown 36, i18n 10, devserver 3).
-- **우선순위(P0, 사용자 승인)**: ① 알림·첨부 ✔(코드) ② 임베드 ✔(코드) ③ 릴리스 exe — `scripts/package_fluxer_client.ps1`(산출 `dist/fluxer_client/`), **아직 빌드 못 함**: 메모리 부족(Unity 사용 중)으로 중단됨. 사용자 확인 후 실행 ④ 안정성 실기(재연결·장시간 메모리·한글 IME). 이후 P1: 이모지 피커, 프로필 팝업, 설정 화면(지침 `docs/rust_client_core/NEXT_BRIEFS.md` 8~10절), 트레이·자동 시작.
-- **실기 미확인**: GIF 애니메이션 수정, 유튜브 카드 중복 수정, Windows 토스트·알림음(사용자 PC가 방해 금지 모드), 첨부 업로드 실서버, 한국어 UI 화면, 릴리스 exe·AUMID 바로가기.
+- **기준**: `desktop-rs` (`f1479c61d` 이후 P1 이모지 피커·프로필·설정 커밋 반영), 워킹 트리 깨끗함(미공개 파일 제외). 미공개 유지 파일(커밋 금지): `RUST_*_PLAN.md`, `RUST_MIGRATION_REFERENCE_REVIEW.md`, `RUST_PORT_RESEARCH_*`, `IPC_M0_FINDINGS.md`, `tools/h265_livekit_probe/`.
+- **현재 주력**: 네이티브 GPUI 클라이언트 `fluxer_client/`(core, app, markdown, i18n, devserver). `cd fluxer_client; $env:CARGO_TARGET_DIR = "../target/fc-root"; cargo test --workspace -- --test-threads=2` → 454 통과(app 163, core 242, markdown 36 [+1 ignored doctest], i18n 10, devserver 3).
+- **우선순위(P0, 사용자 승인)**: ① 알림·첨부 ✔(코드) ② 임베드 ✔(코드) ③ 릴리스 exe — `scripts/package_fluxer_client.ps1`(산출 `dist/fluxer_client/`), **아직 빌드 못 함**: 메모리 부족 제약으로 사용자 확인 후 실행 ④ 안정성 실기(재연결·장시간 메모리·한글 IME). P1 진행: 이모지 피커·프로필 팝업·설정 화면(테마/로케일/알림/로그아웃) ✔(코드/헤드리스), 남은 P1은 트레이·자동 시작(`docs/rust_client_core/NEXT_BRIEFS.md` 8~10절 기준).
+- **실기 미확인**: 이모지 피커·프로필 팝업·설정/테마/로케일 UI 실서버 동작, GIF 애니메이션 수정, 유튜브 카드 중복 수정, Windows 토스트·알림음(사용자 PC가 방해 금지 모드), 첨부 업로드 실서버, 한국어 UI 화면, 릴리스 exe·AUMID 바로가기.
 - **테스트 환경**: 자체 테스트 서버 `fluxer-dev.home.arpa`(SSH 443 터널). 접속·계정·도구는 저장소 밖 `../Logs/fluxer-dev/LOCAL_ACCESS.md`. **친구 서버와 사용자 개인 계정은 테스트에 쓰지 말 것**(개인 정보). 메시지 전송 시험은 자체 서버에서만.
 - **PC 부하 규칙**(사용자 PC가 여러 번 멈춤): `fluxer_client/.cargo/config.toml` `build.jobs=4` 유지, 동시에 빌드하는 작업 최대 2개, 앱 테스트는 항상 `timeout 300 … -- --test-threads=2`, 빌드 디렉터리는 `target/fc-root`만(추가로 만들었으면 끝나고 삭제). 헤드리스 GPUI 테스트가 무한 루프로 CPU를 먹은 전례(uniform_list의 0..1 측정 호출) — 렌더/레이아웃 콜백에서 상태 변경·notify 금지.
 - **GUI 실기**: `tools/agents/gui.ps1`는 다른 창이 대상 창을 가리면 입력을 거부한다(사용자가 PC 사용 중일 수 있음). 마우스 대신 키보드(Ctrl+K 등) 위주로 확인.

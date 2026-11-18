@@ -17,6 +17,7 @@ mod auth;
 mod client;
 mod discovery;
 mod error;
+mod profile;
 mod secret;
 mod upload;
 
@@ -40,6 +41,10 @@ pub use discovery::{
     TransportPolicy, discover, discover_with, discovery_candidates, resolve_instance_input,
 };
 pub use error::{ApiError, DiscoveryAttempt, DiscoveryError, FieldError, RestError};
+pub use profile::{
+    GuildMemberSummary, MutualGuild, PROFILE_FLAG_AVATAR_UNSET, PROFILE_FLAG_BANNER_UNSET, ProfileUser,
+    UserProfileData, UserProfileFull,
+};
 pub use secret::{Secret, SecretToken, redact_json};
 pub use upload::{
     DEFAULT_MAX_ATTACHMENT_FILE_SIZE, MAX_ATTACHMENTS_PER_MESSAGE, UploadFile, UploadOptions, UploadProgress,

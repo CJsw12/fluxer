@@ -265,7 +265,7 @@ fn switcher_titles(view: &Entity<ClientView>, cx: &mut VisualTestContext) -> Vec
             .iter()
             .filter_map(|i| if let SwitcherItem::Result(r) = i { Some(r.title.clone()) } else { None })
             .collect(),
-        Overlay::None => panic!("quick switcher closed"),
+        _ => panic!("quick switcher closed"),
     })
 }
 
@@ -315,7 +315,7 @@ fn quick_switcher_ranks_and_navigates(cx: &mut TestAppContext) {
     typed(cx, "@bob");
     let ix = view.read_with(cx, |v, _| match &v.overlay {
         Overlay::QuickSwitcher(sw) => sw.selected,
-        Overlay::None => None,
+        _ => None,
     });
     view.update_in(cx, |v, window, cx| v.quick_switcher_accept(ix, window, cx));
     draw(cx);

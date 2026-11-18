@@ -48,6 +48,8 @@ pub enum StateChange {
     PresenceUpdated { user_id: Snowflake },
     /// Friend / block / request state with this user changed.
     RelationshipChanged { user_id: Snowflake },
+    /// A user note changed (READY, USER_NOTE_UPDATE, local echo).
+    NotesChanged,
     /// `user_settings` changed (theme, locale, status, guild folders).
     UserSettingsChanged,
     /// Notification settings of a guild (`None` = DMs) changed.
@@ -94,6 +96,8 @@ pub struct ClientState {
     /// user id -> presence of other users; the current user is never
     /// stored (TS `Presence.handlePresenceUpdate`). Missing = offline.
     pub presences: BTreeMap<Snowflake, Presence>,
+    /// user id -> private note shown on their profile.
+    pub notes: BTreeMap<Snowflake, String>,
     /// channel id -> users typing there, in start order.
     pub typing: BTreeMap<Snowflake, Vec<Typer>>,
     pub user_settings: UserSettings,
@@ -183,6 +187,8 @@ impl ClientState {
             // handlers/relationships.rs
             "RELATIONSHIP_ADD" | "RELATIONSHIP_UPDATE" => self.apply_relationship_upsert(d, out_ref),
             "RELATIONSHIP_REMOVE" => self.apply_relationship_remove(d, out_ref),
+            // handlers/notes.rs
+            "USER_NOTE_UPDATE" => self.apply_user_note_update(d, out_ref),
             // handlers/user_settings.rs
             "USER_SETTINGS_UPDATE" => self.apply_user_settings_update(d, out_ref),
             "USER_GUILD_SETTINGS_UPDATE" => self.apply_user_guild_settings_update(d, out_ref),

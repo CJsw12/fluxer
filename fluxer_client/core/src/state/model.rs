@@ -56,6 +56,10 @@ pub struct User {
     pub global_name: Option<String>,
     #[serde(default)]
     pub avatar: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub banner: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_color: Option<i64>,
     #[serde(default, deserialize_with = "null_default")]
     pub bot: bool,
 }

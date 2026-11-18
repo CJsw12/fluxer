@@ -430,3 +430,32 @@ async fn user_dm_and_member_reads() {
     }
     assert_eq!(fixture.requests().len(), 6);
 }
+
+// ---------------------------------------------------------------- notes
+
+#[tokio::test]
+async fn set_user_note_puts_the_note_body() {
+    let fixture = Fixture::start(|_, _| Resp::empty(204)).await;
+    let client = authed(&fixture).await;
+    client.set_user_note(USER, Some("hello")).await.unwrap();
+    client.set_user_note(USER, None).await.unwrap();
+    client.set_user_note(USER, Some("")).await.unwrap();
+
+    let target = format!("/api/v1/users/@me/notes/{USER}");
+    let requests = fixture.requests();
+    assert_eq!(
+        requests.iter().map(line).collect::<Vec<_>>(),
+        vec![expect("PUT", target.clone()), expect("PUT", target.clone()), expect("PUT", target)]
+    );
+    assert_eq!(requests[0].json(), json!({ "note": "hello" }));
+    assert_eq!(requests[1].json(), json!({ "note": null }));
+    assert_eq!(requests[2].json(), json!({ "note": null }));
+    for req in &requests {
+        assert_eq!(req.header("authorization"), Some(FAKE_TOKEN));
+        assert_eq!(req.header("content-type"), Some("application/json"));
+    }
+
+    let bad = client.set_user_note("1/../2", Some("x")).await;
+    assert!(matches!(bad, Err(RestError::InvalidArgument(_))));
+    assert_eq!(fixture.requests().len(), 3);
+}

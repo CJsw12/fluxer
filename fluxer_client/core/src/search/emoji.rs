@@ -14,7 +14,7 @@ use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
 
-use crate::state::{ClientState, GuildEmoji, Snowflake, bits, has};
+use crate::state::{ClientState, Guild, GuildEmoji, Snowflake, bits, has};
 
 const EMOJI_JSON: &str = include_str!("../../data/emojis.json");
 
@@ -22,6 +22,8 @@ const EMOJI_JSON: &str = include_str!("../../data/emojis.json");
 pub const AUTOCOMPLETE_LIMIT: usize = 10;
 /// Empty `:` query shows this many frecent emoji.
 pub const FRECENT_LIMIT: usize = 5;
+/// Number of frecent emoji the picker's empty state shows.
+pub const PICKER_FRECENT_LIMIT: usize = 42;
 /// `UsageFrecency.ts` constants.
 pub const MAX_TRACKED_KEYS: usize = 200;
 const MAX_USAGE_COUNT: u32 = 100_000;
@@ -274,6 +276,93 @@ impl EmojiHit<'_> {
     }
 }
 
+/// An owned picker entry: a unicode emoji or one guild's custom emoji.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EmojiChoice {
+    pub name: String,
+    pub shortcode: String,
+    pub names: Vec<String>,
+    pub glyph: String,
+    pub skins: Vec<String>,
+    pub custom_id: Option<Snowflake>,
+    pub guild_id: Option<Snowflake>,
+    pub animated: bool,
+    pub category: Option<EmojiCategory>,
+    pub frecency_key: String,
+}
+
+impl EmojiChoice {
+    pub fn from_unicode(e: &UnicodeEmoji) -> Self {
+        Self {
+            name: e.name.clone(),
+            shortcode: e.name.clone(),
+            names: e.names.clone(),
+            glyph: e.surrogates.clone(),
+            skins: e.skins.clone(),
+            custom_id: None,
+            guild_id: None,
+            animated: false,
+            category: Some(e.category),
+            frecency_key: e.surrogates.clone(),
+        }
+    }
+
+    pub fn from_custom(guild_id: Snowflake, e: &GuildEmoji) -> Self {
+        Self {
+            name: e.name.clone(),
+            shortcode: e.name.clone(),
+            names: vec![e.name.clone()],
+            glyph: String::new(),
+            skins: Vec::new(),
+            custom_id: Some(e.id),
+            guild_id: Some(guild_id),
+            animated: e.animated,
+            category: None,
+            frecency_key: format!("custom:{}", e.id),
+        }
+    }
+
+    pub fn from_hit(hit: &EmojiHit<'_>) -> Self {
+        match hit {
+            EmojiHit::Unicode(e) => Self::from_unicode(e),
+            EmojiHit::Custom { guild_id, emoji } => Self::from_custom(*guild_id, emoji),
+        }
+    }
+
+    /// The glyph with skin tone `tone` (1..=5); custom emoji are unchanged.
+    pub fn with_tone(&self, tone: usize) -> Self {
+        let mut choice = self.clone();
+        if choice.custom_id.is_none() && (1..=choice.skins.len()).contains(&tone) {
+            choice.glyph = choice.skins[tone - 1].clone();
+        }
+        choice
+    }
+
+    pub fn partial_emoji(&self, tone: usize) -> crate::state::PartialEmoji {
+        crate::state::PartialEmoji {
+            id: self.custom_id,
+            name: if self.custom_id.is_some() { self.name.clone() } else { self.with_tone(tone).glyph },
+            animated: self.animated,
+        }
+    }
+
+    /// Text inserted into the composer: `<:name:id>` / `<a:name:id>` for
+    /// custom emoji, the (toned) glyph for unicode.
+    pub fn insert_text(&self, tone: usize) -> String {
+        if let Some(id) = self.custom_id {
+            let prefix = if self.animated { "a" } else { "" };
+            format!("<{prefix}:{}:{id}>", self.name)
+        } else {
+            self.with_tone(tone).glyph
+        }
+    }
+
+    /// All shortcodes as `:name:` joined by spaces.
+    pub fn label(&self) -> String {
+        self.names.iter().map(|n| format!(":{n}:")).collect::<Vec<_>>().join(" ")
+    }
+}
+
 /// `MATCH_TIER`; lower is better.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MatchTier {
@@ -342,6 +431,18 @@ pub fn match_tier(names: &[&str], keywords: &[&str], query: &str) -> Option<Matc
     contains.then_some(MatchTier::KeywordContains)
 }
 
+/// The channel's own guild and whether external guilds' emoji are allowed
+/// there (DMs and no channel allow them).
+fn channel_emoji_scope(state: &ClientState, channel_id: Option<Snowflake>) -> (Option<Snowflake>, bool) {
+    let channel = channel_id.and_then(|c| state.channels.get(&c));
+    let own_guild = channel.and_then(|c| c.guild_id);
+    let external_ok = match channel {
+        Some(c) if c.guild_id.is_some() => has(state.channel_permissions(c.id), bits::USE_EXTERNAL_EMOJIS),
+        _ => true,
+    };
+    (own_guild, external_ok)
+}
+
 /// Custom emoji the user may use in `channel_id`: the channel's own guild
 /// always; other guilds need USE_EXTERNAL_EMOJIS there. In DMs or with no
 /// channel every guild's emoji are allowed (TS `filterEmojisForAutocomplete`
@@ -350,12 +451,7 @@ fn usable_custom<'a>(
     state: &'a ClientState,
     channel_id: Option<Snowflake>,
 ) -> Vec<(Snowflake, &'a GuildEmoji)> {
-    let channel = channel_id.and_then(|c| state.channels.get(&c));
-    let own_guild = channel.and_then(|c| c.guild_id);
-    let external_ok = match channel {
-        Some(c) if c.guild_id.is_some() => has(state.channel_permissions(c.id), bits::USE_EXTERNAL_EMOJIS),
-        _ => true,
-    };
+    let (own_guild, external_ok) = channel_emoji_scope(state, channel_id);
     state
         .emojis
         .iter()
@@ -427,6 +523,112 @@ fn frecent_hits<'a>(
         })
         .take(count)
         .collect()
+}
+
+/// Picker's frecent choices: the channel's usable custom emoji frecency
+/// intersected with [`EmojiFrecency`]. Deleted custom ids are skipped and
+/// the result is capped at `limit`.
+pub fn frecency_choices(
+    state: &ClientState,
+    channel_id: Option<Snowflake>,
+    frecency: &EmojiFrecency,
+    now_ms: u64,
+    limit: usize,
+) -> Vec<EmojiChoice> {
+    let customs = usable_custom(state, channel_id);
+    let mut choices: Vec<EmojiChoice> = frecent_hits(&customs, frecency, now_ms, limit)
+        .iter()
+        .map(EmojiChoice::from_hit)
+        .filter(|c| c.custom_id.is_none_or(|id| customs.iter().any(|(_, e)| e.id == id)))
+        .collect();
+    choices.truncate(limit);
+    choices
+}
+
+/// Usable custom emoji grouped by guild: the channel's own guild first, then
+/// [`ClientState::sorted_guilds`], external guilds only when the channel
+/// allows them. Emojis within a guild are snowflake-descending.
+pub fn custom_choices_by_guild(
+    state: &ClientState,
+    channel_id: Option<Snowflake>,
+) -> Vec<(Snowflake, String, Vec<EmojiChoice>)> {
+    let (own_guild, external_ok) = channel_emoji_scope(state, channel_id);
+    let mut guilds: Vec<&Guild> = Vec::new();
+    if let Some(id) = own_guild
+        && let Some(guild) = state.guilds.get(&id)
+    {
+        guilds.push(guild);
+    }
+    for guild in state.sorted_guilds() {
+        if Some(guild.id) == own_guild || !external_ok {
+            continue;
+        }
+        guilds.push(guild);
+    }
+    guilds
+        .into_iter()
+        .filter_map(|guild| {
+            let mut emojis: Vec<&GuildEmoji> = state.emojis.get(&guild.id).map(|list| list.iter().collect()).unwrap_or_default();
+            emojis.sort_by(|a, b| b.id.0.cmp(&a.id.0));
+            if emojis.is_empty() {
+                return None;
+            }
+            let choices = emojis.into_iter().map(|e| EmojiChoice::from_custom(guild.id, e)).collect();
+            Some((guild.id, guild.name.clone(), choices))
+        })
+        .collect()
+}
+
+/// Picker query normalization: emoticons map to their emoji name, else strip
+/// surrounding colons and join words with `_`.
+pub fn normalize_picker_query(raw: &str) -> String {
+    let trimmed = raw.trim();
+    if let Some(name) = emoticon_name(trimmed) {
+        return name.to_owned();
+    }
+    trimmed.trim_matches(':').trim().split_whitespace().collect::<Vec<_>>().join("_")
+}
+
+/// Picker search: an empty query is frecent; otherwise unicode plus usable
+/// custom emoji scored like [`search_emojis`] but without its result cap.
+pub fn picker_search_choices(
+    state: &ClientState,
+    channel_id: Option<Snowflake>,
+    query: &str,
+    frecency: &EmojiFrecency,
+    now_ms: u64,
+) -> Vec<EmojiChoice> {
+    let query = normalize_picker_query(query).to_ascii_lowercase();
+    if query.is_empty() {
+        return frecency_choices(state, channel_id, frecency, now_ms, PICKER_FRECENT_LIMIT);
+    }
+
+    let mut scored: Vec<(MatchTier, f64, String, usize, EmojiChoice)> = Vec::new();
+    for e in unicode_emojis() {
+        let names: Vec<&str> = e.names.iter().map(String::as_str).collect();
+        let keywords: Vec<&str> = e.keywords.iter().map(String::as_str).collect();
+        if let Some(tier) = match_tier(&names, &keywords, &query) {
+            let choice = EmojiChoice::from_unicode(e);
+            let f = frecency.score(&choice.frecency_key, now_ms);
+            scored.push((tier, f, choice.name.to_lowercase(), e.order, choice));
+        }
+    }
+    let base = unicode_emojis().len();
+    let custom_groups = custom_choices_by_guild(state, channel_id);
+    let customs: Vec<EmojiChoice> = custom_groups.into_iter().flat_map(|(_, _, choices)| choices).collect();
+    for (i, choice) in customs.into_iter().enumerate() {
+        if let Some(tier) = match_tier(&[choice.name.as_str()], &[], &query) {
+            let f = frecency.score(&choice.frecency_key, now_ms);
+            scored.push((tier, f, choice.name.to_lowercase(), base + i, choice));
+        }
+    }
+    scored.sort_by(|a, b| {
+        a.0.cmp(&b.0)
+            .then(b.1.total_cmp(&a.1))
+            .then_with(|| a.2.cmp(&b.2))
+            .then(a.3.cmp(&b.3))
+    });
+    scored.into_iter().map(|s| s.4).collect()
 }
 
 // ---- composer triggers --------------------------------------------------
@@ -603,5 +805,146 @@ mod tests {
         assert_eq!(channel_query("see #gen"), Some("gen"));
         assert_eq!(channel_query("issue#1"), None, "mid-word");
         assert_eq!(channel_query("#gen "), None);
+    }
+
+    fn sample_unicode() -> UnicodeEmoji {
+        UnicodeEmoji {
+            name: "wave".to_owned(),
+            names: vec!["wave".to_owned(), "bye".to_owned()],
+            keywords: Vec::new(),
+            surrogates: "BASE".to_owned(),
+            category: EmojiCategory::People,
+            skins: vec!["T1".to_owned(), "T2".to_owned(), "T3".to_owned()],
+            order: 0,
+        }
+    }
+
+    fn sample_custom() -> GuildEmoji {
+        GuildEmoji { id: sf(9001), name: "partyparrot".to_owned(), animated: true }
+    }
+
+    #[test]
+    fn emoji_choice_methods() {
+        let e = sample_unicode();
+        let choice = EmojiChoice::from_unicode(&e);
+        assert_eq!(choice.name, "wave");
+        assert_eq!(choice.shortcode, "wave");
+        assert_eq!(choice.names, vec!["wave", "bye"]);
+        assert_eq!(choice.glyph, "BASE");
+        assert_eq!(choice.skins, vec!["T1", "T2", "T3"]);
+        assert_eq!(choice.custom_id, None);
+        assert_eq!(choice.guild_id, None);
+        assert!(!choice.animated);
+        assert_eq!(choice.category, Some(EmojiCategory::People));
+        assert_eq!(choice.frecency_key, "BASE");
+        assert_eq!(choice.label(), ":wave: :bye:");
+
+        assert_eq!(choice.with_tone(2).glyph, "T2");
+        assert_eq!(choice.with_tone(0).glyph, "BASE");
+        assert_eq!(choice.with_tone(4).glyph, "BASE", "out of range keeps base");
+        assert_eq!(choice.glyph, "BASE", "original unchanged");
+
+        let partial = choice.partial_emoji(2);
+        assert_eq!(partial.id, None);
+        assert_eq!(partial.name, "T2");
+        assert!(!partial.animated);
+        assert_eq!(choice.insert_text(2), "T2");
+
+        let custom = EmojiChoice::from_custom(sf(GUILD), &sample_custom());
+        assert_eq!(custom.name, "partyparrot");
+        assert_eq!(custom.shortcode, "partyparrot");
+        assert_eq!(custom.names, vec!["partyparrot"]);
+        assert!(custom.glyph.is_empty());
+        assert!(custom.skins.is_empty());
+        assert_eq!(custom.custom_id, Some(sf(9001)));
+        assert_eq!(custom.guild_id, Some(sf(GUILD)));
+        assert!(custom.animated);
+        assert_eq!(custom.category, None);
+        assert_eq!(custom.frecency_key, "custom:9001");
+        assert_eq!(custom.with_tone(3).glyph, "");
+        assert_eq!(custom.insert_text(3), "<a:partyparrot:9001>");
+        assert_eq!(custom.partial_emoji(3).id, Some(sf(9001)));
+        assert_eq!(custom.partial_emoji(3).name, "partyparrot");
+        assert!(custom.partial_emoji(3).animated);
+        assert_eq!(custom.label(), ":partyparrot:");
+
+        let plain = EmojiChoice::from_custom(sf(GUILD), &GuildEmoji { id: sf(9002), name: "pepe".to_owned(), animated: false });
+        assert_eq!(plain.insert_text(0), "<:pepe:9002>");
+    }
+
+    #[test]
+    fn frecency_choices_cap_and_skip_deleted() {
+        let s = fixture_state();
+        let mut f = EmojiFrecency::default();
+        f.record("custom:9999", 1_000);
+        for i in 0..60 {
+            f.record(&unicode_emojis()[i].surrogates, 1_000);
+        }
+        let choices = frecency_choices(&s, Some(sf(GENERAL)), &f, 2_000, PICKER_FRECENT_LIMIT);
+        assert_eq!(choices.len(), PICKER_FRECENT_LIMIT);
+        assert!(choices.iter().all(|c| c.custom_id != Some(sf(9999))), "deleted custom id skipped");
+        assert_eq!(frecency_choices(&s, Some(sf(GENERAL)), &f, 2_000, 10).len(), 10);
+    }
+
+    #[test]
+    fn custom_choices_grouped_by_guild() {
+        let s = fixture_state();
+        let groups = custom_choices_by_guild(&s, Some(sf(GENERAL)));
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].0, sf(GUILD));
+        assert_eq!(groups[0].1, "Alpha");
+        assert_eq!(
+            groups[0].2.iter().map(|c| c.custom_id).collect::<Vec<_>>(),
+            vec![Some(sf(9002)), Some(sf(9001))],
+            "own guild first, snowflake descending"
+        );
+        assert_eq!(groups[1].0, sf(GUILD2));
+        assert_eq!(groups[1].2.iter().map(|c| c.custom_id).collect::<Vec<_>>(), vec![Some(sf(9003))]);
+
+        // deny USE_EXTERNAL_EMOJIS for @everyone in GENERAL's guild
+        let mut denied = fixture_state();
+        if let Some(g) = denied.guilds.get_mut(&sf(GUILD))
+            && let Some(r) = g.roles.get_mut(&sf(GUILD))
+        {
+            r.permissions &= !bits::USE_EXTERNAL_EMOJIS;
+        }
+        let only_own = custom_choices_by_guild(&denied, Some(sf(GENERAL)));
+        assert_eq!(only_own.iter().map(|g| g.0).collect::<Vec<_>>(), vec![sf(GUILD)]);
+        assert!(only_own.iter().all(|g| g.2.iter().all(|c| c.guild_id == Some(sf(GUILD)))));
+    }
+
+    #[test]
+    fn picker_query_normalization() {
+        assert_eq!(normalize_picker_query(":smile:"), "smile");
+        assert_eq!(normalize_picker_query("hello world"), "hello_world");
+        assert_eq!(normalize_picker_query("  hello   world  "), "hello_world");
+        assert_eq!(normalize_picker_query(":+1"), "+1");
+        assert_eq!(normalize_picker_query("<3"), "heart");
+        assert_eq!(normalize_picker_query(""), "");
+    }
+
+    #[test]
+    fn picker_search_choices_tiers_and_frecency() {
+        let s = fixture_state();
+        let none = EmojiFrecency::default();
+        let heart = picker_search_choices(&s, Some(sf(GENERAL)), "heart", &none, 0);
+        assert_eq!(heart.first().map(|c| c.name.as_str()), Some("heart"));
+
+        let custom = picker_search_choices(&s, Some(sf(GENERAL)), ":partyparrot:", &none, 0);
+        assert_eq!(custom.iter().map(|c| c.custom_id).collect::<Vec<_>>(), vec![Some(sf(9001))]);
+
+        let many = picker_search_choices(&s, Some(sf(GENERAL)), "a", &none, 0);
+        assert!(many.len() > AUTOCOMPLETE_LIMIT, "no 10-result cap");
+
+        let heart_shortcut = picker_search_choices(&s, Some(sf(GENERAL)), "<3", &none, 0);
+        assert!(heart_shortcut.iter().any(|c| c.name == "heart"));
+
+        let mut f = EmojiFrecency::default();
+        f.record("custom:9002", 10);
+        f.record("custom:9002", 11);
+        let glyph = unicode_by_name("heart").map(|e| e.surrogates.clone()).unwrap_or_default();
+        f.record(&glyph, 12);
+        let frecent = picker_search_choices(&s, Some(sf(GENERAL)), "   ", &f, 20);
+        assert_eq!(frecent.iter().map(|c| c.name.as_str()).collect::<Vec<_>>(), vec!["pepe", "heart"]);
     }
 }

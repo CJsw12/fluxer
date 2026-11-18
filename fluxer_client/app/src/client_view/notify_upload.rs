@@ -64,9 +64,10 @@ impl ClientView {
         }
     }
 
-    /// The header's bell: toasts and sounds on/off for this session.
+    /// The header's bell: toasts and sounds on/off for this session and saved prefs.
     pub(crate) fn toggle_notifications(&mut self, cx: &mut Context<Self>) {
         self.notifier.enabled = !self.notifier.enabled;
+        self.prefs.set_notifications(self.notifier.enabled);
         cx.notify();
     }
 

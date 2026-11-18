@@ -10,7 +10,7 @@ use fluxer_client_core::state::{ClientState, Message, MessageState, PartialEmoji
 use gpui_kit::assets::IconName;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
-use gpui_kit::{AnyElement, App, ClipboardItem, ElementId, IntoElement, SharedString, Window, div, prelude::*, px};
+use gpui_kit::{AnyElement, App, ClipboardItem, ElementId, IntoElement, Pixels, Point, SharedString, Window, div, prelude::*, px};
 
 use crate::theme::Theme;
 use crate::ui::l10n;
@@ -185,6 +185,7 @@ pub fn quick_reactions(
     message_key: u64,
     theme: &Theme,
     on_pick: impl Fn(PartialEmoji, &mut Window, &mut App) + 'static,
+    on_more: impl Fn(Point<Pixels>, &mut Window, &mut App) + 'static,
 ) -> AnyElement {
     let on_pick = Rc::new(on_pick);
     let buttons = QUICK_REACTIONS.iter().map(|name| {
@@ -201,6 +202,16 @@ pub fn quick_reactions(
             .on_click(move |_, window, cx| on_pick(emoji.clone(), window, cx))
             .into_any_element()
     });
+    let more = div()
+        .id(SharedString::from(format!("quick-reaction-more-{message_key}")))
+        .debug_selector(|| format!("quick-reaction-more-{message_key}"))
+        .px_1()
+        .rounded(px(4.))
+        .cursor_pointer()
+        .text_color(theme.muted_foreground)
+        .hover(|s| s.bg(theme.muted))
+        .child("+")
+        .on_click(move |ev, window, cx| on_more(ev.position(), window, cx));
     div()
         .flex()
         .flex_row()
@@ -213,6 +224,7 @@ pub fn quick_reactions(
         .bg(theme.background)
         .shadow_sm()
         .children(buttons)
+        .child(more)
         .into_any_element()
 }
 

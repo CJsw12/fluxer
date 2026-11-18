@@ -34,6 +34,7 @@ gpui = "0.2.2"
 rusqlite = { version = "0.33", features = ["bundled"] }
 
 [target.'cfg(windows)'.dependencies]
+fluxer_platform_info = { path = "../fluxer_desktop/native/platform-info", default-features = false }
 fluxer_win_shell = { path = "../fluxer_desktop/native/win-shell", default-features = false }
 fluxer_windows_input_hook = { path = "../fluxer_desktop/native/windows-input-hook", default-features = false }
 fluxer_win_process_loopback = { path = "../fluxer_desktop/native/win-process-loopback", default-features = false }

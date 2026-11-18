@@ -2,40 +2,41 @@
 
 mod probe_helpers;
 
+#[cfg(feature = "node")]
 use napi_derive::napi;
 
 pub const SOURCE_METAL: &str = "metal";
 pub const SOURCE_DXGI: &str = "dxgi";
 pub const SOURCE_LINUX_SYSFS: &str = "linux-sysfs";
 
-#[napi(object)]
+#[cfg_attr(feature = "node", napi(object))]
 pub struct PlatformGpuDeviceInfo {
     pub active: bool,
-    #[napi(js_name = "vendorId")]
+    #[cfg_attr(feature = "node", napi(js_name = "vendorId"))]
     pub vendor_id: u32,
-    #[napi(js_name = "deviceId")]
+    #[cfg_attr(feature = "node", napi(js_name = "deviceId"))]
     pub device_id: u32,
-    #[napi(js_name = "vendorName")]
+    #[cfg_attr(feature = "node", napi(js_name = "vendorName"))]
     pub vendor_name: Option<String>,
-    #[napi(js_name = "deviceString")]
+    #[cfg_attr(feature = "node", napi(js_name = "deviceString"))]
     pub device_string: Option<String>,
-    #[napi(js_name = "driverVendor")]
+    #[cfg_attr(feature = "node", napi(js_name = "driverVendor"))]
     pub driver_vendor: Option<String>,
-    #[napi(js_name = "driverVersion")]
+    #[cfg_attr(feature = "node", napi(js_name = "driverVersion"))]
     pub driver_version: Option<String>,
-    #[napi(js_name = "dedicatedVideoMemory")]
+    #[cfg_attr(feature = "node", napi(js_name = "dedicatedVideoMemory"))]
     pub dedicated_video_memory: Option<f64>,
-    #[napi(js_name = "sharedSystemMemory")]
+    #[cfg_attr(feature = "node", napi(js_name = "sharedSystemMemory"))]
     pub shared_system_memory: Option<f64>,
-    #[napi(js_name = "subsystemVendorId")]
+    #[cfg_attr(feature = "node", napi(js_name = "subsystemVendorId"))]
     pub subsystem_vendor_id: Option<u32>,
-    #[napi(js_name = "subsystemDeviceId")]
+    #[cfg_attr(feature = "node", napi(js_name = "subsystemDeviceId"))]
     pub subsystem_device_id: Option<u32>,
-    #[napi(js_name = "registryId")]
+    #[cfg_attr(feature = "node", napi(js_name = "registryId"))]
     pub registry_id: Option<String>,
-    #[napi(js_name = "adapterLuid")]
+    #[cfg_attr(feature = "node", napi(js_name = "adapterLuid"))]
     pub adapter_luid: Option<String>,
-    #[napi(js_name = "pciPath")]
+    #[cfg_attr(feature = "node", napi(js_name = "pciPath"))]
     pub pci_path: Option<String>,
     pub integrated: Option<bool>,
     pub removable: Option<bool>,
@@ -43,14 +44,14 @@ pub struct PlatformGpuDeviceInfo {
     pub source: String,
 }
 
-#[napi(object)]
+#[cfg_attr(feature = "node", napi(object))]
 pub struct PlatformGpuInfo {
     pub devices: Vec<PlatformGpuDeviceInfo>,
     pub source: String,
     pub error: Option<String>,
 }
 
-#[napi(js_name = "getGpuInfo")]
+#[cfg_attr(feature = "node", napi(js_name = "getGpuInfo"))]
 pub fn get_gpu_info() -> PlatformGpuInfo {
     platform::gpu_info()
 }

@@ -44,7 +44,7 @@ enum UserEvent {
     TrayMenu(MenuId),
     TrayIconClick,
     GlobalShortcut(u32),
-    GlobalKeybindTriggered { id: String, event_type: String },
+    GlobalInput { channel: String, payload: serde_json::Value },
     #[allow(dead_code)]
     AccountEngineEvent(serde_json::Value),
     Audio(crate::audio::AudioEvent),
@@ -289,8 +289,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 5-2. 전역 입력 훅 및 PTT 매니저 초기화
     let proxy_for_input_hook = proxy.clone();
-    let input_hook = Arc::new(input_hook::InputHookManager::new(Arc::new(move |id, event_type| {
-        let _ = proxy_for_input_hook.send_event(UserEvent::GlobalKeybindTriggered { id, event_type });
+    let input_hook = Arc::new(input_hook::InputHookManager::new(Arc::new(move |channel, payload| {
+        let _ = proxy_for_input_hook.send_event(UserEvent::GlobalInput { channel: channel.into(), payload });
     })));
     let input_hook_for_ipc = Arc::clone(&input_hook);
 
@@ -408,6 +408,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         match event {
             Event::UserEvent(UserEvent::IpcOneWay(req)) => match req.cmd.as_str() {
+                "globalShortcutsReset" => input_hook.reset(),
                 "windowMinimize" => {
                     println!("[Fluxer Shell] windowMinimize requested by caption control.");
                     window.set_minimized(true);
@@ -521,10 +522,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             },
             Event::UserEvent(UserEvent::IpcReply(res)) => {
-                let err_str = match res.error {
-                    Some(err) => format!("'{}'", err.replace('\'', "\\'")),
-                    None => "null".to_string(),
-                };
+                let err_str = serde_json::json!(res.error);
                 let script = format!(
                     "window.__fluxerIpcReply({}, {}, {});",
                     res.id, res.result, err_str
@@ -540,12 +538,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let _ = webview.evaluate_script(&script);
                 }
             }
-            Event::UserEvent(UserEvent::GlobalKeybindTriggered { id, event_type }) => {
-                let payload = serde_json::json!({ "id": id, "type": event_type });
-                if let Ok(json) = serde_json::to_string(&payload) {
-                    let script = format!(
-                        "if (window.__fluxerGlobalKeybindTriggered) {{ window.__fluxerGlobalKeybindTriggered({json}); }}"
-                    );
+            Event::UserEvent(UserEvent::GlobalInput { channel, payload }) => {
+                if channel == "capture-timeout" {
+                    if let Some(id) = payload.as_u64() { input_hook.stop_capture(id); }
+                } else if let (Ok(channel_json), Ok(payload_json)) = (serde_json::to_string(&channel), serde_json::to_string(&payload)) {
+                    let script = if channel == "legacy" {
+                        format!("window.__fluxerGlobalKeybindTriggered?.({payload_json});")
+                    } else {
+                        format!("window.__fluxerGlobalShortcutsEmit?.({channel_json}, {payload_json});")
+                    };
                     let _ = webview.evaluate_script(&script);
                 }
             }
@@ -579,15 +580,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 reason,
                 detail,
             })) => {
-                let detail_str = match detail {
-                    Some(d) => format!("'{}'", d.replace('\'', "\\'")),
-                    None => "null".to_string(),
-                };
                 let script = format!(
-                    "if (window.__fluxerNativeAudioEnd) {{ window.__fluxerNativeAudioEnd('{}', '{}', {}); }}",
-                    capture_id.replace('\'', "\\'"),
-                    reason.replace('\'', "\\'"),
-                    detail_str,
+                    "if (window.__fluxerNativeAudioEnd) {{ window.__fluxerNativeAudioEnd({}, {}, {}); }}",
+                    serde_json::json!(capture_id),
+                    serde_json::json!(reason),
+                    serde_json::json!(detail),
                 );
                 let _ = webview.evaluate_script(&script);
             }
@@ -650,6 +647,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 }
             }
+            Event::LoopDestroyed => input_hook.reset(),
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
                     *control_flow = ControlFlow::Exit;

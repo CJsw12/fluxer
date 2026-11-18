@@ -3,4 +3,4 @@
 /**
  * 전역 키/마우스 훅 등록 옵션 DTO (`packages/desktop_ipc/src/GlobalKeyHookContract.ts`)
  */
-export type GlobalKeyHookRegisterOptions = { id: string, ctrl: boolean, alt: boolean, shift: boolean, meta: boolean, keyName: string | null, physicalKeyName: string | null, mouseButton: number | null, };
+export type GlobalKeyHookRegisterOptions = { id: string, keycode: number | null, ctrl: boolean, alt: boolean, shift: boolean, meta: boolean, keyName: string | null, physicalKeyName: string | null, mouseButton: number | null, };

@@ -186,12 +186,52 @@ pub struct ThemeFolderChange {
 #[ts(export, export_to = "contracts/GlobalShortcutsStatus.ts")]
 #[serde(rename_all = "camelCase")]
 pub struct GlobalShortcutsStatus {
-    pub supported: bool,
-    pub has_access: bool,
-    pub direct_input_enabled: bool,
-    pub direct_input_available: bool,
-    pub is_capturing: bool,
-    pub mode: String,
+    pub backend: String,
+    pub platform: String,
+    pub linux: Option<()>,
+    pub hooks_active: bool,
+    pub hook_error: Option<String>,
+    pub supports_mouse_buttons: bool,
+    pub supports_modifier_only: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalShortcutCombo {
+    pub key: String,
+    pub code: Option<String>,
+    pub ctrl: bool,
+    pub alt: bool,
+    pub shift: bool,
+    pub meta: bool,
+    #[serde(default)]
+    pub mouse_button: Option<u8>,
+    #[serde(default)]
+    pub modifier_only: bool,
+    #[serde(default)]
+    pub both_sides: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalShortcutBinding {
+    pub source_id: String,
+    pub action: String,
+    pub combo: GlobalShortcutCombo,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct GlobalShortcutActionDefinition {
+    pub action: String,
+    pub description: String,
+    pub preferred_combo: Option<GlobalShortcutCombo>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct GlobalShortcutsSyncPayload {
+    pub bindings: Vec<GlobalShortcutBinding>,
+    pub actions: Vec<GlobalShortcutActionDefinition>,
 }
 
 /// 전역 키/마우스 훅 등록 옵션 DTO (`packages/desktop_ipc/src/GlobalKeyHookContract.ts`)
@@ -200,6 +240,8 @@ pub struct GlobalShortcutsStatus {
 #[serde(rename_all = "camelCase")]
 pub struct GlobalKeyHookRegisterOptions {
     pub id: String,
+    #[serde(default)]
+    pub keycode: Option<u32>,
     #[serde(default)]
     pub ctrl: bool,
     #[serde(default)]

@@ -66,6 +66,27 @@ pub fn get_initialization_script() -> &'static str {
         });
     };
 
+    const shortcutListeners = { event: new Set(), status: new Set(), capture: new Set(), key: new Set(), mouse: new Set() };
+    window.__fluxerGlobalShortcutsEmit = function(kind, payload) {
+        const listeners = shortcutListeners[kind];
+        if (!listeners) return;
+        listeners.forEach(function(listener) {
+            try { listener(payload); }
+            catch (err) { console.error('[Fluxer Shell] Shortcut listener failed:', err); }
+        });
+    };
+    function subscribeShortcut(kind, callback) {
+        // Use a wrapper so duplicate subscriptions of one callback remain independent.
+        const listener = function(payload) { callback(payload); };
+        shortcutListeners[kind].add(listener);
+        return function() { shortcutListeners[kind].delete(listener); };
+    }
+    window.addEventListener('pagehide', function() {
+        Object.keys(shortcutListeners).forEach(function(kind) { shortcutListeners[kind].clear(); });
+        keybindListeners.clear();
+        sendRust('globalShortcutsReset');
+    });
+
     // 1-0-2. AccountEngine 실시간 이벤트 디스패처
     let nextAccountEngineListenerId = 1;
     const accountEngineListeners = new Map();
@@ -800,10 +821,10 @@ pub fn get_initialization_script() -> &'static str {
             return invokeRust('globalKeyHookUnregisterAll');
         },
         onGlobalKeyEvent: function(callback) {
-            return function() {};
+            return subscribeShortcut('key', callback);
         },
         onGlobalMouseEvent: function(callback) {
-            return function() {};
+            return subscribeShortcut('mouse', callback);
         },
         onGlobalKeybindTriggered: function(callback) {
             var id = nextKeybindListenerId++;
@@ -816,40 +837,26 @@ pub fn get_initialization_script() -> &'static str {
             return Promise.resolve(null);
         },
         globalShortcuts: {
-            sync: function() { return Promise.resolve(); },
-            setPaused: function() { return Promise.resolve(); },
+            sync: function(payload) { return invokeRust('globalShortcutsSync', payload); },
+            setPaused: function(paused) { return invokeRust('globalShortcutsSetPaused', { paused: paused }); },
             getStatus: function() {
                 return invokeRust('globalShortcutsGetStatus');
             },
-            onStatus: function(cb) { return function() {}; },
-            onEvent: function(cb) { return function() {}; },
+            onStatus: function(cb) { return subscribeShortcut('status', cb); },
+            onEvent: function(cb) { return subscribeShortcut('event', cb); },
             setUp: function() {
-                return invokeRust('globalShortcutsGetStatus');
+                return invokeRust('globalShortcutsSetUp');
             },
             recheck: function() {
-                return invokeRust('globalShortcutsGetStatus');
+                return invokeRust('globalShortcutsRecheck');
             },
-            startCapture: function() { return Promise.resolve(null); },
-            stopCapture: function() { return Promise.resolve(); },
-            configure: function() { return Promise.resolve(); },
-            setDirectInputEnabled: function() {
-                return invokeRust('globalShortcutsGetStatus');
-            }
-        },
-                return Promise.resolve({
-                    state: 'unavailable',
-                    version: null,
-                    canConfigure: false,
-                    recovering: false,
-                    canRecheck: false,
-                    portalAppId: null,
-                    shortcuts: [],
-                    error: null
-                });
+            startCapture: function() { return invokeRust('globalShortcutsStartCapture'); },
+            stopCapture: function(captureId) { return invokeRust('globalShortcutsStopCapture', { captureId: captureId }); },
+            configure: function() { return invokeRust('globalShortcutsConfigure'); },
+            setDirectInputEnabled: function(enabled) {
+                return invokeRust('globalShortcutsSetDirectInputEnabled', { enabled: enabled });
             },
-            startCapture: function() { return Promise.resolve(null); },
-            stopCapture: function() { return Promise.resolve(); },
-            onCapture: function(cb) { return function() {}; }
+            onCapture: function(cb) { return subscribeShortcut('capture', cb); }
         },
 
         // 화면 공유 및 디스플레이 미디어
@@ -997,7 +1004,8 @@ pub fn get_initialization_script() -> &'static str {
                 window.removeEventListener('fluxer:theme-folder-change', handler);
             };
         },
-        themeFolderWatch: true,
+        // Folder watching is unavailable until trusted file selection is implemented.
+        themeFolderWatch: undefined,
 
         // 보이스 백그라운드 미디어 캐시
         cacheVoiceBackgroundMedia: function(options) { return Promise.resolve({ ok: false }); },
@@ -1977,6 +1985,29 @@ pub fn get_initialization_script() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn initialization_script_has_valid_javascript_syntax() {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+
+        let mut child = match Command::new("node")
+            .arg("--check")
+            .stdin(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+        {
+            Ok(child) => child,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                eprintln!("Node.js unavailable; JavaScript syntax check skipped");
+                return;
+            }
+            Err(err) => panic!("failed to run JavaScript syntax check: {err}"),
+        };
+        child.stdin.take().unwrap().write_all(get_initialization_script().as_bytes()).unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    }
 
     #[test]
     fn test_initialization_script_contents() {

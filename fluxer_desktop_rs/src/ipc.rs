@@ -18,6 +18,35 @@ use crate::stream_viewer;
 static MINIMIZE_TO_TRAY: AtomicBool = AtomicBool::new(false);
 static CLOSE_TO_TRAY: AtomicBool = AtomicBool::new(false);
 
+#[cfg(windows)]
+fn gpu_info() -> Value {
+    let info = fluxer_platform_info::get_gpu_info();
+    let devices: Vec<Value> = info.devices.into_iter().map(|device| {
+        json!({
+            // DXGI's preferred adapter is not necessarily WebView2's active adapter.
+            "active": false,
+            "vendorId": device.vendor_id,
+            "deviceId": device.device_id,
+            "vendorName": device.vendor_name,
+            "deviceString": device.device_string,
+            "driverVendor": device.driver_vendor,
+            "driverVersion": device.driver_version,
+            "dedicatedVideoMemory": device.dedicated_video_memory,
+            "sharedSystemMemory": device.shared_system_memory,
+            "subsystemVendorId": device.subsystem_vendor_id,
+            "subsystemDeviceId": device.subsystem_device_id,
+            "adapterLuid": device.adapter_luid,
+            "source": device.source,
+        })
+    }).collect();
+    json!({ "devices": devices, "nativeSource": info.source })
+}
+
+#[cfg(not(windows))]
+fn gpu_info() -> Value {
+    json!({ "devices": [] })
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IpcRequest {
     pub id: Option<u64>,
@@ -51,6 +80,36 @@ impl IpcResponse {
     }
 }
 
+fn native_audio_start_response(id: u64, payload: &Value, manager: Option<&audio::AudioManager>) -> IpcResponse {
+    let result = match manager {
+        Some(manager) => manager.start_capture(payload),
+        None => audio::start_capture(payload),
+    };
+    match result {
+        Ok(value) => IpcResponse::success(id, value),
+        Err(error) => IpcResponse::error(id, error),
+    }
+}
+
+// The Rust shell has no trusted-document check or user-selected file allowlist.
+// Deny reads until both are implemented; do not trust paths supplied by a page.
+fn deny_theme_local_files(payload: &Value) -> Value {
+    let paths = payload.get("paths").unwrap_or(payload);
+    Value::Array(paths.as_array().into_iter().flatten().filter_map(Value::as_str)
+        .map(|path| json!({"path": path, "error": "not_allowed"}))
+        .collect())
+}
+
+fn input_hook_response(id: u64, command: &str, payload: &Value, manager: Option<&crate::input_hook::InputHookManager>) -> IpcResponse {
+    match manager {
+        Some(manager) => match manager.handle_request(command, payload) {
+            Ok(value) => IpcResponse::success(id, value),
+            Err(error) => IpcResponse::error(id, error),
+        },
+        None => IpcResponse::error(id, "Global input hook unavailable"),
+    }
+}
+
 /// 들어온 IPC 요청을 해석하고 처리 결과를 반환합니다.
 pub fn handle_ipc_request(
     req: IpcRequest,
@@ -77,18 +136,7 @@ pub fn handle_ipc_request(
             }),
         ),
 
-        "getGpuInfo" => IpcResponse::success(
-            id,
-            json!({
-                "devices": [{
-                    "active": true,
-                    "vendorId": 0x10de,
-                    "deviceId": 0x1234,
-                    "deviceString": "Direct3D 11 / WebView2 Hardware Accelerated",
-                    "source": "dxgi"
-                }]
-            }),
-        ),
+        "getGpuInfo" => IpcResponse::success(id, gpu_info()),
 
         "getAppMetrics" => {
             let pid = std::process::id();
@@ -380,7 +428,6 @@ pub fn handle_ipc_request(
 
                 let client = match reqwest::blocking::Client::builder()
                     .timeout(Duration::from_secs(8))
-                    .danger_accept_invalid_certs(true)
                     .build()
                 {
                     Ok(c) => c,
@@ -480,7 +527,6 @@ pub fn handle_ipc_request(
 
             let client = match reqwest::blocking::Client::builder()
                 .timeout(Duration::from_secs(15))
-                .danger_accept_invalid_certs(true)
                 .build()
             {
                 Ok(c) => c,
@@ -849,11 +895,7 @@ pub fn handle_ipc_request(
         }
 
         "nativeAudioStart" | "native-audio:start" => {
-            let res = match audio {
-                Some(am) => am.start_capture(&req.payload),
-                None => audio::start_capture(&req.payload),
-            };
-            IpcResponse::success(id, res)
+            native_audio_start_response(id, &req.payload, audio.map(AsRef::as_ref))
         }
 
         "nativeAudioStop" | "native-audio:stop" => {
@@ -887,30 +929,11 @@ pub fn handle_ipc_request(
         // 테마 관리 API (desktopThemes)
         // =========================================================
         "importThemeDirectory" | "theme-directory:import" => {
-            let dir_path = req.payload.get("path").and_then(Value::as_str)
-                .or_else(|| req.payload.as_str())
-                .unwrap_or_default();
-            let files = crate::theme_watch::ThemeWatcher::scan_css_files(std::path::Path::new(dir_path));
-            IpcResponse::success(id, json!(files))
+            IpcResponse::error(id, "Theme folder import is unavailable until trusted file selection is implemented")
         }
 
         "readThemeLocalFiles" | "theme-files:read" => {
-            let paths: Vec<String> = req.payload.get("paths")
-                .or_else(|| req.payload.as_array().map(|_| &req.payload))
-                .and_then(Value::as_array)
-                .map(|arr| arr.iter().filter_map(Value::as_str).map(String::from).collect())
-                .unwrap_or_default();
-
-            let mut results = Vec::new();
-            for p_str in paths {
-                let p = std::path::Path::new(&p_str);
-                let content = std::fs::read_to_string(p).unwrap_or_default();
-                results.push(json!({
-                    "path": p_str,
-                    "css": content
-                }));
-            }
-            IpcResponse::success(id, Value::Array(results))
+            IpcResponse::success(id, deny_theme_local_files(&req.payload))
         }
 
         // =========================================================
@@ -948,58 +971,9 @@ pub fn handle_ipc_request(
         // =========================================================
         // 전역 단축키 및 PTT 입력 훅 API (globalKeyHook / globalShortcuts)
         // =========================================================
-        "globalKeyHookStart" | "global-key-hook-start" => {
-            match input_hook {
-                Some(hook) => IpcResponse::success(id, json!(hook.start())),
-                None => IpcResponse::success(id, json!(false)),
-            }
-        }
-
-        "globalKeyHookStop" | "global-key-hook-stop" => {
-            if let Some(hook) = input_hook {
-                hook.stop();
-            }
-            IpcResponse::success(id, json!({}))
-        }
-
-        "globalKeyHookRegister" | "global-key-hook-register" => {
-            if let Some(hook) = input_hook
-                && let Ok(opts) = serde_json::from_value::<crate::contracts::GlobalKeyHookRegisterOptions>(req.payload)
-            {
-                hook.register(opts);
-            }
-            IpcResponse::success(id, json!({}))
-        }
-
-        "globalKeyHookUnregister" | "global-key-hook-unregister" => {
-            let hook_id = req.payload.get("id").and_then(Value::as_str)
-                .or_else(|| req.payload.as_str())
-                .unwrap_or("");
-            if let Some(hook) = input_hook {
-                hook.unregister(hook_id);
-            }
-            IpcResponse::success(id, json!({}))
-        }
-
-        "globalKeyHookUnregisterAll" | "global-key-hook-unregister-all" => {
-            if let Some(hook) = input_hook {
-                hook.unregister_all();
-            }
-            IpcResponse::success(id, json!({}))
-        }
-
-        "globalShortcutsGetStatus" | "global-shortcuts:get-status" => {
-            match input_hook {
-                Some(hook) => IpcResponse::success(id, json!(hook.get_status())),
-                None => IpcResponse::success(id, json!({
-                    "supported": false,
-                    "hasAccess": false,
-                    "directInputEnabled": false,
-                    "directInputAvailable": false,
-                    "isCapturing": false,
-                    "mode": "native"
-                })),
-            }
+        command if command.starts_with("globalShortcuts") || command.starts_with("global-shortcuts:")
+            || command.starts_with("globalKeyHook") || command.starts_with("global-key-hook-") => {
+            input_hook_response(id, command, &req.payload, input_hook.map(Arc::as_ref))
         }
 
         unknown => {
@@ -1014,6 +988,34 @@ pub fn handle_ipc_request(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn gpu_info_reports_real_dxgi_adapters_without_claiming_active_device() {
+        let native = fluxer_platform_info::get_gpu_info();
+        let result = gpu_info();
+        let devices = result["devices"].as_array().unwrap();
+        assert_eq!(devices.len(), native.devices.len());
+        for (reported, adapter) in devices.iter().zip(native.devices.iter()) {
+            assert_eq!(reported["vendorId"], adapter.vendor_id);
+            assert_eq!(reported["deviceId"], adapter.device_id);
+            assert_eq!(reported["active"], false);
+            println!("DXGI adapter: {:04x}:{:04x}", adapter.vendor_id, adapter.device_id);
+        }
+        println!("DXGI adapters reported: {}", devices.len());
+    }
+
+    #[test]
+    fn unapproved_theme_paths_are_denied_without_file_contents() {
+        let result = deny_theme_local_files(&json!({"paths": ["C:\\unapproved.css", 17, "../other.css"]}));
+        assert_eq!(result, json!([
+            {"path": "C:\\unapproved.css", "error": "not_allowed"},
+            {"path": "../other.css", "error": "not_allowed"}
+        ]));
+        assert_eq!(deny_theme_local_files(&json!(["file.css"])), json!([
+            {"path": "file.css", "error": "not_allowed"}
+        ]));
+    }
 
     #[test]
     fn test_ipc_envelope_parsing() {
@@ -1052,8 +1054,16 @@ mod tests {
     #[test]
     fn test_native_audio_ipc_availability() {
         let avail = audio::get_availability();
-        assert_eq!(avail["available"], true);
-        assert_eq!(avail["backend"], "windows-wasapi-loopback");
+        assert_eq!(avail["available"], cfg!(windows));
+        assert_eq!(avail["backend"], if cfg!(windows) { "windows-wasapi-loopback" } else { "none" });
+    }
+
+    #[test]
+    fn native_audio_start_failure_returns_error_envelope() {
+        let response = native_audio_start_response(42, &json!({"targetPid": 0}), None);
+        assert_eq!(response.id, 42);
+        assert_eq!(response.result, Value::Null);
+        assert!(response.error.as_deref().is_some_and(|error| error.contains(if cfg!(windows) { "target PID" } else { "unavailable" })));
     }
 
     #[test]
@@ -1149,7 +1159,7 @@ mod tests {
     fn test_global_shortcuts_status_ipc() {
         let hook_mgr = crate::input_hook::InputHookManager::new(Arc::new(|_, _| {}));
         let status = hook_mgr.get_status();
-        assert_eq!(status.has_access, true);
-        assert_eq!(status.mode, "native");
+        assert!(!status.hooks_active);
+        assert!(status.hook_error.is_none());
     }
 }

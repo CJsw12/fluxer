@@ -2058,6 +2058,7 @@ dependencies = [
  "anyhow",
  "arboard",
  "base64 0.22.1",
+ "fluxer_platform_info",
  "fluxer_win_process_loopback",
  "fluxer_win_shell",
  "fluxer_windows_input_hook",
@@ -2079,6 +2080,16 @@ dependencies = [
  "windows-sys 0.61.2",
  "winres",
  "wry",
+]
+
+[[package]]
+name = "fluxer_platform_info"
+version = "0.0.0"
+dependencies = [
+ "objc2",
+ "objc2-foundation",
+ "objc2-metal",
+ "windows 0.62.2",
 ]
 
 [[package]]

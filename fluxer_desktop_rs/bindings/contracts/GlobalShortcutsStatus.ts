@@ -3,4 +3,4 @@
 /**
  * 전역 단축키 상태 DTO (`packages/desktop_ipc/src/GlobalShortcutsContract.ts`)
  */
-export type GlobalShortcutsStatus = { supported: boolean, hasAccess: boolean, directInputEnabled: boolean, directInputAvailable: boolean, isCapturing: boolean, mode: string, };
+export type GlobalShortcutsStatus = { backend: string, platform: string, linux: null | null, hooksActive: boolean, hookError: string | null, supportsMouseButtons: boolean, supportsModifierOnly: boolean, };

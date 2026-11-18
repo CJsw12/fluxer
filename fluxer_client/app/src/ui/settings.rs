@@ -43,6 +43,8 @@ impl ClientView {
             SettingsEffect::LocaleChanged(code) => self.settings_set_locale(&code, cx),
             SettingsEffect::NotificationsChanged(enabled) => self.settings_set_notifications(enabled, cx),
             SettingsEffect::SoundsChanged(enabled) => self.settings_set_sounds(enabled, cx),
+            SettingsEffect::AutostartChanged(enabled) => self.settings_set_autostart(enabled, cx),
+            SettingsEffect::CloseToTrayChanged(enabled) => self.settings_set_close_to_tray(enabled, cx),
             SettingsEffect::LogOutRequested => {
                 self.close_overlay(window, cx);
                 self.log_out(cx);
@@ -70,6 +72,23 @@ impl ClientView {
     pub(crate) fn settings_set_sounds(&mut self, enabled: bool, cx: &mut Context<Self>) {
         self.prefs.set_sounds(enabled);
         self.notifier.sounds_enabled = enabled;
+        cx.notify();
+    }
+
+    pub(crate) fn settings_set_autostart(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        if let Err(err) = crate::platform::set_autostart_enabled(enabled) {
+            tracing::warn!(error = %format!("{err:#}"), "could not update autostart setting");
+            self.error = Some(l10n::tr("Something went wrong. Try again.").into());
+            cx.notify();
+            return;
+        }
+        self.prefs.set_autostart(enabled);
+        cx.notify();
+    }
+
+    pub(crate) fn settings_set_close_to_tray(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        self.prefs.set_close_to_tray(enabled);
+        crate::tray::set_close_to_tray(enabled);
         cx.notify();
     }
 
@@ -146,9 +165,37 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
                 })),
         );
 
+    let autostart_row = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_between()
+        .child(div().text_sm().child(l10n::tr("Desktop startup")))
+        .child(
+            Switch::new("settings-autostart")
+                .checked(view.prefs.data.autostart)
+                .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                    this.apply_settings_effect(SettingsEffect::AutostartChanged(*checked), window, cx);
+                })),
+        );
+
+    let close_to_tray_row = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_between()
+        .child(div().text_sm().child(l10n::tr("Minimize to tray")))
+        .child(
+            Switch::new("settings-close-to-tray")
+                .checked(view.prefs.data.close_to_tray)
+                .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                    this.apply_settings_effect(SettingsEffect::CloseToTrayChanged(*checked), window, cx);
+                })),
+        );
+
     let locale_list = div()
         .id("settings-locale-list")
-        .max_h(px(180.))
+        .max_h(px(140.))
         .overflow_y_scroll()
         .track_scroll(&modal.locale_scroll)
         .rounded(px(6.))
@@ -273,6 +320,17 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
                 .child(notifications_row)
                 .child(sounds_row),
         )
+        .when(cfg!(any(target_os = "windows", test)), |d| {
+            d.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(section_heading(l10n::tr("Startup"), theme))
+                    .child(autostart_row)
+                    .child(close_to_tray_row),
+            )
+        })
         .child(
             div()
                 .flex()

@@ -701,7 +701,7 @@ fn user_panel_follows_user_and_gateway(cx: &mut TestAppContext) {
 
 #[test]
 fn args_parse() {
-    let parsed = parse_args(["--token-env", "FLUXER_TOKEN", "--instance", "localhost:8080", "--allow-insecure-loopback"]
+    let parsed = parse_args(["--token-env", "FLUXER_TOKEN", "--instance", "localhost:8080", "--allow-insecure-loopback", "--autostart"]
         .map(String::from))
     .expect("args");
     assert_eq!(
@@ -709,7 +709,8 @@ fn args_parse() {
         Args {
             instance: Some("localhost:8080".to_owned()),
             token_env: Some("FLUXER_TOKEN".to_owned()),
-            allow_insecure_loopback: true
+            allow_insecure_loopback: true,
+            autostart: true,
         }
     );
     assert!(parse_args(["--token-env".to_owned()]).is_err());

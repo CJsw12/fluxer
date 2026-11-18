@@ -2,7 +2,7 @@
 //! Fluxer desktop client (GPUI). Usage:
 //!
 //! ```text
-//! fluxer_client [--instance <address>] [--token-env <VAR>] [--allow-insecure-loopback]
+//! fluxer_client [--instance <address>] [--token-env <VAR>] [--allow-insecure-loopback] [--autostart]
 //! ```
 //!
 //! Without `--token-env`, logins are saved (encrypted) in the session store
@@ -32,6 +32,7 @@ mod root;
 mod settings_model;
 mod shortcuts;
 mod theme;
+mod tray;
 mod ui;
 mod view_model;
 
@@ -64,6 +65,7 @@ struct Args {
     instance: Option<String>,
     token_env: Option<String>,
     allow_insecure_loopback: bool,
+    autostart: bool,
 }
 
 fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args> {
@@ -74,6 +76,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args> {
             "--instance" => out.instance = Some(args.next().context("--instance needs a value")?),
             "--token-env" => out.token_env = Some(args.next().context("--token-env needs a variable name")?),
             "--allow-insecure-loopback" => out.allow_insecure_loopback = true,
+            "--autostart" => out.autostart = true,
             other => bail!("unknown argument: {other}"),
         }
     }
@@ -106,6 +109,7 @@ fn run() -> Result<()> {
     };
     let instance = args.instance.clone().unwrap_or_else(|| login::DEFAULT_INSTANCE.to_owned());
     let insecure = args.allow_insecure_loopback;
+    let autostart_launch = args.autostart;
 
     // Network work (discovery, REST, gateway) runs here; the UI awaits it.
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -126,10 +130,12 @@ fn run() -> Result<()> {
         Some(Ok(s)) => Some(prefs::PrefsStore::open(s.dir().join(prefs::FILE_NAME))),
         _ => None,
     };
-    if let Some(prefs) = &initial_prefs
-        && std::env::var_os("FLUXER_LOCALE").is_none()
-    {
-        ui::l10n::set_locale(&prefs.data.locale);
+    if let Some(prefs) = &initial_prefs {
+        tray::set_close_to_tray(prefs.data.close_to_tray);
+        platform::sync_autostart_on_startup(prefs.data.autostart);
+        if std::env::var_os("FLUXER_LOCALE").is_none() {
+            ui::l10n::set_locale(&prefs.data.locale);
+        }
     }
     let initial_theme = if std::env::var_os("FLUXER_THEME").is_some() {
         theme::ThemeKind::from_env()
@@ -158,16 +164,33 @@ fn run() -> Result<()> {
         let opened = gpui_kit::open_window(options, cx, |window, cx| {
             // Make the gpui-kit widgets (inputs, buttons, scrollbars) follow the app theme.
             theme::apply(initial_theme, window, cx);
-            cx.new(|cx| match (token, store) {
+            window.on_window_should_close(cx, |window, _cx| {
+                if tray::should_intercept_close() {
+                    window.minimize_window();
+                    false
+                } else {
+                    true
+                }
+            });
+            let root = cx.new(|cx| match (token, store) {
                 (Some(token), _) => AppRoot::new_with_token(handle, insecure, instance, token, window, cx),
                 (None, Some(store)) => AppRoot::new_session(handle, insecure, store, window, cx),
                 (None, None) => {
                     AppRoot::new_session(handle, insecure, Err(SessionError::NoDataDir), window, cx)
                 }
-            })
+            });
+            tray::install(window.window_handle(), root.downgrade(), cx);
+            if autostart_launch && tray::close_to_tray() && tray::is_active() {
+                window.minimize_window();
+            }
+            root
         });
         match opened {
-            Ok(_) => cx.activate(true),
+            Ok(_) => {
+                if !autostart_launch {
+                    cx.activate(true);
+                }
+            }
             Err(err) => {
                 *open_error_slot.borrow_mut() = Some(format!("{err:#}"));
                 cx.quit();

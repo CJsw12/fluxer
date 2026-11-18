@@ -22,6 +22,52 @@ const MAX_LOG_BYTES: u64 = 8 * 1024 * 1024;
 #[cfg(target_os = "windows")]
 const SHORTCUT_FILE_NAME: &str = "Fluxer Client.lnk";
 
+/// Registry subkey under `HKEY_CURRENT_USER` holding per-user startup items.
+#[cfg_attr(test, allow(dead_code))]
+pub const RUN_REGISTRY_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
+
+/// Formats the HKCU `Run` command for launching `exe` in autostart mode.
+pub fn format_autostart_command(exe: &std::path::Path) -> String {
+    format!("\"{}\" --autostart", exe.display())
+}
+
+/// Registers or removes the per-user Windows `Run` entry for Fluxer.
+pub fn set_autostart_enabled(enabled: bool) -> anyhow::Result<()> {
+    #[cfg(all(target_os = "windows", not(test)))]
+    {
+        use anyhow::Context as _;
+
+        let key = windows_registry::CURRENT_USER
+            .create(RUN_REGISTRY_KEY)
+            .context("could not open HKCU Run registry key")?;
+        if enabled {
+            let exe = std::env::current_exe().context("could not locate the running executable")?;
+            key.set_string(APP_USER_MODEL_ID, &format_autostart_command(&exe))
+                .context("could not write the autostart Run value")?;
+        } else if key.get_value(APP_USER_MODEL_ID).is_ok() {
+            key.remove_value(APP_USER_MODEL_ID)
+                .context("could not remove the autostart Run value")?;
+        }
+        Ok(())
+    }
+    #[cfg(not(all(target_os = "windows", not(test))))]
+    {
+        let _ = enabled;
+        Ok(())
+    }
+}
+
+/// Refreshes the autostart registry entry on startup when enabled, keeping the
+/// registered executable path up to date if the binary was moved.
+pub fn sync_autostart_on_startup(enabled: bool) {
+    if !enabled {
+        return;
+    }
+    if let Err(err) = set_autostart_enabled(true) {
+        tracing::warn!(error = %format!("{err:#}"), "could not refresh the autostart Run value");
+    }
+}
+
 /// Installs the file logger, sets the process AUMID, and ensures the Start menu
 /// shortcut exists. Called once at the very start of `main`, before the window.
 pub fn init() {
@@ -337,5 +383,21 @@ mod logging {
                 let _ = write!(self.line, " {}={value:?}", field.name());
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::*;
+
+    #[test]
+    fn format_autostart_command_quotes_paths_with_spaces() {
+        let exe = Path::new(r"C:\Program Files\Fluxer Client\fluxer_client.exe");
+        assert_eq!(
+            format_autostart_command(exe),
+            r#""C:\Program Files\Fluxer Client\fluxer_client.exe" --autostart"#
+        );
     }
 }

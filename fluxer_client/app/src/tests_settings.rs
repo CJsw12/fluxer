@@ -81,10 +81,12 @@ fn settings_modal_updates_theme_switches_locale_and_logs_out(cx: &mut TestAppCon
         cx.update(|_window, cx| Theme::black(cx).background)
     );
 
-    // Switches mirror notifier.enabled and notifier.sounds_enabled
+    // Switches mirror notifier.enabled, notifier.sounds_enabled, autostart, and close_to_tray
     view.update(cx, |v, cx| {
         v.settings_set_notifications(false, cx);
         v.settings_set_sounds(false, cx);
+        v.settings_set_autostart(true, cx);
+        v.settings_set_close_to_tray(false, cx);
     });
     cx.run_until_parked();
     view.read_with(cx, |v, _| {
@@ -92,6 +94,8 @@ fn settings_modal_updates_theme_switches_locale_and_logs_out(cx: &mut TestAppCon
         assert!(!v.notifier.sounds_enabled);
         assert!(!v.prefs.data.notifications);
         assert!(!v.prefs.data.sounds);
+        assert!(v.prefs.data.autostart);
+        assert!(!v.prefs.data.close_to_tray);
     });
 
     // Switch locale to Korean

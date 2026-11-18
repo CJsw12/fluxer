@@ -1,6 +1,6 @@
 //! Device-local client preferences (`prefs.json`), kept next to the session
-//! store. The file holds only the theme, notification/sound switches and the
-//! locale; it never contains account tokens.
+//! store. The file holds only theme, notification/sound, autostart/tray
+//! switches and the locale; it never contains account tokens.
 
 use std::path::{Path, PathBuf};
 
@@ -17,6 +17,8 @@ pub struct Prefs {
     pub notifications: bool,
     pub sounds: bool,
     pub locale: String,
+    pub autostart: bool,
+    pub close_to_tray: bool,
 }
 
 impl Default for Prefs {
@@ -30,6 +32,8 @@ impl Default for Prefs {
             } else {
                 fluxer_client_i18n::I18n::from_system().locale().to_owned()
             },
+            autostart: false,
+            close_to_tray: true,
         }
     }
 }
@@ -55,6 +59,14 @@ impl Prefs {
                 .and_then(Value::as_str)
                 .map(str::to_owned)
                 .unwrap_or(default.locale),
+            autostart: value
+                .get("autostart")
+                .and_then(Value::as_bool)
+                .unwrap_or(default.autostart),
+            close_to_tray: value
+                .get("close_to_tray")
+                .and_then(Value::as_bool)
+                .unwrap_or(default.close_to_tray),
         }
     }
 
@@ -64,6 +76,8 @@ impl Prefs {
             "notifications": self.notifications,
             "sounds": self.sounds,
             "locale": self.locale,
+            "autostart": self.autostart,
+            "close_to_tray": self.close_to_tray,
         })
     }
 }
@@ -119,6 +133,16 @@ impl PrefsStore {
         self.persist();
     }
 
+    pub fn set_autostart(&mut self, enabled: bool) {
+        self.data.autostart = enabled;
+        self.persist();
+    }
+
+    pub fn set_close_to_tray(&mut self, enabled: bool) {
+        self.data.close_to_tray = enabled;
+        self.persist();
+    }
+
     /// A failed save is only logged: prefs stay valid in memory.
     fn persist(&self) {
         if let Err(err) = self.save() {
@@ -171,6 +195,8 @@ mod tests {
                 notifications: theme != ThemeKind::Light,
                 sounds: theme == ThemeKind::Black,
                 locale: "ko".to_owned(),
+                autostart: theme == ThemeKind::Darker,
+                close_to_tray: theme != ThemeKind::System,
             };
             store.save().expect("save");
             let loaded = PrefsStore::open(path.clone());
@@ -220,6 +246,26 @@ mod tests {
     }
 
     #[test]
+    fn legacy_four_key_json_uses_tray_and_autostart_defaults() {
+        let dir = temp_dir("legacy-four-keys");
+        std::fs::create_dir_all(&dir).expect("dir");
+        let path = dir.join(FILE_NAME);
+        std::fs::write(
+            &path,
+            br#"{"theme":"light","notifications":false,"sounds":true,"locale":"ko"}"#,
+        )
+        .expect("write");
+        let store = PrefsStore::open(path);
+        assert_eq!(store.data.theme, ThemeKind::Light);
+        assert!(!store.data.notifications);
+        assert!(store.data.sounds);
+        assert_eq!(store.data.locale, "ko");
+        assert!(!store.data.autostart);
+        assert!(store.data.close_to_tray);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn serialized_json_has_no_token_keys() {
         let dir = temp_dir("no-tokens");
         let path = dir.join(FILE_NAME);
@@ -233,8 +279,8 @@ mod tests {
             .keys()
             .map(String::as_str)
             .collect();
-        assert_eq!(keys.len(), 4);
-        for key in ["theme", "notifications", "sounds", "locale"] {
+        assert_eq!(keys.len(), 6);
+        for key in ["theme", "notifications", "sounds", "locale", "autostart", "close_to_tray"] {
             assert!(keys.contains(&key), "{key}");
         }
         for forbidden in ["token", "password", "secret"] {

@@ -280,6 +280,7 @@ impl ClientView {
     pub(crate) fn apply_prefs(&mut self, prefs: PrefsStore, window: &mut Window, cx: &mut Context<Self>) {
         self.notifier.enabled = prefs.data.notifications;
         self.notifier.sounds_enabled = prefs.data.sounds;
+        crate::tray::set_close_to_tray(prefs.data.close_to_tray);
         if std::env::var_os("FLUXER_THEME").is_none() {
             theme::set_kind(prefs.data.theme, cx);
             theme::apply(prefs.data.theme, window, cx);

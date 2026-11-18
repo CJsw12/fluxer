@@ -33,9 +33,12 @@ notify-rust = "4.19"
 # Message sounds (bundled mp3/ogg from fluxer_app/src/media/sounds).
 rodio = { version = "0.23", default-features = false, features = ["playback", "mp3", "vorbis"] }
 
+[target.'cfg(windows)'.dependencies]
+# System tray icon and HKCU Run autostart registry access (cached locally).
+tray-icon = { version = "0.20", default-features = false }
+windows-registry = "0.6.1"
 # Win32 AUMID, Start menu shortcut and fatal-error dialog. The version is the
 # copy already in the lockfile (transitive via gpui-pre).
-[target.'cfg(windows)'.dependencies]
 windows = { version = "0.62.2", features = [
     "Win32_Foundation",
     "Win32_System_Com",

@@ -79,6 +79,8 @@ pub enum SettingsEffect {
     LocaleChanged(String),
     NotificationsChanged(bool),
     SoundsChanged(bool),
+    AutostartChanged(bool),
+    CloseToTrayChanged(bool),
     LogOutRequested,
 }
 

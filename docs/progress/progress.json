@@ -407,11 +407,11 @@
         },
         {
           "name": "릴리스 exe·아이콘",
-          "status": "partial"
+          "status": "done"
         },
         {
           "name": "콘솔 창 제거",
-          "status": "partial"
+          "status": "done"
         },
         {
           "name": "시작 메뉴·AUMID",
@@ -419,7 +419,7 @@
         },
         {
           "name": "트레이·자동 시작",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "파일 로그",

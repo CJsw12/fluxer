@@ -35,6 +35,9 @@ gpui_kit::actions!(
         ToggleQuickSwitcher,
         ToggleEmojiPicker,
         OpenSettings,
+        ZoomIn,
+        ZoomOut,
+        ZoomReset,
         MarkChannelRead,
         MarkGuildRead,
         SwitcherPrev,
@@ -76,6 +79,9 @@ fn bindings() -> Vec<KeyBinding> {
     out.push(KeyBinding::new("ctrl-k", ToggleQuickSwitcher, Some(IN_INPUT)));
     both(&mut out, "ctrl-e", ToggleEmojiPicker);
     both(&mut out, "ctrl-,", OpenSettings);
+    both(&mut out, "ctrl-=", ZoomIn);
+    both(&mut out, "ctrl--", ZoomOut);
+    both(&mut out, "ctrl-0", ZoomReset);
     both(&mut out, "shift-escape", MarkGuildRead);
     out.push(KeyBinding::new("escape", MarkChannelRead, Some(CONTEXT)));
     out.push(KeyBinding::new("ctrl-p", SwitcherPrev, Some(quick_switcher::CONTEXT)));
@@ -107,6 +113,9 @@ pub fn on_actions(root: Div, cx: &mut Context<ClientView>) -> Div {
         .on_action(cx.listener(|v, _: &ToggleQuickSwitcher, window, cx| v.toggle_quick_switcher(window, cx)))
         .on_action(cx.listener(|v, _: &ToggleEmojiPicker, window, cx| v.toggle_emoji_picker(window, cx)))
         .on_action(cx.listener(|v, _: &OpenSettings, window, cx| v.open_settings(window, cx)))
+        .on_action(cx.listener(|v, _: &ZoomIn, _, cx| v.step_ui_zoom(10, cx)))
+        .on_action(cx.listener(|v, _: &ZoomOut, _, cx| v.step_ui_zoom(-10, cx)))
+        .on_action(cx.listener(|v, _: &ZoomReset, _, cx| v.settings_set_zoom(100, cx)))
         .on_action(cx.listener(|v, _: &MarkChannelRead, window, cx| {
             if v.overlay.is_open() {
                 v.close_overlay(window, cx);
@@ -130,6 +139,6 @@ mod tests {
             let key = (format!("{:?}", b.keystrokes()), b.predicate().map(|p| p.to_string()));
             assert!(seen.insert(key.clone()), "{key:?} bound twice");
         }
-        assert_eq!(seen.len(), 50);
+        assert_eq!(seen.len(), 59);
     }
 }

@@ -462,10 +462,17 @@ impl EmbedCx {
     }
 }
 
-/// Opens `url` in the browser (http and https only).
-fn open_url(url: &str, cx: &mut App) {
-    if url.starts_with("https://") || url.starts_with("http://") {
-        cx.open_url(url);
+/// Opens `url` via the trusted-domain guard on `ClientView` (http/https only).
+fn open_url(url: &str, view: &WeakEntity<ClientView>, window: &mut gpui_kit::Window, cx: &mut App) {
+    if view.update(cx, |v, cx| v.open_external_url(url, window, cx)).is_err() {
+        #[cfg(not(test))]
+        if crate::trusted_domains::is_safe_non_http_uri(url) {
+            cx.open_url(url.trim());
+        } else if let Some((parsed, host)) = crate::trusted_domains::parse_external_http_url(url)
+            && crate::trusted_domains::is_trusted(&host, &[], &[])
+        {
+            cx.open_url(&parsed);
+        }
     }
 }
 

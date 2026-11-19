@@ -77,24 +77,24 @@
   <g><title>클립보드·드래그 업로드 : 부분</title><rect x="580" y="251.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="296.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">임베드·미디어</text>
   <rect x="270" y="285.0" width="190" height="10" rx="5" fill="#21262d"/>
-  <rect x="270" y="285.0" width="95.0" height="10" rx="5" fill="#58a6ff"/>
-  <text x="474" y="295.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">50%</text>
+  <rect x="270" y="285.0" width="126.7" height="10" rx="5" fill="#58a6ff"/>
+  <text x="474" y="295.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">67%</text>
   <g><title>임베드 모델(core) : 완료</title><rect x="510" y="285.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <g><title>임베드 카드 렌더 : 완료</title><rect x="524" y="285.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <g><title>GIF·동영상 미리보기 : 부분</title><rect x="538" y="285.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>미디어 뷰어 : 미착수</title><rect x="552" y="285.0" width="10" height="10" rx="2" fill="#484f58"/></g>
+  <g><title>미디어 뷰어 : 부분</title><rect x="552" y="285.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <g><title>스포일러·NSFW 가림 : 부분</title><rect x="566" y="285.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>신뢰 도메인 경고 : 미착수</title><rect x="580" y="285.0" width="10" height="10" rx="2" fill="#484f58"/></g>
+  <g><title>신뢰 도메인 경고 : 부분</title><rect x="580" y="285.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="330.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">설정·개인화</text>
   <rect x="270" y="319.0" width="190" height="10" rx="5" fill="#21262d"/>
-  <rect x="270" y="319.0" width="126.7" height="10" rx="5" fill="#58a6ff"/>
-  <text x="474" y="329.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">67%</text>
+  <rect x="270" y="319.0" width="142.5" height="10" rx="5" fill="#58a6ff"/>
+  <text x="474" y="329.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">75%</text>
   <g><title>다크 테마 : 완료</title><rect x="510" y="319.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <g><title>라이트 테마 : 완료</title><rect x="524" y="319.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <g><title>사용자 설정 모델·REST : 완료</title><rect x="538" y="319.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <g><title>사용자 패널 : 부분</title><rect x="552" y="319.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <g><title>설정 화면 : 부분</title><rect x="566" y="319.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>글꼴·밀도·확대 : 미착수</title><rect x="580" y="319.0" width="10" height="10" rx="2" fill="#484f58"/></g>
+  <g><title>글꼴·밀도·확대 : 부분</title><rect x="580" y="319.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="364.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">소셜(친구·DM·프로필)</text>
   <rect x="270" y="353.0" width="190" height="10" rx="5" fill="#21262d"/>
   <rect x="270" y="353.0" width="79.2" height="10" rx="5" fill="#58a6ff"/>

@@ -7,11 +7,11 @@ use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::Escape;
 use gpui_kit::component::switch::Switch;
-use gpui_kit::{AnyElement, Context, FontWeight, ScrollHandle, Window, div, prelude::*, px};
+use gpui_kit::{AnyElement, Context, FontWeight, ScrollHandle, SharedString, Window, div, prelude::*, px};
 
 use crate::client_view::ClientView;
-use crate::settings_model::{LOCALES, SettingsEffect, THEME_OPTIONS, theme_patch_value};
-use crate::theme::{self, Theme, ThemeKind};
+use crate::settings_model::{FONT_SIZE_OPTIONS, LOCALES, SettingsEffect, THEME_OPTIONS, theme_patch_value};
+use crate::theme::{self, MAX_FONT_SIZE, MAX_UI_ZOOM, MIN_FONT_SIZE, MIN_UI_ZOOM, Theme, ThemeKind};
 use crate::ui::overlay::Overlay;
 use crate::ui::{l10n, overlay};
 
@@ -45,6 +45,10 @@ impl ClientView {
             SettingsEffect::SoundsChanged(enabled) => self.settings_set_sounds(enabled, cx),
             SettingsEffect::AutostartChanged(enabled) => self.settings_set_autostart(enabled, cx),
             SettingsEffect::CloseToTrayChanged(enabled) => self.settings_set_close_to_tray(enabled, cx),
+            SettingsEffect::FontSizeChanged(size) => self.settings_set_font_size(size, cx),
+            SettingsEffect::ZoomChanged(zoom) => self.settings_set_zoom(zoom, cx),
+            SettingsEffect::CompactChanged(compact) => self.settings_set_compact(compact, cx),
+            SettingsEffect::ClearTrustedDomains => self.settings_clear_trusted_domains(cx),
             SettingsEffect::LogOutRequested => {
                 self.close_overlay(window, cx);
                 self.log_out(cx);
@@ -92,6 +96,45 @@ impl ClientView {
         cx.notify();
     }
 
+    pub(crate) fn settings_set_font_size(&mut self, size: u8, cx: &mut Context<Self>) {
+        let clamped = size.clamp(MIN_FONT_SIZE, MAX_FONT_SIZE);
+        self.prefs.set_font_size(clamped);
+        theme::set_display(self.prefs.data.display(), cx);
+        cx.notify();
+    }
+
+    pub(crate) fn settings_set_zoom(&mut self, zoom: u16, cx: &mut Context<Self>) {
+        let clamped = zoom.clamp(MIN_UI_ZOOM, MAX_UI_ZOOM);
+        self.prefs.set_ui_zoom(clamped);
+        theme::set_display(self.prefs.data.display(), cx);
+        cx.notify();
+    }
+
+    pub(crate) fn step_ui_zoom(&mut self, delta: i16, cx: &mut Context<Self>) {
+        let current = i16::try_from(self.prefs.data.ui_zoom).unwrap_or(100);
+        let next = (current + delta).clamp(MIN_UI_ZOOM as i16, MAX_UI_ZOOM as i16) as u16;
+        self.settings_set_zoom(next, cx);
+    }
+
+    pub(crate) fn settings_set_compact(&mut self, compact: bool, cx: &mut Context<Self>) {
+        self.prefs.set_compact(compact);
+        theme::set_display(self.prefs.data.display(), cx);
+        self.backend.update_user_settings(UserSettingsPatch {
+            message_display_compact: Some(compact),
+            ..Default::default()
+        });
+        cx.notify();
+    }
+
+    pub(crate) fn settings_clear_trusted_domains(&mut self, cx: &mut Context<Self>) {
+        self.prefs.clear_trusted_domains();
+        self.backend.update_user_settings(UserSettingsPatch {
+            trusted_domains: Some(Vec::new()),
+            ..Default::default()
+        });
+        cx.notify();
+    }
+
     pub(crate) fn settings_set_locale(&mut self, code: &str, cx: &mut Context<Self>) {
         let resolved = fluxer_client_i18n::resolve_locale(code);
         self.prefs.set_locale(resolved);
@@ -126,6 +169,8 @@ fn section_heading(title: String, theme: &Theme) -> impl IntoElement {
 pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
     let active_theme = theme::kind(cx);
     let active_locale = l10n::current().locale();
+    let display = view.prefs.data.display();
+    let trusted_count = view.effective_trusted_domains().len();
 
     let theme_buttons = THEME_OPTIONS.iter().enumerate().map(|(ix, (kind, label))| {
         let kind = *kind;
@@ -136,6 +181,78 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
             this.apply_settings_effect(SettingsEffect::ThemeChanged(kind), window, cx);
         }))
     });
+
+    let density_buttons = [(false, "Cozy", "settings-density-cozy"), (true, "Compact", "settings-density-compact")]
+        .into_iter()
+        .map(|(compact, label, sel_id)| {
+            let selected = display.compact == compact;
+            let mut btn = Button::new(sel_id).small().label(l10n::tr(label));
+            btn = if selected { btn.primary() } else { btn.ghost() };
+            div().debug_selector(move || sel_id.to_owned()).child(btn.on_click(cx.listener(move |this, _, window, cx| {
+                this.apply_settings_effect(SettingsEffect::CompactChanged(compact), window, cx);
+            })))
+        });
+
+    let font_buttons = FONT_SIZE_OPTIONS.iter().map(|&size| {
+        let selected = display.font_size == size;
+        let sel_id = format!("settings-font-{size}");
+        let btn_id = sel_id.clone();
+        let mut btn = Button::new(SharedString::from(btn_id)).small().label(format!("{size}px"));
+        btn = if selected { btn.primary() } else { btn.ghost() };
+        div().debug_selector(move || sel_id.clone()).child(btn.on_click(cx.listener(move |this, _, window, cx| {
+            this.apply_settings_effect(SettingsEffect::FontSizeChanged(size), window, cx);
+        })))
+    });
+
+    let zoom_controls = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_between()
+        .child(div().text_sm().child(l10n::tr("Zoom")))
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_1()
+                .child(
+                    div().debug_selector(|| "settings-zoom-out".to_owned()).child(
+                        Button::new("settings-zoom-out")
+                            .ghost()
+                            .small()
+                            .label("-")
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                let next = display.ui_zoom.saturating_sub(10).max(MIN_UI_ZOOM);
+                                this.apply_settings_effect(SettingsEffect::ZoomChanged(next), window, cx);
+                            })),
+                    ),
+                )
+                .child(div().px_2().text_xs().font_weight(FontWeight::SEMIBOLD).child(format!("{}%", display.ui_zoom)))
+                .child(
+                    div().debug_selector(|| "settings-zoom-in".to_owned()).child(
+                        Button::new("settings-zoom-in")
+                            .ghost()
+                            .small()
+                            .label("+")
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                let next = display.ui_zoom.saturating_add(10).min(MAX_UI_ZOOM);
+                                this.apply_settings_effect(SettingsEffect::ZoomChanged(next), window, cx);
+                            })),
+                    ),
+                )
+                .child(
+                    div().debug_selector(|| "settings-zoom-reset".to_owned()).child(
+                        Button::new("settings-zoom-reset")
+                            .ghost()
+                            .small()
+                            .label(l10n::tr("Reset"))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.apply_settings_effect(SettingsEffect::ZoomChanged(100), window, cx);
+                            })),
+                    ),
+                ),
+        );
 
     let notifications_row = div()
         .flex()
@@ -195,7 +312,7 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
 
     let locale_list = div()
         .id("settings-locale-list")
-        .max_h(px(140.))
+        .max_h(px(110.))
         .overflow_y_scroll()
         .track_scroll(&modal.locale_scroll)
         .rounded(px(6.))
@@ -277,32 +394,13 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
             .into_any_element()
     };
 
-    let content = div()
-        .id("settings-modal")
-        .key_context(CONTEXT)
-        .p_4()
+    let body = div()
+        .id("settings-body")
+        .max_h(px(380.))
+        .overflow_y_scroll()
         .flex()
         .flex_col()
-        .gap_4()
-        .capture_action(cx.listener(|this, _: &Escape, window, cx| {
-            cx.stop_propagation();
-            this.close_overlay(window, cx);
-        }))
-        .child(
-            div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .justify_between()
-                .child(div().text_lg().font_weight(FontWeight::BOLD).child(l10n::tr("Settings")))
-                .child(
-                    Button::new("settings-close")
-                        .ghost()
-                        .small()
-                        .label("✕")
-                        .on_click(cx.listener(|this, _, window, cx| this.close_overlay(window, cx))),
-                ),
-        )
+        .gap_3()
         .child(
             div()
                 .flex()
@@ -310,6 +408,46 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
                 .gap_2()
                 .child(section_heading(l10n::tr("Look and feel"), theme))
                 .child(div().flex().flex_row().flex_wrap().gap_2().children(theme_buttons)),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Display"), theme))
+                .child(div().flex().flex_row().flex_wrap().gap_2().children(density_buttons))
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(div().text_sm().child(l10n::tr("Font size")))
+                        .child(div().flex().flex_row().flex_wrap().gap_1().children(font_buttons)),
+                )
+                .child(zoom_controls)
+                .when(trusted_count > 0, |d| {
+                    d.child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_between()
+                            .child(div().text_sm().child(format!("{} ({trusted_count})", l10n::tr("Trusted domains"))))
+                            .child(
+                                div().debug_selector(|| "settings-clear-trusted".to_owned()).child(
+                                    Button::new("settings-clear-trusted")
+                                        .ghost()
+                                        .small()
+                                        .label(l10n::tr("Clear"))
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.apply_settings_effect(SettingsEffect::ClearTrustedDomains, window, cx);
+                                        })),
+                                ),
+                            ),
+                    )
+                }),
         )
         .child(
             div()
@@ -338,9 +476,40 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
                 .gap_2()
                 .child(section_heading(l10n::tr("Language"), theme))
                 .child(locale_list),
-        )
+        );
+
+    let content = div()
+        .id("settings-modal")
+        .key_context(CONTEXT)
+        .p_4()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .capture_action(cx.listener(|this, _: &Escape, window, cx| {
+            cx.stop_propagation();
+            this.close_overlay(window, cx);
+        }))
         .child(
             div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_between()
+                .child(div().text_lg().font_weight(FontWeight::BOLD).child(l10n::tr("Settings")))
+                .child(
+                    Button::new("settings-close")
+                        .ghost()
+                        .small()
+                        .label("✕")
+                        .on_click(cx.listener(|this, _, window, cx| this.close_overlay(window, cx))),
+                ),
+        )
+        .child(body)
+        .child(
+            div()
+                .pt_3()
+                .border_t_1()
+                .border_color(theme.border)
                 .flex()
                 .flex_col()
                 .gap_2()

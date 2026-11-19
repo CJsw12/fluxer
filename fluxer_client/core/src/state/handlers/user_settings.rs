@@ -29,6 +29,29 @@ pub struct UserSettings {
 }
 
 impl UserSettings {
+    /// Whether compact message display is enabled in `raw`.
+    pub fn message_display_compact(&self) -> bool {
+        self.raw
+            .get("message_display_compact")
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    }
+
+    /// Trusted external link domains configured by the user.
+    pub fn trusted_domains(&self) -> Vec<String> {
+        self.raw
+            .get("trusted_domains")
+            .and_then(Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     fn from_raw(raw: Value) -> Self {
         let text = |key: &str| raw.get(key).and_then(Value::as_str).map(str::to_owned);
         Self {
@@ -224,5 +247,30 @@ impl ClientState {
             .get(&guild_id)
             .and_then(|s| s.channel_overrides.get(&channel_id))
             .is_some_and(|o| mute_active(o.muted, o.mute_config.as_ref(), now_ms))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Dispatch;
+    use serde_json::json;
+
+    #[test]
+    fn compact_and_trusted_domains_read_from_user_settings_updates() {
+        let mut state = ClientState::new();
+        assert!(!state.user_settings.message_display_compact());
+        assert!(state.user_settings.trusted_domains().is_empty());
+
+        state.apply(&Dispatch {
+            t: "USER_SETTINGS_UPDATE".to_owned(),
+            s: 1,
+            d: json!({
+                "message_display_compact": true,
+                "trusted_domains": ["example.org", 42, "docs.rs"]
+            }),
+        });
+        assert!(state.user_settings.message_display_compact());
+        assert_eq!(state.user_settings.trusted_domains(), vec!["example.org", "docs.rs"]);
     }
 }

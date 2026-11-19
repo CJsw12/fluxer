@@ -9,6 +9,8 @@ pub mod guild_modal;
 pub mod guild_rail;
 pub mod header;
 pub mod l10n;
+pub mod link_warning;
+pub mod media_viewer;
 pub mod message_list;
 pub mod message_row;
 pub mod profile_popout;

@@ -247,7 +247,7 @@
         },
         {
           "name": "미디어 뷰어",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "스포일러·NSFW 가림",
@@ -255,7 +255,7 @@
         },
         {
           "name": "신뢰 도메인 경고",
-          "status": "todo"
+          "status": "partial"
         }
       ]
     },
@@ -285,7 +285,7 @@
         },
         {
           "name": "글꼴·밀도·확대",
-          "status": "todo"
+          "status": "partial"
         }
       ]
     },

@@ -111,20 +111,25 @@ fn render_system(row: &MessageRow, system: &SystemRow, theme: &Theme) -> AnyElem
     };
     let bold = HighlightStyle { color: Some(fg), font_weight: Some(FontWeight::SEMIBOLD), ..Default::default() };
     let text = StyledText::new(system.text.clone()).with_highlights(system.bold.iter().map(|r| (r.clone(), bold)));
+    let (icon_w, icon_pr) = if sizes.compact {
+        (20., 6.)
+    } else {
+        (sizes.gutter, sizes.gutter - sizes.avatar)
+    };
     div()
         .flex()
         .flex_row()
         .w_full()
         .px_4()
         .when(row.group_start, |d| d.pt(px(sizes.group_gap)))
-        .pb(px(2.))
+        .pb(px(if sizes.compact { 1. } else { 2. }))
         .child(
             div()
-                .w(px(sizes.gutter))
+                .w(px(icon_w))
                 .flex_none()
                 .flex()
                 .justify_center()
-                .pr(px(sizes.gutter - sizes.avatar))
+                .pr(px(icon_pr))
                 .text_color(icon_color)
                 .font_weight(FontWeight::BOLD)
                 .child(system.icon.glyph()),

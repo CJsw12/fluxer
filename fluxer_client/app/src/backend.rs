@@ -129,6 +129,8 @@ pub struct Backend {
     last_nonce: Arc<AtomicU64>,
     /// Instance media endpoint (avatars), from discovery.
     media: Option<Arc<str>>,
+    /// Hostnames belonging to the active Fluxer instance (trusted external links).
+    instance_hosts: Arc<[String]>,
     /// Window focus and viewed channel for the notification decision.
     focus: Arc<NotifyFocus>,
     /// Monotonic sequence counters so overlapping note/settings saves never
@@ -192,6 +194,20 @@ impl Backend {
         };
         let (mut backend, rx) = Self::new(runtime, instance.rest, Some(gateway));
         backend.media = instance.endpoints.media.as_deref().map(Arc::from);
+        let hosts = crate::trusted_domains::hosts_from_urls(
+            [
+                Some(instance.endpoints.api.as_str()),
+                Some(instance.endpoints.gateway.as_str()),
+                instance.endpoints.media.as_deref(),
+                instance.endpoints.static_cdn.as_deref(),
+                instance.endpoints.upload_relay.as_deref(),
+                instance.endpoints.invite.as_deref(),
+                instance.endpoints.webapp.as_deref(),
+            ]
+            .into_iter()
+            .flatten(),
+        );
+        backend.instance_hosts = Arc::from(hosts);
         backend.runtime.spawn(pump_gateway(
             gateway_events,
             backend.state.clone(),
@@ -217,6 +233,7 @@ impl Backend {
             gateway,
             last_nonce: Arc::new(AtomicU64::new(0)),
             media: None,
+            instance_hosts: Arc::from(Vec::new()),
             focus: Arc::default(),
             note_seq: Arc::new(AtomicU64::new(0)),
             settings_seq: Arc::new(AtomicU64::new(0)),
@@ -247,6 +264,15 @@ impl Backend {
 
     pub fn media(&self) -> Option<&str> {
         self.media.as_deref()
+    }
+
+    pub fn instance_hosts(&self) -> &[String] {
+        &self.instance_hosts
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_instance_hosts_for_test(&mut self, hosts: Vec<String>) {
+        self.instance_hosts = Arc::from(hosts);
     }
 
     /// Shared with the gateway task; the UI keeps it current.

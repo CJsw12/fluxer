@@ -181,6 +181,9 @@ pub struct ClientView {
     pub(crate) sent_files: BTreeMap<Snowflake, (Snowflake, Vec<ui::attachments::PendingAttachment>)>,
     /// Keeps the layout's key context reachable when nothing inside has focus.
     focus: FocusHandle,
+    /// Captured external URLs opened via `launch_external_url` in headless tests.
+    #[cfg(test)]
+    pub(crate) opened_urls: Vec<String>,
     _subscriptions: Vec<Subscription>,
     _events: Task<()>,
 }
@@ -318,6 +321,8 @@ impl ClientView {
             uploads: BTreeMap::new(),
             sent_files: BTreeMap::new(),
             focus: cx.focus_handle(),
+            #[cfg(test)]
+            opened_urls: Vec::new(),
             _subscriptions: subscriptions,
             _events: events_task,
         };
@@ -330,6 +335,7 @@ impl ClientView {
         self.notifier.enabled = prefs.data.notifications;
         self.notifier.sounds_enabled = prefs.data.sounds;
         crate::tray::set_close_to_tray(prefs.data.close_to_tray);
+        theme::set_display(prefs.data.display(), cx);
         if std::env::var_os("FLUXER_THEME").is_none() {
             theme::set_kind(prefs.data.theme, cx);
             theme::apply(prefs.data.theme, window, cx);
@@ -369,6 +375,8 @@ impl ClientView {
                 | Overlay::EmojiPicker(_)
                 | Overlay::JoinGuild(_)
                 | Overlay::LeaveGuild(_)
+                | Overlay::MediaViewer(_)
+                | Overlay::LinkWarning(_)
         );
         self.overlay = Overlay::None;
         if restore_composer {
@@ -590,6 +598,17 @@ impl ClientView {
             let state = self.backend.state();
             let joined_ready = self.pending_joined_guild.filter(|id| state.guilds.contains_key(id));
             let joined_channel_ready = self.pending_joined_channel.filter(|id| state.channels.contains_key(id));
+            if state.user_settings.raw.is_object() {
+                if state.user_settings.raw.get("message_display_compact").is_some() {
+                    let server_compact = state.user_settings.message_display_compact();
+                    if self.prefs.data.compact != server_compact {
+                        self.prefs.set_compact(server_compact);
+                    }
+                }
+                if state.user_settings.raw.get("trusted_domains").is_some() {
+                    self.prefs.set_trusted_domains(state.user_settings.trusted_domains());
+                }
+            }
             if let Place::Guild(id) = self.place
                 && !state.guilds.contains_key(&id)
             {
@@ -677,6 +696,7 @@ impl ClientView {
             self.refresh_open_profile();
             return;
         }
+        theme::sync_display_global(self.prefs.data.display(), cx);
         self.typing_text = typing_text;
         self._typing_timer = ui::typing::schedule_expiry(&self.backend, cx, Self::refresh);
         self.has_more_before = pane.has_more_before;
@@ -1311,6 +1331,8 @@ impl Render for ClientView {
             Overlay::Settings(modal) => Some(ui::settings::render(self, modal, &theme, cx)),
             Overlay::JoinGuild(modal) => Some(ui::guild_modal::render_join(modal, &theme, cx)),
             Overlay::LeaveGuild(modal) => Some(ui::guild_modal::render_leave(modal, &theme, cx)),
+            Overlay::MediaViewer(modal) => Some(ui::media_viewer::render(modal, &theme, cx)),
+            Overlay::LinkWarning(modal) => Some(ui::link_warning::render(modal, &theme, cx)),
             Overlay::None => None,
         };
         // Every image below without its own cache (avatars, custom emoji,

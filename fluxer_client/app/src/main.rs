@@ -33,6 +33,7 @@ mod settings_model;
 mod shortcuts;
 mod theme;
 mod tray;
+mod trusted_domains;
 mod ui;
 mod view_model;
 
@@ -42,6 +43,8 @@ mod tests;
 mod tests_emoji_picker;
 #[cfg(test)]
 mod tests_keyboard;
+#[cfg(test)]
+mod tests_media_display;
 #[cfg(test)]
 mod tests_notify_upload;
 #[cfg(test)]

@@ -7,7 +7,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context as _, Result};
 use serde_json::{Value, json};
 
-use crate::theme::ThemeKind;
+use crate::theme::{
+    DEFAULT_FONT_SIZE, DEFAULT_UI_ZOOM, DisplayPrefs, MAX_FONT_SIZE, MAX_UI_ZOOM, MIN_FONT_SIZE, MIN_UI_ZOOM, ThemeKind,
+};
+use crate::trusted_domains;
 
 pub const FILE_NAME: &str = "prefs.json";
 
@@ -19,6 +22,10 @@ pub struct Prefs {
     pub locale: String,
     pub autostart: bool,
     pub close_to_tray: bool,
+    pub font_size: u8,
+    pub ui_zoom: u16,
+    pub compact: bool,
+    pub trusted_domains: Vec<String>,
 }
 
 impl Default for Prefs {
@@ -34,13 +41,37 @@ impl Default for Prefs {
             },
             autostart: false,
             close_to_tray: true,
+            font_size: DEFAULT_FONT_SIZE,
+            ui_zoom: DEFAULT_UI_ZOOM,
+            compact: false,
+            trusted_domains: Vec::new(),
         }
     }
 }
 
 impl Prefs {
+    pub fn display(&self) -> DisplayPrefs {
+        DisplayPrefs {
+            font_size: self.font_size,
+            ui_zoom: self.ui_zoom,
+            compact: self.compact,
+        }
+        .clamped()
+    }
+
     fn from_value(value: &Value) -> Self {
         let default = Self::default();
+        let mut trusted_domains = Vec::new();
+        if let Some(items) = value.get("trusted_domains").and_then(Value::as_array) {
+            for item in items.iter().filter_map(Value::as_str) {
+                if trusted_domains::to_comparable_host(item) == trusted_domains::TRUST_ALL_PATTERN {
+                    trusted_domains.clear();
+                    trusted_domains.push(trusted_domains::TRUST_ALL_PATTERN.to_owned());
+                    break;
+                }
+                let _ = trusted_domains::add_trusted_domain(&mut trusted_domains, item);
+            }
+        }
         Self {
             theme: match value.get("theme").and_then(Value::as_str) {
                 Some(raw) => ThemeKind::parse(raw).unwrap_or(ThemeKind::Dark),
@@ -67,6 +98,23 @@ impl Prefs {
                 .get("close_to_tray")
                 .and_then(Value::as_bool)
                 .unwrap_or(default.close_to_tray),
+            font_size: value
+                .get("font_size")
+                .and_then(Value::as_u64)
+                .and_then(|n| u8::try_from(n).ok())
+                .unwrap_or(default.font_size)
+                .clamp(MIN_FONT_SIZE, MAX_FONT_SIZE),
+            ui_zoom: value
+                .get("ui_zoom")
+                .and_then(Value::as_u64)
+                .and_then(|n| u16::try_from(n).ok())
+                .unwrap_or(default.ui_zoom)
+                .clamp(MIN_UI_ZOOM, MAX_UI_ZOOM),
+            compact: value
+                .get("compact")
+                .and_then(Value::as_bool)
+                .unwrap_or(default.compact),
+            trusted_domains,
         }
     }
 
@@ -78,6 +126,10 @@ impl Prefs {
             "locale": self.locale,
             "autostart": self.autostart,
             "close_to_tray": self.close_to_tray,
+            "font_size": self.font_size.clamp(MIN_FONT_SIZE, MAX_FONT_SIZE),
+            "ui_zoom": self.ui_zoom.clamp(MIN_UI_ZOOM, MAX_UI_ZOOM),
+            "compact": self.compact,
+            "trusted_domains": self.trusted_domains,
         })
     }
 }
@@ -143,6 +195,44 @@ impl PrefsStore {
         self.persist();
     }
 
+    pub fn set_font_size(&mut self, font_size: u8) {
+        self.data.font_size = font_size.clamp(MIN_FONT_SIZE, MAX_FONT_SIZE);
+        self.persist();
+    }
+
+    pub fn set_ui_zoom(&mut self, ui_zoom: u16) {
+        self.data.ui_zoom = ui_zoom.clamp(MIN_UI_ZOOM, MAX_UI_ZOOM);
+        self.persist();
+    }
+
+    pub fn set_compact(&mut self, compact: bool) {
+        self.data.compact = compact;
+        self.persist();
+    }
+
+    pub fn add_trusted_domain(&mut self, host: &str) -> bool {
+        if trusted_domains::add_trusted_domain(&mut self.data.trusted_domains, host) {
+            self.persist();
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn clear_trusted_domains(&mut self) {
+        if !self.data.trusted_domains.is_empty() {
+            self.data.trusted_domains.clear();
+            self.persist();
+        }
+    }
+
+    pub fn set_trusted_domains(&mut self, domains: Vec<String>) {
+        if self.data.trusted_domains != domains {
+            self.data.trusted_domains = domains;
+            self.persist();
+        }
+    }
+
     /// A failed save is only logged: prefs stay valid in memory.
     fn persist(&self) {
         if let Err(err) = self.save() {
@@ -197,6 +287,14 @@ mod tests {
                 locale: "ko".to_owned(),
                 autostart: theme == ThemeKind::Darker,
                 close_to_tray: theme != ThemeKind::System,
+                font_size: if theme == ThemeKind::Light { 16 } else { 14 },
+                ui_zoom: if theme == ThemeKind::Black { 120 } else { 100 },
+                compact: theme == ThemeKind::Darker,
+                trusted_domains: if theme == ThemeKind::System {
+                    vec!["example.org".to_owned()]
+                } else {
+                    Vec::new()
+                },
             };
             store.save().expect("save");
             let loaded = PrefsStore::open(path.clone());
@@ -279,13 +377,49 @@ mod tests {
             .keys()
             .map(String::as_str)
             .collect();
-        assert_eq!(keys.len(), 6);
-        for key in ["theme", "notifications", "sounds", "locale", "autostart", "close_to_tray"] {
+        assert_eq!(keys.len(), 10);
+        for key in [
+            "theme",
+            "notifications",
+            "sounds",
+            "locale",
+            "autostart",
+            "close_to_tray",
+            "font_size",
+            "ui_zoom",
+            "compact",
+            "trusted_domains",
+        ] {
             assert!(keys.contains(&key), "{key}");
         }
         for forbidden in ["token", "password", "secret"] {
             assert!(!text.to_ascii_lowercase().contains(forbidden), "{forbidden}");
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn clamps_display_prefs_and_round_trips_trusted_domains() {
+        let dir = temp_dir("clamp-display");
+        std::fs::create_dir_all(&dir).expect("dir");
+        let path = dir.join(FILE_NAME);
+        std::fs::write(
+            &path,
+            br#"{"font_size":4,"ui_zoom":999,"compact":true,"trusted_domains":["Docs.RS.","bad host","docs.rs"]}"#,
+        )
+        .expect("write");
+        let mut store = PrefsStore::open(path.clone());
+        assert_eq!(store.data.font_size, MIN_FONT_SIZE);
+        assert_eq!(store.data.ui_zoom, MAX_UI_ZOOM);
+        assert!(store.data.compact);
+        assert_eq!(store.data.trusted_domains, vec!["docs.rs"]);
+
+        assert!(store.add_trusted_domain("example.com"));
+        assert!(!store.add_trusted_domain("EXAMPLE.COM"));
+        let reloaded = PrefsStore::open(path.clone());
+        assert_eq!(reloaded.data.trusted_domains, vec!["docs.rs", "example.com"]);
+        store.clear_trusted_domains();
+        assert!(PrefsStore::open(path).data.trusted_domains.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

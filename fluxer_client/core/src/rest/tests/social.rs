@@ -127,6 +127,7 @@ async fn settings_routes() {
         theme: Some("coal".into()),
         locale: Some("en-US".into()),
         guild_positions: Some(vec![GUILD.into()]),
+        ..UserSettingsPatch::default()
     };
     client.update_user_settings(&patch).await.unwrap();
     let clear = UserSettingsPatch { custom_status: Some(None), ..UserSettingsPatch::default() };

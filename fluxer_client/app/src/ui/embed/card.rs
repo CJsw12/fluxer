@@ -18,7 +18,11 @@ fn text_element(text: &EmbedText, id: SharedString, ecx: &EmbedCx) -> AnyElement
     match text {
         EmbedText::Plain(text) => div().child(text.clone()).into_any_element(),
         EmbedText::Markdown(document) => {
-            MessageMarkdown::new(id, document.clone()).style(markdown_style(&ecx.theme)).into_any_element()
+            let view = ecx.view.clone();
+            MessageMarkdown::new(id, document.clone())
+                .style(markdown_style(&ecx.theme))
+                .on_link_click(move |url, window, cx| open_url(url, &view, window, cx))
+                .into_any_element()
         }
     }
 }
@@ -29,12 +33,13 @@ fn link(text: &LinkText, id: SharedString, ecx: &EmbedCx) -> AnyElement {
     match &text.url {
         Some(url) => {
             let url = url.clone();
+            let view = ecx.view.clone();
             div()
                 .id(id)
                 .cursor_pointer()
                 .hover(|s| s.underline())
                 .child(element)
-                .on_click(move |_, _, cx| open_url(&url, cx))
+                .on_click(move |_, window, cx| open_url(&url, &view, window, cx))
                 .into_any_element()
         }
         None => element,

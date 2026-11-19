@@ -30,6 +30,67 @@ pub fn set_kind(kind: ThemeKind, cx: &mut App) {
     cx.refresh_windows();
 }
 
+pub const MIN_FONT_SIZE: u8 = 12;
+pub const MAX_FONT_SIZE: u8 = 24;
+pub const DEFAULT_FONT_SIZE: u8 = 14;
+pub const MIN_UI_ZOOM: u16 = 75;
+pub const MAX_UI_ZOOM: u16 = 150;
+pub const DEFAULT_UI_ZOOM: u16 = 100;
+
+/// User display preferences affecting typography, spacing density, and UI zoom.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DisplayPrefs {
+    pub font_size: u8,
+    pub ui_zoom: u16,
+    pub compact: bool,
+}
+
+impl Default for DisplayPrefs {
+    fn default() -> Self {
+        Self {
+            font_size: DEFAULT_FONT_SIZE,
+            ui_zoom: DEFAULT_UI_ZOOM,
+            compact: false,
+        }
+    }
+}
+
+impl DisplayPrefs {
+    pub fn clamped(self) -> Self {
+        Self {
+            font_size: self.font_size.clamp(MIN_FONT_SIZE, MAX_FONT_SIZE),
+            ui_zoom: self.ui_zoom.clamp(MIN_UI_ZOOM, MAX_UI_ZOOM),
+            compact: self.compact,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct DisplayGlobal(pub DisplayPrefs);
+
+impl Global for DisplayGlobal {}
+
+pub fn display(cx: &App) -> DisplayPrefs {
+    cx.try_global::<DisplayGlobal>().map_or_else(DisplayPrefs::default, |g| g.0)
+}
+
+pub fn set_display(prefs: DisplayPrefs, cx: &mut App) {
+    cx.set_global(DisplayGlobal(prefs.clamped()));
+    cx.refresh_windows();
+}
+
+/// Updates the global [`DisplayPrefs`] without triggering `refresh_windows`
+/// (used inside `ClientView::refresh` which already finishes with `cx.notify`).
+pub fn sync_display_global(prefs: DisplayPrefs, cx: &mut App) -> bool {
+    let clamped = prefs.clamped();
+    if display(cx) != clamped {
+        cx.set_global(DisplayGlobal(clamped));
+        true
+    } else {
+        false
+    }
+}
+
 /// Which palette to use.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThemeKind {
@@ -162,6 +223,7 @@ pub struct Sizes {
     pub channel_start_icon: f32,
     pub user_panel_avatar: f32,
     pub status_dot: f32,
+    pub compact: bool,
 }
 
 impl Sizes {
@@ -176,7 +238,33 @@ impl Sizes {
         channel_start_icon: 68.,
         user_panel_avatar: 32.,
         status_dot: 10.,
+        compact: false,
     };
+
+    /// Derives pixel dimensions from user font size, zoom percentage, and density mode.
+    pub fn for_display(display: DisplayPrefs) -> Self {
+        let display = display.clamped();
+        let zoom = f32::from(display.ui_zoom) / 100.0;
+        let scale = |v: f32| (v * zoom).round();
+        let (avatar, gutter, group_gap) = if display.compact {
+            (0., 0., scale(4.))
+        } else {
+            (scale(40.), scale(56.), scale(16.))
+        };
+        Self {
+            text: scale(f32::from(display.font_size)),
+            rail_width: scale(64.),
+            rail_button: scale(44.),
+            channel_list_width: scale(220.),
+            avatar,
+            gutter,
+            group_gap,
+            channel_start_icon: scale(68.),
+            user_panel_avatar: scale(32.),
+            status_dot: scale(10.),
+            compact: display.compact,
+        }
+    }
 }
 
 /// One HSL token: hue in degrees, saturation and lightness in percent.
@@ -345,7 +433,9 @@ impl Theme {
     }
 
     pub fn for_kind(kind: ThemeKind, cx: &App) -> Self {
-        Self::from_kind(kind.resolve(cx.window_appearance()))
+        let mut theme = Self::from_kind(kind.resolve(cx.window_appearance()));
+        theme.sizes = Sizes::for_display(display(cx));
+        theme
     }
 
     #[cfg_attr(not(test), allow(dead_code))]
@@ -510,5 +600,32 @@ mod tests {
                 assert_ne!(a.background, b.background);
             }
         }
+    }
+
+    #[test]
+    fn sizes_scale_with_zoom_and_compact_density() {
+        assert_eq!(Sizes::for_display(DisplayPrefs::default()), Sizes::DEFAULT);
+
+        let zoomed = Sizes::for_display(DisplayPrefs {
+            font_size: 16,
+            ui_zoom: 125,
+            compact: false,
+        });
+        assert_eq!(zoomed.text, 20.);
+        assert_eq!(zoomed.rail_width, 80.);
+        assert_eq!(zoomed.avatar, 50.);
+        assert_eq!(zoomed.gutter, 70.);
+        assert_eq!(zoomed.group_gap, 20.);
+        assert!(!zoomed.compact);
+
+        let compact = Sizes::for_display(DisplayPrefs {
+            font_size: 14,
+            ui_zoom: 100,
+            compact: true,
+        });
+        assert!(compact.compact);
+        assert_eq!(compact.avatar, 0.);
+        assert_eq!(compact.gutter, 0.);
+        assert_eq!(compact.group_gap, 4.);
     }
 }

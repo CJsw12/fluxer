@@ -74,6 +74,8 @@ pub const THEME_OPTIONS: &[(ThemeKind, &str)] = &[
     (ThemeKind::Black, "Coal"),
 ];
 
+pub const FONT_SIZE_OPTIONS: &[u8] = &[12, 14, 16, 18, 20];
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SettingsEffect {
     ThemeChanged(ThemeKind),
@@ -82,6 +84,10 @@ pub enum SettingsEffect {
     SoundsChanged(bool),
     AutostartChanged(bool),
     CloseToTrayChanged(bool),
+    FontSizeChanged(u8),
+    ZoomChanged(u16),
+    CompactChanged(bool),
+    ClearTrustedDomains,
     LogOutRequested,
 }
 

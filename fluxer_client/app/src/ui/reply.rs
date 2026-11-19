@@ -104,9 +104,14 @@ pub fn reply_preview_line(
     on_jump: impl Fn(Snowflake, Snowflake, &mut Window, &mut App) + 'static,
 ) -> AnyElement {
     let muted = theme.muted_foreground;
+    let (spine_w, spine_ml) = if theme.sizes.compact {
+        (12., 4.)
+    } else {
+        ((theme.sizes.gutter - theme.sizes.avatar / 2. - 4.).max(0.), theme.sizes.avatar / 2.)
+    };
     let spine = div()
-        .w(px(theme.sizes.gutter - theme.sizes.avatar / 2. - 4.))
-        .ml(px(theme.sizes.avatar / 2.))
+        .w(px(spine_w))
+        .ml(px(spine_ml))
         .mt(px(8.))
         .h(px(8.))
         .flex_none()

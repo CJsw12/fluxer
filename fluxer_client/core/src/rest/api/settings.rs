@@ -46,6 +46,12 @@ pub struct UserSettingsPatch {
     /// Ordered guild IDs of the sidebar.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub guild_positions: Option<Vec<String>>,
+    /// Compact message display mode (`UserSettings.message_display_compact`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_display_compact: Option<bool>,
+    /// Trusted external link domains (`UserSettings.trusted_domains`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub trusted_domains: Option<Vec<String>>,
 }
 
 /// `MuteConfigSchema`.
@@ -92,17 +98,31 @@ pub struct GuildSettingsPatch {
     pub channel_overrides: Option<Option<BTreeMap<String, ChannelOverride>>>,
 }
 
+fn validate_user_settings_patch(patch: &UserSettingsPatch) -> Result<(), RestError> {
+    if let Some(Some(status)) = &patch.custom_status
+        && let Some(id) = &status.emoji_id
+    {
+        check_snowflake(id, "emoji_id")?;
+    }
+    for id in patch.guild_positions.iter().flatten() {
+        check_snowflake(id, "guild_positions")?;
+    }
+    if let Some(domains) = &patch.trusted_domains {
+        if domains.len() > 1000
+            || domains
+                .iter()
+                .any(|d| d.is_empty() || d.len() > 253 || d.chars().any(char::is_control))
+        {
+            return Err(RestError::InvalidArgument("trusted_domains"));
+        }
+    }
+    Ok(())
+}
+
 impl RestClient {
     /// `PATCH /users/@me/settings` → `UserSettingsResponse`.
     pub async fn update_user_settings(&self, patch: &UserSettingsPatch) -> Result<Value, RestError> {
-        if let Some(Some(status)) = &patch.custom_status {
-            if let Some(id) = &status.emoji_id {
-                check_snowflake(id, "emoji_id")?;
-            }
-        }
-        for id in patch.guild_positions.iter().flatten() {
-            check_snowflake(id, "guild_positions")?;
-        }
+        validate_user_settings_patch(patch)?;
         let body = to_body(patch)?;
         self.request(Method::PATCH, "/users/@me/settings", &[], Some(&body), Auth::Required).await
     }
@@ -132,4 +152,48 @@ impl RestClient {
 
 fn to_body(patch: &impl Serialize) -> Result<Value, RestError> {
     serde_json::to_value(patch).map_err(|_| RestError::InvalidArgument("settings body"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn user_settings_patch_serializes_and_validates_trusted_domains() {
+        let patch = UserSettingsPatch {
+            message_display_compact: Some(true),
+            trusted_domains: Some(vec!["example.org".to_owned(), "*.fluxer.app".to_owned()]),
+            ..Default::default()
+        };
+        assert!(validate_user_settings_patch(&patch).is_ok());
+        let body = to_body(&patch).expect("serialize");
+        assert_eq!(
+            body,
+            serde_json::json!({ "message_display_compact": true, "trusted_domains": ["example.org", "*.fluxer.app"] })
+        );
+
+        let empty_entry = UserSettingsPatch {
+            trusted_domains: Some(vec!["".to_owned()]),
+            ..Default::default()
+        };
+        assert!(matches!(validate_user_settings_patch(&empty_entry), Err(RestError::InvalidArgument("trusted_domains"))));
+
+        let too_long = UserSettingsPatch {
+            trusted_domains: Some(vec!["a".repeat(254)]),
+            ..Default::default()
+        };
+        assert!(matches!(validate_user_settings_patch(&too_long), Err(RestError::InvalidArgument("trusted_domains"))));
+
+        let control_char = UserSettingsPatch {
+            trusted_domains: Some(vec!["bad\ndomain".to_owned()]),
+            ..Default::default()
+        };
+        assert!(matches!(validate_user_settings_patch(&control_char), Err(RestError::InvalidArgument("trusted_domains"))));
+
+        let too_many = UserSettingsPatch {
+            trusted_domains: Some(vec!["a.org".to_owned(); 1001]),
+            ..Default::default()
+        };
+        assert!(matches!(validate_user_settings_patch(&too_many), Err(RestError::InvalidArgument("trusted_domains"))));
+    }
 }

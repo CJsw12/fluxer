@@ -25,6 +25,7 @@ use gpui_kit::{
 
 use super::{EmbedCx, MediaKind, MediaView, open_url};
 use crate::ui::l10n;
+use crate::ui::media_viewer::{self, MediaViewerItem};
 
 /// Decoded embed images kept beyond this are dropped, least recently drawn
 /// first (frames x width x height x 4 bytes).
@@ -264,8 +265,18 @@ pub fn spoiler_cover(width: f32, height: f32, ecx: &EmbedCx) -> AnyElement {
 }
 
 /// One media item. Mature media shows a cover (and loads nothing) until
-/// revealed; a click on the media opens its original URL.
+/// revealed; image/GIF clicks open the media viewer, video/audio open externally.
 pub fn render(media: &MediaView, id: &SharedString, ecx: &EmbedCx, cx: &mut App) -> AnyElement {
+    render_with_gallery(media, id, ecx, None, cx)
+}
+
+pub fn render_with_gallery(
+    media: &MediaView,
+    id: &SharedString,
+    ecx: &EmbedCx,
+    gallery: Option<(Arc<Vec<MediaViewerItem>>, usize)>,
+    cx: &mut App,
+) -> AnyElement {
     if media.kind == MediaKind::Audio {
         return audio_row(media, id.clone(), ecx);
     }
@@ -293,8 +304,9 @@ pub fn render(media: &MediaView, id: &SharedString, ecx: &EmbedCx, cx: &mut App)
             _ => image.with_loading(blank).with_fallback(blank),
         }
     });
+    let viewer_pair = gallery.or_else(|| media_viewer::from_embed_media(media, ecx.scale).map(|item| (Arc::new(vec![item]), 0)));
     let open = media.open_url.clone();
-    div()
+    let box_el = div()
         .id(id.clone())
         .debug_selector(|| "embed-media".to_owned())
         .relative()
@@ -306,9 +318,26 @@ pub fn render(media: &MediaView, id: &SharedString, ecx: &EmbedCx, cx: &mut App)
         .bg(if media.kind == MediaKind::Video { gpui_kit::black() } else { placeholder })
         .children(image)
         .when(media.kind == MediaKind::Gifv, |d| d.child(gif_badge()))
-        .when(media.kind == MediaKind::Video, |d| d.child(play_button()))
-        .when_some(open, |d, url| d.cursor_pointer().on_click(move |_, _, cx| open_url(&url, cx)))
-        .into_any_element()
+        .when(media.kind == MediaKind::Video, |d| d.child(play_button()));
+
+    if let Some((items, index)) = viewer_pair {
+        let view = ecx.view.clone();
+        box_el
+            .cursor_pointer()
+            .on_click(move |_, window, cx| {
+                let items = (*items).clone();
+                let _ = view.update(cx, |v, cx| v.open_media_viewer(items, index, window, cx));
+            })
+            .into_any_element()
+    } else if let Some(url) = open {
+        let view = ecx.view.clone();
+        box_el
+            .cursor_pointer()
+            .on_click(move |_, window, cx| open_url(&url, &view, window, cx))
+            .into_any_element()
+    } else {
+        box_el.into_any_element()
+    }
 }
 
 /// `EmbedAudio` without a player: the title as a link to the file.
@@ -316,6 +345,7 @@ fn audio_row(media: &MediaView, id: SharedString, ecx: &EmbedCx) -> AnyElement {
     let theme = ecx.theme;
     let label = media.label.clone().unwrap_or_else(|| l10n::tr("Audio").into());
     let open = media.open_url.clone();
+    let view = ecx.view.clone();
     div()
         .id(id)
         .flex()
@@ -331,6 +361,9 @@ fn audio_row(media: &MediaView, id: SharedString, ecx: &EmbedCx) -> AnyElement {
         .bg(theme.background_secondary)
         .child(div().text_color(theme.muted_foreground).child("♪"))
         .child(div().flex_1().min_w_0().truncate().text_color(theme.text_link).child(label))
-        .when_some(open, |d, url| d.cursor_pointer().on_click(move |_, _, cx| open_url(&url, cx)))
+        .when_some(open, |d, url| {
+            d.cursor_pointer()
+                .on_click(move |_, window, cx| open_url(&url, &view, window, cx))
+        })
         .into_any_element()
 }

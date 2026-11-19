@@ -14,6 +14,7 @@ use gpui_kit::{
 use crate::client_view::ClientView;
 use crate::format::DEFAULT_AVATAR_COLORS;
 use crate::theme::Theme;
+use crate::ui::media_viewer::{self, MediaViewerItem};
 use crate::ui::{embed, l10n, message_actions, reactions, reply};
 use crate::view_model::MessageRow;
 
@@ -83,39 +84,54 @@ pub fn render(
         (MessageState::Failed, _) => Some((l10n::tr("Failed to send message.").into(), theme.danger)),
     };
     let author_id = row.author_id;
+    let compact = sizes.compact;
     let mut content = div().flex().flex_col().flex_1().min_w_0();
-    if row.group_start {
+    if compact || row.group_start {
         let view_author = view.clone();
-        content = content.child(
+        let author_btn = div()
+            .id(("msg-author", row.id.0))
+            .cursor_pointer()
+            .text_color(fg)
+            .font_weight(FontWeight::SEMIBOLD)
+            .on_click(move |ev, window, cx| {
+                if !ev.modifiers().shift {
+                    let pos = ev.position();
+                    let _ = view_author.update(cx, |v, cx| {
+                        v.open_profile(author_id, v.current_guild_id(), pos, window, cx);
+                    });
+                }
+            })
+            .child(row.author.clone());
+        let header = if compact {
             div()
                 .flex()
                 .flex_row()
                 .items_baseline()
                 .gap_2()
-                .child(
-                    div()
-                        .id(("msg-author", row.id.0))
-                        .cursor_pointer()
-                        .text_color(fg)
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .on_click(move |ev, window, cx| {
-                            if !ev.modifiers().shift {
-                                let pos = ev.position();
-                                let _ = view_author.update(cx, |v, cx| {
-                                    v.open_profile(author_id, v.current_guild_id(), pos, window, cx);
-                                });
-                            }
-                        })
-                        .child(row.author.clone()),
-                )
                 .child(div().text_color(muted_fg).text_xs().child(row.time.clone()))
-                .children(state_label.map(|(label, color)| div().text_color(color).text_xs().child(label))),
-        );
+                .child(author_btn)
+                .children(state_label.map(|(label, color)| div().text_color(color).text_xs().child(label)))
+        } else {
+            div()
+                .flex()
+                .flex_row()
+                .items_baseline()
+                .gap_2()
+                .child(author_btn)
+                .child(div().text_color(muted_fg).text_xs().child(row.time.clone()))
+                .children(state_label.map(|(label, color)| div().text_color(color).text_xs().child(label)))
+        };
+        content = content.child(header);
     } else if let Some((label, color)) = state_label {
         content = content.child(div().text_color(color).text_xs().child(label));
     }
     if let Some(document) = &row.document {
-        let mut body = MessageMarkdown::new(("msg", row.id.0), document.clone()).style(markdown_style(theme));
+        let view_link = view.clone();
+        let mut body = MessageMarkdown::new(("msg", row.id.0), document.clone())
+            .style(markdown_style(theme))
+            .on_link_click(move |url, window, cx| {
+                let _ = view_link.update(cx, |v, cx| v.open_external_url(url, window, cx));
+            });
         if document.spoiler_count > 0 {
             body = body.spoiler_state(spoiler_state(row.id, cx));
         }
@@ -129,19 +145,38 @@ pub fn render(
         // The budgeted embed cache (decoded images are dropped when off
         // screen); the id lets GPUI animate GIFs.
         let cache = embed::image_cache(cx);
+        let viewer_items: Arc<Vec<MediaViewerItem>> = Arc::new(
+            row.images
+                .iter()
+                .map(|image| media_viewer::from_attachment(image, scale))
+                .collect(),
+        );
         for (ix, image) in row.images.iter().enumerate() {
             let url = image.url.clone();
+            let view_img = view.clone();
+            let items_for_click = viewer_items.clone();
+            let thumb = img(image.source(scale))
+                .image_cache(&cache)
+                .id(SharedString::from(format!("attachment-{}-{ix}", row.id.0)))
+                .w(px(image.width))
+                .h(px(image.height))
+                .rounded(px(4.))
+                .object_fit(ObjectFit::Contain)
+                .with_loading(move || div().size_full().bg(placeholder).into_any_element())
+                .with_fallback(move || div().text_xs().text_color(muted_fg).child(url.clone()).into_any_element());
             content = content.child(
-                img(image.source(scale))
-                    .image_cache(&cache)
-                    .id(SharedString::from(format!("attachment-{}-{ix}", row.id.0)))
+                div()
+                    .id(SharedString::from(format!("attachment-open-{}-{ix}", row.id.0)))
+                    .debug_selector(move || format!("attachment-open-{}-{ix}", row.id.0))
                     .mt_1()
                     .w(px(image.width))
                     .h(px(image.height))
-                    .rounded(px(4.))
-                    .object_fit(ObjectFit::Contain)
-                    .with_loading(move || div().size_full().bg(placeholder).into_any_element())
-                    .with_fallback(move || div().text_xs().text_color(muted_fg).child(url.clone()).into_any_element()),
+                    .cursor_pointer()
+                    .on_click(move |_, window, cx| {
+                        let items = (*items_for_click).clone();
+                        let _ = view_img.update(cx, |v, cx| v.open_media_viewer(items, ix, window, cx));
+                    })
+                    .child(thumb),
             );
         }
     }
@@ -156,33 +191,35 @@ pub fn render(
             let _ = view.update(cx, |v, cx| v.toggle_reaction(channel_id, message_id, emoji, cx));
         }));
     }
-    let gutter = if row.group_start {
-        let view_avatar = view.clone();
-        div()
-            .id(("msg-avatar", row.id.0))
-            .cursor_pointer()
-            .on_click(move |ev, window, cx| {
-                if !ev.modifiers().shift {
-                    let pos = ev.position();
-                    let _ = view_avatar.update(cx, |v, cx| {
-                        v.open_profile(author_id, v.current_guild_id(), pos, window, cx);
-                    });
-                }
-            })
-            .child(avatar(row.avatar_url.clone(), row.default_avatar, row.initials.clone(), sizes.avatar, theme))
-            .into_any_element()
-    } else {
-        div().into_any_element()
-    };
-    let main = div()
+    let mut main = div()
         .flex()
         .flex_row()
         .w_full()
         .px_4()
-        .pb(px(2.))
-        .when(row.state == MessageState::Sending, |d| d.opacity(0.6))
-        .child(div().w(px(sizes.gutter)).flex_none().child(gutter))
-        .child(content);
+        .pb(px(if compact { 1. } else { 2. }))
+        .when(row.state == MessageState::Sending, |d| d.opacity(0.6));
+    if !compact {
+        let gutter = if row.group_start {
+            let view_avatar = view.clone();
+            div()
+                .id(("msg-avatar", row.id.0))
+                .cursor_pointer()
+                .on_click(move |ev, window, cx| {
+                    if !ev.modifiers().shift {
+                        let pos = ev.position();
+                        let _ = view_avatar.update(cx, |v, cx| {
+                            v.open_profile(author_id, v.current_guild_id(), pos, window, cx);
+                        });
+                    }
+                })
+                .child(avatar(row.avatar_url.clone(), row.default_avatar, row.initials.clone(), sizes.avatar, theme))
+                .into_any_element()
+        } else {
+            div().into_any_element()
+        };
+        main = main.child(div().w(px(sizes.gutter)).flex_none().child(gutter));
+    }
+    let main = main.child(content);
     let reply_line = row.reply.as_ref().map(|line| {
         let view = view.clone();
         let id = SharedString::from(format!("reply-{}", row.id.0));

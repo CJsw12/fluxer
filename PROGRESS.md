@@ -639,11 +639,31 @@
   1. Milestone 4(메시지 검색 REST·패널, 그룹 DM UI, 반응/멘션/검색 연동 등) 설계 및 구현 착수.
   2. 자체 테스트 서버(`fluxer-dev.home.arpa`)에서 `dist/fluxer_client/fluxer_client.exe` 재패키징 및 신규 UI 실기 확인.
 
+## 메시지 검색·점프 UI (Milestone 4, 2026-11-19)
+- **Baseline**: `desktop-rs` `0be772466` 기반(482 테스트 통과).
+- **Done**:
+  - **Core REST (`core/src/rest/api/search.rs`, `core/src/rest/api/mod.rs`, `core/src/rest/mod.rs`, `core/src/rest/tests/social.rs`)**: `POST /search/messages` 계약(`MessageSearchRequest`, `MessageSearchPage` with `channels`·`threads`, `MessageSearchOutcome::{Indexing, Results}`) 및 UTF-16 `encode_utf16().count()` 길이 검증(1..=1024)·페이지 상한(`MAX_PAGE=400`, `LimitConstants.ts`)·스노우플레이크 검증과 HTTP 모의 픽스처 테스트 추가.
+  - **Core State (`core/src/state/messages.rs`)**: `LoadMode::Around` 및 `MessagePaginationUtils.ts`/`MessagePageStateMachine.ts` 규약에 맞춘 `MessageStore::load_around` 추가(`expected_newer`/`expected_older`/`known_latest` 기반 `has_more_before`/`has_more_after`/`pinned_to_end` 판정, 최신 창 보존 시 `take_unsent` 유지, `LoadMode::Replace` 복귀 시 `pinned_to_end = true`).
+  - **Backend·UI (`backend.rs`, `backend/search.rs`, `icons.rs`, `ui/search_panel.rs`, `ui/header.rs`, `ui/message_list.rs`, `shortcuts.rs`, `client_view.rs`, `client_view/keyboard.rs`)**:
+    - 채널 헤더 검색 토글 버튼(`toggle-search`, `ExtraIcons` `Search`), `Ctrl+F`·`Esc` 단축키(총 81바인딩, `SearchPanel` 입력 컨텍스트 단축키 억제).
+    - `SearchPanel`: 인라인 필터 파싱(`has:*`, `is:pinned`, `pinned:true|false`), 범위(`Channel`/`Community`/`All`)·정렬(`Newest`/`Relevance`), `ClientView.search_seq` 기반 세대 불일치/닫기 후 재오픈 지연 응답 차단, 커서·페이지네이션(`Load more`) 및 소진 종료, 색인 중(`Indexing`) 안내, 오류 배너 분리로 `Load more` 실패 시 기존 결과 유지, 스레드 채널 라벨링 및 비점프 가드, 공식 Lingui 카탈로그 msgid(`Community`, `{total, plural, one {# result} other {# results}}`, `Message not found`) 적용.
+    - 메시지 점프·강조(`jump_to_channel_message`, `select_channel_inner(..., auto_load_latest, ...)`, `Backend::load_around` + 채널별 `history_seq` 가드): 캐시된 창은 REST 없이 즉시 스크롤·강조하고, 미로드·과거·타 길드/DM 메시지는 `LoadMode::Around` 단일 로드 후 스크롤, 레이아웃 폭 변화 없는 3px 강조 막대, `has_more_after` 시 `"Jump to present"` 배너(중복 클릭 가드 포함), `suppress_jump_scroll`로 점프 직후 사전 레이아웃 스크롤 콜백의 `load_newer` 오발동 차단.
+  - **DeepSeek 교차 검토·검증**: `deepseek/deepseek-flash`(`fluxer-helper-m4-review`) 정적 검토 P0 0건, P1 3건(재오픈 시 `seq` 초기화, `threads` 스키마·비점프 가드, `Around` 경계·실시간 수신·`Sending` 유지)·P2 항목(Enter 중복 제출·IME 보호, UTF-16 검증, `MAX_PAGE=400`, 커서 소진, Load more 실패 시 결과 유지, 2px 레이아웃 이동 제거, 카탈로그 msgid)을 반영하고 [tests_search.rs](fluxer_client/app/src/tests_search.rs)에 회귀 테스트 추가. 재검증 결과 `cargo check -p fluxer_client_app --bin fluxer_client` **경고 0건**, `cargo test --workspace -- --test-threads=2` **490 passed, 0 failed, 0 warnings** (`app`: 193, `core`: 248, `i18n`: 10, `markdown`: 36 [+1 ignored doctest], `devserver`: 3).
+  - **진행도 배지**: `docs/progress/progress.json` 갱신(`메시지 검색(REST): done`, `검색 결과 화면: partial`, `메시지로 점프: partial`) + `python scripts/progress_svg.py` 실행 → `overall: 62% (93 items)`, `daily driver: 70% (73 items, 10 areas)`.
+- **Decisions**:
+  - `around` 경계 판정은 서버 스키마/웹 `MessagePaginationUtils.ts`의 절반 창(`expected_newer = 25`, `expected_older = 24`)과 `known_latest` 비교를 그대로 따라, 50개 미만 소규모 채널 점프에서 거짓 `"Jump to present"` 배너가 뜨거나 게이트웨이 실시간 메시지 반영이 막히지 않도록 함.
+  - `SearchPanel`의 `request_seq`는 패널 생명주기가 아닌 `ClientView.search_seq`에서 발급하고, `InputEvent::PressEnter` 단일 경로 + `marked_text_range` IME 가드로 중복 제출·미완성 조합 제출을 방지함.
+- **Blockers**:
+  - `POST /search/messages` 및 `?around=` 실서버 왕복, 스레드/NSFW/실제 인덱스 지연 응답, 기존 M2/M3 실기 미확인 항목은 테스트 서버 실기 검증 전임.
+- **Next Steps**:
+  1. Milestone 5(그룹 DM UI, 스레드/채널·권한·멤버 관리, 릴리스 exe 재패키징·실기 검증 등) 설계 및 구현 착수.
+  2. 자체 테스트 서버(`fluxer-dev.home.arpa`)에서 `dist/fluxer_client/fluxer_client.exe` 재패키징 및 M2~M4 실기 확인.
+
 ## 인계 (2026-11-19, 다음 에이전트용 — 이 절부터 읽을 것)
-- **기준**: `desktop-rs` (Milestone 2 `571c4d530` 이후 Milestone 3 미디어 뷰어·신뢰 도메인 경고·글꼴/밀도/확대 커밋 반영), 워킹 트리 깨끗함(미공개 파일·`dist/` 제외). 미공개 유지 파일(커밋 금지): `RUST_*_PLAN.md`, `RUST_MIGRATION_REFERENCE_REVIEW.md`, `RUST_PORT_RESEARCH_*`, `IPC_M0_FINDINGS.md`, `tools/h265_livekit_probe/`.
-- **현재 주력**: 네이티브 GPUI 클라이언트 `fluxer_client/`(core, app, markdown, i18n, devserver). `cd fluxer_client; $env:CARGO_TARGET_DIR = "../target/fc-root"; cargo test --workspace -- --test-threads=2` → 482 통과(app 189, core 244, markdown 36 [+1 ignored doctest], i18n 10, devserver 3), `cargo check --bin fluxer_client` 경고 0.
-- **우선순위(P0)**: ① 알림·첨부 ✔(코드) ② 임베드 ✔(코드) ③ 릴리스 exe ✔(`scripts/package_fluxer_client.ps1`, 산출 `dist/fluxer_client/fluxer_client.exe` 39.17 MB, SHA256 `9a6a9e34600e5025a1e654ece655542c899cf64f5f5ab6b63f953102c6adcae7`, `PE_SUBSYSTEM=2`) ④ 안정성 실기(재연결·장시간 메모리·한글 IME). P1~P2 진행: 이모지 피커·프로필 팝업·설정 화면·트레이/자동 시작·드래프트 보존·방문 기록 이동·채널 음소거·친구 목록·관계 관리·초대 참가·길드 탈퇴·미디어 뷰어·신뢰 도메인 경고·글꼴/밀도/확대 ✔(코드/헤드리스).
-- **실기 미확인**: 미디어 뷰어·신뢰 도메인 경고·글꼴/밀도/확대 실서버/실기기 동작, 친구/관계 관리·초대 참가·그룹 DM 초대·길드 탈퇴 실서버 동작, 채널/DM 음소거 실서버 PATCH, 드래프트·`Alt+Left/Right` 실기, 트레이 아이콘·닫기 최소화·`--autostart` HKCU Run 실제 동작, 이모지 피커·프로필 팝업·설정/테마/로케일 UI 실서버 동작, GIF 애니메이션 수정, 유튜브 카드 중복 수정, Windows 토스트·알림음(사용자 PC가 방해 금지 모드), 첨부 업로드 실서버, 한국어 UI 화면, 릴리스 exe·AUMID 바로가기.
+- **기준**: `desktop-rs` (`0be772466` 이후 Milestone 4 메시지 검색·점프 UI 커밋 반영), 워킹 트리 깨끗함(미공개 파일·`dist/` 제외). 미공개 유지 파일(커밋 금지): `RUST_*_PLAN.md`, `RUST_MIGRATION_REFERENCE_REVIEW.md`, `RUST_PORT_RESEARCH_*`, `IPC_M0_FINDINGS.md`, `tools/h265_livekit_probe/`.
+- **현재 주력**: 네이티브 GPUI 클라이언트 `fluxer_client/`(core, app, markdown, i18n, devserver). `cd fluxer_client; $env:CARGO_TARGET_DIR = "../target/fc-root"; cargo test --workspace -- --test-threads=2` → 490 통과(app 193, core 248, markdown 36 [+1 ignored doctest], i18n 10, devserver 3), `cargo check --bin fluxer_client` 경고 0.
+- **우선순위(P0)**: ① 알림·첨부 ✔(코드) ② 임베드 ✔(코드) ③ 릴리스 exe ✔(`scripts/package_fluxer_client.ps1`, 산출 `dist/fluxer_client/fluxer_client.exe` 39.17 MB, SHA256 `9a6a9e34600e5025a1e654ece655542c899cf64f5f5ab6b63f953102c6adcae7`, `PE_SUBSYSTEM=2`) ④ 안정성 실기(재연결·장시간 메모리·한글 IME). P1~P2 진행: 이모지 피커·프로필 팝업·설정 화면·트레이/자동 시작·드래프트 보존·방문 기록 이동·채널 음소거·친구 목록·관계 관리·초대 참가·길드 탈퇴·미디어 뷰어·신뢰 도메인 경고·글꼴/밀도/확대·메시지 검색·점프 ✔(코드/헤드리스).
+- **실기 미확인**: 메시지 검색 REST·패널·점프(`POST /search/messages`·`?around=`) 실서버 동작, 미디어 뷰어·신뢰 도메인 경고·글꼴/밀도/확대 실서버/실기기 동작, 친구/관계 관리·초대 참가·그룹 DM 초대·길드 탈퇴 실서버 동작, 채널/DM 음소거 실서버 PATCH, 드래프트·`Alt+Left/Right` 실기, 트레이 아이콘·닫기 최소화·`--autostart` HKCU Run 실제 동작, 이모지 피커·프로필 팝업·설정/테마/로케일 UI 실서버 동작, GIF 애니메이션 수정, 유튜브 카드 중복 수정, Windows 토스트·알림음(사용자 PC가 방해 금지 모드), 첨부 업로드 실서버, 한국어 UI 화면, 릴리스 exe·AUMID 바로가기.
 - **테스트 환경**: 자체 테스트 서버 `fluxer-dev.home.arpa`(SSH 443 터널). 접속·계정·도구는 저장소 밖 `../Logs/fluxer-dev/LOCAL_ACCESS.md`. **친구 서버와 사용자 개인 계정은 테스트에 쓰지 말 것**(개인 정보). 메시지 전송 시험은 자체 서버에서만.
 - **PC 부하 규칙**(사용자 PC가 여러 번 멈춤): `fluxer_client/.cargo/config.toml` `build.jobs=4` 유지, 동시에 빌드하는 작업 최대 2개, 앱 테스트는 항상 `timeout 300 … -- --test-threads=2`, 빌드 디렉터리는 `target/fc-root`만(추가로 만들었으면 끝나고 삭제). 헤드리스 GPUI 테스트가 무한 루프로 CPU를 먹은 전례(uniform_list의 0..1 측정 호출) — 렌더/레이아웃 콜백에서 상태 변경·notify 금지.
 - **GUI 실기**: `tools/agents/gui.ps1`는 다른 창이 대상 창을 가리면 입력을 거부한다(사용자가 PC 사용 중일 수 있음). 마우스 대신 키보드(Ctrl+K 등) 위주로 확인.

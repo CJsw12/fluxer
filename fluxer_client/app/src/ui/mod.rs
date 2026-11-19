@@ -17,6 +17,7 @@ pub mod profile_popout;
 pub mod user_panel;
 pub mod reactions;
 pub mod reply;
+pub mod search_panel;
 pub mod message_actions;
 pub mod settings;
 pub mod typing;

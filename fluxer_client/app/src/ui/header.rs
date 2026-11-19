@@ -48,6 +48,18 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             )
         })
         .child({
+            let search_open = view.search.is_some();
+            div().debug_selector(|| "toggle-search".to_owned()).child(
+                Button::new("toggle-search")
+                    .ghost()
+                    .small()
+                    .icon(IconName::Search)
+                    .selected(search_open)
+                    .tooltip(l10n::tr("Search"))
+                    .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx))),
+            )
+        })
+        .child({
             let enabled = view.notifier.enabled;
             Button::new("toggle-notifications")
                 .ghost()

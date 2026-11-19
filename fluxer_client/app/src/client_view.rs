@@ -8,6 +8,8 @@ use std::rc::Rc;
 
 use fluxer_client_core::rest::UserProfileFull;
 use fluxer_client_core::state::{MessageState, PartialEmoji, Snowflake, Status, Unread};
+use gpui_kit::component::Sizable as _;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{InputContent, InputEvent, InputState};
 use gpui_kit::component::message_scroller::MessageScrollerState;
 use gpui_kit::{
@@ -78,7 +80,7 @@ pub struct ClientView {
     has_more_before: bool,
     /// Newer messages were trimmed from the window (pages back towards the
     /// newest load when the list reaches its bottom).
-    has_more_after: bool,
+    pub(crate) has_more_after: bool,
     /// `ClientState::unread_anchor` of the selected channel when it was
     /// opened; places the "NEW" divider until another channel is opened.
     unread_anchor: Option<Snowflake>,
@@ -179,6 +181,17 @@ pub struct ClientView {
     pub(crate) uploads: BTreeMap<Snowflake, u8>,
     /// Files of uploads in flight, by nonce; back to the tray on failure.
     pub(crate) sent_files: BTreeMap<Snowflake, (Snowflake, Vec<ui::attachments::PendingAttachment>)>,
+    /// Right-hand message search drawer (Ctrl+F).
+    pub(crate) search: Option<ui::search_panel::SearchPanelState>,
+    /// Monotonic counter shared across open/close of the search panel so stale
+    /// responses from an earlier panel never apply to a reopened panel.
+    pub(crate) search_seq: u64,
+    /// Historical message waiting for its `?around=` page before scrolling/highlighting.
+    pub(crate) pending_jump: Option<(Snowflake, Snowflake)>,
+    /// Currently highlighted message `(channel_id, message_id)` after jumping.
+    pub(crate) highlighted_message: Option<(Snowflake, Snowflake)>,
+    /// Ignores transient pre-layout scroller observer ticks right after a programmatic jump.
+    pub(crate) suppress_jump_scroll: bool,
     /// Keeps the layout's key context reachable when nothing inside has focus.
     focus: FocusHandle,
     /// Captured external URLs opened via `launch_external_url` in headless tests.
@@ -320,6 +333,11 @@ impl ClientView {
             attachments: AttachmentTray::default(),
             uploads: BTreeMap::new(),
             sent_files: BTreeMap::new(),
+            search: None,
+            search_seq: 0,
+            pending_jump: None,
+            highlighted_message: None,
+            suppress_jump_scroll: false,
             focus: cx.focus_handle(),
             #[cfg(test)]
             opened_urls: Vec::new(),
@@ -424,6 +442,9 @@ impl ClientView {
                     if Some(channel_id) == self.selected_channel {
                         self.loading_history = false;
                         if let Some(error) = error {
+                            if self.pending_jump.is_some_and(|(ch, _)| ch == channel_id) {
+                                self.pending_jump = None;
+                            }
                             self.error =
                                 Some(format!("{}: {error}", l10n::tr("Messages failed to load")).into());
                         }
@@ -556,12 +577,31 @@ impl ClientView {
                         }
                     }
                 }
+                UiEvent::SearchLoaded { seq, result } => {
+                    self.search_loaded(seq, result, cx);
+                }
             }
         }
         if connected {
             self.reload_cleared_channel();
         }
         self.refresh(cx);
+        if let Some((jump_ch, jump_msg)) = self.pending_jump
+            && Some(jump_ch) == self.selected_channel
+            && !self.loading_history
+        {
+            self.pending_jump = None;
+            if let Some(ix) = self.rows.borrow().iter().position(|r| r.id == jump_msg) {
+                self.suppress_jump_scroll = true;
+                self.scroller.update(cx, |s, cx| {
+                    s.scroll_to_item(ix, cx);
+                });
+                self.highlighted_message = Some((jump_ch, jump_msg));
+            } else if self.error.is_none() {
+                self.error = Some(l10n::tr("Message not found").into());
+            }
+            cx.notify();
+        }
     }
 
     /// After READY the windows of a new session are cleared (and those of
@@ -580,6 +620,13 @@ impl ClientView {
     /// shows the newest message (incoming messages trim the far side only
     /// then), and load older / newer pages at either end.
     pub(crate) fn scrolled(&mut self, scrolled_up: bool, at_top: bool, cx: &mut Context<Self>) {
+        if self.suppress_jump_scroll {
+            if scrolled_up && !at_top {
+                self.suppress_jump_scroll = false;
+            } else {
+                return;
+            }
+        }
         if let Some(channel_id) = self.selected_channel {
             self.backend.state().messages.set_pinned_to_end(channel_id, !scrolled_up);
         }
@@ -777,7 +824,7 @@ impl ClientView {
             self.cancel_ack();
             return;
         };
-        if self.loading_history || self.scroller.read(cx).is_scrolled_up() {
+        if self.loading_history || self.has_more_after || self.scroller.read(cx).is_scrolled_up() {
             self.cancel_ack();
             return;
         }
@@ -868,9 +915,18 @@ impl ClientView {
     }
 
     pub(crate) fn select_channel(&mut self, channel_id: Snowflake, cx: &mut Context<Self>) {
+        self.select_channel_inner(channel_id, true, cx);
+    }
+
+    pub(crate) fn select_channel_inner(
+        &mut self,
+        channel_id: Snowflake,
+        auto_load_latest: bool,
+        cx: &mut Context<Self>,
+    ) -> bool {
         let opens_pane = self.backend.state().channels.get(&channel_id).is_some_and(|c| opens_message_pane(c.kind));
         if !opens_pane {
-            return;
+            return false;
         }
         self.cancel_ack();
         let old_channel = self.selected_channel;
@@ -886,6 +942,8 @@ impl ClientView {
         self.hovered_message = None;
         // Replies and edits belong to the old channel; stash/restore plain + token drafts.
         if old_channel != Some(channel_id) {
+            self.pending_jump = None;
+            self.highlighted_message = None;
             let old_draft = self
                 .composer_mode
                 .channel_changed()
@@ -906,12 +964,14 @@ impl ClientView {
         };
         // New channel: start from an empty list that follows the tail.
         self.rows.borrow_mut().clear();
+        self.suppress_jump_scroll = false;
         self.scroller.update(cx, |s, cx| s.reset(0, cx));
-        self.loading_history = needs_load;
-        if needs_load {
+        self.loading_history = needs_load && auto_load_latest;
+        if needs_load && auto_load_latest {
             self.backend.load_messages(channel_id, None);
         }
         self.refresh(cx);
+        true
     }
 
     fn load_older(&mut self, cx: &mut Context<Self>) {
@@ -1071,7 +1131,7 @@ impl ClientView {
         self.composer.update(cx, |s, cx| s.marked_text_range(window, cx)).is_some()
     }
 
-    fn focus_composer(&self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn focus_composer(&self, window: &mut Window, cx: &mut Context<Self>) {
         let focus = self.composer.read(cx).focus_handle(cx);
         window.focus(&focus, cx);
     }
@@ -1110,6 +1170,10 @@ impl ClientView {
             return true;
         }
         if self.cancel_composer_mode(window, cx) {
+            return true;
+        }
+        if self.search.is_some() {
+            self.close_search(window, cx);
             return true;
         }
         self.mark_channel_read(cx);
@@ -1279,19 +1343,119 @@ impl ClientView {
         cx.notify();
     }
 
+    /// Opens `channel_id` (and switches guild/Home when needed), scrolls to
+    /// `message_id` and highlights it; if outside the current cached window,
+    /// loads a `?around=` slice without firing a redundant latest-page fetch.
+    pub(crate) fn jump_to_channel_message(
+        &mut self,
+        guild_id: Option<Snowflake>,
+        channel_id: Snowflake,
+        message_id: Snowflake,
+        cx: &mut Context<Self>,
+    ) {
+        let (opens, resolved_guild, already_loaded) = {
+            let state = self.backend.state();
+            let Some(ch) = state.channels.get(&channel_id) else { return };
+            let opens = opens_message_pane(ch.kind);
+            let resolved_guild = guild_id.or(ch.guild_id);
+            let already_loaded = state
+                .messages
+                .window(channel_id)
+                .is_some_and(|w| w.ready && w.messages.iter().any(|m| m.id == message_id));
+            (opens, resolved_guild, already_loaded)
+        };
+        if !opens {
+            return;
+        }
+        let target_place = resolved_guild.map_or(Place::Home, Place::Guild);
+        if self.place != target_place {
+            self.place = target_place;
+            if let Some(gid) = resolved_guild {
+                self.last_guild = Some(gid);
+                self.backend.subscribe_guild(gid);
+            }
+        }
+        if self.selected_channel != Some(channel_id) {
+            if !self.select_channel_inner(channel_id, false, cx) {
+                return;
+            }
+        } else {
+            self.refresh(cx);
+        }
+        if already_loaded {
+            self.pending_jump = None;
+            if let Some(ix) = self.rows.borrow().iter().position(|r| r.id == message_id) {
+                self.suppress_jump_scroll = true;
+                self.scroller.update(cx, |s, cx| {
+                    s.scroll_to_item(ix, cx);
+                });
+                self.highlighted_message = Some((channel_id, message_id));
+            }
+        } else {
+            self.pending_jump = Some((channel_id, message_id));
+            self.highlighted_message = None;
+            self.loading_history = true;
+            self.backend.load_around(channel_id, message_id);
+        }
+        cx.notify();
+    }
+
     /// Opens the message's channel and scrolls to it when it is loaded
     /// (reply lines, the "Replying to" bar).
     pub(crate) fn jump_to_message(&mut self, channel_id: Snowflake, message_id: Snowflake, cx: &mut Context<Self>) {
-        if self.selected_channel != Some(channel_id) {
-            self.select_channel(channel_id, cx);
+        self.jump_to_channel_message(None, channel_id, message_id, cx);
+    }
+
+    pub(crate) fn next_search_seq(&mut self) -> u64 {
+        self.search_seq = self.search_seq.saturating_add(1);
+        self.search_seq
+    }
+
+    /// Leaves a historical `?around=` jump window and returns to the latest messages.
+    pub(crate) fn jump_to_present(&mut self, cx: &mut Context<Self>) {
+        if self.loading_history {
+            return;
         }
-        let ix = self.rows.borrow().iter().position(|r| r.id == message_id);
-        if let Some(ix) = ix {
-            self.scroller.update(cx, |s, cx| {
-                s.scroll_to_item(ix, cx);
-            });
-        }
+        let Some(channel_id) = self.selected_channel else { return };
+        self.pending_jump = None;
+        self.highlighted_message = None;
+        self.loading_history = true;
+        self.rows.borrow_mut().clear();
+        self.suppress_jump_scroll = false;
+        self.scroller.update(cx, |s, cx| s.reset(0, cx));
+        self.backend.load_messages(channel_id, None);
         cx.notify();
+    }
+
+    fn render_jump_to_present(&self, theme: &Theme, cx: &mut Context<Self>) -> impl IntoElement {
+        let label = if self.loading_history { l10n::tr("Loading…") } else { l10n::tr("Jump to present") };
+        div()
+            .id("jump-to-present-bar")
+            .debug_selector(|| "jump-to-present".to_owned())
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .px_4()
+            .py_1()
+            .border_t_1()
+            .border_color(theme.border)
+            .bg(theme.background_secondary)
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(l10n::tr("Viewing older messages")),
+            )
+            .child(
+                div().debug_selector(|| "jump-to-present-btn".to_owned()).child(
+                    Button::new("jump-to-present-btn")
+                        .primary()
+                        .small()
+                        .label(label)
+                        .on_click(cx.listener(|v, _, _, cx| v.jump_to_present(cx))),
+                ),
+            )
     }
 
     /// "Log out": closes the gateway, sends `POST /auth/logout` and tells the
@@ -1314,7 +1478,9 @@ impl Render for ClientView {
         }
         ui::composer::sync_placeholder(self, window, cx);
         let theme = Theme::current(cx);
-        let member_panel = if self.shows_member_list() {
+        let right_panel = if self.search.is_some() {
+            Some(ui::search_panel::render(self, &theme, cx))
+        } else if self.shows_member_list() {
             Some(ui::member_list::render(self, &theme, cx))
         } else {
             None
@@ -1373,9 +1539,12 @@ impl Render for ClientView {
                     .on_drop(cx.listener(|v, paths: &ExternalPaths, _, cx| v.add_paths(paths.paths(), cx)))
                     .child(ui::header::render(self, &theme, cx))
                     .child(ui::message_list::render(self, handle, &theme))
+                    .when(self.has_more_after && self.selected_channel.is_some(), |d| {
+                        d.child(self.render_jump_to_present(&theme, cx))
+                    })
                     .child(composer)
             })
-            .children(member_panel)
+            .children(right_panel)
             .children(overlay)
     }
 }

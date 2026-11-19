@@ -15,7 +15,7 @@ use gpui_kit::{Action, App, Context, Div, KeyBinding, NoAction, prelude::*};
 
 use crate::client_view::ClientView;
 use crate::nav::ChannelFilter;
-use crate::ui::quick_switcher;
+use crate::ui::{quick_switcher, search_panel};
 
 gpui_kit::actions!(
     fluxer,
@@ -32,6 +32,7 @@ gpui_kit::actions!(
         HistoryForward,
         ToggleLastGuild,
         OpenJoinGuild,
+        OpenSearch,
         ToggleQuickSwitcher,
         ToggleEmojiPicker,
         OpenSettings,
@@ -51,12 +52,13 @@ const IN_INPUT: &str = "ClientView > Input";
 const IN_COMPOSER: &str = "ClientView > Composer > Input";
 
 /// Binds `keys` in the layout and inside the composer, and disables them
-/// inside the quick switcher (whose input would otherwise fall back to
-/// the layout's binding).
+/// inside the quick switcher and search panel (whose inputs would otherwise
+/// fall back to the layout's binding).
 fn both<A: Action + Clone>(out: &mut Vec<KeyBinding>, keys: &'static str, action: A) {
     out.push(KeyBinding::new(keys, action.clone(), Some(CONTEXT)));
     out.push(KeyBinding::new(keys, action, Some(IN_COMPOSER)));
     out.push(KeyBinding::new(keys, NoAction, Some(quick_switcher::CONTEXT)));
+    out.push(KeyBinding::new(keys, NoAction, Some(search_panel::CONTEXT)));
 }
 
 /// Every shortcut binding of the client layout.
@@ -74,6 +76,7 @@ fn bindings() -> Vec<KeyBinding> {
     both(&mut out, "alt-right", HistoryForward);
     both(&mut out, "ctrl-alt-right", ToggleLastGuild);
     both(&mut out, "ctrl-shift-n", OpenJoinGuild);
+    both(&mut out, "ctrl-f", OpenSearch);
     // Ctrl+K also closes the switcher from its own input.
     out.push(KeyBinding::new("ctrl-k", ToggleQuickSwitcher, Some(CONTEXT)));
     out.push(KeyBinding::new("ctrl-k", ToggleQuickSwitcher, Some(IN_INPUT)));
@@ -110,6 +113,7 @@ pub fn on_actions(root: Div, cx: &mut Context<ClientView>) -> Div {
         .on_action(cx.listener(|v, _: &HistoryForward, _, cx| v.history_forward(cx)))
         .on_action(cx.listener(|v, _: &ToggleLastGuild, _, cx| v.toggle_last_guild(cx)))
         .on_action(cx.listener(|v, _: &OpenJoinGuild, window, cx| v.open_join_guild(window, cx)))
+        .on_action(cx.listener(|v, _: &OpenSearch, window, cx| v.open_search(window, cx)))
         .on_action(cx.listener(|v, _: &ToggleQuickSwitcher, window, cx| v.toggle_quick_switcher(window, cx)))
         .on_action(cx.listener(|v, _: &ToggleEmojiPicker, window, cx| v.toggle_emoji_picker(window, cx)))
         .on_action(cx.listener(|v, _: &OpenSettings, window, cx| v.open_settings(window, cx)))
@@ -119,6 +123,8 @@ pub fn on_actions(root: Div, cx: &mut Context<ClientView>) -> Div {
         .on_action(cx.listener(|v, _: &MarkChannelRead, window, cx| {
             if v.overlay.is_open() {
                 v.close_overlay(window, cx);
+            } else if v.search.is_some() {
+                v.close_search(window, cx);
             } else {
                 v.mark_channel_read(cx);
             }
@@ -139,6 +145,6 @@ mod tests {
             let key = (format!("{:?}", b.keystrokes()), b.predicate().map(|p| p.to_string()));
             assert!(seen.insert(key.clone()), "{key:?} bound twice");
         }
-        assert_eq!(seen.len(), 59);
+        assert_eq!(seen.len(), 81);
     }
 }

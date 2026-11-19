@@ -11,6 +11,7 @@ mod notes;
 mod reactions;
 mod read_states;
 mod relationships;
+mod search;
 mod settings;
 mod typing;
 mod users;
@@ -25,6 +26,10 @@ pub use reactions::{ReactionEmoji, ReactionUsersQuery, encode_uri_component};
 pub use read_states::AckRequest;
 pub use typing::{
     TYPING_IMMEDIATE_SEND_IDLE, TYPING_SEND_DELAY, TYPING_THROTTLE, TypingCooldown, TypingPlan, TypingThrottle,
+};
+pub use search::{
+    MessageContentType, MessageSearchOutcome, MessageSearchPage, MessageSearchRequest, MessageSearchScope,
+    MessageSearchSortBy, MessageSearchSortOrder, parse_message_search_response, validate_search_request,
 };
 pub use users::ProfileQuery;
 

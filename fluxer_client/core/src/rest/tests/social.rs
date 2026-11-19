@@ -206,3 +206,75 @@ async fn leave_guild_route() {
     );
     assert!(matches!(client.leave_guild("1/../2", false).await, Err(RestError::InvalidArgument(_))));
 }
+
+#[tokio::test]
+async fn search_messages_route() {
+    let fixture = Fixture::start(|req, idx| {
+        if req.target == "/api/v1/search/messages" && idx == 1 {
+            Resp::json(200, json!({ "indexing": true }))
+        } else {
+            Resp::json(
+                200,
+                json!({
+                    "messages": [{
+                        "id": "900000000000000001",
+                        "channel_id": CHANNEL,
+                        "author": { "id": USER, "username": "alice" },
+                        "content": "found me",
+                        "timestamp": "2026-11-19T00:00:00.000Z"
+                    }],
+                    "channels": [{
+                        "id": CHANNEL,
+                        "guild_id": GUILD,
+                        "name": "general",
+                        "type": 0
+                    }],
+                    "total": 1,
+                    "hits_per_page": 25,
+                    "page": 1
+                }),
+            )
+        }
+    })
+    .await;
+    let client = authed(&fixture).await;
+
+    let req = MessageSearchRequest {
+        content: Some("found".into()),
+        scope: Some(MessageSearchScope::AllGuilds),
+        context_guild_id: Some(GUILD.into()),
+        has: Some(vec![MessageContentType::Image]),
+        sort_by: Some(MessageSearchSortBy::Relevance),
+        sort_order: Some(MessageSearchSortOrder::Desc),
+        ..Default::default()
+    };
+    let first = client.search_messages(&req).await.unwrap();
+    let MessageSearchOutcome::Results(page) = first else { panic!("expected results") };
+    assert_eq!(page.messages.len(), 1);
+    assert_eq!(page.messages[0].content, "found me");
+    assert_eq!(page.total, 1);
+
+    let second = client.search_messages(&req).await.unwrap();
+    assert_eq!(second, MessageSearchOutcome::Indexing);
+
+    let reqs = fixture.requests();
+    assert_eq!(reqs.len(), 2);
+    assert_eq!(reqs[0].method, "POST");
+    assert_eq!(reqs[0].target, "/api/v1/search/messages");
+    assert_eq!(reqs[0].header("authorization"), Some(FAKE_TOKEN));
+    assert_eq!(
+        reqs[0].json(),
+        json!({
+            "content": "found",
+            "has": ["image"],
+            "sort_by": "relevance",
+            "sort_order": "desc",
+            "scope": "all_guilds",
+            "context_guild_id": GUILD,
+        })
+    );
+
+    let invalid = MessageSearchRequest { context_guild_id: Some("1/../2".into()), ..Default::default() };
+    assert!(matches!(client.search_messages(&invalid).await, Err(RestError::InvalidArgument(_))));
+    assert_eq!(fixture.requests().len(), 2);
+}

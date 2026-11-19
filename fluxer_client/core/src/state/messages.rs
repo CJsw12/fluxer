@@ -28,6 +28,9 @@ pub enum LoadMode {
     Before,
     /// Newer page (`?after=<newest id>`): append.
     After,
+    /// Historical slice centered on an anchor (`?around=<id>`): replace
+    /// the window with pagination possible on both sides.
+    Around,
 }
 
 /// One channel's loaded messages, oldest first.
@@ -157,7 +160,7 @@ impl MessageStore {
         let mut records = newest_first;
         records.reverse();
         let window = self.entry(channel_id);
-        let effective = if window.ready { mode } else { LoadMode::Replace };
+        let effective = if window.ready || mode == LoadMode::Around { mode } else { LoadMode::Replace };
         match effective {
             LoadMode::Replace => {
                 let unsent = if mode == LoadMode::Replace {
@@ -170,6 +173,9 @@ impl MessageStore {
                 window.merge(unsent);
                 window.has_more_before = page_more_before;
                 window.has_more_after = page_more_after;
+                if mode == LoadMode::Replace {
+                    window.pinned_to_end = true;
+                }
             }
             LoadMode::Before => {
                 window.merge(records);
@@ -185,7 +191,76 @@ impl MessageStore {
                 }
                 window.has_more_after = page_more_after;
             }
+            LoadMode::Around => {
+                let unsent = if !full_page {
+                    window.take_unsent(&records)
+                } else {
+                    Vec::new()
+                };
+                window.messages.clear();
+                window.merge(records);
+                window.merge(unsent);
+                window.has_more_before = full_page;
+                window.has_more_after = full_page;
+                window.pinned_to_end = !full_page;
+            }
         }
+        window.ready = true;
+    }
+
+    /// Replaces the channel window with an `?around=<target>` slice using
+    /// `MessagePaginationUtils.ts` / `MessagePageStateMachine.ts` boundary rules.
+    pub fn load_around(
+        &mut self,
+        channel_id: Snowflake,
+        newest_first: Vec<Message>,
+        target: Snowflake,
+        known_latest: Option<Snowflake>,
+    ) {
+        let expected_newer = PAGE_SIZE / 2;
+        let expected_older = PAGE_SIZE.saturating_sub(1 + expected_newer);
+        let is_at_known_latest =
+            known_latest.is_some() && newest_first.first().map(|m| m.id) == known_latest;
+        let (has_more_before, has_more_after) =
+            if let Some(target_ix) = newest_first.iter().position(|m| m.id == target) {
+                let messages_newer = target_ix;
+                let messages_older = newest_first.len().saturating_sub(target_ix + 1);
+                (
+                    expected_older > 0 && messages_older >= expected_older,
+                    expected_newer > 0 && messages_newer >= expected_newer && !is_at_known_latest,
+                )
+            } else if newest_first.is_empty() {
+                (false, false)
+            } else {
+                let fetched_past_target = newest_first.first().is_none_or(|m| m.id > target);
+                (
+                    newest_first.len() >= PAGE_SIZE,
+                    fetched_past_target && newest_first.len() >= expected_newer && !is_at_known_latest,
+                )
+            };
+        self.apply_around_slice(channel_id, newest_first, has_more_before, has_more_after);
+    }
+
+    fn apply_around_slice(
+        &mut self,
+        channel_id: Snowflake,
+        mut newest_first: Vec<Message>,
+        has_more_before: bool,
+        has_more_after: bool,
+    ) {
+        newest_first.reverse();
+        let window = self.entry(channel_id);
+        let unsent = if !has_more_after {
+            window.take_unsent(&newest_first)
+        } else {
+            Vec::new()
+        };
+        window.messages.clear();
+        window.merge(newest_first);
+        window.merge(unsent);
+        window.has_more_before = has_more_before;
+        window.has_more_after = has_more_after;
+        window.pinned_to_end = !has_more_after;
         window.ready = true;
     }
 
@@ -414,5 +489,88 @@ impl MessageStore {
             }
         }
         self.windows.entry(channel_id).or_insert_with(MessageWindow::new)
+    }
+}
+
+#[cfg(test)]
+mod around_tests {
+    use super::*;
+    use crate::state::model::User;
+
+    fn test_msg(id: u64, channel_id: u64, content: &str) -> Message {
+        Message {
+            id: Snowflake(id),
+            channel_id: Snowflake(channel_id),
+            guild_id: None,
+            author: User {
+                id: Snowflake(1),
+                username: "alice".to_owned(),
+                discriminator: None,
+                global_name: None,
+                avatar: None,
+                banner: None,
+                avatar_color: None,
+                bot: false,
+            },
+            content: content.to_owned(),
+            timestamp: "2026-11-19T00:00:00.000Z".to_owned(),
+            edited_timestamp: None,
+            kind: 0,
+            flags: 0,
+            pinned: false,
+            mention_everyone: false,
+            mentions: Vec::new(),
+            mention_roles: Vec::new(),
+            attachments: Vec::new(),
+            embeds: Vec::new(),
+            stickers: Vec::new(),
+            reactions: Vec::new(),
+            message_reference: None,
+            referenced_message: None,
+            webhook_id: None,
+            nonce: None,
+            state: MessageState::Sent,
+        }
+    }
+
+    #[test]
+    fn around_load_tracks_pagination_known_latest_and_unsent() {
+        let mut store = MessageStore::default();
+        let ch = Snowflake(10);
+
+        // (a) Full 50-message historical slice centered on index 25 (id 75 out of 100..=51)
+        let full_newest_first: Vec<Message> = (51..=100).rev().map(|id| test_msg(id, 10, "hist")).collect();
+        store.load_around(ch, full_newest_first, Snowflake(75), Some(Snowflake(200)));
+        let win = store.window(ch).expect("window exists");
+        assert!(win.ready);
+        assert!(win.has_more_before);
+        assert!(win.has_more_after);
+        assert!(!win.pinned_to_end);
+
+        // (b) Replace resets pinned_to_end and clears has_more_after
+        store.load(ch, vec![test_msg(200, 10, "latest")], LoadMode::Replace);
+        let win = store.window(ch).expect("window exists");
+        assert!(win.pinned_to_end);
+        assert!(!win.has_more_after);
+
+        // (c) Small channel load_around keeps has_more_after=false, pinned_to_end=true, preserves Sending, and allows apply_incoming
+        let pending_author = store.window(ch).unwrap().messages[0].author.clone();
+        store.insert_pending(ch, Snowflake(205), "unsent".to_owned(), pending_author);
+        let small: Vec<Message> = vec![test_msg(20, 10, "newer"), test_msg(10, 10, "target")];
+        store.load_around(ch, small, Snowflake(10), Some(Snowflake(20)));
+        let win = store.window(ch).expect("small window");
+        assert!(!win.has_more_before);
+        assert!(!win.has_more_after);
+        assert!(win.pinned_to_end);
+        assert!(win.messages.iter().any(|m| m.id == Snowflake(205) && m.state == MessageState::Sending));
+        assert!(store.apply_incoming(test_msg(210, 10, "realtime")));
+
+        // (d) 50-message around reaching known_latest clears has_more_after
+        let at_latest: Vec<Message> = (151..=200).rev().map(|id| test_msg(id, 10, "edge")).collect();
+        store.load_around(ch, at_latest, Snowflake(175), Some(Snowflake(200)));
+        let win = store.window(ch).expect("at latest window");
+        assert!(win.has_more_before);
+        assert!(!win.has_more_after);
+        assert!(win.pinned_to_end);
     }
 }

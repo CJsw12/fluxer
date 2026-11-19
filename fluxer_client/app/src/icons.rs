@@ -10,7 +10,7 @@ use gpui_kit::assets::{Assets, icon_assets};
 use gpui_kit::{AssetSource, SharedString};
 
 // Icons outside gpui-kit's default component bundle.
-icon_assets!(ExtraIcons, [BellOff, FaceSlightlySmilingPlus, Hash, Pencil, Reply, Trash, Users]);
+icon_assets!(ExtraIcons, [BellOff, FaceSlightlySmilingPlus, Hash, Pencil, Reply, Search, Trash, Users]);
 
 /// Register with `Application::with_assets`.
 pub struct AppAssets;
@@ -53,6 +53,7 @@ mod tests {
             IconName::Hash,
             IconName::Pencil,
             IconName::Reply,
+            IconName::Search,
             IconName::Settings,
             IconName::Trash,
             IconName::Users,

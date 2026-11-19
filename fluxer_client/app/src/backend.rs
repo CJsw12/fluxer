@@ -10,11 +10,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{Context as _, Result};
 use fluxer_client_core::gateway::{self, Compression, GatewayConfig, GatewayEvent, GatewayHandle, IdentifyProperties};
 use fluxer_client_core::rest::{
-    AckRequest, ClientIdentity, DiscoveryOptions, Endpoints, MessageQuery, RestClient, RestConfig, SecretToken,
-    SendMessageRequest, TransportPolicy, UserProfileFull, discover_with,
+    AckRequest, ClientIdentity, DiscoveryOptions, Endpoints, MessageQuery, MessageSearchOutcome, RestClient,
+    RestConfig, SecretToken, SendMessageRequest, TransportPolicy, UserProfileFull, discover_with,
 };
 #[cfg(test)]
-use fluxer_client_core::rest::{GuildSettingsPatch, UserSettingsPatch};
+use fluxer_client_core::rest::{GuildSettingsPatch, MessageSearchRequest, UserSettingsPatch};
 use fluxer_client_core::state::{ClientState, LoadMode, Message, PAGE_SIZE, Snowflake};
 use serde_json::{Value, json};
 use tokio::runtime::Handle;
@@ -61,6 +61,8 @@ pub enum UiEvent {
     InviteAccepted { code: String, result: Result<AcceptedInvite, String> },
     /// `DELETE /users/@me/guilds/{id}` finished.
     GuildLeft { guild_id: Snowflake, error: Option<String> },
+    /// `POST /search/messages` finished for client request `seq`.
+    SearchLoaded { seq: u64, result: Result<MessageSearchOutcome, String> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -110,6 +112,7 @@ pub use actions::TypingSender;
 mod members;
 mod navigation;
 mod profile;
+mod search;
 mod settings;
 mod social;
 mod upload;
@@ -138,6 +141,8 @@ pub struct Backend {
     note_seq: Arc<AtomicU64>,
     settings_seq: Arc<AtomicU64>,
     guild_settings_seq: Arc<Mutex<BTreeMap<Option<Snowflake>, u64>>>,
+    /// Per-channel monotonic counter so stale `load_page` replies never overwrite a newer jump/reload.
+    history_seq: Arc<Mutex<BTreeMap<Snowflake, u64>>>,
     /// Every `POST .../messages` body, in order (tests check what the
     /// composer sent; the test runtime never runs the request).
     #[cfg(test)]
@@ -163,6 +168,9 @@ pub struct Backend {
     /// Recorded social & community actions (tests).
     #[cfg(test)]
     pub(crate) sent_social: Arc<Mutex<Vec<SocialCall>>>,
+    /// Sent `POST /search/messages` requests (tests).
+    #[cfg(test)]
+    pub(crate) sent_searches: Arc<Mutex<Vec<MessageSearchRequest>>>,
 }
 
 impl Backend {
@@ -238,6 +246,7 @@ impl Backend {
             note_seq: Arc::new(AtomicU64::new(0)),
             settings_seq: Arc::new(AtomicU64::new(0)),
             guild_settings_seq: Arc::default(),
+            history_seq: Arc::default(),
             #[cfg(test)]
             sent: Arc::default(),
             #[cfg(test)]
@@ -254,6 +263,8 @@ impl Backend {
             sent_guild_settings: Arc::default(),
             #[cfg(test)]
             sent_social: Arc::default(),
+            #[cfg(test)]
+            sent_searches: Arc::default(),
         };
         (backend, rx)
     }
@@ -331,24 +342,54 @@ impl Backend {
         self.load_page(channel_id, LoadMode::After, Some(after));
     }
 
+    /// `GET /channels/{id}/messages?around=<message_id>&limit=50`: loads a
+    /// historical slice centered around `message_id`.
+    pub fn load_around(&self, channel_id: Snowflake, message_id: Snowflake) {
+        self.load_page(channel_id, LoadMode::Around, Some(message_id));
+    }
+
     fn load_page(&self, channel_id: Snowflake, mode: LoadMode, anchor: Option<Snowflake>) {
         #[cfg(test)]
         lock_sent(&self.page_loads).push((channel_id, mode, anchor));
+        let seq = {
+            let mut map = self.history_seq.lock().unwrap_or_else(PoisonError::into_inner);
+            let next = map.get(&channel_id).copied().unwrap_or(0).saturating_add(1);
+            map.insert(channel_id, next);
+            next
+        };
         let rest = self.rest.clone();
         let state = self.state.clone();
+        let history_seq = self.history_seq.clone();
         let events = self.events.clone();
         self.runtime.spawn(async move {
-            let anchor = anchor.map(|id| id.to_string());
+            let anchor_id = anchor;
+            let anchor_str = anchor.map(|id| id.to_string());
             let query = MessageQuery {
-                before: anchor.clone().filter(|_| mode == LoadMode::Before),
-                after: anchor.filter(|_| mode == LoadMode::After),
+                before: anchor_str.clone().filter(|_| mode == LoadMode::Before),
+                after: anchor_str.clone().filter(|_| mode == LoadMode::After),
+                around: anchor_str.filter(|_| mode == LoadMode::Around),
                 limit: u8::try_from(PAGE_SIZE).ok(),
                 ..MessageQuery::default()
             };
-            let error = match rest.get_messages(&channel_id.to_string(), &query).await {
+            let result = rest.get_messages(&channel_id.to_string(), &query).await;
+            let stale = history_seq.lock().unwrap_or_else(PoisonError::into_inner).get(&channel_id).copied().unwrap_or(0) != seq;
+            if stale {
+                return;
+            }
+            let error = match result {
                 Ok(body) => {
                     let page = parse_messages(&body);
-                    lock(&state).messages.load(channel_id, page, mode);
+                    let mut st = lock(&state);
+                    if mode == LoadMode::Around {
+                        let known_latest = st.channels.get(&channel_id).and_then(|c| c.last_message_id);
+                        if let Some(target) = anchor_id {
+                            st.messages.load_around(channel_id, page, target, known_latest);
+                        } else {
+                            st.messages.load(channel_id, page, mode);
+                        }
+                    } else {
+                        st.messages.load(channel_id, page, mode);
+                    }
                     None
                 }
                 Err(err) => Some(err.to_string()),

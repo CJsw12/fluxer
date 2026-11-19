@@ -3,8 +3,8 @@
 
 use gpui_kit::component::message_scroller::MessageScroller;
 use gpui_kit::{
-    AnyElement, App, FontWeight, HighlightStyle, Hsla, SharedString, StyleRefinement, StyledText, WeakEntity, div,
-    prelude::*, px,
+    AnyElement, App, FontWeight, HighlightStyle, Hsla, MouseButton, SharedString, StyleRefinement, StyledText,
+    WeakEntity, div, prelude::*, px,
 };
 
 use super::message_row::{self, RowBar};
@@ -30,6 +30,10 @@ pub fn render(view: &ClientView, handle: WeakEntity<ClientView>, theme: &Theme) 
     let rows = view.rows.clone();
     let leave = handle.clone();
     let (picker, hovered) = (view.reaction_picker, view.hovered_message);
+    let highlighted_id = view
+        .highlighted_message
+        .filter(|(ch, _)| Some(*ch) == view.selected_channel)
+        .map(|(_, id)| id);
     let theme = *theme;
     // Only reads the rows: the scroller calls this during layout.
     let list = MessageScroller::new("messages", view.scroller.clone(), move |ix, window, cx| {
@@ -43,7 +47,8 @@ pub fn render(view: &ClientView, handle: WeakEntity<ClientView>, theme: &Theme) 
                 } else {
                     RowBar::None
                 };
-                render_row(row, &theme, &handle, bar, window.scale_factor(), cx)
+                let highlighted = highlighted_id == Some(row.id);
+                render_row(row, &theme, &handle, bar, highlighted, window.scale_factor(), cx)
             }
             None => div().into_any_element(),
         }
@@ -52,6 +57,7 @@ pub fn render(view: &ClientView, handle: WeakEntity<ClientView>, theme: &Theme) 
     // every row; rows carry their own spacing.
     .with_row_style(StyleRefinement::default().pb(px(0.)).px(px(0.)));
     // Rows set the hovered message on mouse moves; leaving the list clears it.
+    let (wheel, drag) = (leave.clone(), leave.clone());
     div()
         .id("message-pane")
         .flex_1()
@@ -60,6 +66,12 @@ pub fn render(view: &ClientView, handle: WeakEntity<ClientView>, theme: &Theme) 
             if !*hovered {
                 let _ = leave.update(cx, |v, cx| v.hover_message(None, cx));
             }
+        })
+        .on_scroll(move |_, _, cx| {
+            let _ = wheel.update(cx, |v, _| v.suppress_jump_scroll = false);
+        })
+        .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+            let _ = drag.update(cx, |v, _| v.suppress_jump_scroll = false);
         })
         .child(list)
         .into_any_element()
@@ -72,6 +84,7 @@ fn render_row(
     theme: &Theme,
     handle: &WeakEntity<ClientView>,
     bar: RowBar,
+    highlighted: bool,
     scale: f32,
     cx: &mut App,
 ) -> AnyElement {
@@ -96,6 +109,18 @@ fn render_row(
     let message = match &row.system {
         Some(system) => no_message(render_system(row, system, theme)).into_any_element(),
         None => message_row::render(row, theme, handle, bar, scale, cx),
+    };
+    let message = if highlighted {
+        div()
+            .relative()
+            .w_full()
+            .bg(theme.mention_bg)
+            .debug_selector(|| "highlighted-message".to_owned())
+            .child(div().absolute().left_0().top_0().bottom_0().w(px(3.)).bg(theme.brand))
+            .child(message)
+            .into_any_element()
+    } else {
+        message
     };
     column.child(message).into_any_element()
 }

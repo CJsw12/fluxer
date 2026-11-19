@@ -59,6 +59,8 @@ impl ClientView {
     pub(crate) fn clear_selection(&mut self, cx: &mut Context<Self>) {
         self.cancel_ack();
         let old_channel = self.selected_channel.take();
+        self.pending_jump = None;
+        self.highlighted_message = None;
         self.autocomplete = None;
         let old_draft = self
             .composer_mode

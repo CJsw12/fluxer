@@ -117,10 +117,11 @@
   <g><title>채널 음소거 : 부분</title><rect x="580" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="432.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">검색</text>
   <rect x="270" y="421.0" width="190" height="10" rx="5" fill="#21262d"/>
-  <text x="474" y="431.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">0%</text>
-  <g><title>메시지 검색(REST) : 미착수</title><rect x="510" y="421.0" width="10" height="10" rx="2" fill="#484f58"/></g>
-  <g><title>검색 결과 화면 : 미착수</title><rect x="524" y="421.0" width="10" height="10" rx="2" fill="#484f58"/></g>
-  <g><title>메시지로 점프 : 미착수</title><rect x="538" y="421.0" width="10" height="10" rx="2" fill="#484f58"/></g>
+  <rect x="270" y="421.0" width="126.7" height="10" rx="5" fill="#58a6ff"/>
+  <text x="474" y="431.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">67%</text>
+  <g><title>메시지 검색(REST) : 완료</title><rect x="510" y="421.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>검색 결과 화면 : 부분</title><rect x="524" y="421.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>메시지로 점프 : 부분</title><rect x="538" y="421.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="466.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">다국어·접근성</text>
   <rect x="270" y="455.0" width="190" height="10" rx="5" fill="#21262d"/>
   <rect x="270" y="455.0" width="95.0" height="10" rx="5" fill="#58a6ff"/>

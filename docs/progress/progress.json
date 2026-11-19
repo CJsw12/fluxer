@@ -355,15 +355,15 @@
       "items": [
         {
           "name": "메시지 검색(REST)",
-          "status": "todo"
+          "status": "done"
         },
         {
           "name": "검색 결과 화면",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "메시지로 점프",
-          "status": "todo"
+          "status": "partial"
         }
       ]
     },

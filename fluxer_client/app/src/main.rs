@@ -50,6 +50,8 @@ mod tests_notify_upload;
 #[cfg(test)]
 mod tests_profile;
 #[cfg(test)]
+mod tests_search;
+#[cfg(test)]
 mod tests_settings;
 #[cfg(test)]
 mod tests_social;

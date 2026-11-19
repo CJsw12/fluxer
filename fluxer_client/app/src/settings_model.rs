@@ -88,6 +88,7 @@ pub enum SettingsEffect {
     ZoomChanged(u16),
     CompactChanged(bool),
     ClearTrustedDomains,
+    OpenAccountSwitcher,
     LogOutRequested,
 }
 

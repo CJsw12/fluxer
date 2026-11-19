@@ -59,6 +59,12 @@ pub enum Connection {
 pub enum ClientEvent {
     /// The user logged out; the session is closed and REST logout was sent.
     LoggedOut,
+    /// Switch to another saved account by storage key (preserves current token).
+    SwitchAccount(String),
+    /// Open login view to add another account (preserves current saved accounts).
+    AddAccount,
+    /// Remove a saved inactive account from local storage.
+    RemoveAccount(String),
 }
 
 pub struct ClientView {
@@ -204,6 +210,10 @@ pub struct ClientView {
     pub(crate) group_dm_adding: bool,
     /// `(channel_id, custom_name)` last synced into `group_dm_rename`.
     group_dm_rename_synced: Option<(Snowflake, Option<String>)>,
+    /// True when backed by a persistent `SessionStore` (false under `--token-env`).
+    pub(crate) accounts_enabled: bool,
+    /// Token-free list of saved accounts for switching/removing in the UI.
+    pub(crate) saved_accounts: Vec<crate::accounts::SavedAccountItem>,
     /// Keeps the layout's key context reachable when nothing inside has focus.
     focus: FocusHandle,
     /// Captured external URLs opened via `launch_external_url` in headless tests.
@@ -365,6 +375,8 @@ impl ClientView {
             group_dm_rename,
             group_dm_adding: false,
             group_dm_rename_synced: None,
+            accounts_enabled: false,
+            saved_accounts: Vec::new(),
             focus: cx.focus_handle(),
             #[cfg(test)]
             opened_urls: Vec::new(),
@@ -418,6 +430,7 @@ impl ClientView {
             self.overlay,
             Overlay::QuickSwitcher(_)
                 | Overlay::EmojiPicker(_)
+                | Overlay::AccountSwitcher(_)
                 | Overlay::JoinGuild(_)
                 | Overlay::LeaveGuild(_)
                 | Overlay::CreateGroupDm(_)
@@ -1544,6 +1557,24 @@ impl ClientView {
             )
     }
 
+    pub(crate) fn set_saved_accounts(
+        &mut self,
+        enabled: bool,
+        accounts: Vec<crate::accounts::SavedAccountItem>,
+        cx: &mut Context<Self>,
+    ) {
+        self.accounts_enabled = enabled;
+        self.saved_accounts = accounts;
+        cx.notify();
+    }
+
+    /// Closes this session's timers and gateway without revoking the token on the server.
+    pub(crate) fn close_session(&mut self) {
+        self.cancel_ack();
+        self._typing_timer = None;
+        self.backend.close();
+    }
+
     /// "Log out": closes the gateway, sends `POST /auth/logout` and tells the
     /// root, which forgets the stored account and shows the login screen.
     pub(crate) fn log_out(&mut self, cx: &mut Context<Self>) {
@@ -1583,6 +1614,7 @@ impl Render for ClientView {
             }
             Overlay::Profile(pop) => Some(ui::profile_popout::render(pop, &theme, cx)),
             Overlay::Settings(modal) => Some(ui::settings::render(self, modal, &theme, cx)),
+            Overlay::AccountSwitcher(modal) => Some(ui::account_switcher::render(self, modal, &theme, cx)),
             Overlay::JoinGuild(modal) => Some(ui::guild_modal::render_join(modal, &theme, cx)),
             Overlay::LeaveGuild(modal) => Some(ui::guild_modal::render_leave(modal, &theme, cx)),
             Overlay::CreateGroupDm(modal) => {

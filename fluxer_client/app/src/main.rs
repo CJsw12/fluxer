@@ -40,6 +40,8 @@ mod view_model;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod tests_accounts;
+#[cfg(test)]
 mod tests_emoji_picker;
 #[cfg(test)]
 mod tests_group_dm;

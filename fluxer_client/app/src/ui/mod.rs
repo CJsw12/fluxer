@@ -1,6 +1,7 @@
 //! Pieces of the client layout. Each renders from the `ClientView` snapshot;
 //! the view owns the state and the actions the listeners call.
 
+pub mod account_switcher;
 pub mod channel_list;
 pub mod composer;
 pub mod emoji_picker;

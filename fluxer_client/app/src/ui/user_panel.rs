@@ -87,6 +87,18 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .child(div().truncate().font_weight(FontWeight::SEMIBOLD).child(name))
                 .child(div().truncate().text_xs().text_color(theme.muted_foreground).child(label)),
         )
+        .when(view.accounts_enabled, |d| {
+            d.child(
+                div().debug_selector(|| "switch-accounts".to_owned()).child(
+                    Button::new("switch-accounts")
+                        .ghost()
+                        .small()
+                        .icon(IconName::Users)
+                        .tooltip(l10n::tr("Switch accounts"))
+                        .on_click(cx.listener(|this, _, window, cx| this.open_account_switcher(window, cx))),
+                ),
+            )
+        })
         .child(
             Button::new("open-settings")
                 .ghost()

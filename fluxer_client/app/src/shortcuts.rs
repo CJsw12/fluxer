@@ -15,7 +15,7 @@ use gpui_kit::{Action, App, Context, Div, KeyBinding, NoAction, prelude::*};
 
 use crate::client_view::ClientView;
 use crate::nav::ChannelFilter;
-use crate::ui::{quick_switcher, search_panel};
+use crate::ui::{account_switcher, quick_switcher, search_panel};
 
 gpui_kit::actions!(
     fluxer,
@@ -59,6 +59,7 @@ fn both<A: Action + Clone>(out: &mut Vec<KeyBinding>, keys: &'static str, action
     out.push(KeyBinding::new(keys, action, Some(IN_COMPOSER)));
     out.push(KeyBinding::new(keys, NoAction, Some(quick_switcher::CONTEXT)));
     out.push(KeyBinding::new(keys, NoAction, Some(search_panel::CONTEXT)));
+    out.push(KeyBinding::new(keys, NoAction, Some(account_switcher::CONTEXT)));
 }
 
 /// Every shortcut binding of the client layout.
@@ -80,6 +81,7 @@ fn bindings() -> Vec<KeyBinding> {
     // Ctrl+K also closes the switcher from its own input.
     out.push(KeyBinding::new("ctrl-k", ToggleQuickSwitcher, Some(CONTEXT)));
     out.push(KeyBinding::new("ctrl-k", ToggleQuickSwitcher, Some(IN_INPUT)));
+    out.push(KeyBinding::new("ctrl-k", NoAction, Some(account_switcher::CONTEXT)));
     both(&mut out, "ctrl-e", ToggleEmojiPicker);
     both(&mut out, "ctrl-,", OpenSettings);
     both(&mut out, "ctrl-=", ZoomIn);
@@ -145,6 +147,6 @@ mod tests {
             let key = (format!("{:?}", b.keystrokes()), b.predicate().map(|p| p.to_string()));
             assert!(seen.insert(key.clone()), "{key:?} bound twice");
         }
-        assert_eq!(seen.len(), 81);
+        assert_eq!(seen.len(), 101);
     }
 }

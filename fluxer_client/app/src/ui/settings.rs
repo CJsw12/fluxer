@@ -49,6 +49,7 @@ impl ClientView {
             SettingsEffect::ZoomChanged(zoom) => self.settings_set_zoom(zoom, cx),
             SettingsEffect::CompactChanged(compact) => self.settings_set_compact(compact, cx),
             SettingsEffect::ClearTrustedDomains => self.settings_clear_trusted_domains(cx),
+            SettingsEffect::OpenAccountSwitcher => self.open_account_switcher(window, cx),
             SettingsEffect::LogOutRequested => {
                 self.close_overlay(window, cx);
                 self.log_out(cx);
@@ -386,11 +387,36 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
             )
             .into_any_element()
     } else {
-        Button::new("settings-logout")
-            .danger()
-            .small()
-            .label(l10n::tr("Log out"))
-            .on_click(cx.listener(|this, _, _, cx| this.settings_prompt_logout(true, cx)))
+        let switch_label = if view.saved_accounts.len() > 1 {
+            format!("{} ({})", l10n::tr("Switch accounts"), view.saved_accounts.len())
+        } else {
+            l10n::tr("Switch accounts")
+        };
+        div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_2()
+            .child(
+                Button::new("settings-logout")
+                    .danger()
+                    .small()
+                    .label(l10n::tr("Log out"))
+                    .on_click(cx.listener(|this, _, _, cx| this.settings_prompt_logout(true, cx))),
+            )
+            .when(view.accounts_enabled, |d| {
+                d.child(
+                    div().debug_selector(|| "settings-switch-accounts".to_owned()).child(
+                        Button::new("settings-switch-accounts")
+                            .ghost()
+                            .small()
+                            .label(switch_label)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.apply_settings_effect(SettingsEffect::OpenAccountSwitcher, window, cx);
+                            })),
+                    ),
+                )
+            })
             .into_any_element()
     };
 

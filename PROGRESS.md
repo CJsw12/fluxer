@@ -677,11 +677,29 @@
   1. Milestone 6(길드 채널 생성·편집, 역할·권한·멤버 관리, 다중 계정 전환 등 `progress.json` 미구현 핵심 항목) 설계 및 구현 착수.
   2. 자체 테스트 서버(`fluxer-dev.home.arpa`)에서 `dist/fluxer_client/fluxer_client.exe` 재패키징 및 M2~M5 실기 확인.
 
+## 다중 계정 전환 UI (Milestone 6, 2026-11-19)
+- **Baseline**: `desktop-rs` `50e7c67f7` 기반(496 테스트 통과).
+- **Done**:
+  - **토큰 비노출 뷰 모델·로그인 선택기 (`accounts.rs`, `login.rs`)**: `SavedAccountItem`(`SecretToken` 미포함), `instance_label`, `saved_account_avatar_url`(숫자 `user_id` 및 영숫자/`_`/`-` 아바타 해시 검증), `saved_account_items`(활성 계정 우선 정렬) 구현. `LoginView`에 `"Saved accounts"` 1클릭 전환 목록, 비활성 계정 2단계 로컬 제거 확인(`login-remove-*` → `login-remove-confirm-*`), 추가 계정 흐름 `"Back to accounts"`(`Credentials`/`Totp` 양 단계 지원) 구현.
+  - **계정 전환 모달·단축키 차단·오버레이 (`ui/account_switcher.rs`, `ui/overlay.rs`, `ui/user_panel.rs`, `ui/settings.rs`, `settings_model.rs`, `client_view.rs`, `shortcuts.rs`)**: 사용자 패널 `switch-accounts` 버튼 및 설정 화면 `settings-switch-accounts` → `Overlay::AccountSwitcher` 모달 열기, 2단계 비활성 계정 로컬 제거, `"Add account"` 전환, `close_overlay` 시 작성기 포커스 복원, `account_switcher::CONTEXT` 전역 단축키 `NoAction` 차단(총 101바인딩), `--token-env` 모드(`accounts_enabled = false`) UI·액션 완전 숨김·차단 구현.
+  - **세션 전환·보안 오케스트레이션 (`root.rs`)**: `transition_seq`로 지연 `resume_session` 완료 무시, `Checking` 중 중복 전환·취소 가드, 게이트웨이(`close_session`)·타이머 정리 없이 서버 로그아웃(`POST /auth/logout`)을 보내지 않는 안전한 계정 전환, `Backend::start` 성공 이후 `resave_for`/`set_active` 커밋 및 `previous_account_key` 보존(`Backend::start` 실패·401 `Rejected`·`Unreachable` 시 이전 계정 복귀 가능), `@me` `id`와 저장 `user_id` 대조 검증(`verify_me_user_id`), `expected_key` 검증을 통한 백그라운드 `rediscover` 경쟁 차단 구현.
+  - **DeepSeek T3 교차 검토·검증**: `deepseek/deepseek-flash`(`fluxer-helper-m6-review`) 보안·동시성 정적 검토(P0 0건, P1 1건 `active` 커밋 실패 폴백, P2 6건, P3 8건) 중 P1-1, P2-1/3/4/5/6, P3-1/2/3/7/8을 반영하고 [tests_accounts.rs](fluxer_client/app/src/tests_accounts.rs) 등 7개 신규 테스트 추가. 재검증 결과 `cargo check -p fluxer_client_app --bin fluxer_client` **경고 0건**, `cargo test --workspace -- --test-threads=2` **503 passed, 0 failed, 0 warnings** (`app`: 203, `core`: 251, `i18n`: 10, `markdown`: 36 [+1 existing ignored doctest], `devserver`: 3).
+  - **진행도 배지**: `docs/progress/progress.json` 갱신(`다중 계정 전환: partial`) + `python scripts/progress_svg.py` 실행 → `overall: 63% (93 items)`, `daily driver: 71% (73 items, 10 areas)`.
+- **Decisions**:
+  - 계정 전환 시 이전 `SessionStore` 레코드와 토큰을 보존하고 게이트웨이(`close_session`)만 닫으며, 로컬 `"Remove"`는 서버 세션을 폐기하지 않으므로 오동작 방지를 위해 2단계 확인 UI를 둠.
+  - `resave_for`는 재저장 성공 여부(`bool`)를 반환해 `Backend::start` 성공 직후 실패 시에도 `set_active` 폴백이 반드시 실행되도록 하고, `rediscover`는 `finish_resume_seq(Ok)` 및 `start_client` 성공 이후에만 시작함.
+- **Blockers**:
+  - 실서버 다중 계정(및 다중 인스턴스) 전환·TOTP 추가 로그인·만료 복구 실기 검증은 테스트 서버 확인 전임.
+  - 계정 전환 시 메모리 내 채널 초안(`drafts`)과 진행 중 업로드는 영속화되지 않고 초기화됨(향후 초안 영속화 과제).
+- **Next Steps**:
+  1. Milestone 7(딥링크 `fluxer://`·단일 인스턴스 인계, 길드 채널·역할·멤버 관리 등 `progress.json` 미구현 핵심 항목) 설계 및 구현 착수.
+  2. 자체 테스트 서버(`fluxer-dev.home.arpa`)에서 `dist/fluxer_client/fluxer_client.exe` 재패키징 및 M2~M6 실기 확인.
+
 ## 인계 (2026-11-19, 다음 에이전트용 — 이 절부터 읽을 것)
-- **기준**: `desktop-rs` (`a590c7bd5` 이후 Milestone 5 그룹 DM UI 커밋 반영), 워킹 트리 깨끗함(미공개 파일·`dist/` 제외). 미공개 유지 파일(커밋 금지): `RUST_*_PLAN.md`, `RUST_MIGRATION_REFERENCE_REVIEW.md`, `RUST_PORT_RESEARCH_*`, `IPC_M0_FINDINGS.md`, `tools/h265_livekit_probe/`.
-- **현재 주력**: 네이티브 GPUI 클라이언트 `fluxer_client/`(core, app, markdown, i18n, devserver). `cd fluxer_client; $env:CARGO_TARGET_DIR = "../target/fc-root"; cargo test --workspace -- --test-threads=2` → 496 통과(app 196, core 251, markdown 36 [+1 ignored doctest], i18n 10, devserver 3), `cargo check --bin fluxer_client` 경고 0.
-- **우선순위(P0)**: ① 알림·첨부 ✔(코드) ② 임베드 ✔(코드) ③ 릴리스 exe ✔(`scripts/package_fluxer_client.ps1`, 산출 `dist/fluxer_client/fluxer_client.exe` 39.17 MB, SHA256 `9a6a9e34600e5025a1e654ece655542c899cf64f5f5ab6b63f953102c6adcae7`, `PE_SUBSYSTEM=2`) ④ 안정성 실기(재연결·장시간 메모리·한글 IME). P1~P2 진행: 이모지 피커·프로필 팝업·설정 화면·트레이/자동 시작·드래프트 보존·방문 기록 이동·채널 음소거·친구 목록·관계 관리·초대 참가·길드 탈퇴·미디어 뷰어·신뢰 도메인 경고·글꼴/밀도/확대·메시지 검색·점프·그룹 DM UI ✔(코드/헤드리스).
-- **실기 미확인**: 그룹 DM 생성/이름 변경/멤버 추가·제거/나가기 실서버 동작, 메시지 검색 REST·패널·점프(`POST /search/messages`·`?around=`) 실서버 동작, 미디어 뷰어·신뢰 도메인 경고·글꼴/밀도/확대 실서버/실기기 동작, 친구/관계 관리·초대 참가·그룹 DM 초대·길드 탈퇴 실서버 동작, 채널/DM 음소거 실서버 PATCH, 드래프트·`Alt+Left/Right` 실기, 트레이 아이콘·닫기 최소화·`--autostart` HKCU Run 실제 동작, 이모지 피커·프로필 팝업·설정/테마/로케일 UI 실서버 동작, GIF 애니메이션 수정, 유튜브 카드 중복 수정, Windows 토스트·알림음(사용자 PC가 방해 금지 모드), 첨부 업로드 실서버, 한국어 UI 화면, 릴리스 exe·AUMID 바로가기.
+- **기준**: `desktop-rs` (`50e7c67f7` 이후 Milestone 6 다중 계정 전환 UI 커밋 반영), 워킹 트리 깨끗함(미공개 파일·`dist/` 제외). 미공개 유지 파일(커밋 금지): `RUST_*_PLAN.md`, `RUST_MIGRATION_REFERENCE_REVIEW.md`, `RUST_PORT_RESEARCH_*`, `IPC_M0_FINDINGS.md`, `tools/h265_livekit_probe/`.
+- **현재 주력**: 네이티브 GPUI 클라이언트 `fluxer_client/`(core, app, markdown, i18n, devserver). `cd fluxer_client; $env:CARGO_TARGET_DIR = "../target/fc-root"; cargo test --workspace -- --test-threads=2` → 503 통과(app 203, core 251, markdown 36 [+1 ignored doctest], i18n 10, devserver 3), `cargo check --bin fluxer_client` 경고 0.
+- **우선순위(P0)**: ① 알림·첨부 ✔(코드) ② 임베드 ✔(코드) ③ 릴리스 exe ✔(`scripts/package_fluxer_client.ps1`, 산출 `dist/fluxer_client/fluxer_client.exe` 39.17 MB, SHA256 `9a6a9e34600e5025a1e654ece655542c899cf64f5f5ab6b63f953102c6adcae7`, `PE_SUBSYSTEM=2`) ④ 안정성 실기(재연결·장시간 메모리·한글 IME). P1~P2 진행: 이모지 피커·프로필 팝업·설정 화면·트레이/자동 시작·드래프트 보존·방문 기록 이동·채널 음소거·친구 목록·관계 관리·초대 참가·길드 탈퇴·미디어 뷰어·신뢰 도메인 경고·글꼴/밀도/확대·메시지 검색·점프·그룹 DM UI·다중 계정 전환 ✔(코드/헤드리스).
+- **실기 미확인**: 다중 계정/다중 인스턴스 전환·계정 추가·비활성 계정 제거 실서버 동작, 그룹 DM 생성/이름 변경/멤버 추가·제거/나가기 실서버 동작, 메시지 검색 REST·패널·점프(`POST /search/messages`·`?around=`) 실서버 동작, 미디어 뷰어·신뢰 도메인 경고·글꼴/밀도/확대 실서버/실기기 동작, 친구/관계 관리·초대 참가·그룹 DM 초대·길드 탈퇴 실서버 동작, 채널/DM 음소거 실서버 PATCH, 드래프트·`Alt+Left/Right` 실기, 트레이 아이콘·닫기 최소화·`--autostart` HKCU Run 실제 동작, 이모지 피커·프로필 팝업·설정/테마/로케일 UI 실서버 동작, GIF 애니메이션 수정, 유튜브 카드 중복 수정, Windows 토스트·알림음(사용자 PC가 방해 금지 모드), 첨부 업로드 실서버, 한국어 UI 화면, 릴리스 exe·AUMID 바로가기.
 - **테스트 환경**: 자체 테스트 서버 `fluxer-dev.home.arpa`(SSH 443 터널). 접속·계정·도구는 저장소 밖 `../Logs/fluxer-dev/LOCAL_ACCESS.md`. **친구 서버와 사용자 개인 계정은 테스트에 쓰지 말 것**(개인 정보). 메시지 전송 시험은 자체 서버에서만.
 - **PC 부하 규칙**(사용자 PC가 여러 번 멈춤): `fluxer_client/.cargo/config.toml` `build.jobs=4` 유지, 동시에 빌드하는 작업 최대 2개, 앱 테스트는 항상 `timeout 300 … -- --test-threads=2`, 빌드 디렉터리는 `target/fc-root`만(추가로 만들었으면 끝나고 삭제). 헤드리스 GPUI 테스트가 무한 루프로 CPU를 먹은 전례(uniform_list의 0..1 측정 호출) — 렌더/레이아웃 콜백에서 상태 변경·notify 금지.
 - **GUI 실기**: `tools/agents/gui.ps1`는 다른 창이 대상 창을 가리면 입력을 거부한다(사용자가 PC 사용 중일 수 있음). 마우스 대신 키보드(Ctrl+K 등) 위주로 확인.

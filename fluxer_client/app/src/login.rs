@@ -6,17 +6,21 @@ use fluxer_client_core::rest::{
 };
 use gpui_kit::Focusable as _;
 use gpui_kit::component::ActiveTheme as _;
+use gpui_kit::component::Disableable as _;
+use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Input, InputEvent, InputState};
-use gpui_kit::component::Disableable as _;
 use gpui_kit::{
     Context, Entity, EventEmitter, FontWeight, SharedString, Subscription, Task, Window, div, prelude::*, px,
 };
 use serde_json::Value;
 use tokio::runtime::Handle;
 
+use crate::accounts::SavedAccountItem;
 use crate::backend::{Instance, connect_instance};
+use crate::theme::Theme;
 use crate::ui::l10n;
+use crate::ui::message_row::avatar;
 
 pub const DEFAULT_INSTANCE: &str = "fluxer.app";
 
@@ -33,6 +37,9 @@ pub struct Authenticated {
 
 pub enum LoginEvent {
     Authenticated(Authenticated),
+    SelectSaved(String),
+    RemoveSaved(String),
+    CancelAddAccount,
 }
 
 /// Validated login form input.
@@ -101,6 +108,9 @@ pub struct LoginView {
     pub(crate) step: Step,
     pub(crate) busy: bool,
     pub(crate) error: Option<SharedString>,
+    pub(crate) saved_accounts: Vec<SavedAccountItem>,
+    pub(crate) can_cancel: bool,
+    pub(crate) confirm_remove: Option<String>,
     request: Option<Task<()>>,
     _subscriptions: Vec<Subscription>,
 }
@@ -108,10 +118,23 @@ pub struct LoginView {
 impl EventEmitter<LoginEvent> for LoginView {}
 
 impl LoginView {
+    #[cfg(test)]
     pub fn new(
         runtime: Handle,
         allow_insecure_loopback: bool,
         error: Option<SharedString>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        Self::new_with_accounts(runtime, allow_insecure_loopback, error, Vec::new(), false, window, cx)
+    }
+
+    pub fn new_with_accounts(
+        runtime: Handle,
+        allow_insecure_loopback: bool,
+        error: Option<SharedString>,
+        saved_accounts: Vec<SavedAccountItem>,
+        can_cancel: bool,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -144,9 +167,28 @@ impl LoginView {
             step: Step::Credentials,
             busy: false,
             error,
+            saved_accounts,
+            can_cancel,
+            confirm_remove: None,
             request: None,
             _subscriptions: subscriptions,
         }
+    }
+
+    pub(crate) fn set_saved_accounts(
+        &mut self,
+        saved_accounts: Vec<SavedAccountItem>,
+        can_cancel: bool,
+        cx: &mut Context<Self>,
+    ) {
+        self.saved_accounts = saved_accounts;
+        self.can_cancel = can_cancel;
+        if let Some(target) = &self.confirm_remove
+            && !self.saved_accounts.iter().any(|a| &a.key == target)
+        {
+            self.confirm_remove = None;
+        }
+        cx.notify();
     }
 
     pub(crate) fn submit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -221,10 +263,163 @@ impl LoginView {
 
 impl Render for LoginView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = cx.theme();
-        let (bg, fg, muted_fg, danger, border) =
-            (theme.background, theme.foreground, theme.muted_foreground, theme.danger, theme.border);
+        let (bg, fg, muted_fg, danger, border) = {
+            let theme = cx.theme();
+            (theme.background, theme.foreground, theme.muted_foreground, theme.danger, theme.border)
+        };
+        let app_theme = Theme::current(cx);
         let busy = self.busy;
+        let saved_section = (!self.saved_accounts.is_empty()).then(|| {
+            let mut list = div()
+                .id("login-saved-accounts")
+                .max_h(px(200.))
+                .overflow_y_scroll()
+                .flex()
+                .flex_col()
+                .gap_1();
+            for (ix, item) in self.saved_accounts.iter().enumerate() {
+                let key = item.key.clone();
+                let select_key = key.clone();
+                let select_sel = format!("login-saved-{key}");
+                let confirming = self.confirm_remove.as_deref() == Some(key.as_str());
+                let subtitle = if item.username.is_empty() {
+                    item.instance_label.to_string()
+                } else {
+                    format!("@{} · {}", item.username, item.instance_label)
+                };
+                let trailing = if confirming {
+                    let confirm_key = key.clone();
+                    let confirm_sel = format!("login-remove-confirm-{key}");
+                    let cancel_sel = format!("login-remove-cancel-{key}");
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_1()
+                        .child(
+                            div().debug_selector(move || confirm_sel.clone()).child(
+                                Button::new(("login-remove-confirm", ix))
+                                    .danger()
+                                    .small()
+                                    .label(l10n::tr("Remove"))
+                                    .disabled(busy)
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        cx.stop_propagation();
+                                        if !this.busy {
+                                            this.confirm_remove = None;
+                                            cx.emit(LoginEvent::RemoveSaved(confirm_key.clone()));
+                                        }
+                                    })),
+                            ),
+                        )
+                        .child(
+                            div().debug_selector(move || cancel_sel.clone()).child(
+                                Button::new(("login-remove-cancel", ix))
+                                    .ghost()
+                                    .small()
+                                    .label(l10n::tr("Cancel"))
+                                    .disabled(busy)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        cx.stop_propagation();
+                                        this.confirm_remove = None;
+                                        cx.notify();
+                                    })),
+                            ),
+                        )
+                        .into_any_element()
+                } else {
+                    let remove_key = key.clone();
+                    let remove_sel = format!("login-remove-{key}");
+                    div()
+                        .debug_selector(move || remove_sel.clone())
+                        .child(
+                            Button::new(("login-remove", ix))
+                                .ghost()
+                                .small()
+                                .label(l10n::tr("Remove"))
+                                .disabled(busy)
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    cx.stop_propagation();
+                                    if !this.busy {
+                                        this.confirm_remove = Some(remove_key.clone());
+                                        cx.notify();
+                                    }
+                                })),
+                        )
+                        .into_any_element()
+                };
+                let row = div()
+                    .id(("login-saved-row", ix))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap_2()
+                    .px_2()
+                    .py_1()
+                    .rounded(px(6.))
+                    .border_1()
+                    .border_color(border)
+                    .hover(|s| s.bg(app_theme.muted))
+                    .child(
+                        div()
+                            .id(("login-saved", ix))
+                            .debug_selector(move || select_sel.clone())
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap_2()
+                            .when(!busy, |d| d.cursor_pointer())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if !this.busy {
+                                    this.error = None;
+                                    cx.emit(LoginEvent::SelectSaved(select_key.clone()));
+                                }
+                            }))
+                            .child(avatar(
+                                item.avatar_url.clone(),
+                                item.default_avatar,
+                                item.initials.clone(),
+                                28.,
+                                &app_theme,
+                            ))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flex()
+                                    .flex_col()
+                                    .child(
+                                        div()
+                                            .truncate()
+                                            .text_sm()
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .child(item.display_name.clone()),
+                                    )
+                                    .child(div().truncate().text_xs().text_color(muted_fg).child(subtitle)),
+                            ),
+                    )
+                    .child(trailing);
+                list = list.child(row);
+            }
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .pt_2()
+                .border_t_1()
+                .border_color(border)
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(muted_fg)
+                        .child(l10n::tr("Saved accounts")),
+                )
+                .child(list)
+        });
+
         let mut form = div()
             .flex()
             .flex_col()
@@ -247,7 +442,9 @@ impl Render for LoginView {
                         .loading(busy)
                         .disabled(busy)
                         .on_click(cx.listener(|this, _, window, cx| this.submit(window, cx))),
-                ),
+                )
+                .when_some(saved_section, |f, section| f.child(section))
+                .when(self.can_cancel, |f| f.child(cancel_add_button(busy, cx))),
             Step::Totp { .. } => form
                 .child(div().text_size(px(20.)).font_weight(FontWeight::BOLD).child(l10n::tr("Two-factor authentication")))
                 .child(div().text_color(muted_fg).child(l10n::tr("Enter the code from your authenticator app.")))
@@ -265,7 +462,8 @@ impl Render for LoginView {
                         .label(l10n::tr("Back"))
                         .disabled(busy)
                         .on_click(cx.listener(|this, _, _, cx| this.back(cx))),
-                ),
+                )
+                .when(self.can_cancel, |f| f.child(cancel_add_button(busy, cx))),
         };
         if let Some(error) = &self.error {
             form = form.child(div().id("login-error").text_color(danger).child(error.clone()));
@@ -278,8 +476,23 @@ impl Render for LoginView {
             .bg(bg)
             .text_color(fg)
             .text_size(px(14.))
+            .image_cache(crate::ui::embed::image_cache(cx))
             .child(form)
     }
+}
+
+fn cancel_add_button(busy: bool, cx: &mut Context<LoginView>) -> impl IntoElement {
+    div().debug_selector(|| "login-cancel-add".to_owned()).child(
+        Button::new("login-cancel-add")
+            .ghost()
+            .label(l10n::tr("Back to accounts"))
+            .disabled(busy)
+            .on_click(cx.listener(|this, _, _, cx| {
+                if !this.busy {
+                    cx.emit(LoginEvent::CancelAddAccount);
+                }
+            })),
+    )
 }
 
 async fn login_with_password(creds: Credentials, allow_insecure_loopback: bool) -> Result<Next, String> {

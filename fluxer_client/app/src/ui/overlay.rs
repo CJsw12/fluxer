@@ -3,6 +3,7 @@
 use gpui_kit::{Anchor, AnyElement, App, MouseButton, Pixels, Point, Window, anchored, div, prelude::*, px};
 
 use crate::theme::Theme;
+use crate::ui::account_switcher::AccountSwitcherModal;
 use crate::ui::emoji_picker::EmojiPicker;
 use crate::ui::group_dm::{CreateGroupDmModal, LeaveGroupDmModal};
 use crate::ui::guild_modal::{JoinGuildModal, LeaveGuildModal};
@@ -21,6 +22,7 @@ pub enum Overlay {
     EmojiPicker(EmojiPicker),
     Profile(ProfilePopout),
     Settings(SettingsModal),
+    AccountSwitcher(AccountSwitcherModal),
     JoinGuild(JoinGuildModal),
     LeaveGuild(LeaveGuildModal),
     CreateGroupDm(CreateGroupDmModal),

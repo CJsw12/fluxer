@@ -165,6 +165,8 @@ impl ClientState {
             "CHANNEL_UPDATE" => self.apply_channel_update(d, out_ref),
             "CHANNEL_UPDATE_BULK" => self.apply_channel_update_bulk(d, out_ref),
             "CHANNEL_DELETE" => self.apply_channel_delete(d, out_ref),
+            "CHANNEL_RECIPIENT_ADD" => self.apply_channel_recipient_add(d, out_ref),
+            "CHANNEL_RECIPIENT_REMOVE" => self.apply_channel_recipient_remove(d, out_ref),
             "PASSIVE_UPDATES" => self.apply_passive_updates(d, out_ref),
             // handlers/messages.rs
             "MESSAGE_CREATE" => self.apply_message_create(d, out_ref),

@@ -652,3 +652,41 @@ fn member_lists_are_dropped_with_their_guild() {
     // Lists of unknown guilds are ignored.
     assert!(state.apply(&list_update(json!([]), json!([]))).is_empty());
 }
+
+#[test]
+fn group_dm_owner_rename_and_recipient_dispatches() {
+    let mut state = ready_state();
+    let gdm = sf(9001);
+    let create = dispatch(
+        "CHANNEL_CREATE",
+        json!({
+            "id": gdm.to_string(),
+            "type": 3,
+            "name": null,
+            "owner_id": ME.to_string(),
+            "recipients": [user_json(OTHER, "other")]
+        }),
+    );
+    assert_eq!(
+        state.apply(&create),
+        vec![StateChange::ChannelUpserted { channel_id: gdm, guild_id: None }]
+    );
+    assert_eq!(state.channels[&gdm].owner_id, Some(sf(ME)));
+    assert_eq!(state.channels[&gdm].recipients.len(), 1);
+
+    let add = dispatch("CHANNEL_RECIPIENT_ADD", json!({ "channel_id": gdm.to_string(), "user": user_json(OWNER, "owner") }));
+    assert_eq!(state.apply(&add), vec![StateChange::ChannelUpserted { channel_id: gdm, guild_id: None }]);
+    assert_eq!(state.channels[&gdm].recipients.len(), 2);
+    assert!(state.users.contains_key(&sf(OWNER)));
+    // Duplicate add is a no-op.
+    assert!(state.apply(&add).is_empty());
+
+    let rename = dispatch("CHANNEL_UPDATE", json!({ "id": gdm.to_string(), "name": "Alpha" }));
+    assert_eq!(state.apply(&rename), vec![StateChange::ChannelUpserted { channel_id: gdm, guild_id: None }]);
+    assert_eq!(state.channels[&gdm].name.as_deref(), Some("Alpha"));
+
+    let remove = dispatch("CHANNEL_RECIPIENT_REMOVE", json!({ "channel_id": gdm.to_string(), "user": { "id": OWNER.to_string() } }));
+    assert_eq!(state.apply(&remove), vec![StateChange::ChannelUpserted { channel_id: gdm, guild_id: None }]);
+    assert_eq!(state.channels[&gdm].recipients.len(), 1);
+    assert!(state.apply(&remove).is_empty());
+}

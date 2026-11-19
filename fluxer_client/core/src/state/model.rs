@@ -288,6 +288,8 @@ pub struct Channel {
     pub permission_overwrites: Vec<PermissionOverwrite>,
     #[serde(default, deserialize_with = "null_default")]
     pub recipients: Vec<User>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_id: Option<Snowflake>,
     #[serde(default, deserialize_with = "null_default")]
     pub nsfw: bool,
     #[serde(default)]

@@ -97,14 +97,14 @@
   <g><title>글꼴·밀도·확대 : 부분</title><rect x="580" y="319.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="364.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">소셜(친구·DM·프로필)</text>
   <rect x="270" y="353.0" width="190" height="10" rx="5" fill="#21262d"/>
-  <rect x="270" y="353.0" width="79.2" height="10" rx="5" fill="#58a6ff"/>
-  <text x="474" y="363.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">42%</text>
+  <rect x="270" y="353.0" width="95.0" height="10" rx="5" fill="#58a6ff"/>
+  <text x="474" y="363.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">50%</text>
   <g><title>DM 목록·대화 : 부분</title><rect x="510" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <g><title>DM 열기·생성 : 부분</title><rect x="524" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <g><title>친구 목록 : 부분</title><rect x="538" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <g><title>프로필 팝업 : 부분</title><rect x="552" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <g><title>차단·관계 관리 : 부분</title><rect x="566" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>그룹 DM : 미착수</title><rect x="580" y="353.0" width="10" height="10" rx="2" fill="#484f58"/></g>
+  <g><title>그룹 DM : 부분</title><rect x="580" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="398.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">서버 관리</text>
   <rect x="270" y="387.0" width="190" height="10" rx="5" fill="#21262d"/>
   <rect x="270" y="387.0" width="47.5" height="10" rx="5" fill="#58a6ff"/>

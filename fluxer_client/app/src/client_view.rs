@@ -107,7 +107,7 @@ pub struct ClientView {
     /// Message row under the pointer: only it shows the action bar.
     pub(crate) hovered_message: Option<Snowflake>,
     /// For composer updates outside a window callback.
-    window_handle: AnyWindowHandle,
+    pub(crate) window_handle: AnyWindowHandle,
     /// Own status (user panel dot); `user_settings.status`.
     pub(crate) own_status: Status,
     /// Member list panel toggle (header button); the panel shows only when
@@ -192,6 +192,18 @@ pub struct ClientView {
     pub(crate) highlighted_message: Option<(Snowflake, Snowflake)>,
     /// Ignores transient pre-layout scroller observer ticks right after a programmatic jump.
     pub(crate) suppress_jump_scroll: bool,
+    /// Group DM right-hand panel toggle (independent of guild `member_list_open`).
+    pub(crate) group_dm_panel_open: bool,
+    /// Sequence counter for `CreateGroupDm` responses.
+    create_group_dm_seq: u64,
+    /// Snapshot of the open Group DM channel (members, owner, addable friends).
+    pub(crate) group_dm: Option<ui::group_dm::GroupDmSnapshot>,
+    /// Persistent inline Group DM rename input (reused across frames).
+    pub(crate) group_dm_rename: Entity<InputState>,
+    /// Whether the inline "Add friends" picker is open in the Group DM panel.
+    pub(crate) group_dm_adding: bool,
+    /// `(channel_id, custom_name)` last synced into `group_dm_rename`.
+    group_dm_rename_synced: Option<(Snowflake, Option<String>)>,
     /// Keeps the layout's key context reachable when nothing inside has focus.
     focus: FocusHandle,
     /// Captured external URLs opened via `launch_external_url` in headless tests.
@@ -212,10 +224,19 @@ impl ClientView {
         let composer = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Select a channel")));
         composer.update(cx, |s, cx| s.set_disabled(true, cx));
         let add_friend_input = cx.new(|cx| InputState::new(window, cx).placeholder("username#0000"));
+        let group_dm_rename = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Group name")));
         let subscriptions = vec![
             cx.subscribe_in(&add_friend_input, window, |this: &mut Self, _, ev: &InputEvent, _, cx| {
                 if let InputEvent::PressEnter { shift: false, .. } = ev {
                     this.submit_add_friend(cx);
+                }
+            }),
+            cx.subscribe_in(&group_dm_rename, window, |this: &mut Self, input_entity, ev: &InputEvent, window, cx| {
+                if let InputEvent::PressEnter { shift: false, .. } = ev {
+                    if input_entity.update(cx, |s, cx| s.marked_text_range(window, cx)).is_some() {
+                        return;
+                    }
+                    this.group_dm_save_name(cx);
                 }
             }),
             cx.subscribe_in(&composer, window, |this: &mut Self, _, ev: &InputEvent, window, cx| match ev {
@@ -338,6 +359,12 @@ impl ClientView {
             pending_jump: None,
             highlighted_message: None,
             suppress_jump_scroll: false,
+            group_dm_panel_open: true,
+            create_group_dm_seq: 0,
+            group_dm: None,
+            group_dm_rename,
+            group_dm_adding: false,
+            group_dm_rename_synced: None,
             focus: cx.focus_handle(),
             #[cfg(test)]
             opened_urls: Vec::new(),
@@ -393,6 +420,8 @@ impl ClientView {
                 | Overlay::EmojiPicker(_)
                 | Overlay::JoinGuild(_)
                 | Overlay::LeaveGuild(_)
+                | Overlay::CreateGroupDm(_)
+                | Overlay::LeaveGroupDm(_)
                 | Overlay::MediaViewer(_)
                 | Overlay::LinkWarning(_)
         );
@@ -580,6 +609,21 @@ impl ClientView {
                 UiEvent::SearchLoaded { seq, result } => {
                     self.search_loaded(seq, result, cx);
                 }
+                UiEvent::GroupDmCreated { seq, result } => {
+                    self.group_dm_created(seq, result, cx);
+                }
+                UiEvent::GroupDmLeft { channel_id, error } => {
+                    if let Some(err) = error {
+                        self.error = Some(err.into());
+                    } else {
+                        if self.last_channel.get(&None).copied() == Some(channel_id) {
+                            self.last_channel.remove(&None);
+                        }
+                        if self.selected_channel == Some(channel_id) {
+                            self.clear_selection(cx);
+                        }
+                    }
+                }
             }
         }
         if connected {
@@ -704,6 +748,11 @@ impl ClientView {
                 }
                 None => MemberPanel::default(),
             };
+            let include_addable = self.group_dm_panel_open && self.search.is_none() && self.group_dm_adding;
+            self.group_dm = match (self.place, self.selected_channel) {
+                (Place::Home, Some(id)) => ui::group_dm::build_snapshot(&state, self.backend.media(), id, include_addable),
+                _ => None,
+            };
             // A reply whose target was deleted is dropped.
             let reply_gone = match self.composer_mode.mode() {
                 ComposerMode::Replying(t) if state.messages.message(t.channel_id, t.message_id).is_none() => {
@@ -760,6 +809,30 @@ impl ClientView {
         self.sync_rows(rows, cx);
         self.set_can_send(can_send, cx);
         self.own_status = self.backend.own_status();
+        self.refresh_create_group_dm_candidates();
+        let next_sync = self.group_dm.as_ref().map(|g| (g.channel_id, g.custom_name.clone()));
+        if next_sync != self.group_dm_rename_synced {
+            let old_channel = self.group_dm_rename_synced.as_ref().map(|(id, _)| *id);
+            let new_channel = next_sync.as_ref().map(|(id, _)| *id);
+            let channel_changed = old_channel != new_channel;
+            self.group_dm_rename_synced = next_sync;
+            if channel_changed {
+                self.group_dm_adding = false;
+            }
+            let text = self
+                .group_dm
+                .as_ref()
+                .and_then(|g| g.custom_name.clone())
+                .unwrap_or_default();
+            let (entity, handle) = (self.group_dm_rename.clone(), self.window_handle);
+            cx.defer(move |cx| {
+                let _ = handle.update(cx, |_, window, cx| {
+                    if channel_changed || !entity.read(cx).focus_handle(cx).is_focused(window) {
+                        entity.update(cx, |s, cx| s.set_value(text, window, cx));
+                    }
+                });
+            });
+        }
         self.refresh_open_profile();
         self.subscribe_member_list();
         self.maybe_ack(cx);
@@ -772,6 +845,14 @@ impl ClientView {
     }
 
     pub(crate) fn toggle_member_list(&mut self, cx: &mut Context<Self>) {
+        if self.group_dm.is_some() {
+            self.group_dm_panel_open = !self.group_dm_panel_open;
+            if !self.group_dm_panel_open {
+                self.group_dm_adding = false;
+            }
+            cx.notify();
+            return;
+        }
         self.member_list_open = !self.member_list_open;
         self.member_visible.set(None);
         self.subscribe_member_list();
@@ -1411,6 +1492,11 @@ impl ClientView {
         self.search_seq
     }
 
+    pub(crate) fn next_group_dm_seq(&mut self) -> u64 {
+        self.create_group_dm_seq = self.create_group_dm_seq.saturating_add(1);
+        self.create_group_dm_seq
+    }
+
     /// Leaves a historical `?around=` jump window and returns to the latest messages.
     pub(crate) fn jump_to_present(&mut self, cx: &mut Context<Self>) {
         if self.loading_history {
@@ -1482,6 +1568,8 @@ impl Render for ClientView {
             Some(ui::search_panel::render(self, &theme, cx))
         } else if self.shows_member_list() {
             Some(ui::member_list::render(self, &theme, cx))
+        } else if self.group_dm_panel_open && self.group_dm.is_some() {
+            Some(ui::group_dm::render_panel(self, &theme, cx))
         } else {
             None
         };
@@ -1497,6 +1585,11 @@ impl Render for ClientView {
             Overlay::Settings(modal) => Some(ui::settings::render(self, modal, &theme, cx)),
             Overlay::JoinGuild(modal) => Some(ui::guild_modal::render_join(modal, &theme, cx)),
             Overlay::LeaveGuild(modal) => Some(ui::guild_modal::render_leave(modal, &theme, cx)),
+            Overlay::CreateGroupDm(modal) => {
+                let query = modal.filter_input.read(cx).value().to_string();
+                Some(ui::group_dm::render_create_modal(modal, &theme, cx, &query))
+            }
+            Overlay::LeaveGroupDm(modal) => Some(ui::group_dm::render_leave_modal(modal, &theme, cx)),
             Overlay::MediaViewer(modal) => Some(ui::media_viewer::render(modal, &theme, cx)),
             Overlay::LinkWarning(modal) => Some(ui::link_warning::render(modal, &theme, cx)),
             Overlay::None => None,

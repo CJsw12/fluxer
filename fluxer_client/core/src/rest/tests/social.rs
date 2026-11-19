@@ -278,3 +278,54 @@ async fn search_messages_route() {
     assert!(matches!(client.search_messages(&invalid).await, Err(RestError::InvalidArgument(_))));
     assert_eq!(fixture.requests().len(), 2);
 }
+
+#[tokio::test]
+async fn group_dm_routes() {
+    let fixture = Fixture::start(ok_fixture()).await;
+    let client = authed(&fixture).await;
+    let u2 = "423456789012345679";
+
+    client.create_group_dm(&[USER.into(), u2.into()]).await.unwrap();
+    client
+        .update_group_dm(CHANNEL, &GroupDmPatch { name: Some(Some("Squad".into())), owner_id: Some(USER.into()) })
+        .await
+        .unwrap();
+    client
+        .update_group_dm(CHANNEL, &GroupDmPatch { name: Some(None), owner_id: None })
+        .await
+        .unwrap();
+    client.add_group_dm_recipient(CHANNEL, u2).await.unwrap();
+    client.remove_group_dm_recipient(CHANNEL, u2, false).await.unwrap();
+    client.leave_channel(CHANNEL, true).await.unwrap();
+
+    assert_eq!(
+        lines(&fixture),
+        vec![
+            l("POST", "/api/v1/users/@me/channels".into()),
+            l("PATCH", format!("/api/v1/channels/{CHANNEL}")),
+            l("PATCH", format!("/api/v1/channels/{CHANNEL}")),
+            l("PUT", format!("/api/v1/channels/{CHANNEL}/recipients/{u2}")),
+            l("DELETE", format!("/api/v1/channels/{CHANNEL}/recipients/{u2}")),
+            l("DELETE", format!("/api/v1/channels/{CHANNEL}?silent=true")),
+        ]
+    );
+    let reqs = fixture.requests();
+    assert_eq!(reqs[0].json(), json!({ "recipients": [USER, u2] }));
+    assert_eq!(reqs[1].json(), json!({ "name": "Squad", "owner_id": USER }));
+    assert_eq!(reqs[2].json(), json!({ "name": null }));
+    assert!(reqs[3].body.is_empty());
+
+    assert!(matches!(client.create_group_dm(&[]).await, Err(RestError::InvalidArgument("recipients"))));
+    assert!(matches!(
+        client.create_group_dm(&[USER.into(), USER.into()]).await,
+        Err(RestError::InvalidArgument("recipients"))
+    ));
+    let over: Vec<String> = (1..=50).map(|n| n.to_string()).collect();
+    assert!(matches!(client.create_group_dm(&over).await, Err(RestError::InvalidArgument("recipients"))));
+    assert!(matches!(
+        client.update_group_dm(CHANNEL, &GroupDmPatch { name: Some(Some("😀".repeat(51))), owner_id: None }).await,
+        Err(RestError::InvalidArgument("name"))
+    ));
+    assert!(matches!(client.add_group_dm_recipient("bad", u2).await, Err(RestError::InvalidArgument(_))));
+    assert_eq!(fixture.requests().len(), 6);
+}

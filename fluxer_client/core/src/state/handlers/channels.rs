@@ -5,7 +5,7 @@ use serde_json::Value;
 use super::{id_field, is_newer, parse};
 use crate::state::client::{ClientState, StateChange};
 use crate::state::ids::Snowflake;
-use crate::state::model::{Channel, overlay};
+use crate::state::model::{Channel, User, overlay};
 
 impl ClientState {
     pub(in crate::state) fn apply_channel_create(&mut self, d: &Value, out: &mut Vec<StateChange>) {
@@ -66,6 +66,35 @@ impl ClientState {
             out.push(StateChange::ChannelRemoved { channel_id: t, guild_id: channel.guild_id });
         }
         out.push(StateChange::ChannelRemoved { channel_id: id, guild_id: channel.guild_id });
+    }
+
+    pub(in crate::state) fn apply_channel_recipient_add(&mut self, d: &Value, out: &mut Vec<StateChange>) {
+        let Some(channel_id) = id_field(d, "channel_id") else { return };
+        let Some(user_val) = d.get("user") else { return };
+        let Some(user) = parse::<User>(user_val, "CHANNEL_RECIPIENT_ADD") else { return };
+        self.users.entry(user.id).or_insert_with(|| user.clone());
+        let Some(channel) = self.channels.get_mut(&channel_id) else { return };
+        if channel.recipients.iter().any(|r| r.id == user.id) {
+            return;
+        }
+        channel.recipients.push(user);
+        out.push(StateChange::ChannelUpserted { channel_id, guild_id: channel.guild_id });
+    }
+
+    pub(in crate::state) fn apply_channel_recipient_remove(&mut self, d: &Value, out: &mut Vec<StateChange>) {
+        let Some(channel_id) = id_field(d, "channel_id") else { return };
+        let Some(user_id) = d.get("user").and_then(|u| id_field(u, "id")) else { return };
+        let new_owner = id_field(d, "owner_id");
+        let Some(channel) = self.channels.get_mut(&channel_id) else { return };
+        let before = channel.recipients.len();
+        channel.recipients.retain(|r| r.id != user_id);
+        let owner_changed = new_owner.is_some() && new_owner != channel.owner_id;
+        if let Some(owner) = new_owner {
+            channel.owner_id = Some(owner);
+        }
+        if channel.recipients.len() != before || owner_changed {
+            out.push(StateChange::ChannelUpserted { channel_id, guild_id: channel.guild_id });
+        }
     }
 
     /// Passive (large, not subscribed) guild: only newest message ids

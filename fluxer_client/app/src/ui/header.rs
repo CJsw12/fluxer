@@ -14,7 +14,7 @@ use crate::view_model::Place;
 
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> impl IntoElement {
     let glyph = view.channel_glyph;
-    let open = view.member_list_open;
+    let open = if view.group_dm.is_some() { view.group_dm_panel_open } else { view.member_list_open };
     let channel_muted = view.selected_channel_muted();
     let is_dm = view.place == Place::Home;
     div()
@@ -72,19 +72,21 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 })
                 .on_click(cx.listener(|this, _, _, cx| this.toggle_notifications(cx)))
         })
-        .when(view.member_target.is_some(), |d| {
+        .when(view.member_target.is_some() || view.group_dm.is_some(), |d| {
             d.child(
-                Button::new("toggle-member-list")
-                    .ghost()
-                    .small()
-                    .icon(IconName::Users)
-                    .selected(open)
-                    .tooltip(if open {
-                        l10n::tr("Hide members")
-                    } else {
-                        l10n::tr("Show members")
-                    })
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_member_list(cx))),
+                div().debug_selector(|| "toggle-member-list".to_owned()).child(
+                    Button::new("toggle-member-list")
+                        .ghost()
+                        .small()
+                        .icon(IconName::Users)
+                        .selected(open)
+                        .tooltip(if open {
+                            l10n::tr("Hide members")
+                        } else {
+                            l10n::tr("Show members")
+                        })
+                        .on_click(cx.listener(|this, _, _, cx| this.toggle_member_list(cx))),
+                ),
             )
         })
 }

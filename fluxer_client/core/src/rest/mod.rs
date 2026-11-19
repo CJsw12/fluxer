@@ -26,12 +26,13 @@ mod tests;
 
 pub use altcha::{ALTCHA_MAX_COUNTER, ALTCHA_SOLVE_TIMEOUT, solve_altcha_challenge};
 pub use api::{
-    AckRequest, ChannelOverride, CreateInviteRequest, CustomStatus, GuildSettingsPatch, MessageContentType,
-    MessageSearchOutcome, MessageSearchPage, MessageSearchRequest, MessageSearchScope, MessageSearchSortBy,
-    MessageSearchSortOrder, MuteConfig, UserSettingsPatch, parse_message_search_response, parse_user_tag,
-    validate_search_request, EditMessageRequest, MemberQuery, MessageQuery, MessageReference, PinsQuery, ProfileQuery,
-    ReactionEmoji, ReactionUsersQuery, SendMessageRequest, TYPING_IMMEDIATE_SEND_IDLE, TYPING_SEND_DELAY,
-    TYPING_THROTTLE, TypingCooldown, TypingPlan, TypingThrottle, encode_uri_component,
+    AckRequest, ChannelOverride, CreateInviteRequest, CustomStatus, GroupDmPatch, GuildSettingsPatch,
+    MAX_CHANNEL_NAME_UTF16, MAX_GROUP_DM_OTHER_RECIPIENTS, MessageContentType, MessageSearchOutcome,
+    MessageSearchPage, MessageSearchRequest, MessageSearchScope, MessageSearchSortBy, MessageSearchSortOrder,
+    MuteConfig, UserSettingsPatch, parse_message_search_response, parse_user_tag, validate_search_request,
+    EditMessageRequest, MemberQuery, MessageQuery, MessageReference, PinsQuery, ProfileQuery, ReactionEmoji,
+    ReactionUsersQuery, SendMessageRequest, TYPING_IMMEDIATE_SEND_IDLE, TYPING_SEND_DELAY, TYPING_THROTTLE,
+    TypingCooldown, TypingPlan, TypingThrottle, encode_uri_component,
 };
 pub use auth::{LoginOutcome, LoginSuccess, MfaMethods};
 pub use client::{

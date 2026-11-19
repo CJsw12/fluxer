@@ -15,10 +15,24 @@ use crate::view_model::{ChannelItem, Place};
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> impl IntoElement {
     let header_bar = match view.place {
         Place::Home => div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .gap_1()
             .px_3()
             .py_2()
-            .font_weight(FontWeight::BOLD)
-            .child(l10n::tr("Direct messages"))
+            .child(div().flex_1().min_w_0().truncate().font_weight(FontWeight::BOLD).child(l10n::tr("Direct messages")))
+            .child(
+                div().debug_selector(|| "create-group-dm-btn".to_owned()).child(
+                    Button::new("create-group-dm-btn")
+                        .ghost()
+                        .small()
+                        .icon(IconName::Plus)
+                        .tooltip(l10n::tr("Create group DM"))
+                        .on_click(cx.listener(|this, _, window, cx| this.open_create_group_dm(window, cx))),
+                ),
+            )
             .into_any_element(),
         Place::Guild(id) => {
             let name = view

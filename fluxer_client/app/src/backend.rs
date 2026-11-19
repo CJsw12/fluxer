@@ -63,6 +63,10 @@ pub enum UiEvent {
     GuildLeft { guild_id: Snowflake, error: Option<String> },
     /// `POST /search/messages` finished for client request `seq`.
     SearchLoaded { seq: u64, result: Result<MessageSearchOutcome, String> },
+    /// `POST /users/@me/channels` finished for a group DM (`Ok(channel_id)`).
+    GroupDmCreated { seq: u64, result: Result<Snowflake, String> },
+    /// `DELETE /channels/{id}` finished for a group DM.
+    GroupDmLeft { channel_id: Snowflake, error: Option<String> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -109,6 +113,7 @@ pub(crate) fn lock_sent<T>(sent: &Mutex<T>) -> MutexGuard<'_, T> {
 mod actions;
 
 pub use actions::TypingSender;
+mod group_dm;
 mod members;
 mod navigation;
 mod profile;
@@ -117,6 +122,8 @@ mod settings;
 mod social;
 mod upload;
 
+#[cfg(test)]
+pub use group_dm::GroupDmCall;
 pub use social::{AcceptedInvite, InvitePreview, extract_invite_code};
 #[cfg(test)]
 pub use social::SocialCall;
@@ -143,6 +150,8 @@ pub struct Backend {
     guild_settings_seq: Arc<Mutex<BTreeMap<Option<Snowflake>, u64>>>,
     /// Per-channel monotonic counter so stale `load_page` replies never overwrite a newer jump/reload.
     history_seq: Arc<Mutex<BTreeMap<Snowflake, u64>>>,
+    /// Per-channel monotonic counter so stale group DM rename replies never overwrite a newer edit.
+    rename_group_dm_seq: Arc<Mutex<BTreeMap<Snowflake, u64>>>,
     /// Every `POST .../messages` body, in order (tests check what the
     /// composer sent; the test runtime never runs the request).
     #[cfg(test)]
@@ -171,6 +180,9 @@ pub struct Backend {
     /// Sent `POST /search/messages` requests (tests).
     #[cfg(test)]
     pub(crate) sent_searches: Arc<Mutex<Vec<MessageSearchRequest>>>,
+    /// Recorded group DM actions (tests).
+    #[cfg(test)]
+    pub(crate) sent_group_dm: Arc<Mutex<Vec<GroupDmCall>>>,
 }
 
 impl Backend {
@@ -247,6 +259,7 @@ impl Backend {
             settings_seq: Arc::new(AtomicU64::new(0)),
             guild_settings_seq: Arc::default(),
             history_seq: Arc::default(),
+            rename_group_dm_seq: Arc::default(),
             #[cfg(test)]
             sent: Arc::default(),
             #[cfg(test)]
@@ -265,6 +278,8 @@ impl Backend {
             sent_social: Arc::default(),
             #[cfg(test)]
             sent_searches: Arc::default(),
+            #[cfg(test)]
+            sent_group_dm: Arc::default(),
         };
         (backend, rx)
     }

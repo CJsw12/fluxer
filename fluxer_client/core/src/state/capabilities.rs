@@ -63,6 +63,24 @@ impl ClientState {
         has(self.channel_permissions(channel_id), bits::MENTION_EVERYONE)
     }
 
+    /// `GuildChannelController`: creating uncategorized channels or categories
+    /// requires guild-wide `MANAGE_CHANNELS`. Visiting sessions never qualify
+    /// because `VISITOR_MASK` excludes `MANAGE_CHANNELS`.
+    pub fn can_manage_guild_channels(&self, guild_id: Snowflake) -> bool {
+        has(self.guild_permissions(guild_id), bits::MANAGE_CHANNELS)
+    }
+
+    /// Editing or deleting a guild channel/category (or creating inside a
+    /// category) requires channel-scoped `MANAGE_CHANNELS`. Private channels and
+    /// threads are excluded here.
+    pub fn can_manage_channel(&self, channel_id: Snowflake) -> bool {
+        let Some(channel) = self.channels.get(&channel_id) else { return false };
+        if channel.kind.is_private() || channel.kind.is_thread() || channel.guild_id.is_none() {
+            return false;
+        }
+        has(self.channel_permissions(channel_id), bits::MANAGE_CHANNELS)
+    }
+
     /// Whether the current user is timed out in `channel`'s guild
     /// (`GuildMembers.isUserTimedOut`, `GuildMembers.ts:129-142`).
     fn timed_out_in(&self, channel: &Channel, now_ms: i64) -> bool {
@@ -253,5 +271,114 @@ mod tests {
         // DMs stay allowed.
         assert!(state.can_attach_files(sf(DM)));
         assert!(state.can_add_reactions(sf(DM)));
+    }
+
+    #[test]
+    fn manage_channels_permissions_and_category_scope() {
+        let mut state = ready_state();
+        assert!(!state.can_manage_guild_channels(sf(GUILD)));
+        assert!(!state.can_manage_channel(sf(GENERAL)));
+
+        // Category-scoped overwrite grants MANAGE_CHANNELS only on that category.
+        let cat_managed = 2100;
+        let cat_other = 2101;
+        state.apply(&dispatch(
+            "CHANNEL_CREATE",
+            json!({
+                "id": cat_managed.to_string(),
+                "guild_id": GUILD.to_string(),
+                "type": 4,
+                "name": "managed-cat",
+                "position": 0,
+                "permission_overwrites": [
+                    overwrite(GUILD, 0, bits::VIEW_CHANNEL | bits::MANAGE_CHANNELS, 0)
+                ]
+            }),
+        ));
+        state.apply(&dispatch(
+            "CHANNEL_CREATE",
+            json!({
+                "id": cat_other.to_string(),
+                "guild_id": GUILD.to_string(),
+                "type": 4,
+                "name": "other-cat",
+                "position": 1,
+                "permission_overwrites": []
+            }),
+        ));
+        assert!(!state.can_manage_guild_channels(sf(GUILD)));
+        assert!(state.can_manage_channel(sf(cat_managed)));
+        assert!(!state.can_manage_channel(sf(cat_other)));
+        assert!(!state.can_manage_channel(sf(GENERAL)));
+
+        // Guild-wide MANAGE_CHANNELS allows root and categories unless denied on a category.
+        let cat_denied = 2102;
+        state.apply(&dispatch(
+            "GUILD_ROLE_UPDATE",
+            json!({
+                "guild_id": GUILD.to_string(),
+                "role": role_json(GUILD, "@everyone", bits::DEFAULT | bits::MANAGE_CHANNELS),
+            }),
+        ));
+        state.apply(&dispatch(
+            "CHANNEL_CREATE",
+            json!({
+                "id": cat_denied.to_string(),
+                "guild_id": GUILD.to_string(),
+                "type": 4,
+                "name": "locked-cat",
+                "position": 2,
+                "permission_overwrites": [overwrite(GUILD, 0, 0, bits::MANAGE_CHANNELS)]
+            }),
+        ));
+        assert!(state.can_manage_guild_channels(sf(GUILD)));
+        assert!(state.can_manage_channel(sf(cat_other)));
+        assert!(!state.can_manage_channel(sf(cat_denied)));
+
+        // Administrator / owner bypass denies.
+        state.members.get_mut(&sf(GUILD)).unwrap().get_mut(&sf(ME)).unwrap().roles = vec![sf(ROLE_ADMIN)];
+        assert!(state.can_manage_channel(sf(cat_denied)));
+        state.members.get_mut(&sf(GUILD)).unwrap().get_mut(&sf(ME)).unwrap().roles = Vec::new();
+        state.guilds.get_mut(&sf(GUILD)).unwrap().owner_id = Some(sf(ME));
+        assert!(state.can_manage_guild_channels(sf(GUILD)));
+        assert!(state.can_manage_channel(sf(cat_denied)));
+    }
+
+    #[test]
+    fn visiting_dm_and_thread_cannot_manage_channels() {
+        let mut state = ready_state();
+        state.guilds.get_mut(&sf(GUILD)).unwrap().owner_id = Some(sf(ME));
+        state.apply(&dispatch(
+            "CHANNEL_CREATE",
+            json!({"id": "2200", "guild_id": GUILD.to_string(), "type": 11, "parent_id": GENERAL.to_string()}),
+        ));
+        assert!(!state.can_manage_channel(sf(DM)));
+        assert!(!state.can_manage_channel(sf(GROUP_DM)));
+        assert!(!state.can_manage_channel(sf(2200)));
+        assert!(!state.can_manage_channel(sf(999_999)));
+
+        state.guilds.get_mut(&sf(GUILD)).unwrap().visiting = true;
+        assert!(!state.can_manage_guild_channels(sf(GUILD)));
+        assert!(!state.can_manage_channel(sf(GENERAL)));
+    }
+
+    #[test]
+    fn empty_category_visibility_follows_manage_permission() {
+        let mut state = ready_state();
+        let empty_cat = 2300;
+        state.apply(&dispatch(
+            "CHANNEL_CREATE",
+            json!({"id": empty_cat.to_string(), "guild_id": GUILD.to_string(), "type": 4, "name": "Empty", "position": 9}),
+        ));
+        assert!(state.channel_tree(sf(GUILD)).iter().all(|n| n.channel.id != sf(empty_cat)));
+
+        state.apply(&dispatch(
+            "CHANNEL_UPDATE",
+            json!({
+                "id": empty_cat.to_string(),
+                "permission_overwrites": [overwrite(GUILD, 0, bits::VIEW_CHANNEL | bits::MANAGE_CHANNELS, 0)]
+            }),
+        ));
+        assert!(state.channel_tree(sf(GUILD)).iter().any(|n| n.channel.id == sf(empty_cat)));
     }
 }

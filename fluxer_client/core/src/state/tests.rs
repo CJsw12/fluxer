@@ -423,6 +423,26 @@ fn state_thread_permissions_derive_from_parent() {
     assert!(state.channels.contains_key(&sf(2101)));
 }
 
+#[test]
+fn deleting_category_detaches_children_to_root() {
+    let mut state = ready_state();
+    assert_eq!(state.channels.get(&sf(GENERAL)).and_then(|c| c.parent_id), Some(sf(CATEGORY)));
+    assert_eq!(state.channels.get(&sf(STAFF)).and_then(|c| c.parent_id), Some(sf(CATEGORY)));
+
+    let changes = state.apply(&dispatch("CHANNEL_DELETE", json!({"id": CATEGORY.to_string()})));
+    assert!(!state.channels.contains_key(&sf(CATEGORY)));
+    assert_eq!(state.channels.get(&sf(GENERAL)).and_then(|c| c.parent_id), None);
+    assert_eq!(state.channels.get(&sf(STAFF)).and_then(|c| c.parent_id), None);
+    assert_eq!(
+        changes,
+        vec![
+            StateChange::ChannelUpserted { channel_id: sf(GENERAL), guild_id: Some(sf(GUILD)) },
+            StateChange::ChannelUpserted { channel_id: sf(STAFF), guild_id: Some(sf(GUILD)) },
+            StateChange::ChannelRemoved { channel_id: sf(CATEGORY), guild_id: Some(sf(GUILD)) },
+        ]
+    );
+}
+
 // ---- timestamps -------------------------------------------------------------
 
 #[test]

@@ -4,6 +4,7 @@ use gpui_kit::{Anchor, AnyElement, App, MouseButton, Pixels, Point, Window, anch
 
 use crate::theme::Theme;
 use crate::ui::account_switcher::AccountSwitcherModal;
+use crate::ui::channel_modal::{CreateChannelModal, EditChannelModal};
 use crate::ui::emoji_picker::EmojiPicker;
 use crate::ui::group_dm::{CreateGroupDmModal, LeaveGroupDmModal};
 use crate::ui::guild_modal::{JoinGuildModal, LeaveGuildModal};
@@ -29,6 +30,8 @@ pub enum Overlay {
     LeaveGroupDm(LeaveGroupDmModal),
     MediaViewer(MediaViewerModal),
     LinkWarning(LinkWarningModal),
+    CreateChannel(CreateChannelModal),
+    EditChannel(EditChannelModal),
 }
 
 impl Overlay {

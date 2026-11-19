@@ -711,11 +711,34 @@
 - **Blockers / Unverified**: Windows 실제 HKCU `fluxer://` 실행·브라우저 핸드오프, 실제 두 번째 프로세스 잠금 충돌 시 창 활성화·URI 인계, 실서버 초대·길드·DM·프로필 딥링크 점프는 실기/실서버 확인 전까지 미검증.
 - **Next Steps**: Milestone 8 계획 수립(남은 항목 중 우선순위 선정).
 
+## 길드 채널 생성·편집·삭제 (Milestone 8, 2026-11-19)
+- **Baseline**: `desktop-rs` `0c2a34129` (Milestone 7 완료 커밋).
+- **Done**:
+  - `fluxer_client/core`:
+    - `state/client.rs`, `state/capabilities.rs`: `guild_permissions`, `can_manage_guild_channels`, `can_manage_channel`(방문 길드·DM·그룹DM·스레드 제외) 추가, 관리 권한자용 `channel_tree` 빈 카테고리 노출 및 단위 테스트 3종 추가.
+    - `state/handlers/channels.rs`, `state/tests.rs`: 카테고리 `CHANNEL_DELETE` 시 자식 채널을 삭제하지 않고 `parent_id = None`으로 루트 분리(`ChannelUpserted`) 및 테스트 추가.
+    - `rest/api/channels.rs`, `rest/api/mod.rs`, `rest/mod.rs`, `rest/tests/social.rs`: `CreateGuildChannelRequest`, `GuildChannelPatch`(`topic: Some(None)`·`parent_id: Some(None)`·`nsfw_override: Some(Some(bool))` 지원), UTF-16/타입/슬로우모드 경계 검증(`validate_create_guild_channel`, `validate_guild_channel_patch`), `RestClient::{create_guild_channel, update_guild_channel, delete_channel}`, 단위·HTTP 픽스처 테스트 추가.
+  - `fluxer_client/app`:
+    - `backend/channels.rs`, `backend.rs`: `create_guild_channel`, `update_guild_channel`, `delete_guild_channel` 비동기 액션과 `UiEvent::{ChannelCreated, ChannelUpdated, ChannelDeleted}` 추가.
+    - `view_model.rs`, `ui/channel_modal.rs`, `ui/overlay.rs`, `ui/mod.rs`: `CreateChannelModal` 및 `EditChannelModal` 구현(카테고리 범위 권한 게이팅, 음성 기본값 64000/0/5, 공지 채널 전환, 슬로우모드 프리셋, dirty diff 패치, 2단계 삭제 확인·`Escape` 취소 분기).
+    - `shortcuts.rs`: `CreateChannelModal`·`EditChannelModal` 및 내장 `Input`(`> Input`) 단축키 격리(`143` 바인딩)와 `MarkChannelRead` 2단계 삭제 취소 분기 추가.
+    - `ui/channel_list.rs`, `ui/header.rs`, `client_view.rs`: 길드 헤더 `+`, 카테고리 `+`/설정, 채널 행 설정(클릭 전파 차단), 헤더 채널 주제·선택 채널 설정 버튼, 생성 후 자동 선택·카테고리 유지·삭제 폴백·컴포저 포커스 복구 구현.
+    - `tests_channel_mgmt.rs`, `main.rs`: 권한·생성·편집·2단계 삭제·게이트웨이 배치 레이스·단축키 격리 헤드리스 GPUI 테스트 5종 추가.
+  - DeepSeek(`deepseek/deepseek-flash`) T3 검토(`fluxer-helper-m8-review`, P0=0, P1=0, P2=3, P3=7) 반영:
+    - P2-1/P3-1: 게이트웨이 `CHANNEL_DELETE`(`StateChanged`)가 HTTP 204 완료 이벤트보다 먼저 처리되는 교차 배치 레이스 및 원격 삭제 시 `ClientView::refresh`에서 `drafts`/`last_channel` 정리 및 다음 메시지 채널 자동 폴백 보강.
+    - P2-2: `GuildChannelPatch`에 `nsfw_override`를 추가해 편집 모달에서 NSFW 해제 시 레거시 `nsfw: false`(상속) 대신 `"nsfw_override": false`를 전송하도록 수정.
+- **Decisions**:
+  - 카테고리 범위 `MANAGE_CHANNELS`만 있는 사용자는 루트 채널/카테고리 생성 및 `No category` 이동을 UI에서 제한하며, `parent_id` 이동 시 `lock_permissions` 동기화는 후속 권한 관리 마일스톤에서 다룸.
+  - `docs/progress/progress.json` `guilds`의 `채널 생성·편집`을 `partial`로 갱신하여 SVG 기준 `overall 64% (93 items)`, `daily driver 72% (73 items, 10 areas)` 반영.
+- **Verification**: `cargo check -p fluxer_client_app --bin fluxer_client` 경고 0, `cargo test --workspace -- --test-threads=2` → **526 통과, 0 실패, 경고 0**(app 220, core 257, i18n 10, markdown 36 [+1 ignored doctest], e2e 3).
+- **Blockers / Unverified**: 실서버 `POST /guilds/{id}/channels`, `PATCH /channels/{id}`, `DELETE /channels/{id}` 권한·MFA 적용·공지 변환·카테고리 분리 동작 및 GUI 실기 확인은 미검증.
+- **Next Steps**: Milestone 9 계획 수립(남은 항목 중 우선순위 선정).
+
 ## 인계 (2026-11-19, 다음 에이전트용 — 이 절부터 읽을 것)
-- **기준**: `desktop-rs` (`d07f2087f` 이후 Milestone 7 딥링크·단일 인스턴스 인계 커밋 반영), 워킹 트리 깨끗함(미공개 파일·`dist/` 제외). 미공개 유지 파일(커밋 금지): `RUST_*_PLAN.md`, `RUST_MIGRATION_REFERENCE_REVIEW.md`, `RUST_PORT_RESEARCH_*`, `IPC_M0_FINDINGS.md`, `tools/h265_livekit_probe/`.
-- **현재 주력**: 네이티브 GPUI 클라이언트 `fluxer_client/`(core, app, markdown, i18n, e2e). `cd fluxer_client; $env:CARGO_TARGET_DIR = "../target/fc-root"; cargo test --workspace -- --test-threads=2` → 515 통과(app 215, core 251, i18n 10, markdown 36 [+1 ignored doctest], e2e 3), `cargo check --bin fluxer_client` 경고 0.
-- **우선순위(P0)**: ① 알림·첨부 ✔(코드) ② 임베드 ✔(코드) ③ 릴리스 exe ✔(`scripts/package_fluxer_client.ps1`, 산출 `dist/fluxer_client/fluxer_client.exe` 39.17 MB, SHA256 `9a6a9e34600e5025a1e654ece655542c899cf64f5f5ab6b63f953102c6adcae7`, `PE_SUBSYSTEM=2`) ④ 안정성 실기(재연결·장시간 메모리·한글 IME). P1~P2 진행: 이모지 피커·프로필 팝업·설정 화면·트레이/자동 시작·드래프트 보존·방문 기록 이동·채널 음소거·친구 목록·관계 관리·초대 참가·길드 탈퇴·미디어 뷰어·신뢰 도메인 경고·글꼴/밀도/확대·메시지 검색·점프·그룹 DM UI·다중 계정 전환·딥링크/단일 인스턴스 인계 ✔(코드/헤드리스).
-- **실기 미확인**: Windows 실제 HKCU `fluxer://` 프로토콜 실행·다중 프로세스 창 활성화·URI 인계 실서버/실기기 동작, 다중 계정/다중 인스턴스 전환·계정 추가·비활성 계정 제거 실서버 동작, 그룹 DM 생성/이름 변경/멤버 추가·제거/나가기 실서버 동작, 메시지 검색 REST·패널·점프(`POST /search/messages`·`?around=`) 실서버 동작, 미디어 뷰어·신뢰 도메인 경고·글꼴/밀도/확대 실서버/실기기 동작, 친구/관계 관리·초대 참가·그룹 DM 초대·길드 탈퇴 실서버 동작, 채널/DM 음소거 실서버 PATCH, 드래프트·`Alt+Left/Right` 실기, 트레이 아이콘·닫기 최소화·`--autostart` HKCU Run 실제 동작, 이모지 피커·프로필 팝업·설정/테마/로케일 UI 실서버 동작, GIF 애니메이션 수정, 유튜브 카드 중복 수정, Windows 토스트·알림음(사용자 PC가 방해 금지 모드), 첨부 업로드 실서버, 한국어 UI 화면, 릴리스 exe·AUMID 바로가기.
+- **기준**: `desktop-rs` (`0c2a34129` 이후 Milestone 8 길드 채널 생성·편집·삭제 커밋 반영), 워킹 트리 깨끗함(미공개 파일·`dist/` 제외). 미공개 유지 파일(커밋 금지): `RUST_*_PLAN.md`, `RUST_MIGRATION_REFERENCE_REVIEW.md`, `RUST_PORT_RESEARCH_*`, `IPC_M0_FINDINGS.md`, `tools/h265_livekit_probe/`.
+- **현재 주력**: 네이티브 GPUI 클라이언트 `fluxer_client/`(core, app, markdown, i18n, e2e). `cd fluxer_client; $env:CARGO_TARGET_DIR = "../target/fc-root"; cargo test --workspace -- --test-threads=2` → 526 통과(app 220, core 257, i18n 10, markdown 36 [+1 ignored doctest], e2e 3), `cargo check --bin fluxer_client` 경고 0.
+- **우선순위(P0)**: ① 알림·첨부 ✔(코드) ② 임베드 ✔(코드) ③ 릴리스 exe ✔(`scripts/package_fluxer_client.ps1`, 산출 `dist/fluxer_client/fluxer_client.exe` 39.17 MB, SHA256 `9a6a9e34600e5025a1e654ece655542c899cf64f5f5ab6b63f953102c6adcae7`, `PE_SUBSYSTEM=2`) ④ 안정성 실기(재연결·장시간 메모리·한글 IME). P1~P2 진행: 이모지 피커·프로필 팝업·설정 화면·트레이/자동 시작·드래프트 보존·방문 기록 이동·채널 음소거·친구 목록·관계 관리·초대 참가·길드 탈퇴·미디어 뷰어·신뢰 도메인 경고·글꼴/밀도/확대·메시지 검색·점프·그룹 DM UI·다중 계정 전환·딥링크/단일 인스턴스 인계·길드 채널 생성/편집/삭제 ✔(코드/헤드리스).
+- **실기 미확인**: 실서버 길드 채널 생성·편집·공지 변환·카테고리 분리·삭제 동작, Windows 실제 HKCU `fluxer://` 프로토콜 실행·다중 프로세스 창 활성화·URI 인계 실서버/실기기 동작, 다중 계정/다중 인스턴스 전환·계정 추가·비활성 계정 제거 실서버 동작, 그룹 DM 생성/이름 변경/멤버 추가·제거/나가기 실서버 동작, 메시지 검색 REST·패널·점프(`POST /search/messages`·`?around=`) 실서버 동작, 미디어 뷰어·신뢰 도메인 경고·글꼴/밀도/확대 실서버/실기기 동작, 친구/관계 관리·초대 참가·그룹 DM 초대·길드 탈퇴 실서버 동작, 채널/DM 음소거 실서버 PATCH, 드래프트·`Alt+Left/Right` 실기, 트레이 아이콘·닫기 최소화·`--autostart` HKCU Run 실제 동작, 이모지 피커·프로필 팝업·설정/테마/로케일 UI 실서버 동작, GIF 애니메이션 수정, 유튜브 카드 중복 수정, Windows 토스트·알림음(사용자 PC가 방해 금지 모드), 첨부 업로드 실서버, 한국어 UI 화면, 릴리스 exe·AUMID 바로가기.
 - **테스트 환경**: 자체 테스트 서버 `fluxer-dev.home.arpa`(SSH 443 터널). 접속·계정·도구는 저장소 밖 `../Logs/fluxer-dev/LOCAL_ACCESS.md`. **친구 서버와 사용자 개인 계정은 테스트에 쓰지 말 것**(개인 정보). 메시지 전송 시험은 자체 서버에서만.
 - **PC 부하 규칙**(사용자 PC가 여러 번 멈춤): `fluxer_client/.cargo/config.toml` `build.jobs=4` 유지, 동시에 빌드하는 작업 최대 2개, 앱 테스트는 항상 `timeout 300 … -- --test-threads=2`, 빌드 디렉터리는 `target/fc-root`만(추가로 만들었으면 끝나고 삭제). 헤드리스 GPUI 테스트가 무한 루프로 CPU를 먹은 전례(uniform_list의 0..1 측정 호출) — 렌더/레이아웃 콜백에서 상태 변경·notify 금지.
 - **GUI 실기**: `tools/agents/gui.ps1`는 다른 창이 대상 창을 가리면 입력을 거부한다(사용자가 PC 사용 중일 수 있음). 마우스 대신 키보드(Ctrl+K 등) 위주로 확인.

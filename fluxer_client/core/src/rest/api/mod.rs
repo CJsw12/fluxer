@@ -17,7 +17,12 @@ mod settings;
 mod typing;
 mod users;
 
-pub use channels::{GroupDmPatch, MAX_CHANNEL_NAME_UTF16, MAX_GROUP_DM_OTHER_RECIPIENTS};
+pub use channels::{
+    CreateGuildChannelRequest, GroupDmPatch, GuildChannelPatch, MAX_CHANNEL_NAME_UTF16,
+    MAX_CHANNEL_RATE_LIMIT_PER_USER, MAX_CHANNEL_TOPIC_UTF16, MAX_GROUP_DM_OTHER_RECIPIENTS,
+    VOICE_CHANNEL_BITRATE_DEFAULT, VOICE_CHANNEL_CONNECTION_LIMIT_DEFAULT, validate_create_guild_channel,
+    validate_guild_channel_patch,
+};
 pub use guilds::MemberQuery;
 pub use invites::CreateInviteRequest;
 pub use relationships::parse_user_tag;

@@ -15,7 +15,7 @@ use gpui_kit::{Action, App, Context, Div, KeyBinding, NoAction, prelude::*};
 
 use crate::client_view::ClientView;
 use crate::nav::ChannelFilter;
-use crate::ui::{account_switcher, quick_switcher, search_panel};
+use crate::ui::{account_switcher, channel_modal, quick_switcher, search_panel};
 
 gpui_kit::actions!(
     fluxer,
@@ -50,6 +50,8 @@ gpui_kit::actions!(
 pub const CONTEXT: &str = "ClientView";
 const IN_INPUT: &str = "ClientView > Input";
 const IN_COMPOSER: &str = "ClientView > Composer > Input";
+const IN_CREATE_CHANNEL_INPUT: &str = "CreateChannelModal > Input";
+const IN_EDIT_CHANNEL_INPUT: &str = "EditChannelModal > Input";
 
 /// Binds `keys` in the layout and inside the composer, and disables them
 /// inside the quick switcher and search panel (whose inputs would otherwise
@@ -60,6 +62,8 @@ fn both<A: Action + Clone>(out: &mut Vec<KeyBinding>, keys: &'static str, action
     out.push(KeyBinding::new(keys, NoAction, Some(quick_switcher::CONTEXT)));
     out.push(KeyBinding::new(keys, NoAction, Some(search_panel::CONTEXT)));
     out.push(KeyBinding::new(keys, NoAction, Some(account_switcher::CONTEXT)));
+    out.push(KeyBinding::new(keys, NoAction, Some(channel_modal::CREATE_CONTEXT)));
+    out.push(KeyBinding::new(keys, NoAction, Some(channel_modal::EDIT_CONTEXT)));
 }
 
 /// Every shortcut binding of the client layout.
@@ -82,6 +86,10 @@ fn bindings() -> Vec<KeyBinding> {
     out.push(KeyBinding::new("ctrl-k", ToggleQuickSwitcher, Some(CONTEXT)));
     out.push(KeyBinding::new("ctrl-k", ToggleQuickSwitcher, Some(IN_INPUT)));
     out.push(KeyBinding::new("ctrl-k", NoAction, Some(account_switcher::CONTEXT)));
+    out.push(KeyBinding::new("ctrl-k", NoAction, Some(channel_modal::CREATE_CONTEXT)));
+    out.push(KeyBinding::new("ctrl-k", NoAction, Some(IN_CREATE_CHANNEL_INPUT)));
+    out.push(KeyBinding::new("ctrl-k", NoAction, Some(channel_modal::EDIT_CONTEXT)));
+    out.push(KeyBinding::new("ctrl-k", NoAction, Some(IN_EDIT_CHANNEL_INPUT)));
     both(&mut out, "ctrl-e", ToggleEmojiPicker);
     both(&mut out, "ctrl-,", OpenSettings);
     both(&mut out, "ctrl-=", ZoomIn);
@@ -123,7 +131,9 @@ pub fn on_actions(root: Div, cx: &mut Context<ClientView>) -> Div {
         .on_action(cx.listener(|v, _: &ZoomOut, _, cx| v.step_ui_zoom(-10, cx)))
         .on_action(cx.listener(|v, _: &ZoomReset, _, cx| v.settings_set_zoom(100, cx)))
         .on_action(cx.listener(|v, _: &MarkChannelRead, window, cx| {
-            if v.overlay.is_open() {
+            if matches!(&v.overlay, crate::ui::overlay::Overlay::EditChannel(_)) {
+                v.handle_edit_channel_escape(window, cx);
+            } else if v.overlay.is_open() {
                 v.close_overlay(window, cx);
             } else if v.search.is_some() {
                 v.close_search(window, cx);
@@ -147,6 +157,6 @@ mod tests {
             let key = (format!("{:?}", b.keystrokes()), b.predicate().map(|p| p.to_string()));
             assert!(seen.insert(key.clone()), "{key:?} bound twice");
         }
-        assert_eq!(seen.len(), 101);
+        assert_eq!(seen.len(), 143);
     }
 }

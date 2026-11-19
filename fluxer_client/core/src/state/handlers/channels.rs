@@ -65,6 +65,22 @@ impl ClientState {
             self.typing.remove(&t);
             out.push(StateChange::ChannelRemoved { channel_id: t, guild_id: channel.guild_id });
         }
+        if channel.kind.is_category()
+            && let Some(guild_id) = channel.guild_id
+        {
+            let detached: Vec<Snowflake> = self
+                .channels
+                .values()
+                .filter(|c| c.guild_id == Some(guild_id) && c.parent_id == Some(id))
+                .map(|c| c.id)
+                .collect();
+            for child_id in detached {
+                if let Some(child) = self.channels.get_mut(&child_id) {
+                    child.parent_id = None;
+                    out.push(StateChange::ChannelUpserted { channel_id: child_id, guild_id: Some(guild_id) });
+                }
+            }
+        }
         out.push(StateChange::ChannelRemoved { channel_id: id, guild_id: channel.guild_id });
     }
 

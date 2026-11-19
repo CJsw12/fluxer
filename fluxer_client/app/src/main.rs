@@ -44,6 +44,8 @@ mod tests;
 #[cfg(test)]
 mod tests_accounts;
 #[cfg(test)]
+mod tests_channel_mgmt;
+#[cfg(test)]
 mod tests_deep_links;
 #[cfg(test)]
 mod tests_emoji_picker;

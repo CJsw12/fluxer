@@ -67,6 +67,12 @@ pub enum UiEvent {
     GroupDmCreated { seq: u64, result: Result<Snowflake, String> },
     /// `DELETE /channels/{id}` finished for a group DM.
     GroupDmLeft { channel_id: Snowflake, error: Option<String> },
+    /// `POST /guilds/{guild_id}/channels` finished (`Ok(channel_id)`).
+    ChannelCreated { seq: u64, guild_id: Snowflake, result: Result<Snowflake, String> },
+    /// `PATCH /channels/{channel_id}` finished.
+    ChannelUpdated { seq: u64, channel_id: Snowflake, error: Option<String> },
+    /// `DELETE /channels/{channel_id}` finished for a guild channel or category.
+    ChannelDeleted { seq: u64, channel_id: Snowflake, error: Option<String> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -113,6 +119,7 @@ pub(crate) fn lock_sent<T>(sent: &Mutex<T>) -> MutexGuard<'_, T> {
 mod actions;
 
 pub use actions::TypingSender;
+mod channels;
 mod group_dm;
 mod members;
 mod navigation;
@@ -122,6 +129,8 @@ mod settings;
 mod social;
 mod upload;
 
+#[cfg(test)]
+pub use channels::GuildChannelCall;
 #[cfg(test)]
 pub use group_dm::GroupDmCall;
 pub use social::{AcceptedInvite, InvitePreview, extract_invite_code};
@@ -183,6 +192,9 @@ pub struct Backend {
     /// Recorded group DM actions (tests).
     #[cfg(test)]
     pub(crate) sent_group_dm: Arc<Mutex<Vec<GroupDmCall>>>,
+    /// Recorded guild channel CRUD actions (tests).
+    #[cfg(test)]
+    pub(crate) sent_guild_channels: Arc<Mutex<Vec<GuildChannelCall>>>,
 }
 
 impl Backend {
@@ -280,6 +292,8 @@ impl Backend {
             sent_searches: Arc::default(),
             #[cfg(test)]
             sent_group_dm: Arc::default(),
+            #[cfg(test)]
+            sent_guild_channels: Arc::default(),
         };
         (backend, rx)
     }

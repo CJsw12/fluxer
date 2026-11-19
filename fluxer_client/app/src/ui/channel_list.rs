@@ -4,7 +4,7 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Icon, Sizable as _};
-use gpui_kit::{AnyElement, Context, FontWeight, div, prelude::*, px};
+use gpui_kit::{AnyElement, Context, FontWeight, MouseButton, div, prelude::*, px};
 
 use super::{badge, user_panel};
 use crate::client_view::ClientView;
@@ -51,6 +51,18 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .px_3()
                 .py_2()
                 .child(div().flex_1().min_w_0().truncate().font_weight(FontWeight::BOLD).child(name))
+                .when(view.can_manage_guild_channels, |d| {
+                    d.child(
+                        div().debug_selector(|| "create-channel-btn".to_owned()).child(
+                            Button::new("create-channel-btn")
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::Plus)
+                                .tooltip(l10n::tr("Create channel"))
+                                .on_click(cx.listener(|this, _, window, cx| this.open_create_channel(None, window, cx))),
+                        ),
+                    )
+                })
                 .when(can_leave, |d| {
                     d.child(
                         div().debug_selector(|| "leave-guild-btn".to_owned()).child(
@@ -120,17 +132,51 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
 fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
     let (muted_fg, fg) = (theme.muted_foreground, theme.foreground);
     if c.is_category {
+        let cat_id = c.id;
+        let create_sel = format!("create-in-category-{}", cat_id.0);
+        let edit_sel = format!("edit-channel-{}", cat_id.0);
         return div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_1()
             .px_3()
             .pt_3()
             .text_xs()
             .text_color(muted_fg)
             .font_weight(FontWeight::MEDIUM)
-            .child(c.name.clone())
+            .child(div().flex_1().min_w_0().truncate().child(c.name.clone()))
+            .when(c.can_manage, |d| {
+                d.child(
+                    div().debug_selector(move || create_sel.clone()).child(
+                        Button::new(("create-in-category", cat_id.0))
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::Plus)
+                            .tooltip(l10n::tr("Create channel"))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.open_create_channel(Some(cat_id), window, cx);
+                            })),
+                    ),
+                )
+                .child(
+                    div().debug_selector(move || edit_sel.clone()).child(
+                        Button::new(("edit-channel", cat_id.0))
+                            .ghost()
+                            .xsmall()
+                            .icon(IconName::Settings)
+                            .tooltip(l10n::tr("Category settings"))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.open_edit_channel(cat_id, window, cx);
+                            })),
+                    ),
+                )
+            })
             .into_any_element();
     }
     let selected = view.selected_channel == Some(c.id);
     let highlight_unread = c.unread.unread && !c.muted;
+    let can_edit_row = view.place != Place::Home && c.can_manage;
     let mut row = div()
         .id(("channel", c.id.0))
         .flex()
@@ -152,6 +198,28 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         row = row.child(badge(c.unread.mention_count, theme));
     } else if highlight_unread {
         row = row.child(div().text_color(fg).child("•"));
+    }
+    if can_edit_row {
+        let ch_id = c.id;
+        let edit_sel = format!("edit-channel-{}", ch_id.0);
+        row = row.child(
+            div()
+                .id(("edit-channel-wrap", ch_id.0))
+                .debug_selector(move || edit_sel.clone())
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_click(|_, _, cx| cx.stop_propagation())
+                .child(
+                    Button::new(("edit-channel", ch_id.0))
+                        .ghost()
+                        .xsmall()
+                        .icon(IconName::Settings)
+                        .tooltip(l10n::tr("Channel settings"))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            cx.stop_propagation();
+                            this.open_edit_channel(ch_id, window, cx);
+                        })),
+                ),
+        );
     }
     if c.has_messages {
         let id = c.id;

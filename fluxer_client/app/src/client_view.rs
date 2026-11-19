@@ -75,8 +75,14 @@ pub struct ClientView {
     pub(crate) home_unread: Unread,
     pub(crate) channels: Vec<ChannelItem>,
     pub(crate) channel_title: SharedString,
+    /// Trimmed non-empty topic of the selected channel, if any.
+    pub(crate) channel_topic: Option<SharedString>,
     /// Glyph of the selected channel (`#`, `@`...), for the window title.
     pub(crate) channel_glyph: &'static str,
+    /// Current user holds guild-level `MANAGE_CHANNELS` in the active guild.
+    pub(crate) can_manage_guild_channels: bool,
+    /// Current user holds channel-level `MANAGE_CHANNELS` on `selected_channel`.
+    pub(crate) can_manage_selected_channel: bool,
     /// Last title given to the OS window.
     pub(crate) window_title: String,
     acks: AckScheduler,
@@ -202,6 +208,8 @@ pub struct ClientView {
     pub(crate) group_dm_panel_open: bool,
     /// Sequence counter for `CreateGroupDm` responses.
     create_group_dm_seq: u64,
+    /// Sequence counter for guild channel create/edit/delete responses.
+    channel_mgmt_seq: u64,
     /// Snapshot of the open Group DM channel (members, owner, addable friends).
     pub(crate) group_dm: Option<ui::group_dm::GroupDmSnapshot>,
     /// Persistent inline Group DM rename input (reused across frames).
@@ -306,7 +314,10 @@ impl ClientView {
             home_unread: Unread::default(),
             channels: Vec::new(),
             channel_title: SharedString::default(),
+            channel_topic: None,
             channel_glyph: "",
+            can_manage_guild_channels: false,
+            can_manage_selected_channel: false,
             window_title: String::new(),
             acks: AckScheduler::default(),
             _ack_timer: None,
@@ -373,6 +384,7 @@ impl ClientView {
             suppress_jump_scroll: false,
             group_dm_panel_open: true,
             create_group_dm_seq: 0,
+            channel_mgmt_seq: 0,
             group_dm: None,
             group_dm_rename,
             group_dm_adding: false,
@@ -440,12 +452,24 @@ impl ClientView {
                 | Overlay::LeaveGroupDm(_)
                 | Overlay::MediaViewer(_)
                 | Overlay::LinkWarning(_)
+                | Overlay::CreateChannel(_)
+                | Overlay::EditChannel(_)
         );
         self.overlay = Overlay::None;
         if restore_composer {
             self.focus_composer(window, cx);
         }
         cx.notify();
+    }
+
+    pub(crate) fn focus_composer_later(&self, cx: &mut Context<Self>) {
+        let (composer, handle) = (self.composer.clone(), self.window_handle);
+        cx.defer(move |cx| {
+            let _ = handle.update(cx, |_, window, cx| {
+                let focus = composer.read(cx).focus_handle(cx);
+                window.focus(&focus, cx);
+            });
+        });
     }
 
     pub(crate) fn refresh_status_text(&mut self) {
@@ -640,6 +664,88 @@ impl ClientView {
                         }
                     }
                 }
+                UiEvent::ChannelCreated { seq, guild_id, result } => {
+                    if !matches!(&self.overlay, Overlay::CreateChannel(m) if m.seq == seq) {
+                        continue;
+                    }
+                    match result {
+                        Ok(channel_id) => {
+                            self.overlay = Overlay::None;
+                            self.focus_composer_later(cx);
+                            if self.place == Place::Guild(guild_id) {
+                                let opens = self
+                                    .backend
+                                    .state()
+                                    .channels
+                                    .get(&channel_id)
+                                    .is_some_and(|c| opens_message_pane(c.kind));
+                                if opens {
+                                    self.select_channel(channel_id, cx);
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            if let Overlay::CreateChannel(modal) = &mut self.overlay {
+                                modal.submitting = false;
+                                modal.error = Some(err);
+                            }
+                        }
+                    }
+                }
+                UiEvent::ChannelUpdated { seq, error, .. } => {
+                    if !matches!(&self.overlay, Overlay::EditChannel(m) if m.seq == seq) {
+                        continue;
+                    }
+                    match error {
+                        None => {
+                            self.overlay = Overlay::None;
+                            self.focus_composer_later(cx);
+                        }
+                        Some(err) => {
+                            if let Overlay::EditChannel(modal) = &mut self.overlay {
+                                modal.submitting = false;
+                                modal.error = Some(err);
+                            }
+                        }
+                    }
+                }
+                UiEvent::ChannelDeleted { seq, channel_id, error } => {
+                    match error {
+                        Some(err) => {
+                            if let Overlay::EditChannel(modal) = &mut self.overlay {
+                                if modal.seq != seq {
+                                    continue;
+                                }
+                                modal.submitting = false;
+                                modal.confirming_delete = false;
+                                modal.error = Some(err);
+                            } else {
+                                self.error = Some(err.into());
+                            }
+                        }
+                        None => {
+                            self.drafts.remove(&channel_id);
+                            self.last_channel.retain(|_, v| *v != channel_id);
+                            if matches!(&self.overlay, Overlay::EditChannel(m) if m.channel_id == channel_id) {
+                                self.overlay = Overlay::None;
+                                self.focus_composer_later(cx);
+                            }
+                            if self.selected_channel == Some(channel_id) {
+                                let next = {
+                                    let state = self.backend.state();
+                                    channel_items(&state, self.place)
+                                        .into_iter()
+                                        .find(|c| c.has_messages && c.id != channel_id)
+                                        .map(|c| c.id)
+                                };
+                                match next {
+                                    Some(id) => self.select_channel(id, cx),
+                                    None => self.clear_selection(cx),
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
         if connected {
@@ -716,7 +822,19 @@ impl ClientView {
     /// Re-reads the state and updates every snapshot, the scroller rows and
     /// the composer.
     pub(crate) fn refresh(&mut self, cx: &mut Context<Self>) {
-        let (pane, can_send, title, glyph, typing_text, joined_ready, joined_channel_ready) = {
+        let (
+            pane,
+            can_send,
+            title,
+            topic,
+            glyph,
+            typing_text,
+            can_manage_guild,
+            can_manage_selected,
+            dismiss_modal,
+            joined_ready,
+            joined_channel_ready,
+        ) = {
             let state = self.backend.state();
             let joined_ready = self.pending_joined_guild.filter(|id| state.guilds.contains_key(id));
             let joined_channel_ready = self.pending_joined_channel.filter(|id| state.channels.contains_key(id));
@@ -741,10 +859,62 @@ impl ClientView {
                     self.last_guild = None;
                 }
             }
-            if self.selected_channel.is_some_and(|id| !state.channels.contains_key(&id)) {
+            let mut fallback_guild_channel: Option<Option<Snowflake>> = None;
+            if let Some(removed_id) = self.selected_channel.filter(|id| !state.channels.contains_key(id)) {
+                self.drafts.remove(&removed_id);
+                self.last_channel.retain(|_, v| *v != removed_id);
                 self.selected_channel = None;
+                if matches!(self.place, Place::Guild(_)) {
+                    let next = channel_items(&state, self.place)
+                        .into_iter()
+                        .find(|c| c.has_messages)
+                        .map(|c| c.id);
+                    fallback_guild_channel = Some(next);
+                }
+            }
+            if !state.channels.is_empty() {
+                self.drafts.retain(|id, _| state.channels.contains_key(id));
+                self.last_channel.retain(|_, v| state.channels.contains_key(v));
             }
             self.attachments.retain_channels(|id| state.channels.contains_key(&id));
+            let dismiss_modal = match &self.overlay {
+                Overlay::CreateChannel(m) => {
+                    !state.guilds.contains_key(&m.guild_id)
+                        || match m.parent_id {
+                            None => !state.can_manage_guild_channels(m.guild_id),
+                            Some(pid) => {
+                                !state
+                                    .channels
+                                    .get(&pid)
+                                    .is_some_and(|c| c.guild_id == Some(m.guild_id) && c.kind.is_category())
+                                    || !state.can_manage_channel(pid)
+                            }
+                        }
+                }
+                Overlay::EditChannel(m) => {
+                    !state.guilds.contains_key(&m.guild_id)
+                        || !state.channels.contains_key(&m.channel_id)
+                        || !state.can_manage_channel(m.channel_id)
+                }
+                _ => false,
+            };
+            if dismiss_modal || fallback_guild_channel.is_some() {
+                if let Some(next_opt) = fallback_guild_channel {
+                    drop(state);
+                    if dismiss_modal {
+                        self.overlay = Overlay::None;
+                        self.focus_composer_later(cx);
+                    }
+                    match next_opt {
+                        Some(id) => self.select_channel(id, cx),
+                        None => self.clear_selection(cx),
+                    }
+                    return;
+                }
+            }
+            if !dismiss_modal && let Overlay::EditChannel(m) = &mut self.overlay {
+                m.sync_state(&state);
+            }
             self.guilds = guild_items(&state);
             self.home_unread = dm_unread(&state);
             self.mention_total = self
@@ -794,22 +964,55 @@ impl ClientView {
             if let Some(id) = reply_gone {
                 self.composer_mode.message_deleted(id);
             }
+            let can_manage_guild = match self.place {
+                Place::Guild(gid) => state.can_manage_guild_channels(gid),
+                Place::Home => false,
+            };
+            let can_manage_selected = self
+                .selected_channel
+                .filter(|_| matches!(self.place, Place::Guild(_)))
+                .is_some_and(|id| state.can_manage_channel(id));
             match self.selected_channel {
                 Some(id) => {
                     let channel = state.channels.get(&id);
+                    let topic = channel
+                        .and_then(|c| c.topic.as_deref())
+                        .map(str::trim)
+                        .filter(|t| !t.is_empty())
+                        .map(SharedString::from);
                     (
                         message_pane(&state, id, self.backend.media(), self.unread_anchor),
                         state.can_send_messages(id),
                         channel.map(channel_name).unwrap_or_default(),
+                        topic,
                         channel.map_or("", |c| ChannelIcon::of(c.kind).glyph()),
                         ui::typing::channel_typing_text(&state, id),
+                        can_manage_guild,
+                        can_manage_selected,
+                        dismiss_modal,
                         joined_ready,
                         joined_channel_ready,
                     )
                 }
-                None => (Default::default(), false, String::new(), "", None, joined_ready, joined_channel_ready),
+                None => (
+                    Default::default(),
+                    false,
+                    String::new(),
+                    None,
+                    "",
+                    None,
+                    can_manage_guild,
+                    false,
+                    dismiss_modal,
+                    joined_ready,
+                    joined_channel_ready,
+                ),
             }
         };
+        if dismiss_modal {
+            self.overlay = Overlay::None;
+            self.focus_composer_later(cx);
+        }
         if let Some(joined) = joined_ready {
             self.pending_joined_guild = None;
             self.pending_joined_channel = None;
@@ -829,7 +1032,10 @@ impl ClientView {
         self.has_more_before = pane.has_more_before;
         self.has_more_after = pane.has_more_after;
         self.channel_title = title.into();
+        self.channel_topic = topic;
         self.channel_glyph = glyph;
+        self.can_manage_guild_channels = can_manage_guild;
+        self.can_manage_selected_channel = can_manage_selected;
         self.backend.notify_focus().set_viewing(self.selected_channel);
         let mut rows = pane.rows;
         if !self.uploads.is_empty() {
@@ -1644,6 +1850,11 @@ impl ClientView {
         self.create_group_dm_seq
     }
 
+    pub(crate) fn next_channel_mgmt_seq(&mut self) -> u64 {
+        self.channel_mgmt_seq = self.channel_mgmt_seq.saturating_add(1);
+        self.channel_mgmt_seq
+    }
+
     /// Leaves a historical `?around=` jump window and returns to the latest messages.
     pub(crate) fn jump_to_present(&mut self, cx: &mut Context<Self>) {
         if self.loading_history {
@@ -1758,6 +1969,8 @@ impl Render for ClientView {
             Overlay::LeaveGroupDm(modal) => Some(ui::group_dm::render_leave_modal(modal, &theme, cx)),
             Overlay::MediaViewer(modal) => Some(ui::media_viewer::render(modal, &theme, cx)),
             Overlay::LinkWarning(modal) => Some(ui::link_warning::render(modal, &theme, cx)),
+            Overlay::CreateChannel(modal) => Some(ui::channel_modal::render_create(modal, &theme, cx)),
+            Overlay::EditChannel(modal) => Some(ui::channel_modal::render_edit(modal, &theme, cx)),
             Overlay::None => None,
         };
         // Every image below without its own cache (avatars, custom emoji,

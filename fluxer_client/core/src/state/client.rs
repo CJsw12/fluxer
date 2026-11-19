@@ -247,8 +247,9 @@ impl ClientState {
                 .filter(|c| !c.kind.is_category() && c.parent_id == Some(category.id))
                 .map(|c| (*c).clone())
                 .collect();
-            // Categories with no visible children are hidden, like the TS sidebar.
-            if !children.is_empty() {
+            // Categories with no visible children are hidden to members, but shown
+            // to managers so newly created empty categories stay reachable.
+            if !children.is_empty() || self.can_manage_channel(category.id) {
                 nodes.push(ChannelTreeNode { channel: (*category).clone(), children });
             }
         }
@@ -335,6 +336,15 @@ impl ClientState {
             total.mention_count = total.mention_count.saturating_add(u.mention_count);
         }
         total
+    }
+
+    /// Current user's guild-level permissions (before channel overwrites);
+    /// 0 when not signed in or the guild is unknown.
+    pub fn guild_permissions(&self, guild_id: Snowflake) -> u64 {
+        let Some(me) = self.current_user_id() else { return 0 };
+        let Some(guild) = self.guilds.get(&guild_id) else { return 0 };
+        let member = self.members.get(&guild_id).and_then(|m| m.get(&me));
+        compute_permissions(guild, me, member, None)
     }
 
     /// Current user's permissions in a guild channel; 0 for DMs and unknown

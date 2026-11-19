@@ -329,3 +329,102 @@ async fn group_dm_routes() {
     assert!(matches!(client.add_group_dm_recipient("bad", u2).await, Err(RestError::InvalidArgument(_))));
     assert_eq!(fixture.requests().len(), 6);
 }
+
+#[tokio::test]
+async fn guild_channel_crud_routes() {
+    let fixture = Fixture::start(ok_fixture()).await;
+    let client = authed(&fixture).await;
+    let cat = "623456789012345678";
+
+    client
+        .create_guild_channel(
+            GUILD,
+            &CreateGuildChannelRequest {
+                name: "  voice-chat  ".into(),
+                kind: crate::state::ChannelKind::GuildVoice,
+                parent_id: Some(cat.into()),
+                topic: None,
+                nsfw: Some(false),
+                rate_limit_per_user: None,
+                bitrate: Some(VOICE_CHANNEL_BITRATE_DEFAULT),
+                user_limit: Some(0),
+                voice_connection_limit: Some(VOICE_CHANNEL_CONNECTION_LIMIT_DEFAULT),
+            },
+        )
+        .await
+        .unwrap();
+    client
+        .update_guild_channel(
+            CHANNEL,
+            &GuildChannelPatch {
+                name: Some("  news  ".into()),
+                kind: Some(crate::state::ChannelKind::GuildAnnouncement),
+                topic: Some(None),
+                parent_id: Some(None),
+                nsfw: None,
+                nsfw_override: Some(Some(false)),
+                rate_limit_per_user: Some(15),
+            },
+        )
+        .await
+        .unwrap();
+    client.delete_channel(CHANNEL).await.unwrap();
+
+    assert_eq!(
+        lines(&fixture),
+        vec![
+            l("POST", format!("/api/v1/guilds/{GUILD}/channels")),
+            l("PATCH", format!("/api/v1/channels/{CHANNEL}")),
+            l("DELETE", format!("/api/v1/channels/{CHANNEL}")),
+        ]
+    );
+    let reqs = fixture.requests();
+    assert_eq!(
+        reqs[0].json(),
+        json!({
+            "name": "voice-chat",
+            "type": 2,
+            "parent_id": cat,
+            "nsfw": false,
+            "bitrate": VOICE_CHANNEL_BITRATE_DEFAULT,
+            "user_limit": 0,
+            "voice_connection_limit": VOICE_CHANNEL_CONNECTION_LIMIT_DEFAULT,
+        })
+    );
+    assert_eq!(
+        reqs[1].json(),
+        json!({
+            "name": "news",
+            "type": 5,
+            "topic": null,
+            "parent_id": null,
+            "nsfw_override": false,
+            "rate_limit_per_user": 15,
+        })
+    );
+    for req in &reqs {
+        assert_eq!(req.header("authorization"), Some(FAKE_TOKEN));
+    }
+
+    assert!(matches!(
+        client
+            .create_guild_channel("1/../2", &CreateGuildChannelRequest {
+                name: "x".into(),
+                kind: crate::state::ChannelKind::GuildText,
+                parent_id: None,
+                topic: None,
+                nsfw: None,
+                rate_limit_per_user: None,
+                bitrate: None,
+                user_limit: None,
+                voice_connection_limit: None,
+            })
+            .await,
+        Err(RestError::InvalidArgument("guild_id"))
+    ));
+    assert!(matches!(
+        client.update_guild_channel(CHANNEL, &GuildChannelPatch::default()).await,
+        Err(RestError::InvalidArgument("patch"))
+    ));
+    assert_eq!(fixture.requests().len(), 3);
+}

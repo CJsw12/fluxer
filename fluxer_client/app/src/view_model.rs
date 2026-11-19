@@ -93,6 +93,7 @@ pub struct ChannelItem {
     /// Has a message pane (text, announcement, DM...). Voice/link/forum
     /// channels are listed but not selectable.
     pub has_messages: bool,
+    pub can_manage: bool,
     pub nested: bool,
     pub unread: Unread,
     pub muted: bool,
@@ -241,6 +242,7 @@ fn channel_item(state: &ClientState, channel: &Channel, nested: bool, now_ms: i6
         icon: ChannelIcon::of(channel.kind),
         is_category: channel.kind.is_category(),
         has_messages: opens_message_pane(channel.kind),
+        can_manage: state.can_manage_channel(channel.id),
         nested,
         unread: state.channel_unread(channel.id),
         muted: state.is_channel_muted(channel.guild_id, channel.id, now_ms),

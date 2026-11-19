@@ -28,7 +28,40 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .border_color(theme.border)
         .font_weight(FontWeight::BOLD)
         .when(!glyph.is_empty(), |d| d.child(div().text_color(theme.muted_foreground).text_lg().child(glyph)))
-        .child(div().flex_1().min_w_0().truncate().child(view.channel_title.clone()))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_2()
+                .child(div().min_w_0().truncate().child(view.channel_title.clone()))
+                .when_some(view.channel_topic.clone(), |d, topic| {
+                    d.child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_xs()
+                            .font_weight(FontWeight::NORMAL)
+                            .text_color(theme.muted_foreground)
+                            .child(topic),
+                    )
+                }),
+        )
+        .when_some(view.selected_channel.filter(|_| view.can_manage_selected_channel), |d, ch_id| {
+            d.child(
+                div().debug_selector(|| "edit-selected-channel-btn".to_owned()).child(
+                    Button::new("edit-selected-channel-btn")
+                        .ghost()
+                        .small()
+                        .icon(IconName::Settings)
+                        .tooltip(l10n::tr("Channel settings"))
+                        .on_click(cx.listener(move |this, _, window, cx| this.open_edit_channel(ch_id, window, cx))),
+                ),
+            )
+        })
         .when(view.selected_channel.is_some(), |d| {
             let label = match (is_dm, channel_muted) {
                 (true, true) => l10n::tr("Unmute DM"),

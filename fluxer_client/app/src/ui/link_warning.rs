@@ -51,7 +51,19 @@ impl ClientView {
 
     /// Opens an external link if trusted (or safe `mailto:`/`tel:` URI), or
     /// prompts the user when an HTTP/HTTPS destination host is untrusted.
+    /// `fluxer://` protocol links and internal HTTP(S) channel/user links are
+    /// routed in-app without invoking the external browser.
     pub(crate) fn open_external_url(&mut self, raw_url: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if crate::deep_links::is_app_protocol_url(raw_url) {
+            if let Some(link) = crate::deep_links::parse_protocol_deep_link(raw_url) {
+                self.open_deep_link(link, window, cx);
+            }
+            return;
+        }
+        if let Some(link) = crate::deep_links::parse_internal_http_deep_link(raw_url, self.backend.instance_hosts()) {
+            self.open_deep_link(link, window, cx);
+            return;
+        }
         if trusted_domains::is_safe_non_http_uri(raw_url) {
             self.launch_external_url(raw_url.trim(), cx);
             return;

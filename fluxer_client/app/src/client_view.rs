@@ -214,6 +214,8 @@ pub struct ClientView {
     pub(crate) accounts_enabled: bool,
     /// Token-free list of saved accounts for switching/removing in the UI.
     pub(crate) saved_accounts: Vec<crate::accounts::SavedAccountItem>,
+    /// Deep link deferred until READY completes (`self.user.is_some()`) and target arrives.
+    pub(crate) pending_deep_link: Option<(crate::deep_links::DeepLink, std::time::Instant)>,
     /// Keeps the layout's key context reachable when nothing inside has focus.
     focus: FocusHandle,
     /// Captured external URLs opened via `launch_external_url` in headless tests.
@@ -377,6 +379,7 @@ impl ClientView {
             group_dm_rename_synced: None,
             accounts_enabled: false,
             saved_accounts: Vec::new(),
+            pending_deep_link: None,
             focus: cx.focus_handle(),
             #[cfg(test)]
             opened_urls: Vec::new(),
@@ -643,6 +646,21 @@ impl ClientView {
             self.reload_cleared_channel();
         }
         self.refresh(cx);
+        if self.user.is_some()
+            && let Some((link, queued_at)) = self.pending_deep_link.take()
+        {
+            let expired = queued_at.elapsed() >= std::time::Duration::from_secs(10);
+            let (view, handle) = (cx.weak_entity(), self.window_handle);
+            cx.defer(move |cx| {
+                let _ = handle.update(cx, |_, window, cx| {
+                    let _ = view.update(cx, |v, cx| {
+                        if !v.try_apply_deep_link(&link, expired, window, cx) && !expired {
+                            v.pending_deep_link = Some((link, queued_at));
+                        }
+                    });
+                });
+            });
+        }
         if let Some((jump_ch, jump_msg)) = self.pending_jump
             && Some(jump_ch) == self.selected_channel
             && !self.loading_history
@@ -1498,6 +1516,122 @@ impl ClientView {
     /// (reply lines, the "Replying to" bar).
     pub(crate) fn jump_to_message(&mut self, channel_id: Snowflake, message_id: Snowflake, cx: &mut Context<Self>) {
         self.jump_to_channel_message(None, channel_id, message_id, cx);
+    }
+
+    /// Routes a validated deep link inside the window, deferring workspace links until `READY`.
+    pub(crate) fn open_deep_link(
+        &mut self,
+        link: crate::deep_links::DeepLink,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if matches!(link, crate::deep_links::DeepLink::Settings) {
+            let _ = self.try_apply_deep_link(&link, true, window, cx);
+            return;
+        }
+        if self.user.is_some() {
+            let _ = self.try_apply_deep_link(&link, true, window, cx);
+        } else {
+            self.pending_deep_link = Some((link, std::time::Instant::now()));
+        }
+    }
+
+    /// Tries to navigate to `link`. Returns `true` when resolved (or failed with
+    /// `show_missing_error`), or `false` when still waiting for deferred guild/channel data.
+    pub(crate) fn try_apply_deep_link(
+        &mut self,
+        link: &crate::deep_links::DeepLink,
+        show_missing_error: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        use crate::deep_links::DeepLink;
+
+        self.error = None;
+        match link {
+            DeepLink::Home => {
+                self.close_overlay(window, cx);
+                self.place = Place::Home;
+                self.clear_selection(cx);
+                true
+            }
+            DeepLink::DmChannel { channel_id, message_id } => {
+                let valid = self
+                    .backend
+                    .state()
+                    .channels
+                    .get(channel_id)
+                    .is_some_and(|ch| ch.guild_id.is_none() && opens_message_pane(ch.kind));
+                if !valid {
+                    if show_missing_error {
+                        self.error = Some(l10n::tr("Unknown channel").into());
+                        cx.notify();
+                    }
+                    return show_missing_error;
+                }
+                self.close_overlay(window, cx);
+                if let Some(msg) = *message_id {
+                    self.jump_to_channel_message(None, *channel_id, msg, cx);
+                } else {
+                    self.open_channel(None, *channel_id, cx);
+                }
+                true
+            }
+            DeepLink::Guild { guild_id } => {
+                if !self.backend.state().guilds.contains_key(guild_id) {
+                    if show_missing_error {
+                        self.error = Some(l10n::tr("Not found").into());
+                        cx.notify();
+                    }
+                    return show_missing_error;
+                }
+                self.close_overlay(window, cx);
+                self.select_place(Place::Guild(*guild_id), cx);
+                true
+            }
+            DeepLink::GuildChannel { guild_id, channel_id, message_id } => {
+                let valid = self
+                    .backend
+                    .state()
+                    .channels
+                    .get(channel_id)
+                    .is_some_and(|ch| ch.guild_id == Some(*guild_id) && opens_message_pane(ch.kind));
+                if !valid {
+                    if show_missing_error {
+                        self.error = Some(l10n::tr("Unknown channel").into());
+                        cx.notify();
+                    }
+                    return show_missing_error;
+                }
+                self.close_overlay(window, cx);
+                if let Some(msg) = *message_id {
+                    self.jump_to_channel_message(Some(*guild_id), *channel_id, msg, cx);
+                } else {
+                    self.open_channel(Some(*guild_id), *channel_id, cx);
+                }
+                true
+            }
+            DeepLink::Invite { code } => {
+                self.open_join_guild_with_code(code, window, cx);
+                true
+            }
+            DeepLink::UserProfile { user_id } => {
+                self.open_profile(
+                    *user_id,
+                    self.current_guild_id(),
+                    gpui_kit::point(px(240.), px(120.)),
+                    window,
+                    cx,
+                );
+                true
+            }
+            DeepLink::Settings => {
+                if !matches!(self.overlay, Overlay::Settings(_)) {
+                    self.open_settings(window, cx);
+                }
+                true
+            }
+        }
     }
 
     pub(crate) fn next_search_seq(&mut self) -> u64 {

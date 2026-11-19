@@ -18,6 +18,7 @@ mod accounts;
 mod ack;
 mod backend;
 mod client_view;
+mod deep_links;
 mod format;
 mod frecency;
 mod http;
@@ -31,6 +32,7 @@ mod profile;
 mod root;
 mod settings_model;
 mod shortcuts;
+mod single_instance;
 mod theme;
 mod tray;
 mod trusted_domains;
@@ -41,6 +43,8 @@ mod view_model;
 mod tests;
 #[cfg(test)]
 mod tests_accounts;
+#[cfg(test)]
+mod tests_deep_links;
 #[cfg(test)]
 mod tests_emoji_picker;
 #[cfg(test)]
@@ -77,19 +81,55 @@ struct Args {
     token_env: Option<String>,
     allow_insecure_loopback: bool,
     autostart: bool,
+    deep_link: Option<String>,
 }
 
 fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args> {
     let mut out = Args::default();
     let mut args = args.into_iter();
+    let mut flags_ended = false;
     while let Some(arg) = args.next() {
+        if flags_ended {
+            if !deep_links::is_app_protocol_url(&arg) {
+                bail!("unexpected argument: {arg}");
+            }
+            if out.deep_link.is_some() {
+                bail!("multiple deep link URLs provided");
+            }
+            out.deep_link = Some(arg);
+            continue;
+        }
         match arg.as_str() {
             "--instance" => out.instance = Some(args.next().context("--instance needs a value")?),
             "--token-env" => out.token_env = Some(args.next().context("--token-env needs a variable name")?),
+            "--url" => {
+                let mut raw = args.next().context("--url needs a value")?;
+                if raw == "--" {
+                    raw = args.next().context("--url needs a value")?;
+                    flags_ended = true;
+                }
+                if !deep_links::is_app_protocol_url(&raw) {
+                    bail!("--url requires a fluxer:// URL");
+                }
+                if out.deep_link.is_some() {
+                    bail!("multiple deep link URLs provided");
+                }
+                out.deep_link = Some(raw);
+            }
             "--allow-insecure-loopback" => out.allow_insecure_loopback = true,
             "--autostart" => out.autostart = true,
+            "--" => flags_ended = true,
+            _ if deep_links::is_app_protocol_url(&arg) => {
+                if out.deep_link.is_some() {
+                    bail!("multiple deep link URLs provided");
+                }
+                out.deep_link = Some(arg);
+            }
             other => bail!("unknown argument: {other}"),
         }
+    }
+    if out.deep_link.is_some() && out.instance.is_some() {
+        bail!("--instance cannot be combined with a deep link URL");
     }
     Ok(out)
 }
@@ -137,6 +177,32 @@ fn run() -> Result<()> {
         Some(_) => None,
         None => Some(accounts::open_store(insecure)),
     };
+    if let Some(Err(SessionError::Locked { ref path })) = store
+        && let Some(dir) = path.parent()
+        && single_instance::try_forward_with_retry(
+            dir,
+            args.deep_link.as_deref(),
+            std::time::Duration::from_millis(1500),
+        )
+    {
+        tracing::info!(deep_link = args.deep_link.is_some(), "handed off launch to running instance");
+        runtime.shutdown_background();
+        return Ok(());
+    }
+    let (ipc_server, ipc_rx) = match &store {
+        Some(Ok(s)) => {
+            platform::ensure_protocol_handler();
+            match single_instance::SingleInstanceServer::bind(s.dir()) {
+                Ok((server, rx)) => (Some(server), Some(rx)),
+                Err(err) => {
+                    tracing::warn!(error = %format!("{err:#}"), "could not start single-instance IPC server");
+                    (None, None)
+                }
+            }
+        }
+        _ => (None, None),
+    };
+    let initial_deep_link = args.deep_link;
     let initial_prefs = match &store {
         Some(Ok(s)) => Some(prefs::PrefsStore::open(s.dir().join(prefs::FILE_NAME))),
         _ => None,
@@ -191,6 +257,12 @@ fn run() -> Result<()> {
                 }
             });
             tray::install(window.window_handle(), root.downgrade(), cx);
+            if let Some(rx) = ipc_rx {
+                single_instance::install(rx, window.window_handle(), root.downgrade(), cx);
+            }
+            if let Some(url) = initial_deep_link {
+                root.update(cx, |r, cx| r.handle_deep_link(&url, window, cx));
+            }
             if autostart_launch && tray::close_to_tray() && tray::is_active() {
                 window.minimize_window();
             }
@@ -208,6 +280,7 @@ fn run() -> Result<()> {
             }
         }
     });
+    drop(ipc_server);
     runtime.shutdown_background();
     let open_error = open_error.borrow_mut().take();
     match open_error {

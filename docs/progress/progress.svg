@@ -57,13 +57,13 @@
   <g><title>드래프트 보존 : 완료</title><rect x="650" y="183.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <text x="24" y="228.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">탐색·단축키</text>
   <rect x="270" y="217.0" width="190" height="10" rx="5" fill="#21262d"/>
-  <rect x="270" y="217.0" width="142.5" height="10" rx="5" fill="#58a6ff"/>
-  <text x="474" y="227.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">75%</text>
+  <rect x="270" y="217.0" width="158.3" height="10" rx="5" fill="#58a6ff"/>
+  <text x="474" y="227.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">83%</text>
   <g><title>Ctrl+K 빠른 전환 : 완료</title><rect x="510" y="217.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <g><title>단축키 등록·처리 : 완료</title><rect x="524" y="217.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <g><title>길드·채널 순회 : 완료</title><rect x="538" y="217.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <g><title>안읽음·멘션 점프 : 부분</title><rect x="552" y="217.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>딥링크(fluxer://) : 미착수</title><rect x="566" y="217.0" width="10" height="10" rx="2" fill="#484f58"/></g>
+  <g><title>딥링크(fluxer://) : 부분</title><rect x="566" y="217.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <g><title>방문 기록·앞뒤 이동 : 완료</title><rect x="580" y="217.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <text x="24" y="262.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">알림·첨부</text>
   <rect x="270" y="251.0" width="190" height="10" rx="5" fill="#21262d"/>

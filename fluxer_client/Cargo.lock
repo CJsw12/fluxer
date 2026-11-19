@@ -2067,6 +2067,7 @@ dependencies = [
  "gpui-kit",
  "gpui-pre",
  "notify-rust",
+ "rand 0.9.5",
  "reqwest",
  "rodio",
  "serde_json",

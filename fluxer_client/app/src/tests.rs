@@ -711,6 +711,7 @@ fn args_parse() {
             token_env: Some("FLUXER_TOKEN".to_owned()),
             allow_insecure_loopback: true,
             autostart: true,
+            deep_link: None,
         }
     );
     assert!(parse_args(["--token-env".to_owned()]).is_err());

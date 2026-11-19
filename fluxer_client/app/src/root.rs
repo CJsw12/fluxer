@@ -58,6 +58,10 @@ pub struct AppRoot {
     pub(crate) transition_seq: u64,
     /// Cached rediscovery target deferred until `finish_resume_seq(Ok)` succeeds.
     pending_rediscover: Option<(String, String, String)>,
+    /// Protocol deep link queued before a client session is active.
+    pub(crate) pending_deep_link: Option<crate::deep_links::DeepLink>,
+    /// Suppresses duplicate deep-link launches within 1.5s.
+    deep_link_deduper: crate::deep_links::DeepLinkDeduper,
     _subscription: Option<Subscription>,
     _task: Option<Task<()>>,
     /// Background rediscovery that refreshes the cached endpoints.
@@ -75,6 +79,8 @@ impl AppRoot {
             previous_account_key: None,
             transition_seq: 0,
             pending_rediscover: None,
+            pending_deep_link: None,
+            deep_link_deduper: crate::deep_links::DeepLinkDeduper::default(),
             _subscription: None,
             _task: None,
             _rediscover: None,
@@ -283,6 +289,7 @@ impl AppRoot {
                 tracing::info!(%reason, "saved token rejected");
                 self.pending_rediscover = None;
                 self._rediscover = None;
+                self.pending_deep_link = None;
                 if let Some(key) = self.account_key.take() {
                     self.forget(&key);
                 }
@@ -294,6 +301,7 @@ impl AppRoot {
             Err(ResumeError::Unreachable(message)) => {
                 self.pending_rediscover = None;
                 self._rediscover = None;
+                self.pending_deep_link = None;
                 self.account_key = None;
                 self.show_login(Some(message.into()), window, cx);
             }
@@ -450,7 +458,11 @@ impl AppRoot {
                         }
                     }));
                 self.sync_client_accounts(&client, cx);
-                self.screen = Screen::Client(client);
+                let pending = self.pending_deep_link.take();
+                self.screen = Screen::Client(client.clone());
+                if let Some(link) = pending {
+                    client.update(cx, |v, cx| v.open_deep_link(link, window, cx));
+                }
                 cx.notify();
                 true
             }
@@ -491,6 +503,9 @@ impl AppRoot {
             self.previous_account_key.clone()
         };
         self.close_active_client(cx);
+        if self.account_key.as_deref() != Some(key.as_str()) {
+            self.pending_deep_link = None;
+        }
         self.previous_account_key = prev.filter(|k| k != &key);
         self.resume(account, window, cx);
     }
@@ -504,6 +519,7 @@ impl AppRoot {
         self.close_active_client(cx);
         self.previous_account_key = prev;
         self.account_key = None;
+        self.pending_deep_link = None;
         self.show_login(None, window, cx);
     }
 
@@ -538,12 +554,31 @@ impl AppRoot {
         }
     }
 
+    /// Handles an incoming `fluxer://` deep link for the foreground session,
+    /// queuing it until login/READY finishes if no client is active yet.
+    pub(crate) fn handle_deep_link(&mut self, raw: &str, window: &mut Window, cx: &mut Context<Self>) {
+        if self.deep_link_deduper.should_suppress(raw) {
+            return;
+        }
+        let Some(link) = crate::deep_links::parse_protocol_deep_link(raw) else {
+            tracing::warn!("ignoring invalid or disallowed fluxer:// deep link");
+            return;
+        };
+        if let Screen::Client(client) = &self.screen {
+            let client = client.clone();
+            client.update(cx, |v, cx| v.open_deep_link(link, window, cx));
+        } else {
+            self.pending_deep_link = Some(link);
+        }
+    }
+
     /// The client view logged out (REST logout already sent): forget the
     /// saved account and show the login form.
     fn logged_out(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.previous_account_key = None;
         self._rediscover = None;
         self.pending_rediscover = None;
+        self.pending_deep_link = None;
         if let Some(key) = self.account_key.take() {
             self.forget(&key);
         }

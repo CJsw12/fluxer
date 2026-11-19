@@ -26,9 +26,18 @@ const SHORTCUT_FILE_NAME: &str = "Fluxer Client.lnk";
 #[cfg_attr(test, allow(dead_code))]
 pub const RUN_REGISTRY_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 
+/// Registry subkey under `HKEY_CURRENT_USER` holding the `fluxer://` URL handler.
+#[cfg_attr(test, allow(dead_code))]
+pub const PROTOCOL_REGISTRY_KEY: &str = r"Software\Classes\fluxer";
+
 /// Formats the HKCU `Run` command for launching `exe` in autostart mode.
 pub fn format_autostart_command(exe: &std::path::Path) -> String {
     format!("\"{}\" --autostart", exe.display())
+}
+
+/// Formats the Windows URL protocol command registered for `fluxer://` links.
+pub fn format_protocol_command(exe: &std::path::Path) -> String {
+    format!("\"{}\" --url -- \"%1\"", exe.display())
 }
 
 /// Registers or removes the per-user Windows `Run` entry for Fluxer.
@@ -81,6 +90,47 @@ pub fn init() {
     );
     set_app_user_model_id();
     ensure_start_menu_shortcut();
+}
+
+/// Registers `HKCU\Software\Classes\fluxer` for the current executable if missing or stale.
+pub fn ensure_protocol_handler() {
+    #[cfg(all(target_os = "windows", not(test)))]
+    {
+        if let Err(err) = register_protocol_handler() {
+            tracing::warn!(error = %format!("{err:#}"), "could not register the fluxer:// protocol handler");
+        }
+    }
+}
+
+#[cfg(all(target_os = "windows", not(test)))]
+fn register_protocol_handler() -> anyhow::Result<()> {
+    use anyhow::Context as _;
+
+    let exe = std::env::current_exe().context("could not locate the running executable")?;
+    let expected_cmd = format_protocol_command(&exe);
+    let cmd_path = format!(r"{PROTOCOL_REGISTRY_KEY}\shell\open\command");
+    if let Ok(existing) = windows_registry::CURRENT_USER.open(&cmd_path)
+        && existing.get_string("").ok().as_deref() == Some(expected_cmd.as_str())
+    {
+        return Ok(());
+    }
+
+    let base = windows_registry::CURRENT_USER
+        .create(PROTOCOL_REGISTRY_KEY)
+        .context("could not open HKCU fluxer protocol key")?;
+    base.set_string("", "URL:Fluxer Protocol")?;
+    base.set_string("URL Protocol", "")?;
+
+    let icon = windows_registry::CURRENT_USER
+        .create(format!(r"{PROTOCOL_REGISTRY_KEY}\DefaultIcon"))
+        .context("could not open DefaultIcon key")?;
+    icon.set_string("", &format!("\"{}\",0", exe.display()))?;
+
+    let cmd = windows_registry::CURRENT_USER
+        .create(&cmd_path)
+        .context("could not open shell command key")?;
+    cmd.set_string("", &expected_cmd)?;
+    Ok(())
 }
 
 /// Release builds have no console, so record panics in the log file.
@@ -398,6 +448,15 @@ mod tests {
         assert_eq!(
             format_autostart_command(exe),
             r#""C:\Program Files\Fluxer Client\fluxer_client.exe" --autostart"#
+        );
+    }
+
+    #[test]
+    fn format_protocol_command_quotes_paths_with_spaces() {
+        let exe = Path::new(r"C:\Program Files\Fluxer Client\fluxer_client.exe");
+        assert_eq!(
+            format_protocol_command(exe),
+            r#""C:\Program Files\Fluxer Client\fluxer_client.exe" --url -- "%1""#
         );
     }
 }

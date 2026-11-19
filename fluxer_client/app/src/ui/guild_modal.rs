@@ -44,10 +44,28 @@ impl ClientView {
     }
 
     pub(crate) fn open_join_guild(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_join_guild_initial(None, window, cx);
+    }
+
+    /// Opens the Join Guild confirmation modal pre-filled with an invite code
+    /// and immediately fetches its preview (never auto-joining without consent).
+    pub(crate) fn open_join_guild_with_code(&mut self, code: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_join_guild_initial(Some(code), window, cx);
+        self.preview_join_invite(cx);
+    }
+
+    fn open_join_guild_initial(&mut self, initial: Option<&str>, window: &mut Window, cx: &mut Context<Self>) {
         self.prepare_overlay_replace(cx);
         self.autocomplete = None;
         self.pending_accept_code = None;
-        let input = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Enter an invite link or code")));
+        let initial_value = initial.map(str::to_owned);
+        let input = cx.new(|cx| {
+            let mut state = InputState::new(window, cx).placeholder(l10n::tr("Enter an invite link or code"));
+            if let Some(code) = &initial_value {
+                state.set_value(code, window, cx);
+            }
+            state
+        });
         let subscription = cx.subscribe_in(&input, window, |this: &mut Self, _, ev: &InputEvent, _, cx| match ev {
             InputEvent::PressEnter { shift: false, .. } => this.preview_or_join_invite(cx),
             InputEvent::Change => {

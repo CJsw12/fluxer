@@ -303,7 +303,7 @@
         },
         {
           "name": "친구 목록",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "프로필 팝업",
@@ -311,7 +311,7 @@
         },
         {
           "name": "차단·관계 관리",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "그룹 DM",
@@ -325,11 +325,11 @@
       "items": [
         {
           "name": "초대 참가",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "길드 탈퇴",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "채널 생성·편집",

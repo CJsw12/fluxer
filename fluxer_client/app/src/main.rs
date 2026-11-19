@@ -48,6 +48,8 @@ mod tests_notify_upload;
 mod tests_profile;
 #[cfg(test)]
 mod tests_settings;
+#[cfg(test)]
+mod tests_social;
 
 use std::cell::RefCell;
 use std::rc::Rc;

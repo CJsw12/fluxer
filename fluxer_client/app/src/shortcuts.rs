@@ -31,6 +31,7 @@ gpui_kit::actions!(
         HistoryBack,
         HistoryForward,
         ToggleLastGuild,
+        OpenJoinGuild,
         ToggleQuickSwitcher,
         ToggleEmojiPicker,
         OpenSettings,
@@ -69,6 +70,7 @@ fn bindings() -> Vec<KeyBinding> {
     both(&mut out, "alt-left", HistoryBack);
     both(&mut out, "alt-right", HistoryForward);
     both(&mut out, "ctrl-alt-right", ToggleLastGuild);
+    both(&mut out, "ctrl-shift-n", OpenJoinGuild);
     // Ctrl+K also closes the switcher from its own input.
     out.push(KeyBinding::new("ctrl-k", ToggleQuickSwitcher, Some(CONTEXT)));
     out.push(KeyBinding::new("ctrl-k", ToggleQuickSwitcher, Some(IN_INPUT)));
@@ -101,6 +103,7 @@ pub fn on_actions(root: Div, cx: &mut Context<ClientView>) -> Div {
         .on_action(cx.listener(|v, _: &HistoryBack, _, cx| v.history_back(cx)))
         .on_action(cx.listener(|v, _: &HistoryForward, _, cx| v.history_forward(cx)))
         .on_action(cx.listener(|v, _: &ToggleLastGuild, _, cx| v.toggle_last_guild(cx)))
+        .on_action(cx.listener(|v, _: &OpenJoinGuild, window, cx| v.open_join_guild(window, cx)))
         .on_action(cx.listener(|v, _: &ToggleQuickSwitcher, window, cx| v.toggle_quick_switcher(window, cx)))
         .on_action(cx.listener(|v, _: &ToggleEmojiPicker, window, cx| v.toggle_emoji_picker(window, cx)))
         .on_action(cx.listener(|v, _: &OpenSettings, window, cx| v.open_settings(window, cx)))
@@ -127,6 +130,6 @@ mod tests {
             let key = (format!("{:?}", b.keystrokes()), b.predicate().map(|p| p.to_string()));
             assert!(seen.insert(key.clone()), "{key:?} bound twice");
         }
-        assert_eq!(seen.len(), 47);
+        assert_eq!(seen.len(), 50);
     }
 }

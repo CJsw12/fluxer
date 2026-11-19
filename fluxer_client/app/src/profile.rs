@@ -54,6 +54,7 @@ pub struct ProfileCard {
     pub note: String,
     pub is_self: bool,
     pub is_blocked: bool,
+    pub relationship: Option<RelationshipKind>,
     pub bot: bool,
     pub loaded: bool,
 }
@@ -168,6 +169,16 @@ fn non_empty(value: Option<&str>) -> Option<&str> {
     value.filter(|value| !value.is_empty())
 }
 
+/// Formats `username#discriminator` while suppressing `0` and `0000` placeholders.
+pub fn format_username_tag(username: &str, discriminator: Option<&str>) -> String {
+    match discriminator {
+        Some(discriminator) if !discriminator.is_empty() && discriminator != "0" && discriminator != "0000" => {
+            format!("{username}#{discriminator}")
+        }
+        _ => username.to_owned(),
+    }
+}
+
 /// Builds a profile snapshot from the live state and the optional REST result.
 /// Without `fetched` this still yields the base user/avatar/name while the
 /// fetch is in flight.
@@ -199,12 +210,7 @@ pub fn build_profile_card(
         .to_owned();
 
     let username = base.as_ref().map(|user| user.username).unwrap_or_default();
-    let username_tag = match base.as_ref().and_then(|user| user.discriminator) {
-        Some(discriminator) if !discriminator.is_empty() && discriminator != "0" && discriminator != "0000" => {
-            format!("{username}#{discriminator}")
-        }
-        _ => username.to_owned(),
-    };
+    let username_tag = format_username_tag(username, base.as_ref().and_then(|user| user.discriminator));
 
     let member_avatar = fetched_member.and_then(|member| non_empty(member.avatar.as_deref()));
     let avatar_url = if avatar_unset {
@@ -301,6 +307,7 @@ pub fn build_profile_card(
         })
         .unwrap_or_default();
 
+    let relationship = state.relationship_kind(user_id);
     ProfileCard {
         user_id,
         guild_id,
@@ -317,9 +324,8 @@ pub fn build_profile_card(
         mutual_guilds,
         note: state.note(user_id).unwrap_or_default().to_owned(),
         is_self: state.current_user_id() == Some(user_id),
-        is_blocked: state.relationships.get(&user_id).is_some_and(|relationship| {
-            relationship.kind() == RelationshipKind::Blocked
-        }),
+        is_blocked: relationship == Some(RelationshipKind::Blocked),
+        relationship,
         bot: base.as_ref().is_some_and(|user| user.bot),
         loaded: fetched.is_some(),
     }

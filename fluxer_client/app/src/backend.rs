@@ -53,6 +53,14 @@ pub enum UiEvent {
     },
     /// A user note save finished (error is `Some` on failure after rollback).
     NoteSaved { user_id: Snowflake, error: Option<String> },
+    /// Friend request by username/tag finished.
+    FriendRequestSent { input: String, error: Option<String> },
+    /// `GET /invites/{code}` preview finished.
+    InvitePreviewLoaded { code: String, result: Result<InvitePreview, String> },
+    /// `POST /invites/{code}` accept finished; `Ok(AcceptedInvite)`.
+    InviteAccepted { code: String, result: Result<AcceptedInvite, String> },
+    /// `DELETE /users/@me/guilds/{id}` finished.
+    GuildLeft { guild_id: Snowflake, error: Option<String> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -103,7 +111,12 @@ mod members;
 mod navigation;
 mod profile;
 mod settings;
+mod social;
 mod upload;
+
+pub use social::{AcceptedInvite, InvitePreview, extract_invite_code};
+#[cfg(test)]
+pub use social::SocialCall;
 
 /// A logged-in session. Cloning shares the same connection and state.
 #[derive(Clone)]
@@ -145,6 +158,9 @@ pub struct Backend {
     /// Sent `PATCH /users/@me/guilds/{g|@me}/settings` payloads (tests).
     #[cfg(test)]
     pub(crate) sent_guild_settings: Arc<Mutex<Vec<(Option<Snowflake>, GuildSettingsPatch)>>>,
+    /// Recorded social & community actions (tests).
+    #[cfg(test)]
+    pub(crate) sent_social: Arc<Mutex<Vec<SocialCall>>>,
 }
 
 impl Backend {
@@ -219,6 +235,8 @@ impl Backend {
             sent_settings: Arc::default(),
             #[cfg(test)]
             sent_guild_settings: Arc::default(),
+            #[cfg(test)]
+            sent_social: Arc::default(),
         };
         (backend, rx)
     }

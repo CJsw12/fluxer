@@ -604,11 +604,28 @@
   1. Milestone 2(소셜: 친구 목록·차단/관계 관리, 길드 초대 참가·탈퇴, 미디어 뷰어) 구현 착수.
   2. 자체 테스트 서버(`fluxer-dev.home.arpa`)에서 `dist/fluxer_client/fluxer_client.exe` 실기 및 신규 UI 검증.
 
+## 친구 목록·관계 관리·초대 참가·길드 탈퇴 (Milestone 2, 2026-11-19)
+- **Baseline**: `desktop-rs` `37957e5a1` 기반(465 테스트 통과).
+- **Done**:
+  - **소셜·커뮤니티 백엔드 (`backend/social.rs`, `backend.rs`)**: 친구 요청(태그/ID), 수락, 관계 삭제/차단 해제, 차단, 초대 미리보기(`GET /invites/{code}`, `member_count`/`presence_count` 및 그룹 DM 채널명 폴백), 초대 수락(`POST /invites/{code}` 길드·그룹 DM 분기), 길드 탈퇴(`DELETE /users/@me/guilds/{id}` 및 낙관적 `GUILD_DELETE` 반영) 구현. `extract_invite_code`의 `..` 경로 역참조 및 빈 `/invite`/`/i` 경로 검증 강화.
+  - **홈 친구 화면·프로필 관계 버튼 (`ui/friends.rs`, `ui/channel_list.rs`, `profile.rs`, `ui/profile_popout.rs`)**: `Place::Home` 미선택 상태에 `Online` / `All` / `Pending` / `Blocked` / `Add friend` 탭과 `home-friends` 항목, 대기 요청 배지, 1:1 DM 열기·생성, Friends 화면 오류 배너(`friends-error`), 프로필 팝업 관계 버튼 및 `refresh_open_profile`(실패 시 `card.loaded` 보존) 추가.
+  - **길드 참가·탈퇴 모달 (`ui/guild_modal.rs`, `ui/guild_rail.rs`, `ui/overlay.rs`, `shortcuts.rs`, `client_view.rs`)**: `Ctrl+Shift+N`(총 50바인딩) 및 레일 `+` 버튼으로 `Overlay::JoinGuild` 열기, `GUILD_CREATE`/`CHANNEL_CREATE` 자동 이동(`pending_joined_guild`/`pending_joined_channel`), 비소유자 전용 `"leave-guild-btn"` → `Overlay::LeaveGuild` 확인 모달 및 소유자 가드 구현.
+  - **DeepSeek 교차 검토·검증**: `deepseek/deepseek-flash`(`fluxer-helper-m2-review`) 정적 검토 P0/P1 0건 및 P2 6건(연쇄 수락 stale `code` 레이스, 그룹 DM 초대 채널 미오픈, Fluxer API `member_count`/`presence_count` 필드명 불일치, Friends 오류 배너 미노출, Join/Leave 모달 종료 후 컴포저 포커스 복원 누락, Leave 모달 포커스 부재로 인한 `Escape` 오작동)과 입력 유지 가드를 모두 수정하고 [tests_social.rs](fluxer_client/app/src/tests_social.rs)에 4개 헤드리스 UI 테스트 추가. 재검증 결과 `cargo check -p fluxer_client_app --bin fluxer_client` **경고 0건**, `cargo test --workspace -- --test-threads=2` **473 passed, 0 failed, 0 warnings** (`app`: 182, `core`: 242, `i18n`: 10, `markdown`: 36 [+1 existing ignored doctest], `devserver`: 3).
+  - **진행도 배지**: `docs/progress/progress.json` 갱신(`친구 목록: partial`, `차단·관계 관리: partial`, `초대 참가: partial`, `길드 탈퇴: partial`) + `python scripts/progress_svg.py` 실행 → `overall: 58% (93 items)`, `daily driver: 68% (73 items, 10 areas)`.
+- **Decisions**:
+  - `Place::Home`에서 채널 미선택 시 Friends 화면을 표시하되 컴포저를 `0px` 숨김 슬롯에 유지해 기존 `ClientView > Composer > Input` 단축키 문맥과 포커스 복원을 보존.
+  - 초대 미리보기(`InvitePreview`)는 Fluxer 스키마(`member_count`, `presence_count`)를 우선 읽고 하위 호환 키(`approximate_*`)를 폴백으로 지원하며, 그룹 DM 초대는 `AcceptedInvite::channel_id`로 채널을 연다.
+- **Blockers**:
+  - 친구 요청·수락·차단, 초대 링크 미리보기/수락, 그룹 DM 초대, 비소유자 길드 탈퇴 실서버 API 왕복 및 기존 실기 미확인 항목은 테스트 서버 실기 검증 전임.
+- **Next Steps**:
+  1. Milestone 3(미디어 뷰어, 신뢰 도메인 링크 경고, 글꼴·밀도·확대 설정, 메시지 검색 등) 설계 및 구현 착수.
+  2. 자체 테스트 서버(`fluxer-dev.home.arpa`)에서 `dist/fluxer_client/fluxer_client.exe` 재패키징 및 신규 소셜·커뮤니티 UI 실기 확인.
+
 ## 인계 (2026-11-19, 다음 에이전트용 — 이 절부터 읽을 것)
-- **기준**: `desktop-rs` (`f531f3aba` 이후 드래프트·방문 기록·채널 음소거 커밋 반영), 워킹 트리 깨끗함(미공개 파일·`dist/` 제외). 미공개 유지 파일(커밋 금지): `RUST_*_PLAN.md`, `RUST_MIGRATION_REFERENCE_REVIEW.md`, `RUST_PORT_RESEARCH_*`, `IPC_M0_FINDINGS.md`, `tools/h265_livekit_probe/`.
-- **현재 주력**: 네이티브 GPUI 클라이언트 `fluxer_client/`(core, app, markdown, i18n, devserver). `cd fluxer_client; $env:CARGO_TARGET_DIR = "../target/fc-root"; cargo test --workspace -- --test-threads=2` → 465 통과(app 174, core 242, markdown 36 [+1 ignored doctest], i18n 10, devserver 3), `cargo check --bin fluxer_client` 경고 0.
-- **우선순위(P0)**: ① 알림·첨부 ✔(코드) ② 임베드 ✔(코드) ③ 릴리스 exe ✔(`scripts/package_fluxer_client.ps1`, 산출 `dist/fluxer_client/fluxer_client.exe` 39.17 MB, SHA256 `9a6a9e34600e5025a1e654ece655542c899cf64f5f5ab6b63f953102c6adcae7`, `PE_SUBSYSTEM=2`) ④ 안정성 실기(재연결·장시간 메모리·한글 IME). P1 진행: 이모지 피커·프로필 팝업·설정 화면·트레이/자동 시작·드래프트 보존·방문 기록 이동·채널 음소거 ✔(코드/헤드리스).
-- **실기 미확인**: 채널/DM 음소거 실서버 PATCH, 드래프트·`Alt+Left/Right` 실기, 트레이 아이콘·닫기 최소화·`--autostart` HKCU Run 실제 동작, 이모지 피커·프로필 팝업·설정/테마/로케일 UI 실서버 동작, GIF 애니메이션 수정, 유튜브 카드 중복 수정, Windows 토스트·알림음(사용자 PC가 방해 금지 모드), 첨부 업로드 실서버, 한국어 UI 화면, 릴리스 exe·AUMID 바로가기.
+- **기준**: `desktop-rs` (Milestone 1 `37957e5a1` 이후 Milestone 2 친구·관계·초대·탈퇴 커밋 반영), 워킹 트리 깨끗함(미공개 파일·`dist/` 제외). 미공개 유지 파일(커밋 금지): `RUST_*_PLAN.md`, `RUST_MIGRATION_REFERENCE_REVIEW.md`, `RUST_PORT_RESEARCH_*`, `IPC_M0_FINDINGS.md`, `tools/h265_livekit_probe/`.
+- **현재 주력**: 네이티브 GPUI 클라이언트 `fluxer_client/`(core, app, markdown, i18n, devserver). `cd fluxer_client; $env:CARGO_TARGET_DIR = "../target/fc-root"; cargo test --workspace -- --test-threads=2` → 473 통과(app 182, core 242, markdown 36 [+1 ignored doctest], i18n 10, devserver 3), `cargo check --bin fluxer_client` 경고 0.
+- **우선순위(P0)**: ① 알림·첨부 ✔(코드) ② 임베드 ✔(코드) ③ 릴리스 exe ✔(`scripts/package_fluxer_client.ps1`, 산출 `dist/fluxer_client/fluxer_client.exe` 39.17 MB, SHA256 `9a6a9e34600e5025a1e654ece655542c899cf64f5f5ab6b63f953102c6adcae7`, `PE_SUBSYSTEM=2`) ④ 안정성 실기(재연결·장시간 메모리·한글 IME). P1~P2 진행: 이모지 피커·프로필 팝업·설정 화면·트레이/자동 시작·드래프트 보존·방문 기록 이동·채널 음소거·친구 목록·관계 관리·초대 참가·길드 탈퇴 ✔(코드/헤드리스).
+- **실기 미확인**: 친구/관계 관리·초대 참가·그룹 DM 초대·길드 탈퇴 실서버 동작, 채널/DM 음소거 실서버 PATCH, 드래프트·`Alt+Left/Right` 실기, 트레이 아이콘·닫기 최소화·`--autostart` HKCU Run 실제 동작, 이모지 피커·프로필 팝업·설정/테마/로케일 UI 실서버 동작, GIF 애니메이션 수정, 유튜브 카드 중복 수정, Windows 토스트·알림음(사용자 PC가 방해 금지 모드), 첨부 업로드 실서버, 한국어 UI 화면, 릴리스 exe·AUMID 바로가기.
 - **테스트 환경**: 자체 테스트 서버 `fluxer-dev.home.arpa`(SSH 443 터널). 접속·계정·도구는 저장소 밖 `../Logs/fluxer-dev/LOCAL_ACCESS.md`. **친구 서버와 사용자 개인 계정은 테스트에 쓰지 말 것**(개인 정보). 메시지 전송 시험은 자체 서버에서만.
 - **PC 부하 규칙**(사용자 PC가 여러 번 멈춤): `fluxer_client/.cargo/config.toml` `build.jobs=4` 유지, 동시에 빌드하는 작업 최대 2개, 앱 테스트는 항상 `timeout 300 … -- --test-threads=2`, 빌드 디렉터리는 `target/fc-root`만(추가로 만들었으면 끝나고 삭제). 헤드리스 GPUI 테스트가 무한 루프로 CPU를 먹은 전례(uniform_list의 0..1 측정 호출) — 렌더/레이아웃 콜백에서 상태 변경·notify 금지.
 - **GUI 실기**: `tools/agents/gui.ps1`는 다른 창이 대상 창을 가리면 입력을 거부한다(사용자가 PC 사용 중일 수 있음). 마우스 대신 키보드(Ctrl+K 등) 위주로 확인.

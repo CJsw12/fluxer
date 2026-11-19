@@ -2,7 +2,7 @@
 //! guild roles, mutual guilds, private note editor and "Message" DM action.
 
 use fluxer_client_core::rest::UserProfileFull;
-use fluxer_client_core::state::{ChannelKind, ClientState, Snowflake};
+use fluxer_client_core::state::{ChannelKind, ClientState, RelationshipKind, Snowflake};
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
@@ -37,7 +37,7 @@ pub struct ProfilePopout {
     pub _subscription: Subscription,
 }
 
-fn find_1on1_dm(state: &ClientState, user_id: Snowflake) -> Option<Snowflake> {
+pub(crate) fn find_1on1_dm(state: &ClientState, user_id: Snowflake) -> Option<Snowflake> {
     state
         .dm_channels()
         .into_iter()
@@ -136,6 +136,20 @@ impl ClientView {
             pop.card = build_profile_card(&state, self.backend.media(), user_id, guild_id, fetched);
             pop.error = None;
             cx.notify();
+        }
+    }
+
+    /// Rebuilds the currently open profile card from live state so friend/block
+    /// changes update immediately.
+    pub(crate) fn refresh_open_profile(&mut self) {
+        if let Overlay::Profile(pop) = &mut self.overlay {
+            let was_loaded = pop.card.loaded;
+            let state = self.backend.state();
+            let fetched = self.profile_cache.get(&(pop.user_id, pop.guild_id));
+            pop.card = build_profile_card(&state, self.backend.media(), pop.user_id, pop.guild_id, fetched);
+            if was_loaded {
+                pop.card.loaded = true;
+            }
         }
     }
 
@@ -264,18 +278,111 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
         );
 
     if !card.is_self {
+        let user_id = card.user_id;
         let label = if pop.confirm_blocked_dm {
             l10n::tr("Open DM")
         } else {
             l10n::tr("Message")
         };
-        body = body.child(
-            Button::new("profile-message-btn")
-                .primary()
-                .small()
-                .label(label)
-                .on_click(cx.listener(|this, _, window, cx| this.profile_message(window, cx))),
-        );
+        let mut actions = div()
+            .flex()
+            .flex_row()
+            .flex_wrap()
+            .gap_1()
+            .child(
+                Button::new("profile-message-btn")
+                    .primary()
+                    .small()
+                    .label(label)
+                    .on_click(cx.listener(|this, _, window, cx| this.profile_message(window, cx))),
+            );
+        match card.relationship {
+            None | Some(RelationshipKind::Unknown(_)) => {
+                actions = actions
+                    .child(
+                        Button::new("profile-add-friend-btn")
+                            .ghost()
+                            .small()
+                            .label(l10n::tr("Add friend"))
+                            .on_click(cx.listener(move |this, _, _, _| this.backend.send_friend_request(user_id))),
+                    )
+                    .child(
+                        Button::new("profile-block-btn")
+                            .danger()
+                            .small()
+                            .label(l10n::tr("Block"))
+                            .on_click(cx.listener(move |this, _, _, _| this.backend.block_user(user_id))),
+                    );
+            }
+            Some(RelationshipKind::Friend) => {
+                actions = actions
+                    .child(
+                        Button::new("profile-remove-friend-btn")
+                            .ghost()
+                            .small()
+                            .label(l10n::tr("Remove friend"))
+                            .on_click(cx.listener(move |this, _, _, _| this.backend.remove_relationship(user_id))),
+                    )
+                    .child(
+                        Button::new("profile-block-btn")
+                            .danger()
+                            .small()
+                            .label(l10n::tr("Block"))
+                            .on_click(cx.listener(move |this, _, _, _| this.backend.block_user(user_id))),
+                    );
+            }
+            Some(RelationshipKind::IncomingRequest) => {
+                actions = actions
+                    .child(
+                        Button::new("profile-accept-btn")
+                            .primary()
+                            .small()
+                            .label(l10n::tr("Accept"))
+                            .on_click(cx.listener(move |this, _, _, _| this.backend.accept_friend_request(user_id))),
+                    )
+                    .child(
+                        Button::new("profile-ignore-btn")
+                            .ghost()
+                            .small()
+                            .label(l10n::tr("Ignore"))
+                            .on_click(cx.listener(move |this, _, _, _| this.backend.remove_relationship(user_id))),
+                    )
+                    .child(
+                        Button::new("profile-block-btn")
+                            .danger()
+                            .small()
+                            .label(l10n::tr("Block"))
+                            .on_click(cx.listener(move |this, _, _, _| this.backend.block_user(user_id))),
+                    );
+            }
+            Some(RelationshipKind::OutgoingRequest) => {
+                actions = actions
+                    .child(
+                        Button::new("profile-cancel-req-btn")
+                            .ghost()
+                            .small()
+                            .label(l10n::tr("Cancel"))
+                            .on_click(cx.listener(move |this, _, _, _| this.backend.remove_relationship(user_id))),
+                    )
+                    .child(
+                        Button::new("profile-block-btn")
+                            .danger()
+                            .small()
+                            .label(l10n::tr("Block"))
+                            .on_click(cx.listener(move |this, _, _, _| this.backend.block_user(user_id))),
+                    );
+            }
+            Some(RelationshipKind::Blocked) => {
+                actions = actions.child(
+                    Button::new("profile-unblock-btn")
+                        .ghost()
+                        .small()
+                        .label(l10n::tr("Unblock"))
+                        .on_click(cx.listener(move |this, _, _, _| this.backend.remove_relationship(user_id))),
+                );
+            }
+        }
+        body = body.child(actions);
     }
 
     if let Some(bio) = card.bio.as_ref().filter(|b| !b.trim().is_empty()) {

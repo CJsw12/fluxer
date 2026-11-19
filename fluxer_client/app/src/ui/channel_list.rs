@@ -2,8 +2,9 @@
 //! user panel at the bottom.
 
 use gpui_kit::assets::IconName;
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Icon, Sizable as _};
-use gpui_kit::{AnyElement, Context, FontWeight, SharedString, div, prelude::*, px};
+use gpui_kit::{AnyElement, Context, FontWeight, div, prelude::*, px};
 
 use super::{badge, user_panel};
 use crate::client_view::ClientView;
@@ -12,9 +13,43 @@ use crate::ui::l10n;
 use crate::view_model::{ChannelItem, Place};
 
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> impl IntoElement {
-    let heading: SharedString = match view.place {
-        Place::Home => l10n::tr("Direct messages").into(),
-        Place::Guild(id) => view.guilds.iter().find(|g| g.id == id).map(|g| g.name.clone()).unwrap_or_default(),
+    let header_bar = match view.place {
+        Place::Home => div()
+            .px_3()
+            .py_2()
+            .font_weight(FontWeight::BOLD)
+            .child(l10n::tr("Direct messages"))
+            .into_any_element(),
+        Place::Guild(id) => {
+            let name = view
+                .guilds
+                .iter()
+                .find(|g| g.id == id)
+                .map(|g| g.name.clone())
+                .unwrap_or_default();
+            let can_leave = !view.current_guild_is_owner();
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_between()
+                .gap_1()
+                .px_3()
+                .py_2()
+                .child(div().flex_1().min_w_0().truncate().font_weight(FontWeight::BOLD).child(name))
+                .when(can_leave, |d| {
+                    d.child(
+                        div().debug_selector(|| "leave-guild-btn".to_owned()).child(
+                            Button::new("leave-guild-btn")
+                                .ghost()
+                                .small()
+                                .label(l10n::tr("Leave community"))
+                                .on_click(cx.listener(move |this, _, window, cx| this.open_leave_guild(id, window, cx))),
+                        ),
+                    )
+                })
+                .into_any_element()
+        }
     };
     let mut list = div()
         .id("channel-list")
@@ -23,7 +58,36 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .flex_1()
         .min_h_0()
         .overflow_y_scroll()
-        .child(div().px_3().py_2().font_weight(FontWeight::BOLD).child(heading));
+        .child(header_bar);
+    if view.place == Place::Home {
+        let active = view.selected_channel.is_none();
+        list = list.child(
+            div()
+                .id("home-friends")
+                .debug_selector(|| "home-friends".to_owned())
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_between()
+                .gap_2()
+                .px_3()
+                .py_2()
+                .cursor_pointer()
+                .when(active, |d| d.bg(theme.accent))
+                .hover(|s| s.bg(theme.muted))
+                .on_click(cx.listener(|this, _, _, cx| this.open_friends(cx)))
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_2()
+                        .child(Icon::new(IconName::Users).xsmall())
+                        .child(div().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("Friends"))),
+                )
+                .when(view.pending_incoming > 0, |d| d.child(badge(view.pending_incoming, theme))),
+        );
+    }
     for c in &view.channels {
         list = list.child(render_channel(view, c, theme, cx));
     }

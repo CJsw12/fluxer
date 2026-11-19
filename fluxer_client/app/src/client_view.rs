@@ -33,6 +33,7 @@ use crate::ui::composer::{
     last_own_message,
 };
 use crate::ui::composer_text;
+use crate::ui::friends::{self, FriendRow, FriendsTab};
 use crate::ui::l10n;
 use crate::ui::overlay::Overlay;
 use crate::ui::member_list::{self, MemberListSubscriptions, MemberPanel};
@@ -145,6 +146,22 @@ pub struct ClientView {
     navigating_history: bool,
     /// Most recently visited guild, used by Ctrl+Alt+Right (`ToggleLastGuild`).
     pub(crate) last_guild: Option<Snowflake>,
+    /// Active tab in the home Friends surface.
+    pub(crate) friends_tab: FriendsTab,
+    /// Filtered & sorted rows currently displayed in Friends.
+    pub(crate) friend_rows: Vec<FriendRow>,
+    /// Count of incoming friend requests (shown on Home / Pending badges).
+    pub(crate) pending_incoming: u32,
+    /// Username/tag input inside the "Add friend" tab.
+    pub(crate) add_friend_input: Entity<InputState>,
+    /// Result banner for the most recent "Add friend" request.
+    pub(crate) friends_status: Option<Result<String, String>>,
+    /// Newly joined guild awaiting its `GUILD_CREATE` gateway snapshot.
+    pub(crate) pending_joined_guild: Option<Snowflake>,
+    /// Newly joined group DM channel awaiting its `CHANNEL_CREATE` gateway event.
+    pub(crate) pending_joined_channel: Option<Snowflake>,
+    /// Invite code for the active in-flight accept request.
+    pub(crate) pending_accept_code: Option<String>,
     /// The composer's @ / # / : popup.
     pub(crate) autocomplete: Option<Autocomplete>,
     pub(crate) autocomplete_scroll: ScrollHandle,
@@ -178,7 +195,13 @@ impl ClientView {
         let scroller = cx.new(|cx| MessageScrollerState::new(0, cx));
         let composer = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Select a channel")));
         composer.update(cx, |s, cx| s.set_disabled(true, cx));
+        let add_friend_input = cx.new(|cx| InputState::new(window, cx).placeholder("username#0000"));
         let subscriptions = vec![
+            cx.subscribe_in(&add_friend_input, window, |this: &mut Self, _, ev: &InputEvent, _, cx| {
+                if let InputEvent::PressEnter { shift: false, .. } = ev {
+                    this.submit_add_friend(cx);
+                }
+            }),
             cx.subscribe_in(&composer, window, |this: &mut Self, _, ev: &InputEvent, window, cx| match ev {
                 InputEvent::PressEnter { shift: false, .. } => this.submit(window, cx),
                 InputEvent::Change => {
@@ -277,6 +300,14 @@ impl ClientView {
             nav_history: nav::NavHistory::default(),
             navigating_history: false,
             last_guild: None,
+            friends_tab: FriendsTab::Online,
+            friend_rows: Vec::new(),
+            pending_incoming: 0,
+            add_friend_input,
+            friends_status: None,
+            pending_joined_guild: None,
+            pending_joined_channel: None,
+            pending_accept_code: None,
             autocomplete: None,
             autocomplete_scroll: ScrollHandle::new(),
             frecency: FrecencyStore::default(),
@@ -322,6 +353,9 @@ impl ClientView {
         if matches!(self.overlay, Overlay::Profile(_)) {
             self.save_profile_note(cx);
         }
+        if matches!(self.overlay, Overlay::JoinGuild(_)) {
+            self.pending_accept_code = None;
+        }
     }
 
     pub(crate) fn close_overlay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -329,7 +363,13 @@ impl ClientView {
             return;
         }
         self.prepare_overlay_replace(cx);
-        let restore_composer = matches!(self.overlay, Overlay::QuickSwitcher(_) | Overlay::EmojiPicker(_));
+        let restore_composer = matches!(
+            self.overlay,
+            Overlay::QuickSwitcher(_)
+                | Overlay::EmojiPicker(_)
+                | Overlay::JoinGuild(_)
+                | Overlay::LeaveGuild(_)
+        );
         self.overlay = Overlay::None;
         if restore_composer {
             self.focus_composer(window, cx);
@@ -405,6 +445,109 @@ impl ClientView {
                         self.sync_profile_note_from_state(user_id);
                     }
                 }
+                UiEvent::FriendRequestSent { input, error } => {
+                    self.friends_status = Some(match error {
+                        Some(err) => Err(err),
+                        None => {
+                            if self.add_friend_input.read(cx).value().trim() == input.trim() {
+                                let (input_entity, handle) = (self.add_friend_input.clone(), self.window_handle);
+                                cx.defer(move |cx| {
+                                    let _ = handle.update(cx, |_, window, cx| {
+                                        input_entity.update(cx, |s, cx| s.set_value("", window, cx));
+                                    });
+                                });
+                            }
+                            Ok(l10n::tr("Friend request sent!"))
+                        }
+                    });
+                }
+                UiEvent::InvitePreviewLoaded { code, result } => {
+                    if let Overlay::JoinGuild(modal) = &mut self.overlay {
+                        let current = modal.input.read(cx).value().to_string();
+                        if crate::backend::extract_invite_code(&current).as_deref() != Some(code.as_str()) {
+                            continue;
+                        }
+                        modal.loading = false;
+                        match result {
+                            Ok(preview) => {
+                                modal.preview = Some(preview);
+                                modal.error = None;
+                            }
+                            Err(err) => {
+                                modal.preview = None;
+                                modal.error = Some(err);
+                            }
+                        }
+                    }
+                }
+                UiEvent::InviteAccepted { code, result } => {
+                    let is_current = self.pending_accept_code.as_deref() == Some(code.as_str())
+                        && match &self.overlay {
+                            Overlay::JoinGuild(modal) => {
+                                crate::backend::extract_invite_code(&modal.input.read(cx).value()).as_deref()
+                                    == Some(code.as_str())
+                            }
+                            _ => false,
+                        };
+                    if !is_current {
+                        continue;
+                    }
+                    self.pending_accept_code = None;
+                    match result {
+                        Ok(accepted) => {
+                            if matches!(self.overlay, Overlay::JoinGuild(_)) {
+                                self.overlay = Overlay::None;
+                                let composer = self.composer.clone();
+                                let handle = self.window_handle;
+                                cx.defer(move |cx| {
+                                    let _ = handle.update(cx, |_, window, cx| {
+                                        let focus = composer.read(cx).focus_handle(cx);
+                                        window.focus(&focus, cx);
+                                    });
+                                });
+                            }
+                            if let Some(id) = accepted.guild_id {
+                                self.pending_joined_channel = None;
+                                if self.backend.state().guilds.contains_key(&id) {
+                                    self.pending_joined_guild = None;
+                                    self.select_place(Place::Guild(id), cx);
+                                } else {
+                                    self.pending_joined_guild = Some(id);
+                                }
+                            } else if let Some(ch) = accepted.channel_id {
+                                self.pending_joined_guild = None;
+                                if self.backend.state().channels.contains_key(&ch) {
+                                    self.pending_joined_channel = None;
+                                    self.open_channel(None, ch, cx);
+                                } else {
+                                    self.pending_joined_channel = Some(ch);
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            if let Overlay::JoinGuild(modal) = &mut self.overlay {
+                                modal.loading = false;
+                                modal.error = Some(err);
+                            } else {
+                                self.error = Some(err.into());
+                            }
+                        }
+                    }
+                }
+                UiEvent::GuildLeft { guild_id, error } => {
+                    if let Some(err) = error {
+                        self.error = Some(err.into());
+                    } else {
+                        self.last_channel.remove(&Some(guild_id));
+                        if self.last_guild == Some(guild_id) {
+                            self.last_guild = None;
+                        }
+                        if self.place == Place::Guild(guild_id) {
+                            self.place = Place::Home;
+                            self.selected_channel = None;
+                        }
+                    }
+                }
             }
         }
         if connected {
@@ -443,12 +586,19 @@ impl ClientView {
     /// Re-reads the state and updates every snapshot, the scroller rows and
     /// the composer.
     pub(crate) fn refresh(&mut self, cx: &mut Context<Self>) {
-        let (pane, can_send, title, glyph, typing_text) = {
+        let (pane, can_send, title, glyph, typing_text, joined_ready, joined_channel_ready) = {
             let state = self.backend.state();
+            let joined_ready = self.pending_joined_guild.filter(|id| state.guilds.contains_key(id));
+            let joined_channel_ready = self.pending_joined_channel.filter(|id| state.channels.contains_key(id));
             if let Place::Guild(id) = self.place
                 && !state.guilds.contains_key(&id)
             {
                 self.place = Place::Home;
+                self.selected_channel = None;
+                self.last_channel.remove(&Some(id));
+                if self.last_guild == Some(id) {
+                    self.last_guild = None;
+                }
             }
             if self.selected_channel.is_some_and(|id| !state.channels.contains_key(&id)) {
                 self.selected_channel = None;
@@ -461,6 +611,12 @@ impl ClientView {
                 .iter()
                 .fold(self.home_unread.mention_count, |n, g| n.saturating_add(g.unread.mention_count));
             self.user = current_user(&state, self.backend.media());
+            self.pending_incoming = friends::pending_incoming_count(&state);
+            self.friend_rows = if self.place == Place::Home && self.selected_channel.is_none() {
+                friends::build_friend_rows(&state, self.backend.media(), self.friends_tab)
+            } else {
+                Vec::new()
+            };
             self.channels = channel_items(&state, self.place);
             let target = match (self.place, self.selected_channel) {
                 (Place::Guild(guild_id), Some(channel_id))
@@ -501,11 +657,26 @@ impl ClientView {
                         channel.map(channel_name).unwrap_or_default(),
                         channel.map_or("", |c| ChannelIcon::of(c.kind).glyph()),
                         ui::typing::channel_typing_text(&state, id),
+                        joined_ready,
+                        joined_channel_ready,
                     )
                 }
-                None => (Default::default(), false, String::new(), "", None),
+                None => (Default::default(), false, String::new(), "", None, joined_ready, joined_channel_ready),
             }
         };
+        if let Some(joined) = joined_ready {
+            self.pending_joined_guild = None;
+            self.pending_joined_channel = None;
+            self.select_place(Place::Guild(joined), cx);
+            self.refresh_open_profile();
+            return;
+        }
+        if let Some(ch) = joined_channel_ready {
+            self.pending_joined_channel = None;
+            self.open_channel(None, ch, cx);
+            self.refresh_open_profile();
+            return;
+        }
         self.typing_text = typing_text;
         self._typing_timer = ui::typing::schedule_expiry(&self.backend, cx, Self::refresh);
         self.has_more_before = pane.has_more_before;
@@ -522,6 +693,7 @@ impl ClientView {
         self.sync_rows(rows, cx);
         self.set_can_send(can_send, cx);
         self.own_status = self.backend.own_status();
+        self.refresh_open_profile();
         self.subscribe_member_list();
         self.maybe_ack(cx);
         cx.notify();
@@ -1129,6 +1301,7 @@ impl Render for ClientView {
         };
         let handle = cx.weak_entity();
         let composer = self.render_composer(&theme, cx);
+        let show_friends = self.place == Place::Home && self.selected_channel.is_none();
         let overlay = match &self.overlay {
             Overlay::QuickSwitcher(sw) => Some(ui::quick_switcher::render(sw, &theme, cx)),
             Overlay::EmojiPicker(picker) => {
@@ -1136,6 +1309,8 @@ impl Render for ClientView {
             }
             Overlay::Profile(pop) => Some(ui::profile_popout::render(pop, &theme, cx)),
             Overlay::Settings(modal) => Some(ui::settings::render(self, modal, &theme, cx)),
+            Overlay::JoinGuild(modal) => Some(ui::guild_modal::render_join(modal, &theme, cx)),
+            Overlay::LeaveGuild(modal) => Some(ui::guild_modal::render_leave(modal, &theme, cx)),
             Overlay::None => None,
         };
         // Every image below without its own cache (avatars, custom emoji,
@@ -1154,7 +1329,18 @@ impl Render for ClientView {
             .text_size(px(theme.sizes.text))
             .child(ui::guild_rail::render(self, &theme, cx))
             .child(ui::channel_list::render(self, &theme, cx))
-            .child(
+            .child(if show_friends {
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_w_0()
+                    .h_full()
+                    .child(ui::friends::render(self, &theme, cx))
+                    // Keep the composer mounted in a 0px hidden slot so the
+                    // `ClientView > Composer > Input` shortcut context stays live.
+                    .child(div().h(px(0.)).overflow_hidden().child(composer))
+            } else {
                 div()
                     .flex()
                     .flex_col()
@@ -1165,8 +1351,8 @@ impl Render for ClientView {
                     .on_drop(cx.listener(|v, paths: &ExternalPaths, _, cx| v.add_paths(paths.paths(), cx)))
                     .child(ui::header::render(self, &theme, cx))
                     .child(ui::message_list::render(self, handle, &theme))
-                    .child(composer),
-            )
+                    .child(composer)
+            })
             .children(member_panel)
             .children(overlay)
     }

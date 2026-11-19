@@ -56,7 +56,7 @@ impl ClientView {
         self.select_place(next.map_or(Place::Home, Place::Guild), cx);
     }
 
-    pub(super) fn clear_selection(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn clear_selection(&mut self, cx: &mut Context<Self>) {
         self.cancel_ack();
         let old_channel = self.selected_channel.take();
         self.autocomplete = None;

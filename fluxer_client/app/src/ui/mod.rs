@@ -4,6 +4,8 @@
 pub mod channel_list;
 pub mod composer;
 pub mod emoji_picker;
+pub mod friends;
+pub mod guild_modal;
 pub mod guild_rail;
 pub mod header;
 pub mod l10n;

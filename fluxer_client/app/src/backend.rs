@@ -2,6 +2,7 @@
 //! the shared `ClientState`. Everything here runs on the tokio runtime; the
 //! UI only receives `UiEvent`s and reads the state under the mutex.
 
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -10,8 +11,10 @@ use anyhow::{Context as _, Result};
 use fluxer_client_core::gateway::{self, Compression, GatewayConfig, GatewayEvent, GatewayHandle, IdentifyProperties};
 use fluxer_client_core::rest::{
     AckRequest, ClientIdentity, DiscoveryOptions, Endpoints, MessageQuery, RestClient, RestConfig, SecretToken,
-    SendMessageRequest, TransportPolicy, UserProfileFull, UserSettingsPatch, discover_with,
+    SendMessageRequest, TransportPolicy, UserProfileFull, discover_with,
 };
+#[cfg(test)]
+use fluxer_client_core::rest::{GuildSettingsPatch, UserSettingsPatch};
 use fluxer_client_core::state::{ClientState, LoadMode, Message, PAGE_SIZE, Snowflake};
 use serde_json::{Value, json};
 use tokio::runtime::Handle;
@@ -119,6 +122,7 @@ pub struct Backend {
     /// roll back a newer change on an older failure.
     note_seq: Arc<AtomicU64>,
     settings_seq: Arc<AtomicU64>,
+    guild_settings_seq: Arc<Mutex<BTreeMap<Option<Snowflake>, u64>>>,
     /// Every `POST .../messages` body, in order (tests check what the
     /// composer sent; the test runtime never runs the request).
     #[cfg(test)]
@@ -138,6 +142,9 @@ pub struct Backend {
     /// Sent `PATCH /users/@me/settings` payloads (tests).
     #[cfg(test)]
     pub(crate) sent_settings: Arc<Mutex<Vec<UserSettingsPatch>>>,
+    /// Sent `PATCH /users/@me/guilds/{g|@me}/settings` payloads (tests).
+    #[cfg(test)]
+    pub(crate) sent_guild_settings: Arc<Mutex<Vec<(Option<Snowflake>, GuildSettingsPatch)>>>,
 }
 
 impl Backend {
@@ -197,6 +204,7 @@ impl Backend {
             focus: Arc::default(),
             note_seq: Arc::new(AtomicU64::new(0)),
             settings_seq: Arc::new(AtomicU64::new(0)),
+            guild_settings_seq: Arc::default(),
             #[cfg(test)]
             sent: Arc::default(),
             #[cfg(test)]
@@ -209,6 +217,8 @@ impl Backend {
             saved_notes: Arc::default(),
             #[cfg(test)]
             sent_settings: Arc::default(),
+            #[cfg(test)]
+            sent_guild_settings: Arc::default(),
         };
         (backend, rx)
     }

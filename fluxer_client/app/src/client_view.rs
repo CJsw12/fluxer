@@ -133,6 +133,18 @@ pub struct ClientView {
     /// Last opened channel per place (`None` = Home), reopened when the
     /// place is selected again.
     last_channel: BTreeMap<Option<Snowflake>, Snowflake>,
+    /// Unsent composer text and tokens per channel (`MAX_DRAFTS` cap).
+    pub(crate) drafts: BTreeMap<Snowflake, InputContent>,
+    /// Latest deferred composer value not yet applied to `composer`.
+    pending_composer: Option<InputContent>,
+    /// Monotonic token so older `set_composer_later` defers do not clobber newer switches.
+    composer_seq: Rc<Cell<u64>>,
+    /// Back/forward navigation stack across visited channels.
+    pub(crate) nav_history: nav::NavHistory,
+    /// Suppresses pushing a duplicate entry while stepping through history.
+    navigating_history: bool,
+    /// Most recently visited guild, used by Ctrl+Alt+Right (`ToggleLastGuild`).
+    pub(crate) last_guild: Option<Snowflake>,
     /// The composer's @ / # / : popup.
     pub(crate) autocomplete: Option<Autocomplete>,
     pub(crate) autocomplete_scroll: ScrollHandle,
@@ -259,6 +271,12 @@ impl ClientView {
             prefs: PrefsStore::default(),
             recent_visits: Vec::new(),
             last_channel: BTreeMap::new(),
+            drafts: BTreeMap::new(),
+            pending_composer: None,
+            composer_seq: Rc::new(Cell::new(0)),
+            nav_history: nav::NavHistory::default(),
+            navigating_history: false,
+            last_guild: None,
             autocomplete: None,
             autocomplete_scroll: ScrollHandle::new(),
             frecency: FrecencyStore::default(),
@@ -644,6 +662,7 @@ impl ClientView {
     pub(crate) fn select_place(&mut self, place: Place, cx: &mut Context<Self>) {
         self.place = place;
         if let Place::Guild(id) = place {
+            self.last_guild = Some(id);
             self.backend.subscribe_guild(id);
         }
         self.refresh(cx);
@@ -652,10 +671,7 @@ impl ClientView {
         let first = remembered.or_else(|| self.channels.iter().find(|c| c.has_messages).map(|c| c.id));
         match first {
             Some(id) => self.select_channel(id, cx),
-            None => {
-                self.selected_channel = None;
-                self.refresh(cx);
-            }
+            None => self.clear_selection(cx),
         }
     }
 
@@ -665,15 +681,29 @@ impl ClientView {
             return;
         }
         self.cancel_ack();
+        let old_channel = self.selected_channel;
         self.selected_channel = Some(channel_id);
         nav::record_visit(&mut self.recent_visits, channel_id);
         self.last_channel.insert(nav::place_key(self.place), channel_id);
+        if !self.navigating_history {
+            self.nav_history.push(nav::HistoryEntry { place: self.place, channel_id });
+        }
         self.autocomplete = None;
         self.error = None;
         self.reaction_picker = None;
         self.hovered_message = None;
-        // Replies and edits belong to the old channel.
-        if let Some(restore) = self.composer_mode.channel_changed() {
+        // Replies and edits belong to the old channel; stash/restore plain + token drafts.
+        if old_channel != Some(channel_id) {
+            let old_draft = self
+                .composer_mode
+                .channel_changed()
+                .unwrap_or_else(|| self.current_composer_content(cx));
+            if let Some(old_id) = old_channel {
+                self.stash_channel_draft(old_id, old_draft);
+            }
+            let next_draft = self.drafts.remove(&channel_id).unwrap_or_else(|| InputContent::new(""));
+            self.set_composer_later(next_draft, cx);
+        } else if let Some(restore) = self.composer_mode.channel_changed() {
             self.set_composer_later(restore, cx);
         }
         let needs_load = {
@@ -779,6 +809,9 @@ impl ClientView {
 
     pub(crate) fn after_send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.set_composer(String::new(), window, cx);
+        if let Some(id) = self.selected_channel {
+            self.drafts.remove(&id);
+        }
         self.typing.message_sent();
         self.error = None;
         self.refresh(cx);
@@ -790,11 +823,34 @@ impl ClientView {
         cx.notify();
     }
 
+    /// Stores a non-empty draft for `channel_id` (evicting the lowest-ID
+    /// entry if the `MAX_DRAFTS` map cap is reached).
+    pub(super) fn stash_channel_draft(&mut self, channel_id: Snowflake, content: InputContent) {
+        const MAX_DRAFTS: usize = 100;
+        if content.text().is_empty() && content.tokens().is_empty() {
+            self.drafts.remove(&channel_id);
+            return;
+        }
+        if !self.drafts.contains_key(&channel_id)
+            && self.drafts.len() >= MAX_DRAFTS
+            && let Some(oldest) = self.drafts.keys().next().copied()
+        {
+            self.drafts.remove(&oldest);
+        }
+        self.drafts.insert(channel_id, content);
+    }
+
+    pub(super) fn current_composer_content(&mut self, cx: &mut Context<Self>) -> InputContent {
+        self.pending_composer.take().unwrap_or_else(|| self.composer.read(cx).content())
+    }
+
     /// Replaces the input (text and tokens). `set_value` emits no change
     /// event, so the popup computed for the old text is dropped here: its
     /// byte range would otherwise be applied to the new text.
     fn set_composer(&mut self, content: impl Into<InputContent>, window: &mut Window, cx: &mut Context<Self>) {
         self.autocomplete = None;
+        self.composer_seq.set(self.composer_seq.get().wrapping_add(1));
+        self.pending_composer = None;
         let content = content.into();
         self.composer.update(cx, |s, cx| s.set_value(content, window, cx));
     }
@@ -803,8 +859,16 @@ impl ClientView {
     /// switch): runs after the current update.
     fn set_composer_later(&mut self, content: InputContent, cx: &mut Context<Self>) {
         self.autocomplete = None;
-        let (composer, handle) = (self.composer.clone(), self.window_handle);
+        let seq = self.composer_seq.get().wrapping_add(1);
+        self.composer_seq.set(seq);
+        self.pending_composer = Some(content.clone());
+        let (composer_seq, view, composer, handle) =
+            (self.composer_seq.clone(), cx.weak_entity(), self.composer.clone(), self.window_handle);
         cx.defer(move |cx| {
+            if composer_seq.get() != seq {
+                return;
+            }
+            let _ = view.update(cx, |v, _| v.pending_composer = None);
             let _ = handle.update(cx, |_, window, cx| composer.update(cx, |s, cx| s.set_value(content, window, cx)));
         });
     }
@@ -822,6 +886,8 @@ impl ClientView {
 
     /// The composer text changed: the typing signal.
     fn composer_changed(&mut self, cx: &mut Context<Self>) {
+        self.pending_composer = None;
+        self.composer_seq.set(self.composer_seq.get().wrapping_add(1));
         let Some(channel_id) = self.selected_channel.filter(|_| self.can_send) else { return };
         let text = self.composer.read(cx).value().to_string();
         match self.composer_mode.typing_signal(&text) {
@@ -960,7 +1026,7 @@ impl ClientView {
     ) {
         let target = self.backend.state().messages.message(channel_id, message_id).map(EditTarget::of);
         let Some(target) = target else { return };
-        let current = self.composer.read(cx).content();
+        let current = self.current_composer_content(cx);
         let text = self.composer_mode.start_edit(target, current);
         self.set_composer(text, window, cx);
         self.focus_composer(window, cx);

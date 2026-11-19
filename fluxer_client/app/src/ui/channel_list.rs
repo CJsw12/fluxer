@@ -1,6 +1,8 @@
 //! Channel sidebar: heading, the channels of the selected place, and the
 //! user panel at the bottom.
 
+use gpui_kit::assets::IconName;
+use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{AnyElement, Context, FontWeight, SharedString, div, prelude::*, px};
 
 use super::{badge, user_panel};
@@ -50,6 +52,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
             .into_any_element();
     }
     let selected = view.selected_channel == Some(c.id);
+    let highlight_unread = c.unread.unread && !c.muted;
     let mut row = div()
         .id(("channel", c.id.0))
         .flex()
@@ -59,14 +62,17 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         .px_3()
         .py_1()
         .when(c.nested, |d| d.pl_5())
-        .text_color(if (c.unread.unread || selected) && c.has_messages { fg } else { muted_fg })
-        .when(c.unread.unread, |d| d.font_weight(FontWeight::BOLD))
+        .text_color(if (highlight_unread || selected) && c.has_messages { fg } else { muted_fg })
+        .when(highlight_unread, |d| d.font_weight(FontWeight::BOLD))
         .when(selected, |d| d.bg(theme.accent))
         .child(div().w(px(18.)).flex_none().text_color(muted_fg).child(c.icon.glyph()))
         .child(div().flex_1().truncate().child(c.name.clone()));
+    if c.muted {
+        row = row.child(Icon::new(IconName::BellOff).xsmall());
+    }
     if c.unread.mention_count > 0 {
         row = row.child(badge(c.unread.mention_count, theme));
-    } else if c.unread.unread {
+    } else if highlight_unread {
         row = row.child(div().text_color(fg).child("•"));
     }
     if c.has_messages {

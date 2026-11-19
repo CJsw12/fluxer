@@ -71,6 +71,27 @@ impl ClientView {
         cx.notify();
     }
 
+    pub(crate) fn selected_channel_muted(&self) -> bool {
+        self.channels
+            .iter()
+            .find(|c| Some(c.id) == self.selected_channel)
+            .is_some_and(|c| c.muted)
+    }
+
+    /// Toggles per-channel mute for the selected channel or DM and persists
+    /// the override via `PATCH /users/@me/guilds/{g|@me}/settings`.
+    pub(crate) fn toggle_channel_mute(&mut self, cx: &mut Context<Self>) {
+        let Some(channel_id) = self.selected_channel else { return };
+        let now_ms = i64::try_from(crate::accounts::now_ms()).unwrap_or(i64::MAX);
+        let (guild_id, next_muted) = {
+            let state = self.backend.state();
+            let guild_id = state.channels.get(&channel_id).and_then(|c| c.guild_id);
+            (guild_id, !state.is_channel_muted(guild_id, channel_id, now_ms))
+        };
+        self.backend.set_channel_muted(guild_id, channel_id, next_muted);
+        self.refresh(cx);
+    }
+
     /// Queues files for the open channel; an error replaces the error line.
     /// Without ATTACH_FILES nothing is queued (`UploadManager.tsx`'s
     /// permission modal), so a send cannot fail with 403 after the tray

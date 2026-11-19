@@ -58,6 +58,7 @@ pub const LOCALES: &[LocaleOption] = &[
 ];
 
 /// The native name of `code`, or `code` itself for unsupported codes.
+#[cfg_attr(not(test), allow(dead_code))]
 pub fn locale_native_name(code: &str) -> &str {
     match LOCALES.iter().find(|locale| locale.code == code) {
         Some(locale) => locale.native_name,

@@ -42,8 +42,8 @@
   <g><title>반응 pill 표시 : 부분</title><rect x="636" y="149.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="194.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">메시지 작성·상호작용</text>
   <rect x="270" y="183.0" width="190" height="10" rx="5" fill="#21262d"/>
-  <rect x="270" y="183.0" width="120.9" height="10" rx="5" fill="#58a6ff"/>
-  <text x="474" y="193.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">64%</text>
+  <rect x="270" y="183.0" width="138.2" height="10" rx="5" fill="#58a6ff"/>
+  <text x="474" y="193.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">73%</text>
   <g><title>텍스트 전송·낙관적 표시 : 완료</title><rect x="510" y="183.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <g><title>메시지 수정·저장 : 완료</title><rect x="524" y="183.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <g><title>멘션 자동완성 : 완료</title><rect x="538" y="183.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
@@ -54,17 +54,17 @@
   <g><title>입력 중 표시 : 부분</title><rect x="608" y="183.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <g><title>이모지 피커 : 부분</title><rect x="622" y="183.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <g><title>첨부 업로드 : 부분</title><rect x="636" y="183.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>드래프트 보존 : 미착수</title><rect x="650" y="183.0" width="10" height="10" rx="2" fill="#484f58"/></g>
+  <g><title>드래프트 보존 : 완료</title><rect x="650" y="183.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <text x="24" y="228.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">탐색·단축키</text>
   <rect x="270" y="217.0" width="190" height="10" rx="5" fill="#21262d"/>
-  <rect x="270" y="217.0" width="110.8" height="10" rx="5" fill="#58a6ff"/>
-  <text x="474" y="227.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">58%</text>
+  <rect x="270" y="217.0" width="142.5" height="10" rx="5" fill="#58a6ff"/>
+  <text x="474" y="227.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">75%</text>
   <g><title>Ctrl+K 빠른 전환 : 완료</title><rect x="510" y="217.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <g><title>단축키 등록·처리 : 완료</title><rect x="524" y="217.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <g><title>길드·채널 순회 : 완료</title><rect x="538" y="217.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <g><title>안읽음·멘션 점프 : 부분</title><rect x="552" y="217.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <g><title>딥링크(fluxer://) : 미착수</title><rect x="566" y="217.0" width="10" height="10" rx="2" fill="#484f58"/></g>
-  <g><title>방문 기록·앞뒤 이동 : 미착수</title><rect x="580" y="217.0" width="10" height="10" rx="2" fill="#484f58"/></g>
+  <g><title>방문 기록·앞뒤 이동 : 완료</title><rect x="580" y="217.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <text x="24" y="262.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">알림·첨부</text>
   <rect x="270" y="251.0" width="190" height="10" rx="5" fill="#21262d"/>
   <rect x="270" y="251.0" width="110.8" height="10" rx="5" fill="#58a6ff"/>
@@ -107,13 +107,14 @@
   <g><title>그룹 DM : 미착수</title><rect x="580" y="353.0" width="10" height="10" rx="2" fill="#484f58"/></g>
   <text x="24" y="398.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">서버 관리</text>
   <rect x="270" y="387.0" width="190" height="10" rx="5" fill="#21262d"/>
-  <text x="474" y="397.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">0%</text>
+  <rect x="270" y="387.0" width="15.8" height="10" rx="5" fill="#58a6ff"/>
+  <text x="474" y="397.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">8%</text>
   <g><title>초대 참가 : 미착수</title><rect x="510" y="387.0" width="10" height="10" rx="2" fill="#484f58"/></g>
   <g><title>길드 탈퇴 : 미착수</title><rect x="524" y="387.0" width="10" height="10" rx="2" fill="#484f58"/></g>
   <g><title>채널 생성·편집 : 미착수</title><rect x="538" y="387.0" width="10" height="10" rx="2" fill="#484f58"/></g>
   <g><title>역할·권한 편집 : 미착수</title><rect x="552" y="387.0" width="10" height="10" rx="2" fill="#484f58"/></g>
   <g><title>멤버 관리(킥·밴) : 미착수</title><rect x="566" y="387.0" width="10" height="10" rx="2" fill="#484f58"/></g>
-  <g><title>채널 음소거 : 미착수</title><rect x="580" y="387.0" width="10" height="10" rx="2" fill="#484f58"/></g>
+  <g><title>채널 음소거 : 부분</title><rect x="580" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="432.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">검색</text>
   <rect x="270" y="421.0" width="190" height="10" rx="5" fill="#21262d"/>
   <text x="474" y="431.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">0%</text>

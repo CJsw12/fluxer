@@ -4,7 +4,7 @@
 
 use fluxer_client_core::search::switcher::{SwitcherContext, SwitcherItem, SwitcherTarget, quick_switcher_results};
 use fluxer_client_core::state::Snowflake;
-use gpui_kit::component::input::{InputEvent, InputState};
+use gpui_kit::component::input::{InputContent, InputEvent, InputState};
 use gpui_kit::{AppContext as _, Context, EntityInputHandler as _, Focusable as _, ScrollHandle, Window};
 
 use super::ClientView;
@@ -15,7 +15,7 @@ use crate::ui::composer_text;
 use crate::ui::l10n;
 use crate::ui::overlay::Overlay;
 use crate::ui::quick_switcher::QuickSwitcher;
-use crate::view_model::Place;
+use crate::view_model::{Place, opens_message_pane};
 
 /// Navigation and read marking.
 impl ClientView {
@@ -56,13 +56,18 @@ impl ClientView {
         self.select_place(next.map_or(Place::Home, Place::Guild), cx);
     }
 
-    fn clear_selection(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn clear_selection(&mut self, cx: &mut Context<Self>) {
         self.cancel_ack();
-        self.selected_channel = None;
+        let old_channel = self.selected_channel.take();
         self.autocomplete = None;
-        if let Some(restore) = self.composer_mode.channel_changed() {
-            self.set_composer_later(restore, cx);
+        let old_draft = self
+            .composer_mode
+            .channel_changed()
+            .unwrap_or_else(|| self.current_composer_content(cx));
+        if let Some(old_id) = old_channel {
+            self.stash_channel_draft(old_id, old_draft);
         }
+        self.set_composer_later(InputContent::new(""), cx);
         self.backend.state().messages.select(None);
         self.refresh(cx);
     }
@@ -104,12 +109,71 @@ impl ClientView {
         if self.place != place {
             self.place = place;
             if let Some(id) = guild_id {
+                self.last_guild = Some(id);
                 self.backend.subscribe_guild(id);
             }
         }
         self.select_channel(channel_id, cx);
         // Voice channels do not open, but the place changed.
         self.refresh(cx);
+    }
+
+    pub(crate) fn history_back(&mut self, cx: &mut Context<Self>) {
+        self.history_step(false, cx);
+    }
+
+    pub(crate) fn history_forward(&mut self, cx: &mut Context<Self>) {
+        self.history_step(true, cx);
+    }
+
+    fn history_step(&mut self, forward: bool, cx: &mut Context<Self>) {
+        let target = {
+            let state = self.backend.state();
+            let valid = |entry: nav::HistoryEntry| {
+                let Some(ch) = state.channels.get(&entry.channel_id) else {
+                    return false;
+                };
+                if !opens_message_pane(ch.kind) {
+                    return false;
+                }
+                match entry.place {
+                    Place::Home => ch.guild_id.is_none(),
+                    Place::Guild(g) => state.guilds.contains_key(&g) && ch.guild_id == Some(g),
+                }
+            };
+            if forward {
+                self.nav_history.forward_matching(valid)
+            } else {
+                self.nav_history.back_matching(valid)
+            }
+        };
+        if let Some(entry) = target {
+            self.navigating_history = true;
+            self.open_channel(place_key(entry.place), entry.channel_id, cx);
+            self.navigating_history = false;
+        }
+    }
+
+    /// Ctrl+Alt+Right: switches between the Home (DM) view and the most
+    /// recently visited guild (falling back to the first guild).
+    pub(crate) fn toggle_last_guild(&mut self, cx: &mut Context<Self>) {
+        match self.place {
+            Place::Guild(g) => {
+                self.last_guild = Some(g);
+                self.select_place(Place::Home, cx);
+            }
+            Place::Home => {
+                let next = {
+                    let state = self.backend.state();
+                    self.last_guild
+                        .filter(|id| state.guilds.contains_key(id))
+                        .or_else(|| nav::guilds(&state).into_iter().next())
+                };
+                if let Some(g) = next {
+                    self.select_place(Place::Guild(g), cx);
+                }
+            }
+        }
     }
 }
 

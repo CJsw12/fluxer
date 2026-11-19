@@ -110,12 +110,118 @@ pub fn record_visit(visits: &mut Vec<Snowflake>, channel_id: Snowflake) {
     visits.truncate(MAX_VISITS);
 }
 
+/// One visited destination in the back/forward stack (`Place` + channel).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HistoryEntry {
+    pub place: Place,
+    pub channel_id: Snowflake,
+}
+
+/// Browser-like back/forward navigation stack for visited channels.
+#[derive(Debug, Clone, Default)]
+pub struct NavHistory {
+    entries: Vec<HistoryEntry>,
+    cursor: Option<usize>,
+}
+
+impl NavHistory {
+    const MAX_HISTORY: usize = 100;
+
+    pub fn current(&self) -> Option<HistoryEntry> {
+        self.cursor.and_then(|ix| self.entries.get(ix).copied())
+    }
+
+    /// Pushes `entry`, truncating any forward entries after the cursor.
+    pub fn push(&mut self, entry: HistoryEntry) {
+        if self.current() == Some(entry) {
+            return;
+        }
+        if let Some(ix) = self.cursor {
+            self.entries.truncate(ix + 1);
+        }
+        self.entries.push(entry);
+        if self.entries.len() > Self::MAX_HISTORY {
+            self.entries.remove(0);
+        }
+        self.cursor = Some(self.entries.len() - 1);
+    }
+
+    /// Moves backward to the first entry satisfying `pred`. Keeps the cursor
+    /// unchanged if no earlier entry matches.
+    pub fn back_matching(&mut self, mut pred: impl FnMut(HistoryEntry) -> bool) -> Option<HistoryEntry> {
+        let cur = self.cursor?;
+        for ix in (0..cur).rev() {
+            let entry = self.entries[ix];
+            if pred(entry) {
+                self.cursor = Some(ix);
+                return Some(entry);
+            }
+        }
+        None
+    }
+
+    /// Moves forward to the first entry satisfying `pred`. Keeps the cursor
+    /// unchanged if no later entry matches.
+    pub fn forward_matching(&mut self, mut pred: impl FnMut(HistoryEntry) -> bool) -> Option<HistoryEntry> {
+        let cur = self.cursor?;
+        for ix in (cur + 1)..self.entries.len() {
+            let entry = self.entries[ix];
+            if pred(entry) {
+                self.cursor = Some(ix);
+                return Some(entry);
+            }
+        }
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn ids(v: &[u64]) -> Vec<Snowflake> {
         v.iter().map(|n| Snowflake(*n)).collect()
+    }
+
+    #[test]
+    fn history_push_back_forward_truncates_and_skips_invalid() {
+        let mut h = NavHistory::default();
+        let e1 = HistoryEntry { place: Place::Home, channel_id: Snowflake(1) };
+        let e2 = HistoryEntry { place: Place::Guild(Snowflake(10)), channel_id: Snowflake(2) };
+        let e3 = HistoryEntry { place: Place::Guild(Snowflake(10)), channel_id: Snowflake(3) };
+        let e4 = HistoryEntry { place: Place::Home, channel_id: Snowflake(4) };
+
+        assert_eq!(h.current(), None);
+        h.push(e1);
+        h.push(e1);
+        h.push(e2);
+        h.push(e3);
+        assert_eq!(h.current(), Some(e3));
+
+        // Skips deleted channel e2 when stepping back.
+        assert_eq!(h.back_matching(|e| e.channel_id != Snowflake(2)), Some(e1));
+        assert_eq!(h.forward_matching(|e| e.channel_id != Snowflake(2)), Some(e3));
+
+        // Going back to e2 then pushing e4 drops e3 from forward history.
+        assert_eq!(h.back_matching(|_| true), Some(e2));
+        h.push(e4);
+        assert_eq!(h.current(), Some(e4));
+        assert_eq!(h.forward_matching(|_| true), None);
+        assert_eq!(h.back_matching(|_| true), Some(e2));
+    }
+
+    #[test]
+    fn history_caps_at_max_entries() {
+        let mut h = NavHistory::default();
+        for n in 1..=120u64 {
+            h.push(HistoryEntry { place: Place::Home, channel_id: Snowflake(n) });
+        }
+        assert_eq!(h.current().map(|e| e.channel_id), Some(Snowflake(120)));
+        let mut count = 0;
+        while h.back_matching(|_| true).is_some() {
+            count += 1;
+        }
+        assert_eq!(count, NavHistory::MAX_HISTORY - 1);
     }
 
     #[test]

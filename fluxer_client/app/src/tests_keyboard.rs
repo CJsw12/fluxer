@@ -505,3 +505,148 @@ fn quick_switcher_input_gets_no_navigation_shortcuts(cx: &mut TestAppContext) {
     assert_ne!(at(&view, cx), before, "the composer still gets them");
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn per_channel_drafts_keep_tokens_ignore_edits_clear_on_send_and_survive_rapid_switches(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend(&rt);
+    let (view, cx) = open(cx, backend.clone(), events);
+    let composer = view.read_with(cx, |v, _| v.composer.clone());
+    let wire = |cx: &VisualTestContext| composer.read_with(cx, |s, _| crate::ui::composer_text::wire_text(s));
+
+    // Compose text + mention token in GENERAL.
+    typed(cx, "hello @a");
+    keys(cx, "enter");
+    assert_eq!(wire(cx), "hello <@201> ");
+
+    // Move to ANNOUNCEMENTS and write a separate draft.
+    keys(cx, "alt-down");
+    assert_eq!(at(&view, cx), (Place::Guild(GUILD), Some(ANNOUNCEMENTS)));
+    assert_eq!(composer_text(&composer, cx), "");
+    typed(cx, "ann draft");
+
+    // Rapid synchronous switches before cx.defer fires must not drop or clobber drafts.
+    view.update(cx, |v, cx| {
+        v.select_channel(STAFF, cx);
+        v.select_channel(GENERAL, cx);
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert_eq!(at(&view, cx), (Place::Guild(GUILD), Some(GENERAL)));
+    assert_eq!(wire(cx), "hello <@201> ");
+
+    // Enter edit mode on a past message, then switch channels: the stashed pre-edit
+    // draft (not the edited message text) is saved back for GENERAL.
+    view.update_in(cx, |v, window, cx| v.start_edit(GENERAL, msg_id(2), window, cx));
+    cx.run_until_parked();
+    draw(cx);
+    assert_eq!(composer_text(&composer, cx), "hello from alice");
+    keys(cx, "alt-down");
+    assert_eq!(composer_text(&composer, cx), "ann draft");
+    keys(cx, "alt-up");
+    assert_eq!(wire(cx), "hello <@201> ");
+
+    // Sending clears the draft so switching away and returning stays empty.
+    keys(cx, "enter");
+    assert_eq!(lock_sent(&backend.sent).last().map(|(c, r)| (*c, r.content.as_deref())), Some((GENERAL, Some("hello <@201>"))));
+    assert_eq!(composer_text(&composer, cx), "");
+    keys(cx, "alt-down");
+    assert_eq!(composer_text(&composer, cx), "ann draft");
+    keys(cx, "alt-up");
+    assert_eq!(composer_text(&composer, cx), "");
+    drop(rt);
+}
+
+#[gpui_kit::test]
+fn history_back_forward_and_toggle_last_guild(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend(&rt);
+    let (view, cx) = open(cx, backend, events);
+    let g1 = Place::Guild(GUILD);
+    let g2 = Place::Guild(SECOND);
+    assert_eq!(at(&view, cx), (g1, Some(GENERAL)));
+
+    keys(cx, "alt-down");
+    assert_eq!(at(&view, cx), (g1, Some(ANNOUNCEMENTS)));
+    keys(cx, "ctrl-alt-down");
+    assert_eq!(at(&view, cx), (g2, Some(LOBBY)));
+
+    // Step backward then forward.
+    keys(cx, "alt-left");
+    assert_eq!(at(&view, cx), (g1, Some(ANNOUNCEMENTS)));
+    keys(cx, "alt-left");
+    assert_eq!(at(&view, cx), (g1, Some(GENERAL)));
+    keys(cx, "alt-right");
+    assert_eq!(at(&view, cx), (g1, Some(ANNOUNCEMENTS)));
+
+    // Visiting a new channel from mid-history truncates the old forward branch.
+    keys(cx, "alt-down");
+    assert_eq!(at(&view, cx), (g1, Some(STAFF)));
+    keys(cx, "alt-right");
+    assert_eq!(at(&view, cx), (g1, Some(STAFF)), "forward history truncated");
+
+    // Ctrl+Alt+Right toggles Home <-> last guild.
+    keys(cx, "ctrl-alt-right");
+    assert_eq!(at(&view, cx), (Place::Home, Some(DM_BOB)));
+    keys(cx, "ctrl-alt-right");
+    assert_eq!(at(&view, cx), (g1, Some(STAFF)));
+    drop(rt);
+}
+
+#[gpui_kit::test]
+fn channel_mute_toggles_guild_and_dm_and_preserves_siblings(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend(&rt);
+    {
+        let mut state = backend.state();
+        state.apply(&Dispatch {
+            t: "USER_GUILD_SETTINGS_UPDATE".to_owned(),
+            s: 2,
+            d: json!({
+                "guild_id": GUILD.to_string(),
+                "channel_overrides": {
+                    ANNOUNCEMENTS.to_string(): { "channel_id": ANNOUNCEMENTS.to_string(), "muted": true }
+                }
+            }),
+        });
+    }
+    let (view, cx) = open(cx, backend.clone(), events);
+    assert!(!view.read_with(cx, |v, _| v.selected_channel_muted()));
+
+    view.update(cx, |v, cx| v.toggle_channel_mute(cx));
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| v.selected_channel_muted()));
+    {
+        let state = backend.state();
+        assert!(state.is_channel_muted(Some(GUILD), GENERAL, 0));
+        assert!(state.is_channel_muted(Some(GUILD), ANNOUNCEMENTS, 0), "sibling override kept");
+    }
+    assert!(cx.debug_bounds("toggle-channel-mute").is_some());
+
+    // Toggle off on guild channel.
+    view.update(cx, |v, cx| v.toggle_channel_mute(cx));
+    cx.run_until_parked();
+    assert!(!backend.state().is_channel_muted(Some(GUILD), GENERAL, 0));
+
+    // Toggle mute on a DM channel (@me settings path).
+    keys(cx, "ctrl-alt-right");
+    assert_eq!(at(&view, cx), (Place::Home, Some(DM_BOB)));
+    view.update(cx, |v, cx| v.toggle_channel_mute(cx));
+    cx.run_until_parked();
+    assert!(backend.state().is_channel_muted(None, DM_BOB, 0));
+
+    let sent = lock_sent(&backend.sent_guild_settings);
+    assert_eq!(sent.len(), 3);
+    assert_eq!(sent[0].0, Some(GUILD));
+    let first_overrides = sent[0]
+        .1
+        .channel_overrides
+        .as_ref()
+        .and_then(|inner| inner.as_ref())
+        .expect("patch carries channel_overrides");
+    assert_eq!(first_overrides.get(&GENERAL.to_string()).and_then(|o| o.muted), Some(true));
+    assert_eq!(first_overrides.get(&ANNOUNCEMENTS.to_string()).and_then(|o| o.muted), Some(true));
+    assert_eq!(sent[2].0, None);
+    drop(rt);
+}

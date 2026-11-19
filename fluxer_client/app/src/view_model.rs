@@ -95,6 +95,7 @@ pub struct ChannelItem {
     pub has_messages: bool,
     pub nested: bool,
     pub unread: Unread,
+    pub muted: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -213,18 +214,19 @@ pub fn dm_unread(state: &ClientState) -> Unread {
 }
 
 pub fn channel_items(state: &ClientState, place: Place) -> Vec<ChannelItem> {
+    let now_ms = i64::try_from(crate::accounts::now_ms()).unwrap_or(i64::MAX);
     match place {
         Place::Home => state
             .dm_channels()
             .into_iter()
-            .map(|c| channel_item(state, c, false))
+            .map(|c| channel_item(state, c, false, now_ms))
             .collect(),
         Place::Guild(guild_id) => {
             let mut items = Vec::new();
             for node in state.channel_tree(guild_id) {
-                items.push(channel_item(state, &node.channel, false));
+                items.push(channel_item(state, &node.channel, false, now_ms));
                 for child in &node.children {
-                    items.push(channel_item(state, child, true));
+                    items.push(channel_item(state, child, true, now_ms));
                 }
             }
             items
@@ -232,7 +234,7 @@ pub fn channel_items(state: &ClientState, place: Place) -> Vec<ChannelItem> {
     }
 }
 
-fn channel_item(state: &ClientState, channel: &Channel, nested: bool) -> ChannelItem {
+fn channel_item(state: &ClientState, channel: &Channel, nested: bool, now_ms: i64) -> ChannelItem {
     ChannelItem {
         id: channel.id,
         name: channel_name(channel).into(),
@@ -241,6 +243,7 @@ fn channel_item(state: &ClientState, channel: &Channel, nested: bool) -> Channel
         has_messages: opens_message_pane(channel.kind),
         nested,
         unread: state.channel_unread(channel.id),
+        muted: state.is_channel_muted(channel.guild_id, channel.id, now_ms),
     }
 }
 

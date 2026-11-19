@@ -28,6 +28,9 @@ gpui_kit::actions!(
         MentionChannelNext,
         GuildPrev,
         GuildNext,
+        HistoryBack,
+        HistoryForward,
+        ToggleLastGuild,
         ToggleQuickSwitcher,
         ToggleEmojiPicker,
         OpenSettings,
@@ -63,6 +66,9 @@ fn bindings() -> Vec<KeyBinding> {
     both(&mut out, "ctrl-alt-shift-down", MentionChannelNext);
     both(&mut out, "ctrl-alt-up", GuildPrev);
     both(&mut out, "ctrl-alt-down", GuildNext);
+    both(&mut out, "alt-left", HistoryBack);
+    both(&mut out, "alt-right", HistoryForward);
+    both(&mut out, "ctrl-alt-right", ToggleLastGuild);
     // Ctrl+K also closes the switcher from its own input.
     out.push(KeyBinding::new("ctrl-k", ToggleQuickSwitcher, Some(CONTEXT)));
     out.push(KeyBinding::new("ctrl-k", ToggleQuickSwitcher, Some(IN_INPUT)));
@@ -92,6 +98,9 @@ pub fn on_actions(root: Div, cx: &mut Context<ClientView>) -> Div {
         .on_action(cx.listener(|v, _: &MentionChannelNext, _, cx| v.cycle_filtered(ChannelFilter::Mentioned, 1, cx)))
         .on_action(cx.listener(|v, _: &GuildPrev, _, cx| v.cycle_guild(-1, cx)))
         .on_action(cx.listener(|v, _: &GuildNext, _, cx| v.cycle_guild(1, cx)))
+        .on_action(cx.listener(|v, _: &HistoryBack, _, cx| v.history_back(cx)))
+        .on_action(cx.listener(|v, _: &HistoryForward, _, cx| v.history_forward(cx)))
+        .on_action(cx.listener(|v, _: &ToggleLastGuild, _, cx| v.toggle_last_guild(cx)))
         .on_action(cx.listener(|v, _: &ToggleQuickSwitcher, window, cx| v.toggle_quick_switcher(window, cx)))
         .on_action(cx.listener(|v, _: &ToggleEmojiPicker, window, cx| v.toggle_emoji_picker(window, cx)))
         .on_action(cx.listener(|v, _: &OpenSettings, window, cx| v.open_settings(window, cx)))
@@ -118,6 +127,6 @@ mod tests {
             let key = (format!("{:?}", b.keystrokes()), b.predicate().map(|p| p.to_string()));
             assert!(seen.insert(key.clone()), "{key:?} bound twice");
         }
-        assert_eq!(seen.len(), 38);
+        assert_eq!(seen.len(), 47);
     }
 }

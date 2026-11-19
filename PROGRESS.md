@@ -586,11 +586,29 @@
   2. 자체 테스트 서버(`fluxer-dev.home.arpa`)에서 P1 UI(이모지 피커·프로필 팝업·노트/설정 저장·테마/로케일 전환) 및 기존 P0 실기 항목 검증.
   3. 필요 시 P0④ 안정성 실기(재연결·장시간 메모리) 및 P2 기능 착수.
 
+## 채널별 드래프트·방문 기록 이동·채널 음소거 및 경고 제거 (2026-11-19)
+- **Baseline**: `desktop-rs` `f531f3aba` 기반(458 테스트 통과).
+- **Done**:
+  - **채널별 드래프트 보존 (`client_view.rs`, `client_view/keyboard.rs`)**: 채널·DM별 미전송 텍스트 및 인라인 `@`/`#`/커스텀 이모지 토큰을 `ClientView::drafts`(`MAX_DRAFTS = 100`)에 저장·복원하도록 구현. `pending_composer`와 단조 카운터 `composer_seq`로 `cx.defer` 실행 전 빠른 연속 전환·사용자 입력·편집 시작(`start_edit`) 간 경합을 차단했고, 편집 중 전환 시 편집 대상 원문 대신 편집 전 드래프트를 보존하며 전송 성공 시 해당 채널 드래프트를 비우도록 처리.
+  - **방문 기록 앞뒤 이동·직전 길드 토글 (`nav.rs`, `shortcuts.rs`, `client_view/keyboard.rs`)**: `NavHistory`(`MAX_HISTORY = 100`, 중복·무효 채널 건너뜀, 분기 시 forward 절단) 구현 및 `Alt+Left`/`Alt+Right`(`HistoryBack`/`HistoryForward`), `Ctrl+Alt+Right`(`ToggleLastGuild`) 단축키(총 47바인딩) 등록.
+  - **채널·DM 음소거 (`backend.rs`, `backend/settings.rs`, `view_model.rs`, `notify_upload.rs`, `ui/header.rs`, `ui/channel_list.rs`)**: 헤더 `"toggle-channel-mute"` 버튼 및 `Backend::set_channel_muted` 구현. `USER_GUILD_SETTINGS_UPDATE` 낙관 적용 + 스코프(`Option<Snowflake>`)별 시퀀스 가드 + 실패 시 단일 채널 롤백 + 채널 목록 `BellOff` 아이콘·안읽음 점 비활성 처리.
+  - **비테스트 바이너리 경고 0건 (`backend.rs`, `settings_model.rs`, `theme.rs`)**: 테스트 전용 `UserSettingsPatch`/`GuildSettingsPatch` import를 `#[cfg(test)]`로 분리하고 테스트 전용 헬퍼에 `#[cfg_attr(not(test), allow(dead_code))]` 적용.
+  - **DeepSeek 교차 검토·검증**: `deepseek/deepseek-flash`(`fluxer-helper-m1-review`) 리뷰의 P1 2건(서버 `PATCH /users/@me/guilds/{g|@me}/settings` 전체 맵 교체 사양에 맞춰 `build_channel_mute_patch`가 형제 오버라이드·`collapsed`·`message_notifications`를 함께 전송하도록 수정, 패치·단일 채널 롤백 단위 테스트 추가) 및 P2 항목(스코프별 시퀀스 맵, 단일 채널 롤백 `apply_channel_mute_rollback`, `start_edit`의 `pending_composer` 참조)을 모두 반영. 재검증 결과 `cargo check -p fluxer_client_app --bin fluxer_client` **경고 0건**, `cargo test --workspace -- --test-threads=2` **465 passed, 0 failed, 0 warnings** (`app`: 174, `core`: 242, `i18n`: 10, `markdown`: 36 [+1 existing ignored doctest], `devserver`: 3).
+  - **진행도 배지**: `docs/progress/progress.json` 갱신(`드래프트 보존: done`, `방문 기록·앞뒤 이동: done`, `채널 음소거: partial`) + `python scripts/progress_svg.py` 실행 → `overall: 56% (93 items)`, `daily driver: 66% (73 items, 10 areas)`.
+- **Decisions**:
+  - `build_channel_mute_patch`는 서버 `UserAccountSettingsService`가 `channel_overrides` 전체를 교체하는 동작에 맞춰 현재 상태의 형제 채널 오버라이드를 유지한 맵을 전송하도록 고정.
+  - `NavHistory::MAX_HISTORY`는 100, `MAX_DRAFTS`는 100(상한 초과 시 가장 작은 ID 키 제거)으로 설정.
+- **Blockers**:
+  - 채널·DM 음소거 실서버 `PATCH /users/@me/guilds/{g|@me}/settings` 왕복, 드래프트·앞뒤 이동 GUI 조작, 및 기존 실기 미확인 항목은 테스트 서버 실기 확인 전임.
+- **Next Steps**:
+  1. Milestone 2(소셜: 친구 목록·차단/관계 관리, 길드 초대 참가·탈퇴, 미디어 뷰어) 구현 착수.
+  2. 자체 테스트 서버(`fluxer-dev.home.arpa`)에서 `dist/fluxer_client/fluxer_client.exe` 실기 및 신규 UI 검증.
+
 ## 인계 (2026-11-19, 다음 에이전트용 — 이 절부터 읽을 것)
-- **기준**: `desktop-rs` (`55597163f` 이후 트레이·자동 시작·릴리스 패키징 커밋 반영), 워킹 트리 깨끗함(미공개 파일·`dist/` 제외). 미공개 유지 파일(커밋 금지): `RUST_*_PLAN.md`, `RUST_MIGRATION_REFERENCE_REVIEW.md`, `RUST_PORT_RESEARCH_*`, `IPC_M0_FINDINGS.md`, `tools/h265_livekit_probe/`.
-- **현재 주력**: 네이티브 GPUI 클라이언트 `fluxer_client/`(core, app, markdown, i18n, devserver). `cd fluxer_client; $env:CARGO_TARGET_DIR = "../target/fc-root"; cargo test --workspace -- --test-threads=2` → 458 통과(app 167, core 242, markdown 36 [+1 ignored doctest], i18n 10, devserver 3), 경고 0.
-- **우선순위(P0)**: ① 알림·첨부 ✔(코드) ② 임베드 ✔(코드) ③ 릴리스 exe ✔(`scripts/package_fluxer_client.ps1`, 산출 `dist/fluxer_client/fluxer_client.exe` 39.17 MB, SHA256 `9a6a9e34600e5025a1e654ece655542c899cf64f5f5ab6b63f953102c6adcae7`, `PE_SUBSYSTEM=2`) ④ 안정성 실기(재연결·장시간 메모리·한글 IME). P1 진행: 이모지 피커·프로필 팝업·설정 화면(테마/로케일/알림/로그아웃)·트레이/자동 시작 ✔(코드/헤드리스).
-- **실기 미확인**: 트레이 아이콘·닫기 최소화·`--autostart` HKCU Run 실제 동작, 이모지 피커·프로필 팝업·설정/테마/로케일 UI 실서버 동작, GIF 애니메이션 수정, 유튜브 카드 중복 수정, Windows 토스트·알림음(사용자 PC가 방해 금지 모드), 첨부 업로드 실서버, 한국어 UI 화면, 릴리스 exe·AUMID 바로가기.
+- **기준**: `desktop-rs` (`f531f3aba` 이후 드래프트·방문 기록·채널 음소거 커밋 반영), 워킹 트리 깨끗함(미공개 파일·`dist/` 제외). 미공개 유지 파일(커밋 금지): `RUST_*_PLAN.md`, `RUST_MIGRATION_REFERENCE_REVIEW.md`, `RUST_PORT_RESEARCH_*`, `IPC_M0_FINDINGS.md`, `tools/h265_livekit_probe/`.
+- **현재 주력**: 네이티브 GPUI 클라이언트 `fluxer_client/`(core, app, markdown, i18n, devserver). `cd fluxer_client; $env:CARGO_TARGET_DIR = "../target/fc-root"; cargo test --workspace -- --test-threads=2` → 465 통과(app 174, core 242, markdown 36 [+1 ignored doctest], i18n 10, devserver 3), `cargo check --bin fluxer_client` 경고 0.
+- **우선순위(P0)**: ① 알림·첨부 ✔(코드) ② 임베드 ✔(코드) ③ 릴리스 exe ✔(`scripts/package_fluxer_client.ps1`, 산출 `dist/fluxer_client/fluxer_client.exe` 39.17 MB, SHA256 `9a6a9e34600e5025a1e654ece655542c899cf64f5f5ab6b63f953102c6adcae7`, `PE_SUBSYSTEM=2`) ④ 안정성 실기(재연결·장시간 메모리·한글 IME). P1 진행: 이모지 피커·프로필 팝업·설정 화면·트레이/자동 시작·드래프트 보존·방문 기록 이동·채널 음소거 ✔(코드/헤드리스).
+- **실기 미확인**: 채널/DM 음소거 실서버 PATCH, 드래프트·`Alt+Left/Right` 실기, 트레이 아이콘·닫기 최소화·`--autostart` HKCU Run 실제 동작, 이모지 피커·프로필 팝업·설정/테마/로케일 UI 실서버 동작, GIF 애니메이션 수정, 유튜브 카드 중복 수정, Windows 토스트·알림음(사용자 PC가 방해 금지 모드), 첨부 업로드 실서버, 한국어 UI 화면, 릴리스 exe·AUMID 바로가기.
 - **테스트 환경**: 자체 테스트 서버 `fluxer-dev.home.arpa`(SSH 443 터널). 접속·계정·도구는 저장소 밖 `../Logs/fluxer-dev/LOCAL_ACCESS.md`. **친구 서버와 사용자 개인 계정은 테스트에 쓰지 말 것**(개인 정보). 메시지 전송 시험은 자체 서버에서만.
 - **PC 부하 규칙**(사용자 PC가 여러 번 멈춤): `fluxer_client/.cargo/config.toml` `build.jobs=4` 유지, 동시에 빌드하는 작업 최대 2개, 앱 테스트는 항상 `timeout 300 … -- --test-threads=2`, 빌드 디렉터리는 `target/fc-root`만(추가로 만들었으면 끝나고 삭제). 헤드리스 GPUI 테스트가 무한 루프로 CPU를 먹은 전례(uniform_list의 0..1 측정 호출) — 렌더/레이아웃 콜백에서 상태 변경·notify 금지.
 - **GUI 실기**: `tools/agents/gui.ps1`는 다른 창이 대상 창을 가리면 입력을 거부한다(사용자가 PC 사용 중일 수 있음). 마우스 대신 키보드(Ctrl+K 등) 위주로 확인.

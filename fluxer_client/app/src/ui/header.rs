@@ -10,10 +10,13 @@ use gpui_kit::{Context, FontWeight, div, prelude::*};
 use crate::client_view::ClientView;
 use crate::theme::Theme;
 use crate::ui::l10n;
+use crate::view_model::Place;
 
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> impl IntoElement {
     let glyph = view.channel_glyph;
     let open = view.member_list_open;
+    let channel_muted = view.selected_channel_muted();
+    let is_dm = view.place == Place::Home;
     div()
         .flex()
         .flex_row()
@@ -26,6 +29,24 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .font_weight(FontWeight::BOLD)
         .when(!glyph.is_empty(), |d| d.child(div().text_color(theme.muted_foreground).text_lg().child(glyph)))
         .child(div().flex_1().min_w_0().truncate().child(view.channel_title.clone()))
+        .when(view.selected_channel.is_some(), |d| {
+            let label = match (is_dm, channel_muted) {
+                (true, true) => l10n::tr("Unmute DM"),
+                (true, false) => l10n::tr("Mute DM"),
+                (false, true) => l10n::tr("Unmute channel"),
+                (false, false) => l10n::tr("Mute channel"),
+            };
+            d.child(
+                div().debug_selector(|| "toggle-channel-mute".to_owned()).child(
+                    Button::new("toggle-channel-mute")
+                        .ghost()
+                        .small()
+                        .selected(channel_muted)
+                        .label(label)
+                        .on_click(cx.listener(|this, _, _, cx| this.toggle_channel_mute(cx))),
+                ),
+            )
+        })
         .child({
             let enabled = view.notifier.enabled;
             Button::new("toggle-notifications")

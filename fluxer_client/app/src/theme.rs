@@ -348,18 +348,22 @@ impl Theme {
         Self::from_kind(kind.resolve(cx.window_appearance()))
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn light(_cx: &App) -> Self {
         Self::from_kind(ThemeKind::Light)
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn dark(_cx: &App) -> Self {
         Self::from_kind(ThemeKind::Dark)
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn darker(_cx: &App) -> Self {
         Self::from_kind(ThemeKind::Darker)
     }
 
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn black(_cx: &App) -> Self {
         Self::from_kind(ThemeKind::Black)
     }

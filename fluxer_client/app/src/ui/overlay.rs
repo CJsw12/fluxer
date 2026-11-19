@@ -10,6 +10,7 @@ use crate::ui::group_dm::{CreateGroupDmModal, LeaveGroupDmModal};
 use crate::ui::guild_modal::{JoinGuildModal, LeaveGuildModal};
 use crate::ui::link_warning::LinkWarningModal;
 use crate::ui::media_viewer::MediaViewerModal;
+use crate::ui::moderation_modal::{GuildBansModal, MemberModerationModal};
 use crate::ui::profile_popout::ProfilePopout;
 use crate::ui::quick_switcher::QuickSwitcher;
 use crate::ui::settings::SettingsModal;
@@ -32,6 +33,8 @@ pub enum Overlay {
     LinkWarning(LinkWarningModal),
     CreateChannel(CreateChannelModal),
     EditChannel(EditChannelModal),
+    MemberModeration(MemberModerationModal),
+    GuildBans(GuildBansModal),
 }
 
 impl Overlay {

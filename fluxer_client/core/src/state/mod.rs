@@ -58,4 +58,6 @@ pub use model::{
 };
 pub use notify::{NotificationKind, effective_notification_level, should_notify};
 pub use visibility::{user_can_view_channel, user_channel_permissions};
-pub use permissions::{bits, compute_permissions, has, thread_view_permissions};
+pub use permissions::{
+    bits, can_manage_target_member, compute_permissions, has, highest_role, is_role_higher, thread_view_permissions,
+};

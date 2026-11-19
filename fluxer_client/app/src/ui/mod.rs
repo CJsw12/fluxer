@@ -16,6 +16,7 @@ pub mod link_warning;
 pub mod media_viewer;
 pub mod message_list;
 pub mod message_row;
+pub mod moderation_modal;
 pub mod profile_popout;
 pub mod user_panel;
 pub mod reactions;

@@ -128,6 +128,8 @@ pub(crate) struct RequestOptions<'a> {
     pub timeout: Option<Duration>,
     /// 429 retries instead of [`RestConfig::max_rate_limit_retries`].
     pub rate_limit_retries: Option<u32>,
+    /// Optional reason sent percent-encoded in `X-Audit-Log-Reason`.
+    pub audit_log_reason: Option<&'a str>,
 }
 
 /// The body of one request attempt.
@@ -286,6 +288,19 @@ impl RestClient {
         self.request_with(method, path, query, body, auth, RequestOptions::default()).await
     }
 
+    pub(crate) async fn request_with_reason(
+        &self,
+        method: Method,
+        path: &str,
+        query: &[(&str, String)],
+        body: Option<&Value>,
+        auth: Auth,
+        audit_log_reason: Option<&str>,
+    ) -> Result<Value, RestError> {
+        let options = RequestOptions { audit_log_reason, ..RequestOptions::default() };
+        self.request_with(method, path, query, body, auth, options).await
+    }
+
     /// [`Self::request`] plus an optional solved captcha token, sent as
     /// `X-Captcha-Token` (`CaptchaInterceptor.ts`).
     pub(crate) async fn request_with_captcha(
@@ -350,6 +365,21 @@ impl RestClient {
             Some(token) => Some(captcha_header(token)?),
             None => None,
         };
+        let audit_reason = match options.audit_log_reason {
+            Some(reason) => {
+                let normalized = super::api::normalize_audit_log_reason(reason);
+                if normalized.is_empty() {
+                    None
+                } else {
+                    if normalized.encode_utf16().count() > super::api::MAX_AUDIT_LOG_REASON_UTF16 {
+                        return Err(RestError::InvalidArgument("reason"));
+                    }
+                    let encoded = super::api::encode_uri_component(&normalized);
+                    Some(HeaderValue::from_str(&encoded).map_err(|_| RestError::InvalidArgument("reason"))?)
+                }
+            }
+            None => None,
+        };
         let url = self.build_url(path, query)?;
         // Generation of the stored token the header was built from; checked
         // again before each retry so a cleared or replaced token is not reused.
@@ -393,6 +423,9 @@ impl RestClient {
             }
             if let Some(value) = &captcha {
                 builder = builder.header("x-captcha-token", value.clone());
+            }
+            if let Some(value) = &audit_reason {
+                builder = builder.header("x-audit-log-reason", value.clone());
             }
             match &body {
                 RequestBody::Empty => {}

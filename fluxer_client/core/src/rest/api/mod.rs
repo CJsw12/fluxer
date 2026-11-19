@@ -23,7 +23,11 @@ pub use channels::{
     VOICE_CHANNEL_BITRATE_DEFAULT, VOICE_CHANNEL_CONNECTION_LIMIT_DEFAULT, validate_create_guild_channel,
     validate_guild_channel_patch,
 };
-pub use guilds::MemberQuery;
+pub use guilds::{
+    BanMemberRequest, GuildBanEntry, GuildMemberPatch, MAX_AUDIT_LOG_REASON_UTF16, MAX_BAN_DELETE_MESSAGE_SECONDS,
+    MAX_NICKNAME_UTF16, MAX_TEMP_BAN_DURATION_SECONDS, MAX_TIMEOUT_DURATION_SECONDS, MIN_TEMP_BAN_DURATION_SECONDS,
+    MemberQuery, normalize_audit_log_reason, validate_audit_log_reason, validate_ban_request, validate_member_patch,
+};
 pub use invites::CreateInviteRequest;
 pub use relationships::parse_user_tag;
 pub use settings::{ChannelOverride, CustomStatus, GuildSettingsPatch, MuteConfig, UserSettingsPatch};

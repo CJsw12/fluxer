@@ -10,8 +10,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{Context as _, Result};
 use fluxer_client_core::gateway::{self, Compression, GatewayConfig, GatewayEvent, GatewayHandle, IdentifyProperties};
 use fluxer_client_core::rest::{
-    AckRequest, ClientIdentity, DiscoveryOptions, Endpoints, MessageQuery, MessageSearchOutcome, RestClient,
-    RestConfig, SecretToken, SendMessageRequest, TransportPolicy, UserProfileFull, discover_with,
+    AckRequest, ClientIdentity, DiscoveryOptions, Endpoints, GuildBanEntry, MessageQuery, MessageSearchOutcome,
+    RestClient, RestConfig, SecretToken, SendMessageRequest, TransportPolicy, UserProfileFull, discover_with,
 };
 #[cfg(test)]
 use fluxer_client_core::rest::{GuildSettingsPatch, MessageSearchRequest, UserSettingsPatch};
@@ -73,6 +73,12 @@ pub enum UiEvent {
     ChannelUpdated { seq: u64, channel_id: Snowflake, error: Option<String> },
     /// `DELETE /channels/{channel_id}` finished for a guild channel or category.
     ChannelDeleted { seq: u64, channel_id: Snowflake, error: Option<String> },
+    /// Kick / ban / timeout / nickname update finished for a guild member.
+    MemberModerated { seq: u64, guild_id: Snowflake, user_id: Snowflake, error: Option<String> },
+    /// `GET /guilds/{guild_id}/bans` finished.
+    GuildBansLoaded { seq: u64, guild_id: Snowflake, result: Result<Vec<GuildBanEntry>, String> },
+    /// `DELETE /guilds/{guild_id}/bans/{user_id}` finished.
+    MemberUnbanned { seq: u64, guild_id: Snowflake, user_id: Snowflake, error: Option<String> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -122,6 +128,7 @@ pub use actions::TypingSender;
 mod channels;
 mod group_dm;
 mod members;
+mod moderation;
 mod navigation;
 mod profile;
 mod search;
@@ -133,6 +140,8 @@ mod upload;
 pub use channels::GuildChannelCall;
 #[cfg(test)]
 pub use group_dm::GroupDmCall;
+#[cfg(test)]
+pub use moderation::ModerationCall;
 pub use social::{AcceptedInvite, InvitePreview, extract_invite_code};
 #[cfg(test)]
 pub use social::SocialCall;
@@ -195,6 +204,9 @@ pub struct Backend {
     /// Recorded guild channel CRUD actions (tests).
     #[cfg(test)]
     pub(crate) sent_guild_channels: Arc<Mutex<Vec<GuildChannelCall>>>,
+    /// Recorded guild member moderation actions (tests).
+    #[cfg(test)]
+    pub(crate) sent_moderation: Arc<Mutex<Vec<ModerationCall>>>,
 }
 
 impl Backend {
@@ -294,6 +306,8 @@ impl Backend {
             sent_group_dm: Arc::default(),
             #[cfg(test)]
             sent_guild_channels: Arc::default(),
+            #[cfg(test)]
+            sent_moderation: Arc::default(),
         };
         (backend, rx)
     }

@@ -2,7 +2,7 @@
 //! (`fluxer_app/src/features/permissions/utils/PermissionUtils.ts:105-201`).
 
 use super::ids::Snowflake;
-use super::model::{Channel, Guild, Member};
+use super::model::{Channel, Guild, Member, Role};
 
 /// Bit values from `packages/constants/src/ChannelConstants.ts:172-210`.
 pub mod bits {
@@ -211,4 +211,51 @@ pub fn thread_view_permissions(parent: u64) -> u64 {
 /// True when every bit of `needed` is in `permissions` (TS `Permission.can`).
 pub fn has(permissions: u64, needed: u64) -> bool {
     permissions & needed == needed
+}
+
+/// Highest non-@everyone role held by `member` in `guild`, ordered by
+/// descending `position` and ascending `id` (`PermissionUtils.ts:211-226`).
+pub fn highest_role<'a>(guild: &'a Guild, member: Option<&Member>) -> Option<&'a Role> {
+    let member = member?;
+    member
+        .roles
+        .iter()
+        .filter(|id| **id != guild.id)
+        .filter_map(|id| guild.roles.get(id))
+        .min_by(|a, b| b.position.cmp(&a.position).then_with(|| a.id.cmp(&b.id)))
+}
+
+/// True when `actor_id` (owning the guild or holding `actor_top`) outranks
+/// `target_top` (`PermissionUtils.ts:203-209`).
+pub fn is_role_higher(guild: &Guild, actor_id: Snowflake, actor_top: Option<&Role>, target_top: Option<&Role>) -> bool {
+    if guild.owner_id == Some(actor_id) {
+        return true;
+    }
+    let Some(a) = actor_top else { return false };
+    let Some(b) = target_top else { return true };
+    a.position > b.position || (a.position == b.position && a.id < b.id)
+}
+
+/// True when `actor_id` outranks `target_id` as a guild member
+/// (`PermissionUtils.ts:228-237`), blocking self, guild owner, visiting
+/// sessions, and unknown targets.
+pub fn can_manage_target_member(
+    guild: &Guild,
+    actor_id: Snowflake,
+    actor_member: Option<&Member>,
+    target_id: Snowflake,
+    target_member: Option<&Member>,
+) -> bool {
+    if actor_id == target_id || guild.visiting || guild.owner_id == Some(target_id) || target_member.is_none() {
+        return false;
+    }
+    if guild.owner_id == Some(actor_id) {
+        return true;
+    }
+    is_role_higher(
+        guild,
+        actor_id,
+        highest_role(guild, actor_member),
+        highest_role(guild, target_member),
+    )
 }

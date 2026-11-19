@@ -107,13 +107,13 @@
   <g><title>그룹 DM : 부분</title><rect x="580" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="398.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">서버 관리</text>
   <rect x="270" y="387.0" width="190" height="10" rx="5" fill="#21262d"/>
-  <rect x="270" y="387.0" width="63.3" height="10" rx="5" fill="#58a6ff"/>
-  <text x="474" y="397.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">33%</text>
+  <rect x="270" y="387.0" width="79.2" height="10" rx="5" fill="#58a6ff"/>
+  <text x="474" y="397.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">42%</text>
   <g><title>초대 참가 : 부분</title><rect x="510" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <g><title>길드 탈퇴 : 부분</title><rect x="524" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <g><title>채널 생성·편집 : 부분</title><rect x="538" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <g><title>역할·권한 편집 : 미착수</title><rect x="552" y="387.0" width="10" height="10" rx="2" fill="#484f58"/></g>
-  <g><title>멤버 관리(킥·밴) : 미착수</title><rect x="566" y="387.0" width="10" height="10" rx="2" fill="#484f58"/></g>
+  <g><title>멤버 관리(킥·밴) : 부분</title><rect x="566" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <g><title>채널 음소거 : 부분</title><rect x="580" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="432.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">검색</text>
   <rect x="270" y="421.0" width="190" height="10" rx="5" fill="#21262d"/>

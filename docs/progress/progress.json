@@ -341,7 +341,7 @@
         },
         {
           "name": "멤버 관리(킥·밴)",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "채널 음소거",

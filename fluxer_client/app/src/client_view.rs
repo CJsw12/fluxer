@@ -81,6 +81,8 @@ pub struct ClientView {
     pub(crate) channel_glyph: &'static str,
     /// Current user holds guild-level `MANAGE_CHANNELS` in the active guild.
     pub(crate) can_manage_guild_channels: bool,
+    /// Current user holds guild-level `BAN_MEMBERS` in the active guild.
+    pub(crate) can_ban_members: bool,
     /// Current user holds channel-level `MANAGE_CHANNELS` on `selected_channel`.
     pub(crate) can_manage_selected_channel: bool,
     /// Last title given to the OS window.
@@ -210,6 +212,8 @@ pub struct ClientView {
     create_group_dm_seq: u64,
     /// Sequence counter for guild channel create/edit/delete responses.
     channel_mgmt_seq: u64,
+    /// Sequence counter for guild member moderation / ban list responses.
+    moderation_seq: u64,
     /// Snapshot of the open Group DM channel (members, owner, addable friends).
     pub(crate) group_dm: Option<ui::group_dm::GroupDmSnapshot>,
     /// Persistent inline Group DM rename input (reused across frames).
@@ -317,6 +321,7 @@ impl ClientView {
             channel_topic: None,
             channel_glyph: "",
             can_manage_guild_channels: false,
+            can_ban_members: false,
             can_manage_selected_channel: false,
             window_title: String::new(),
             acks: AckScheduler::default(),
@@ -385,6 +390,7 @@ impl ClientView {
             group_dm_panel_open: true,
             create_group_dm_seq: 0,
             channel_mgmt_seq: 0,
+            moderation_seq: 0,
             group_dm: None,
             group_dm_rename,
             group_dm_adding: false,
@@ -454,6 +460,8 @@ impl ClientView {
                 | Overlay::LinkWarning(_)
                 | Overlay::CreateChannel(_)
                 | Overlay::EditChannel(_)
+                | Overlay::MemberModeration(_)
+                | Overlay::GuildBans(_)
         );
         self.overlay = Overlay::None;
         if restore_composer {
@@ -746,6 +754,68 @@ impl ClientView {
                         }
                     }
                 }
+                UiEvent::MemberModerated { seq, guild_id, user_id, error } => {
+                    if matches!(&self.overlay, Overlay::MemberModeration(m) if m.seq == seq) {
+                        match error {
+                            None => {
+                                self.profile_cache.remove(&(user_id, Some(guild_id)));
+                                self.overlay = Overlay::None;
+                                self.focus_composer_later(cx);
+                            }
+                            Some(err) => {
+                                if let Overlay::MemberModeration(modal) = &mut self.overlay {
+                                    modal.submitting = false;
+                                    modal.error = Some(err);
+                                }
+                            }
+                        }
+                    } else if seq == self.moderation_seq && matches!(self.overlay, Overlay::None) {
+                        if let Some(err) = error {
+                            self.error = Some(err.into());
+                        } else {
+                            self.profile_cache.remove(&(user_id, Some(guild_id)));
+                        }
+                    }
+                }
+                UiEvent::GuildBansLoaded { seq, guild_id, result } => {
+                    let Overlay::GuildBans(modal) = &mut self.overlay else {
+                        continue;
+                    };
+                    if modal.seq != seq || modal.guild_id != guild_id {
+                        continue;
+                    }
+                    modal.loading = false;
+                    match result {
+                        Ok(mut bans) => {
+                            bans.retain(|b| !modal.recently_unbanned.get(&b.user.id).is_some_and(|&u_seq| u_seq > seq));
+                            modal.recently_unbanned.retain(|_, &mut u_seq| u_seq > seq);
+                            modal.bans = bans;
+                            modal.error = None;
+                        }
+                        Err(err) => {
+                            modal.error = Some(err);
+                        }
+                    }
+                }
+                UiEvent::MemberUnbanned { seq, guild_id, user_id, error } => {
+                    let Overlay::GuildBans(modal) = &mut self.overlay else {
+                        continue;
+                    };
+                    if modal.guild_id != guild_id || modal.unban_seqs.remove(&user_id) != Some(seq) {
+                        continue;
+                    }
+                    modal.unbanning.remove(&user_id);
+                    match error {
+                        None => {
+                            modal.bans.retain(|b| b.user.id != user_id);
+                            modal.recently_unbanned.insert(user_id, seq);
+                            modal.error = None;
+                        }
+                        Some(err) => {
+                            modal.error = Some(err);
+                        }
+                    }
+                }
             }
         }
         if connected {
@@ -896,6 +966,25 @@ impl ClientView {
                         || !state.channels.contains_key(&m.channel_id)
                         || !state.can_manage_channel(m.channel_id)
                 }
+                Overlay::MemberModeration(m) => {
+                    let now = i64::try_from(crate::accounts::now_ms()).unwrap_or(i64::MAX);
+                    !state.guilds.contains_key(&m.guild_id)
+                        || !match &m.kind {
+                            ui::moderation_modal::ModerationKind::Kick => state.can_kick_member(m.guild_id, m.user_id),
+                            ui::moderation_modal::ModerationKind::Ban => state.can_ban_member(m.guild_id, m.user_id),
+                            ui::moderation_modal::ModerationKind::Timeout { .. } => {
+                                state.can_timeout_member(m.guild_id, m.user_id)
+                            }
+                            ui::moderation_modal::ModerationKind::Nickname { .. } => {
+                                state.can_edit_member_nickname(m.guild_id, m.user_id, now)
+                            }
+                        }
+                }
+                Overlay::GuildBans(m) => {
+                    self.place != Place::Guild(m.guild_id)
+                        || !state.guilds.contains_key(&m.guild_id)
+                        || !state.can_ban_members(m.guild_id)
+                }
                 _ => false,
             };
             if dismiss_modal || fallback_guild_channel.is_some() {
@@ -964,6 +1053,10 @@ impl ClientView {
             if let Some(id) = reply_gone {
                 self.composer_mode.message_deleted(id);
             }
+            self.can_ban_members = match self.place {
+                Place::Guild(gid) => state.can_ban_members(gid),
+                Place::Home => false,
+            };
             let can_manage_guild = match self.place {
                 Place::Guild(gid) => state.can_manage_guild_channels(gid),
                 Place::Home => false,
@@ -1855,6 +1948,11 @@ impl ClientView {
         self.channel_mgmt_seq
     }
 
+    pub(crate) fn next_moderation_seq(&mut self) -> u64 {
+        self.moderation_seq = self.moderation_seq.saturating_add(1);
+        self.moderation_seq
+    }
+
     /// Leaves a historical `?around=` jump window and returns to the latest messages.
     pub(crate) fn jump_to_present(&mut self, cx: &mut Context<Self>) {
         if self.loading_history {
@@ -1971,6 +2069,8 @@ impl Render for ClientView {
             Overlay::LinkWarning(modal) => Some(ui::link_warning::render(modal, &theme, cx)),
             Overlay::CreateChannel(modal) => Some(ui::channel_modal::render_create(modal, &theme, cx)),
             Overlay::EditChannel(modal) => Some(ui::channel_modal::render_edit(modal, &theme, cx)),
+            Overlay::MemberModeration(modal) => Some(ui::moderation_modal::render_action(modal, &theme, cx)),
+            Overlay::GuildBans(modal) => Some(ui::moderation_modal::render_bans(modal, &theme, cx)),
             Overlay::None => None,
         };
         // Every image below without its own cache (avatars, custom emoji,

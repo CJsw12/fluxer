@@ -15,6 +15,7 @@ use crate::client_view::ClientView;
 use crate::profile::{ProfileCard, build_profile_card};
 use crate::theme::Theme;
 use crate::ui::message_row::avatar;
+use crate::ui::moderation_modal::ModerationKind;
 use crate::ui::overlay::Overlay;
 use crate::ui::{l10n, overlay};
 use crate::view_model::Place;
@@ -34,7 +35,35 @@ pub struct ProfilePopout {
     pub note_input: Entity<InputState>,
     pub saved_note: String,
     pub confirm_blocked_dm: bool,
+    pub can_edit_nickname: bool,
+    pub can_timeout: bool,
+    pub can_kick: bool,
+    pub can_ban: bool,
+    pub is_timed_out: bool,
     pub _subscription: Subscription,
+}
+
+fn moderation_flags(
+    state: &ClientState,
+    user_id: Snowflake,
+    guild_id: Option<Snowflake>,
+) -> (bool, bool, bool, bool, bool) {
+    let Some(gid) = guild_id else {
+        return (false, false, false, false, false);
+    };
+    let now = i64::try_from(crate::accounts::now_ms()).unwrap_or(i64::MAX);
+    let is_timed_out = state
+        .members
+        .get(&gid)
+        .and_then(|m| m.get(&user_id))
+        .is_some_and(|m| m.is_timed_out(now));
+    (
+        state.can_edit_member_nickname(gid, user_id, now),
+        state.can_timeout_member(gid, user_id),
+        state.can_kick_member(gid, user_id),
+        state.can_ban_member(gid, user_id),
+        is_timed_out,
+    )
 }
 
 pub(crate) fn find_1on1_dm(state: &ClientState, user_id: Snowflake) -> Option<Snowflake> {
@@ -71,10 +100,13 @@ impl ClientView {
     ) {
         self.prepare_overlay_replace(cx);
         self.autocomplete = None;
-        let card = {
+        let (card, (can_edit_nickname, can_timeout, can_kick, can_ban, is_timed_out)) = {
             let state = self.backend.state();
             let fetched = self.profile_cache.get(&(user_id, guild_id));
-            build_profile_card(&state, self.backend.media(), user_id, guild_id, fetched)
+            (
+                build_profile_card(&state, self.backend.media(), user_id, guild_id, fetched),
+                moderation_flags(&state, user_id, guild_id),
+            )
         };
         let initial_note = card.note.clone();
         let note_input = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Click to add a note")));
@@ -94,6 +126,11 @@ impl ClientView {
             note_input,
             saved_note: initial_note,
             confirm_blocked_dm: false,
+            can_edit_nickname,
+            can_timeout,
+            can_kick,
+            can_ban,
+            is_timed_out,
             _subscription: subscription,
         });
         if self.profile_in_flight.insert((user_id, guild_id)) {
@@ -134,6 +171,13 @@ impl ClientView {
             let state = self.backend.state();
             let fetched = self.profile_cache.get(&(user_id, guild_id));
             pop.card = build_profile_card(&state, self.backend.media(), user_id, guild_id, fetched);
+            (
+                pop.can_edit_nickname,
+                pop.can_timeout,
+                pop.can_kick,
+                pop.can_ban,
+                pop.is_timed_out,
+            ) = moderation_flags(&state, user_id, guild_id);
             pop.error = None;
             cx.notify();
         }
@@ -147,6 +191,13 @@ impl ClientView {
             let state = self.backend.state();
             let fetched = self.profile_cache.get(&(pop.user_id, pop.guild_id));
             pop.card = build_profile_card(&state, self.backend.media(), pop.user_id, pop.guild_id, fetched);
+            (
+                pop.can_edit_nickname,
+                pop.can_timeout,
+                pop.can_kick,
+                pop.can_ban,
+                pop.is_timed_out,
+            ) = moderation_flags(&state, pop.user_id, pop.guild_id);
             if was_loaded {
                 pop.card.loaded = true;
             }
@@ -383,6 +434,102 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
             }
         }
         body = body.child(actions);
+    }
+
+    if let Some(guild_id) = pop.guild_id {
+        let user_id = card.user_id;
+        if card.is_self && pop.can_edit_nickname {
+            body = body.child(
+                div().debug_selector(|| "profile-nickname-btn".to_owned()).child(
+                    Button::new("profile-nickname-btn")
+                        .ghost()
+                        .small()
+                        .label(l10n::tr("Change nickname"))
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.open_member_moderation(
+                                guild_id,
+                                user_id,
+                                ModerationKind::Nickname { is_self: true, original_nick: String::new() },
+                                window,
+                                cx,
+                            );
+                        })),
+                ),
+            );
+        } else if !card.is_self && (pop.can_edit_nickname || pop.can_timeout || pop.can_kick || pop.can_ban) {
+            let mut mod_row = div().flex().flex_row().flex_wrap().gap_1();
+            if pop.can_edit_nickname {
+                mod_row = mod_row.child(
+                    div().debug_selector(|| "profile-nickname-btn".to_owned()).child(
+                        Button::new("profile-nickname-btn")
+                            .ghost()
+                            .small()
+                            .label(l10n::tr("Change nickname"))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.open_member_moderation(
+                                    guild_id,
+                                    user_id,
+                                    ModerationKind::Nickname { is_self: false, original_nick: String::new() },
+                                    window,
+                                    cx,
+                                );
+                            })),
+                    ),
+                );
+            }
+            if pop.can_timeout {
+                let is_timed_out = pop.is_timed_out;
+                let timeout_label = if is_timed_out {
+                    l10n::tr("Remove timeout")
+                } else {
+                    l10n::tr("Timeout")
+                };
+                mod_row = mod_row.child(
+                    div().debug_selector(|| "profile-timeout-btn".to_owned()).child(
+                        Button::new("profile-timeout-btn")
+                            .ghost()
+                            .small()
+                            .label(timeout_label)
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.open_member_moderation(
+                                    guild_id,
+                                    user_id,
+                                    ModerationKind::Timeout { currently_timed_out: is_timed_out },
+                                    window,
+                                    cx,
+                                );
+                            })),
+                    ),
+                );
+            }
+            if pop.can_kick {
+                mod_row = mod_row.child(
+                    div().debug_selector(|| "profile-kick-btn".to_owned()).child(
+                        Button::new("profile-kick-btn")
+                            .danger()
+                            .small()
+                            .label(l10n::tr("Kick"))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.open_member_moderation(guild_id, user_id, ModerationKind::Kick, window, cx);
+                            })),
+                    ),
+                );
+            }
+            if pop.can_ban {
+                mod_row = mod_row.child(
+                    div().debug_selector(|| "profile-ban-btn".to_owned()).child(
+                        Button::new("profile-ban-btn")
+                            .danger()
+                            .small()
+                            .label(l10n::tr("Ban"))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.open_member_moderation(guild_id, user_id, ModerationKind::Ban, window, cx);
+                            })),
+                    ),
+                );
+            }
+            body = body.child(mod_row);
+        }
     }
 
     if let Some(bio) = card.bio.as_ref().filter(|b| !b.trim().is_empty()) {

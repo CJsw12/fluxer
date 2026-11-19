@@ -4,7 +4,7 @@
 use super::client::{ClientState, now_ms};
 use super::ids::Snowflake;
 use super::model::{Channel, ChannelKind};
-use super::permissions::{bits, has};
+use super::permissions::{bits, can_manage_target_member, compute_permissions, has};
 
 impl ClientState {
     /// `AttachmentPermissionUtils.ts:8-11` and `ChannelMessages.tsx:105`:
@@ -79,6 +79,82 @@ impl ClientState {
             return false;
         }
         has(self.channel_permissions(channel_id), bits::MANAGE_CHANNELS)
+    }
+
+    pub fn can_kick_members(&self, guild_id: Snowflake) -> bool {
+        has(self.guild_permissions(guild_id), bits::KICK_MEMBERS)
+    }
+
+    pub fn can_ban_members(&self, guild_id: Snowflake) -> bool {
+        has(self.guild_permissions(guild_id), bits::BAN_MEMBERS)
+    }
+
+    pub fn can_moderate_members(&self, guild_id: Snowflake) -> bool {
+        has(self.guild_permissions(guild_id), bits::MODERATE_MEMBERS)
+    }
+
+    pub fn can_manage_nicknames(&self, guild_id: Snowflake) -> bool {
+        has(self.guild_permissions(guild_id), bits::MANAGE_NICKNAMES)
+    }
+
+    pub fn can_change_own_nickname(&self, guild_id: Snowflake) -> bool {
+        has(self.guild_permissions(guild_id), bits::CHANGE_NICKNAME)
+    }
+
+    /// True when the current user may kick `target_id` from `guild_id`.
+    pub fn can_kick_member(&self, guild_id: Snowflake, target_id: Snowflake) -> bool {
+        self.can_kick_members(guild_id) && self.can_manage_guild_member(guild_id, target_id)
+    }
+
+    /// True when the current user may ban loaded member `target_id` from `guild_id`.
+    /// Requires both `BAN_MEMBERS` and hierarchy superiority over the loaded target
+    /// so unloaded members in large guilds do not expose a failing Ban button
+    /// (`GuildModerationCapabilityUtils.ts:28-35`, `PermissionUtils.ts:228-237`);
+    /// ban-by-ID entry itself is governed by [`Self::can_ban_members`].
+    pub fn can_ban_member(&self, guild_id: Snowflake, target_id: Snowflake) -> bool {
+        self.can_ban_members(guild_id) && self.can_manage_guild_member(guild_id, target_id)
+    }
+
+    /// True when the current user may timeout (or remove timeout from) `target_id`.
+    /// Guild administrators cannot be timed out.
+    pub fn can_timeout_member(&self, guild_id: Snowflake, target_id: Snowflake) -> bool {
+        if !self.can_moderate_members(guild_id) || !self.can_manage_guild_member(guild_id, target_id) {
+            return false;
+        }
+        let Some(guild) = self.guilds.get(&guild_id) else { return false };
+        let target_member = self.members.get(&guild_id).and_then(|m| m.get(&target_id));
+        !has(compute_permissions(guild, target_id, target_member, None), bits::ADMINISTRATOR)
+    }
+
+    /// True when the current user may edit `target_id`'s guild nickname at `now_ms`.
+    /// Self edits require `CHANGE_NICKNAME` and not being timed out
+    /// (`GuildModerationCapabilityUtils.ts:85-89`).
+    pub fn can_edit_member_nickname(&self, guild_id: Snowflake, target_id: Snowflake, now_ms: i64) -> bool {
+        let Some(me) = self.current_user_id() else { return false };
+        let Some(guild) = self.guilds.get(&guild_id) else { return false };
+        if guild.visiting {
+            return false;
+        }
+        if me == target_id {
+            let Some(me_member) = self.members.get(&guild_id).and_then(|m| m.get(&me)) else {
+                return false;
+            };
+            return self.can_change_own_nickname(guild_id) && !me_member.is_timed_out(now_ms);
+        }
+        self.can_manage_nicknames(guild_id) && self.can_manage_guild_member(guild_id, target_id)
+    }
+
+    fn can_manage_guild_member(&self, guild_id: Snowflake, target_id: Snowflake) -> bool {
+        let Some(me) = self.current_user_id() else { return false };
+        let Some(guild) = self.guilds.get(&guild_id) else { return false };
+        let members = self.members.get(&guild_id);
+        can_manage_target_member(
+            guild,
+            me,
+            members.and_then(|m| m.get(&me)),
+            target_id,
+            members.and_then(|m| m.get(&target_id)),
+        )
     }
 
     /// Whether the current user is timed out in `channel`'s guild
@@ -380,5 +456,129 @@ mod tests {
             }),
         ));
         assert!(state.channel_tree(sf(GUILD)).iter().any(|n| n.channel.id == sf(empty_cat)));
+    }
+
+    #[test]
+    fn member_moderation_hierarchy_and_timeout_protection() {
+        let mut state = ready_state();
+        let mod_user = 401;
+        let peer_mod = 402;
+        let low_user = 403;
+        let admin_user = 404;
+        let non_member = 405;
+        let role_mod_high = 1010;
+        let role_mod_tie_lower_id = 1009; // same position as role_mod_high -> lower id wins
+        let role_low = 1011;
+
+        for r in [
+            json!({
+                "id": role_mod_high.to_string(),
+                "name": "mod-high",
+                "position": 5,
+                "permissions": (bits::KICK_MEMBERS | bits::BAN_MEMBERS | bits::MODERATE_MEMBERS | bits::MANAGE_NICKNAMES).to_string()
+            }),
+            json!({
+                "id": role_mod_tie_lower_id.to_string(),
+                "name": "mod-tie",
+                "position": 5,
+                "permissions": (bits::KICK_MEMBERS | bits::BAN_MEMBERS).to_string()
+            }),
+            json!({
+                "id": role_low.to_string(),
+                "name": "low",
+                "position": 1,
+                "permissions": "0"
+            }),
+        ] {
+            state.apply(&dispatch("GUILD_ROLE_CREATE", json!({ "guild_id": GUILD.to_string(), "role": r })));
+        }
+        for (uid, roles) in [
+            (mod_user, vec![role_mod_high]),
+            (peer_mod, vec![role_mod_tie_lower_id]),
+            (low_user, vec![role_low]),
+            (admin_user, vec![ROLE_ADMIN]),
+            (OWNER, vec![]),
+        ] {
+            let role_strs: Vec<String> = roles.into_iter().map(|id| id.to_string()).collect();
+            state.apply(&dispatch(
+                "GUILD_MEMBER_ADD",
+                json!({
+                    "guild_id": GUILD.to_string(),
+                    "user": user_json(uid, "u"),
+                    "roles": role_strs,
+                    "joined_at": "2020-01-01T00:00:00+00:00"
+                }),
+            ));
+        }
+
+        // Plain ME cannot moderate others, can change own nick via DEFAULT permissions.
+        let now_ms = 1_000_000_i64;
+        assert!(!state.can_kick_member(sf(GUILD), sf(low_user)));
+        assert!(!state.can_ban_member(sf(GUILD), sf(low_user)));
+        assert!(!state.can_timeout_member(sf(GUILD), sf(low_user)));
+        assert!(state.can_edit_member_nickname(sf(GUILD), sf(ME), now_ms));
+        assert!(!state.can_edit_member_nickname(sf(GUILD), sf(low_user), now_ms));
+
+        // ME gets mod_high (pos 5, id 1010): beats low_user (pos 1), loses tie to peer_mod (pos 5, id 1009).
+        state.members.get_mut(&sf(GUILD)).unwrap().get_mut(&sf(ME)).unwrap().roles = vec![sf(role_mod_high)];
+        assert!(state.can_kick_member(sf(GUILD), sf(low_user)));
+        assert!(state.can_ban_member(sf(GUILD), sf(low_user)));
+        assert!(state.can_timeout_member(sf(GUILD), sf(low_user)));
+        assert!(state.can_edit_member_nickname(sf(GUILD), sf(low_user), now_ms));
+        // Tie-breaker & owner & self protection.
+        assert!(!state.can_kick_member(sf(GUILD), sf(peer_mod)));
+        assert!(!state.can_ban_member(sf(GUILD), sf(peer_mod)));
+        assert!(!state.can_kick_member(sf(GUILD), sf(OWNER)));
+        assert!(!state.can_ban_member(sf(GUILD), sf(OWNER)));
+        assert!(!state.can_kick_member(sf(GUILD), sf(ME)));
+        assert!(!state.can_ban_member(sf(GUILD), sf(ME)));
+        assert!(!state.can_timeout_member(sf(GUILD), sf(ME)));
+        // Unloaded/unknown targets do not expose can_ban_member (can_ban_members still gates Bans entry).
+        assert!(state.can_ban_members(sf(GUILD)));
+        assert!(!state.can_ban_member(sf(GUILD), sf(non_member)));
+        assert!(!state.can_kick_member(sf(GUILD), sf(non_member)));
+        assert!(!state.can_timeout_member(sf(GUILD), sf(non_member)));
+        assert!(!state.can_edit_member_nickname(sf(GUILD), sf(non_member), now_ms));
+
+        // MANAGE_NICKNAMES without CHANGE_NICKNAME does not allow self nickname edits;
+        // timed-out self also cannot change own nickname even with CHANGE_NICKNAME.
+        {
+            let everyone = state.guilds.get_mut(&sf(GUILD)).unwrap().roles.get_mut(&sf(GUILD)).unwrap();
+            everyone.permissions &= !bits::CHANGE_NICKNAME;
+        }
+        assert!(!state.can_edit_member_nickname(sf(GUILD), sf(ME), now_ms));
+        {
+            let everyone = state.guilds.get_mut(&sf(GUILD)).unwrap().roles.get_mut(&sf(GUILD)).unwrap();
+            everyone.permissions |= bits::CHANGE_NICKNAME;
+        }
+        assert!(state.can_edit_member_nickname(sf(GUILD), sf(ME), now_ms));
+        state
+            .members
+            .get_mut(&sf(GUILD))
+            .unwrap()
+            .get_mut(&sf(ME))
+            .unwrap()
+            .communication_disabled_until = Some("2099-01-01T00:00:00Z".to_owned());
+        assert!(!state.can_edit_member_nickname(sf(GUILD), sf(ME), now_ms));
+        state
+            .members
+            .get_mut(&sf(GUILD))
+            .unwrap()
+            .get_mut(&sf(ME))
+            .unwrap()
+            .communication_disabled_until = None;
+
+        // Even as owner, cannot timeout an administrator or self, and visiting blocks all.
+        state.guilds.get_mut(&sf(GUILD)).unwrap().owner_id = Some(sf(ME));
+        assert!(state.can_kick_member(sf(GUILD), sf(admin_user)));
+        assert!(state.can_ban_member(sf(GUILD), sf(admin_user)));
+        assert!(!state.can_timeout_member(sf(GUILD), sf(admin_user)));
+        assert!(state.can_edit_member_nickname(sf(GUILD), sf(admin_user), now_ms));
+        assert!(!state.can_kick_member(sf(GUILD), sf(ME)));
+
+        state.guilds.get_mut(&sf(GUILD)).unwrap().visiting = true;
+        assert!(!state.can_kick_member(sf(GUILD), sf(low_user)));
+        assert!(!state.can_ban_member(sf(GUILD), sf(low_user)));
+        assert!(!state.can_edit_member_nickname(sf(GUILD), sf(ME), now_ms));
     }
 }

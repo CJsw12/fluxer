@@ -63,6 +63,17 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         ),
                     )
                 })
+                .when(view.can_ban_members, |d| {
+                    d.child(
+                        div().debug_selector(|| "guild-bans-btn".to_owned()).child(
+                            Button::new("guild-bans-btn")
+                                .ghost()
+                                .xsmall()
+                                .label(l10n::tr("Bans"))
+                                .on_click(cx.listener(|this, _, window, cx| this.open_guild_bans(window, cx))),
+                        ),
+                    )
+                })
                 .when(can_leave, |d| {
                     d.child(
                         div().debug_selector(|| "leave-guild-btn".to_owned()).child(

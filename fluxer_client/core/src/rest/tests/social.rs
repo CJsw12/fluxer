@@ -428,3 +428,106 @@ async fn guild_channel_crud_routes() {
     ));
     assert_eq!(fixture.requests().len(), 3);
 }
+
+#[tokio::test]
+async fn guild_member_moderation_routes() {
+    let fixture = Fixture::start(|req, _| match (req.method.as_str(), req.target.as_str()) {
+        ("GET", t) if t.ends_with("/bans") => Resp::json(
+            200,
+            json!([{
+                "user": { "id": USER, "username": "alice", "global_name": "Alice" },
+                "reason": "spam",
+                "banned_at": "2026-11-19T00:00:00Z"
+            }]),
+        ),
+        ("DELETE", _) => Resp::empty(204),
+        ("PUT", _) => Resp::empty(204),
+        _ => Resp::json(200, json!({ "user": { "id": USER, "username": "alice" }, "roles": [] })),
+    })
+    .await;
+    let client = authed(&fixture).await;
+
+    client.kick_guild_member(GUILD, USER, Some("규칙 위반")).await.unwrap();
+    client
+        .ban_guild_member(
+            GUILD,
+            USER,
+            &BanMemberRequest {
+                delete_message_seconds: Some(3600),
+                reason: Some("  스팸 도배  ".into()),
+                ban_duration_seconds: Some(86_400),
+            },
+        )
+        .await
+        .unwrap();
+    let bans = client.list_guild_bans(GUILD).await.unwrap();
+    assert_eq!(bans.len(), 1);
+    assert_eq!(bans[0].user.username, "alice");
+    assert_eq!(bans[0].reason.as_deref(), Some("spam"));
+    client.unban_guild_member(GUILD, USER, Some("해제")).await.unwrap();
+    client
+        .update_guild_member(
+            GUILD,
+            USER,
+            &GuildMemberPatch {
+                nick: Some(None),
+                communication_disabled_until: Some(None),
+                timeout_reason: Some("사유".into()),
+            },
+            Some("  정정  "),
+        )
+        .await
+        .unwrap();
+    client
+        .update_own_guild_member(
+            GUILD,
+            &GuildMemberPatch { nick: Some(Some("  MyNick  ".into())), ..Default::default() },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        lines(&fixture),
+        vec![
+            l("DELETE", format!("/api/v1/guilds/{GUILD}/members/{USER}")),
+            l("PUT", format!("/api/v1/guilds/{GUILD}/bans/{USER}")),
+            l("GET", format!("/api/v1/guilds/{GUILD}/bans")),
+            l("DELETE", format!("/api/v1/guilds/{GUILD}/bans/{USER}")),
+            l("PATCH", format!("/api/v1/guilds/{GUILD}/members/{USER}")),
+            l("PATCH", format!("/api/v1/guilds/{GUILD}/members/@me")),
+        ]
+    );
+    let reqs = fixture.requests();
+    assert_eq!(reqs[0].header("x-audit-log-reason"), Some(encode_uri_component("규칙 위반").as_str()));
+    assert_eq!(reqs[1].header("x-audit-log-reason"), Some(encode_uri_component("스팸 도배").as_str()));
+    assert_eq!(
+        reqs[1].json(),
+        json!({ "delete_message_seconds": 3600, "reason": "스팸 도배", "ban_duration_seconds": 86_400 })
+    );
+    assert_eq!(reqs[3].header("x-audit-log-reason"), Some(encode_uri_component("해제").as_str()));
+    assert_eq!(reqs[4].header("x-audit-log-reason"), Some(encode_uri_component("정정").as_str()));
+    assert_eq!(
+        reqs[4].json(),
+        json!({ "nick": null, "communication_disabled_until": null, "timeout_reason": "사유" })
+    );
+    assert_eq!(reqs[5].header("x-audit-log-reason"), None);
+    assert_eq!(reqs[5].json(), json!({ "nick": "MyNick" }));
+
+    assert!(matches!(
+        client
+            .update_own_guild_member(
+                GUILD,
+                &GuildMemberPatch {
+                    communication_disabled_until: Some(Some("2026-12-01T00:00:00Z".into())),
+                    ..Default::default()
+                },
+            )
+            .await,
+        Err(RestError::InvalidArgument("communication_disabled_until"))
+    ));
+    assert!(matches!(
+        client.kick_guild_member(GUILD, "@me", None).await,
+        Err(RestError::InvalidArgument("user_id"))
+    ));
+    assert_eq!(fixture.requests().len(), 6);
+}

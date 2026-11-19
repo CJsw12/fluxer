@@ -56,6 +56,8 @@ mod tests_keyboard;
 #[cfg(test)]
 mod tests_media_display;
 #[cfg(test)]
+mod tests_moderation;
+#[cfg(test)]
 mod tests_notify_upload;
 #[cfg(test)]
 mod tests_profile;

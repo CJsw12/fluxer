@@ -221,23 +221,12 @@ impl MessageStore {
         let expected_older = PAGE_SIZE.saturating_sub(1 + expected_newer);
         let is_at_known_latest =
             known_latest.is_some() && newest_first.first().map(|m| m.id) == known_latest;
-        let (has_more_before, has_more_after) =
-            if let Some(target_ix) = newest_first.iter().position(|m| m.id == target) {
-                let messages_newer = target_ix;
-                let messages_older = newest_first.len().saturating_sub(target_ix + 1);
-                (
-                    expected_older > 0 && messages_older >= expected_older,
-                    expected_newer > 0 && messages_newer >= expected_newer && !is_at_known_latest,
-                )
-            } else if newest_first.is_empty() {
-                (false, false)
-            } else {
-                let fetched_past_target = newest_first.first().is_none_or(|m| m.id > target);
-                (
-                    newest_first.len() >= PAGE_SIZE,
-                    fetched_past_target && newest_first.len() >= expected_newer && !is_at_known_latest,
-                )
-            };
+        // A read cursor can be synthetic or refer to a deleted message.
+        // The server still fills separate slices on either side of it.
+        let messages_newer = newest_first.iter().filter(|m| m.id > target).count();
+        let messages_older = newest_first.iter().filter(|m| m.id < target).count();
+        let has_more_before = expected_older > 0 && messages_older >= expected_older;
+        let has_more_after = expected_newer > 0 && messages_newer >= expected_newer && !is_at_known_latest;
         self.apply_around_slice(channel_id, newest_first, has_more_before, has_more_after);
     }
 

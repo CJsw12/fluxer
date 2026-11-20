@@ -60,6 +60,7 @@ impl ClientView {
         self.cancel_ack();
         let old_channel = self.selected_channel.take();
         self.loading_history = false;
+        self.unread_anchor = None;
         self.pending_jump = None;
         self.highlighted_message = None;
         self.group_dm = None;
@@ -84,14 +85,21 @@ impl ClientView {
         let last = {
             let state = self.backend.state();
             let unread = state.channel_unread(channel_id);
-            if !unread.unread && unread.mention_count == 0 {
-                return;
-            }
-            state.channels.get(&channel_id).and_then(|c| c.last_message_id)
+            state.channels.get(&channel_id)
+                .filter(|_| unread.unread || unread.mention_count > 0)
+                .and_then(|channel| channel.last_message_id)
         };
-        let Some(last) = last else { return };
+        if self.unread_anchor.take().is_none() && last.is_none() {
+            return;
+        }
         self.cancel_ack();
-        self.backend.ack(channel_id, last);
+        if let Some(last) = last {
+            self.backend.ack(channel_id, last);
+        }
+        if self.has_more_after && !self.loading_history {
+            self.jump_to_present(cx);
+            return;
+        }
         self.scroller.update(cx, |s, cx| s.scroll_to_end(cx));
         self.refresh(cx);
     }

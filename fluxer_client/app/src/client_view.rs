@@ -200,8 +200,8 @@ pub struct ClientView {
     /// Monotonic counter shared across open/close of the search panel so stale
     /// responses from an earlier panel never apply to a reopened panel.
     pub(crate) search_seq: u64,
-    /// Historical message waiting for its `?around=` page before scrolling/highlighting.
-    pub(crate) pending_jump: Option<(Snowflake, Snowflake)>,
+    /// Historical jump waiting for its `?around=` page.
+    pub(crate) pending_jump: Option<(Snowflake, unread::JumpTarget)>,
     /// Currently highlighted message `(channel_id, message_id)` after jumping.
     pub(crate) highlighted_message: Option<(Snowflake, Snowflake)>,
     /// Ignores transient pre-layout scroller observer ticks right after a programmatic jump.
@@ -844,19 +844,13 @@ impl ClientView {
                 });
             });
         }
-        if let Some((jump_ch, jump_msg)) = self.pending_jump
+        if let Some((jump_ch, target)) = self.pending_jump
             && Some(jump_ch) == self.selected_channel
             && !self.loading_history
         {
             self.pending_jump = None;
-            if let Some(ix) = self.rows.borrow().iter().position(|r| r.id == jump_msg) {
-                self.suppress_jump_scroll = true;
-                self.scroller.update(cx, |s, cx| {
-                    s.scroll_to_item(ix, cx);
-                });
-                self.highlighted_message = Some((jump_ch, jump_msg));
-            } else if self.error.is_none() {
-                self.error = Some(l10n::tr("Message not found").into());
+            if !self.reveal_jump(jump_ch, target, cx) && self.error.is_none() {
+                self.error = Some(l10n::tr(target.missing_label()).into());
             }
             cx.notify();
         }
@@ -1080,6 +1074,9 @@ impl ClientView {
                 .is_some_and(|id| state.can_manage_channel(id));
             match self.selected_channel {
                 Some(id) => {
+                    if self.unread_anchor.is_none() && self.scroller.read(cx).is_scrolled_up() {
+                        self.unread_anchor = state.unread_anchor(id);
+                    }
                     let channel = state.channels.get(&id);
                     let topic = channel
                         .and_then(|c| c.topic.as_deref())
@@ -1248,7 +1245,7 @@ impl ClientView {
             self.cancel_ack();
             return;
         };
-        if self.loading_history || self.has_more_after || self.scroller.read(cx).is_scrolled_up() {
+        if self.loading_history || self.pending_jump.is_some() || self.has_more_after || self.scroller.read(cx).is_scrolled_up() {
             self.cancel_ack();
             return;
         }
@@ -1812,15 +1809,9 @@ impl ClientView {
         }
         if already_loaded {
             self.pending_jump = None;
-            if let Some(ix) = self.rows.borrow().iter().position(|r| r.id == message_id) {
-                self.suppress_jump_scroll = true;
-                self.scroller.update(cx, |s, cx| {
-                    s.scroll_to_item(ix, cx);
-                });
-                self.highlighted_message = Some((channel_id, message_id));
-            }
+            self.reveal_jump(channel_id, unread::JumpTarget::Message(message_id), cx);
         } else {
-            self.pending_jump = Some((channel_id, message_id));
+            self.pending_jump = Some((channel_id, unread::JumpTarget::Message(message_id)));
             self.highlighted_message = None;
             self.loading_history = true;
             self.backend.load_around(channel_id, message_id);
@@ -2128,6 +2119,9 @@ impl Render for ClientView {
                     // Files dropped anywhere on the message pane go to the tray.
                     .on_drop(cx.listener(|v, paths: &ExternalPaths, _, cx| v.add_paths(paths.paths(), cx)))
                     .child(ui::header::render(self, &theme, cx))
+                    .when(self.selected_channel.is_some() && self.unread_anchor.is_some(), |d| {
+                        d.child(self.render_unread_bar(&theme, cx))
+                    })
                     .child(ui::message_list::render(self, handle, &theme))
                     .when(self.has_more_after && self.selected_channel.is_some(), |d| {
                         d.child(self.render_jump_to_present(&theme, cx))
@@ -2174,6 +2168,7 @@ impl ClientView {
 
 mod keyboard;
 mod notify_upload;
+mod unread;
 
 impl Drop for ClientView {
     fn drop(&mut self) {

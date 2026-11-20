@@ -367,3 +367,88 @@ fn jump_to_in_window_around_boundaries_and_jump_to_present(cx: &mut TestAppConte
 
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn unread_bar_jumps_inside_the_loaded_page_and_marks_read(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, cx) = open_client(cx, backend.clone(), events);
+    view.update(cx, |v, cx| v.select_place(Place::Guild(GUILD), cx));
+    cx.run_until_parked();
+    draw(cx);
+    lock_sent(&backend.page_loads).clear();
+
+    let jump = cx.debug_bounds("jump-to-unread-btn").unwrap().center();
+    cx.simulate_click(jump, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    assert_eq!(view.read_with(cx, |v, _| v.highlighted_message), Some((GENERAL, msg_id(2))));
+    assert!(lock_sent(&backend.page_loads).is_empty());
+    cx.executor().advance_clock(crate::ack::ACK_DELAY);
+    cx.run_until_parked();
+    assert!(backend.state().channel_unread(GENERAL).unread);
+
+    let mark_read = cx.debug_bounds("mark-unread-bar-read-btn").unwrap().center();
+    cx.simulate_click(mark_read, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    assert!(!backend.state().channel_unread(GENERAL).unread);
+    assert_eq!(backend.state().channel_unread(GENERAL).mention_count, 0);
+    assert!(cx.debug_bounds("unread-bar").is_none());
+    assert!(view.read_with(cx, |v, _| v.rows.borrow().iter().all(|row| !row.new_divider)));
+}
+
+#[gpui_kit::test]
+fn unread_jump_fetches_around_a_deleted_cursor_without_acknowledging_the_tail(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let read = msg_id(75);
+    let latest = msg_id(150);
+    {
+        let mut state = backend.state();
+        state.channels.get_mut(&GENERAL).unwrap().last_message_id = Some(latest);
+        state.read_states.get_mut(&GENERAL).unwrap().ack_message_id = Some(read);
+        let page = (101..=150).rev().map(|id| make_message(msg_id(id), GENERAL, 201, "Alice", "latest page")).collect();
+        state.messages.load(GENERAL, page, LoadMode::Replace);
+    }
+    let (view, cx) = open_client(cx, backend.clone(), events);
+    view.update(cx, |v, cx| v.select_place(Place::Guild(GUILD), cx));
+    cx.run_until_parked();
+    draw(cx);
+    lock_sent(&backend.page_loads).clear();
+
+    let jump = cx.debug_bounds("jump-to-unread-btn").unwrap().center();
+    cx.simulate_click(jump, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    cx.simulate_click(jump, Modifiers::default());
+    cx.run_until_parked();
+    assert_eq!(*lock_sent(&backend.page_loads), vec![(GENERAL, LoadMode::Around, Some(read))]);
+    view.update(cx, |v, cx| {
+        v.handle_events(vec![UiEvent::HistoryLoaded { channel_id: ANNOUNCEMENTS, error: None }], cx);
+    });
+    assert!(view.read_with(cx, |v, _| v.loading_history));
+
+    let around = (51..=100).rev().filter(|&id| id != 75)
+        .map(|id| make_message(msg_id(id), GENERAL, 201, "Alice", "around read cursor")).collect();
+    backend.state().messages.load_around(GENERAL, around, read, Some(latest));
+    view.update(cx, |v, cx| {
+        v.handle_events(vec![UiEvent::HistoryLoaded { channel_id: GENERAL, error: None }], cx);
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert_eq!(view.read_with(cx, |v, _| v.highlighted_message), Some((GENERAL, msg_id(76))));
+    assert!(backend.state().messages.window(GENERAL).unwrap().has_more_before);
+    assert!(view.read_with(cx, |v, _| v.has_more_after));
+    cx.executor().advance_clock(crate::ack::ACK_DELAY);
+    cx.run_until_parked();
+    assert_eq!(backend.state().read_states[&GENERAL].ack_message_id, Some(read));
+
+    let mark_read = cx.debug_bounds("mark-unread-bar-read-btn").unwrap().center();
+    cx.simulate_click(mark_read, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    assert_eq!(backend.state().read_states[&GENERAL].ack_message_id, Some(latest));
+    assert_eq!(lock_sent(&backend.page_loads).last(), Some(&(GENERAL, LoadMode::Replace, None)));
+    assert!(cx.debug_bounds("unread-bar").is_none());
+}

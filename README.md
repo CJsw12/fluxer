@@ -6,9 +6,9 @@
 
 [![Rust 클라이언트 전체](docs/progress/badge-overall.svg)](docs/progress/progress.json) [![일상 사용 기준](docs/progress/badge-daily-driver.svg)](docs/progress/progress.json)
 
-**최근 업데이트 · 2026-11-20 · 마일스톤 10**
+**최근 업데이트 · 2026-11-20 · 마일스톤 11**
 
-길드 역할 관리, 채널·카테고리 권한 편집, 카테고리 이동 시 권한 동기화를 구현했습니다. 워크스페이스 테스트 542건이 통과했으며, 실서버 GUI 검증은 남아 있습니다. [상세 진행 기록](PROGRESS.md)
+채널의 첫 읽지 않은 메시지로 이동하고 읽음 처리할 수 있습니다. 워크스페이스 테스트 544건이 통과했으며, 실서버 GUI 검증은 남아 있습니다. [상세 진행 기록](PROGRESS.md)
 
 [![진행 지도](docs/progress/progress.svg)](docs/progress/progress.json)
 

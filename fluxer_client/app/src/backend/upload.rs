@@ -48,7 +48,33 @@ impl Backend {
             }
             let author = state.current_user.clone()?;
             let author_id = author.id;
-            state.messages.insert_pending(channel_id, nonce, pending_text(&content, &files), author);
+            let placeholders = files
+                .iter()
+                .enumerate()
+                .map(|(i, f)| fluxer_client_core::state::Attachment {
+                    id: Snowflake(i as u64),
+                    filename: f.filename.clone(),
+                    title: None,
+                    description: None,
+                    content_type: f.content_type.clone(),
+                    size: 0,
+                    url: None,
+                    proxy_url: None,
+                    width: None,
+                    height: None,
+                    placeholder: None,
+                    flags: f.flags,
+                    duration: None,
+                })
+                .collect();
+            state.messages.insert_pending_full(
+                channel_id,
+                nonce,
+                content.clone(),
+                author,
+                reply,
+                placeholders,
+            );
             (state.channels.get(&channel_id).and_then(|c| c.guild_id), author_id)
         };
         let request = SendMessageRequest {
@@ -107,6 +133,7 @@ impl Backend {
 }
 
 /// The pending row's text: the message, then a `📎 name` line per file.
+#[allow(dead_code)]
 fn pending_text(content: &str, files: &[UploadFile]) -> String {
     let mut text = content.to_owned();
     for file in files {

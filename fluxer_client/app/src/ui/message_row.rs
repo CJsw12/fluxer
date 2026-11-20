@@ -83,6 +83,34 @@ pub fn render(
         (MessageState::Sending, None) => Some(("sending…".into(), muted_fg)),
         (MessageState::Failed, _) => Some((l10n::tr("Failed to send message.").into(), theme.danger)),
     };
+    let (channel_id, message_id) = (row.actions.channel_id, row.id);
+    let can_retry = row.actions.can_retry;
+    let render_state_label = |label: SharedString, color: Hsla, view: &WeakEntity<ClientView>| -> AnyElement {
+        let mut el = div()
+            .flex()
+            .flex_row()
+            .items_baseline()
+            .gap_1()
+            .text_color(color)
+            .text_xs()
+            .child(label);
+        if can_retry {
+            let view_retry = view.clone();
+            el = el.child(
+                div()
+                    .id(SharedString::from(format!("retry-msg-{}", message_id.0)))
+                    .debug_selector(move || format!("retry-msg-{}", message_id.0))
+                    .cursor_pointer()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .hover(|s| s.underline())
+                    .on_click(move |_, _, cx| {
+                        let _ = view_retry.update(cx, |v, cx| v.retry_failed_message(channel_id, message_id, cx));
+                    })
+                    .child(l10n::tr("Try again")),
+            );
+        }
+        el.into_any_element()
+    };
     let author_id = row.author_id;
     let compact = sizes.compact;
     let mut content = div().flex().flex_col().flex_1().min_w_0();
@@ -110,7 +138,7 @@ pub fn render(
                 .gap_2()
                 .child(div().text_color(muted_fg).text_xs().child(row.time.clone()))
                 .child(author_btn)
-                .children(state_label.map(|(label, color)| div().text_color(color).text_xs().child(label)))
+                .children(state_label.map(|(label, color)| render_state_label(label, color, view)))
         } else {
             div()
                 .flex()
@@ -119,11 +147,11 @@ pub fn render(
                 .gap_2()
                 .child(author_btn)
                 .child(div().text_color(muted_fg).text_xs().child(row.time.clone()))
-                .children(state_label.map(|(label, color)| div().text_color(color).text_xs().child(label)))
+                .children(state_label.map(|(label, color)| render_state_label(label, color, view)))
         };
         content = content.child(header);
     } else if let Some((label, color)) = state_label {
-        content = content.child(div().text_color(color).text_xs().child(label));
+        content = content.child(render_state_label(label, color, view));
     }
     if let Some(document) = &row.document {
         let view_link = view.clone();

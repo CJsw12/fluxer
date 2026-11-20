@@ -1707,7 +1707,14 @@ impl ClientView {
             }
             MessageAction::Reply => self.start_reply(channel_id, message_id, window, cx),
             MessageAction::Edit => self.start_edit(channel_id, message_id, window, cx),
-            MessageAction::Delete => self.confirm_delete(channel_id, message_id, window, cx),
+            MessageAction::Retry => self.retry_failed_message(channel_id, message_id, cx),
+            MessageAction::Delete => {
+                if target.sent {
+                    self.confirm_delete(channel_id, message_id, window, cx);
+                } else {
+                    self.delete_message(channel_id, message_id, window, cx);
+                }
+            }
             MessageAction::DeleteNow => self.delete_message(channel_id, message_id, window, cx),
             MessageAction::CopyText | MessageAction::CopyId => {
                 message_actions::copy_to_clipboard(action, target, cx);
@@ -1776,6 +1783,13 @@ impl ClientView {
             self.set_composer(restore, window, cx);
         }
         self.refresh(cx);
+    }
+
+    pub(crate) fn retry_failed_message(&mut self, channel_id: Snowflake, message_id: Snowflake, cx: &mut Context<Self>) {
+        if self.backend.retry_failed_message(channel_id, message_id) {
+            self.error = None;
+            self.refresh(cx);
+        }
     }
 
     /// A reaction pill was clicked: adds or removes the user's reaction.

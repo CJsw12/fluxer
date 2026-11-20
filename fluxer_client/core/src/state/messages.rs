@@ -6,6 +6,7 @@ use std::collections::{HashMap, VecDeque};
 
 use serde::Serialize;
 
+use super::content::{MESSAGE_TYPE_REPLY, MessageReference};
 use super::ids::Snowflake;
 use super::model::{Message, MessageState, User, overlay};
 
@@ -268,6 +269,59 @@ impl MessageStore {
         content: String,
         author: User,
     ) {
+        self.insert_pending_with_reply(channel_id, nonce, content, author, None);
+    }
+
+    /// Optimistic send with an optional reply target `(target_message_id, mention_replied_user)`.
+    /// When `reply` is `Some((target_id, mention))`, sets `kind = MESSAGE_TYPE_REPLY`,
+    /// `message_reference`, snapshots the target message into `referenced_message`
+    /// if currently loaded, and stores `author` in `mentions` when `mention` is true
+    /// so `retry_failed` can reconstruct `allowed_mentions.replied_user`.
+    pub fn insert_pending_with_reply(
+        &mut self,
+        channel_id: Snowflake,
+        nonce: Snowflake,
+        content: String,
+        author: User,
+        reply: Option<(Snowflake, bool)>,
+    ) {
+        self.insert_pending_full(channel_id, nonce, content, author, reply, Vec::new());
+    }
+
+    /// Optimistic send with an optional reply target and placeholder attachments
+    /// (`attachments` marks that the pending row is an attachment upload so a
+    /// failed upload row is not retried as plain text).
+    pub fn insert_pending_full(
+        &mut self,
+        channel_id: Snowflake,
+        nonce: Snowflake,
+        content: String,
+        author: User,
+        reply: Option<(Snowflake, bool)>,
+        attachments: Vec<super::content::Attachment>,
+    ) {
+        let (kind, message_reference, referenced_message, mentions) = match reply {
+            Some((target_id, mention)) => {
+                let target_msg = self.message(channel_id, target_id).cloned();
+                let mentions = if mention {
+                    vec![author.clone()]
+                } else {
+                    Vec::new()
+                };
+                (
+                    MESSAGE_TYPE_REPLY,
+                    Some(MessageReference {
+                        message_id: Some(target_id),
+                        channel_id: Some(channel_id),
+                        guild_id: None,
+                        kind: 0,
+                    }),
+                    target_msg.map(|m| Some(Box::new(m))),
+                    mentions,
+                )
+            }
+            None => (0, None, None, Vec::new()),
+        };
         let message = Message {
             id: nonce,
             channel_id,
@@ -276,18 +330,18 @@ impl MessageStore {
             content,
             timestamp: String::new(),
             edited_timestamp: None,
-            kind: 0,
+            kind,
             flags: 0,
             pinned: false,
             mention_everyone: false,
-            mentions: Vec::new(),
+            mentions,
             mention_roles: Vec::new(),
-            attachments: Vec::new(),
+            attachments,
             embeds: Vec::new(),
             stickers: Vec::new(),
             reactions: Vec::new(),
-            message_reference: None,
-            referenced_message: None,
+            message_reference,
+            referenced_message,
             webhook_id: None,
             nonce: Some(nonce.to_string()),
             state: MessageState::Sending,

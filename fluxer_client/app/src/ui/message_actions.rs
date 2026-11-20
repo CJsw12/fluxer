@@ -24,6 +24,8 @@ pub enum MessageAction {
     Reply,
     /// Edit the message (composer goes to `Editing`); own messages only.
     Edit,
+    /// Retry sending a failed local message (`MessageStates.FAILED`).
+    Retry,
     /// Delete after the confirm dialog ([`confirm_delete`]).
     Delete,
     /// Shift+click on delete: delete without confirming (TS behavior).
@@ -45,6 +47,10 @@ pub struct ActionTarget {
     pub can_delete: bool,
     /// Sent (not pending/failed): react/reply/edit need a server id.
     pub sent: bool,
+    /// Failed local send (`MessageState::Failed`): retry is offered when
+    /// retryable in place (plain text or reply; failed file uploads restore
+    /// their files to the attachment tray instead).
+    pub can_retry: bool,
     pub content: SharedString,
     /// Author, or Manage Messages outside DMs (`canSuppressEmbeds`), on a
     /// message with embeds or with them already suppressed.
@@ -60,12 +66,17 @@ impl ActionTarget {
         let in_dm = state.channels.get(&message.channel_id).is_none_or(|c| c.guild_id.is_none());
         let embeds_suppressed = message.suppresses_embeds();
         let has_embeds = embeds_suppressed || !message.embeds.is_empty();
+        let can_retry = message.state == MessageState::Failed
+            && message.nonce.is_some()
+            && message.attachments.is_empty()
+            && state.can_send_messages(message.channel_id);
         Self {
             channel_id: message.channel_id,
             message_id: message.id,
             own,
             can_delete: own || manage,
             sent: message.state == MessageState::Sent,
+            can_retry,
             content: message.content.clone().into(),
             can_suppress_embeds: has_embeds && (own || (manage && !in_dm)),
             embeds_suppressed,
@@ -81,6 +92,8 @@ pub fn available_actions(target: &ActionTarget) -> Vec<MessageAction> {
         if target.own {
             actions.push(MessageAction::Edit);
         }
+    } else if target.can_retry {
+        actions.push(MessageAction::Retry);
     }
     if target.sent && target.can_suppress_embeds {
         actions.push(MessageAction::SuppressEmbeds);
@@ -155,6 +168,7 @@ fn tooltip(action: MessageAction, target: &ActionTarget) -> String {
         MessageAction::React => l10n::tr("Add reaction"),
         MessageAction::Reply => l10n::tr("Reply"),
         MessageAction::Edit => l10n::tr("Edit"),
+        MessageAction::Retry => l10n::tr("Try again"),
         MessageAction::Delete | MessageAction::DeleteNow => l10n::tr("Delete"),
         MessageAction::CopyText => l10n::tr("Copy text"),
         MessageAction::CopyId => l10n::tr("Copy message ID"),
@@ -169,6 +183,7 @@ fn icon(action: MessageAction, target: &ActionTarget) -> IconName {
         MessageAction::React => IconName::FaceSlightlySmilingPlus,
         MessageAction::Reply => IconName::Reply,
         MessageAction::Edit => IconName::Pencil,
+        MessageAction::Retry => IconName::RotateCw,
         MessageAction::CopyText => IconName::Copy,
         MessageAction::CopyId => IconName::Hash,
         MessageAction::Delete | MessageAction::DeleteNow => IconName::Trash,
@@ -318,6 +333,7 @@ mod tests {
             own,
             can_delete,
             sent,
+            can_retry: false,
             content: content.to_owned().into(),
             can_suppress_embeds: false,
             embeds_suppressed: false,
@@ -330,8 +346,10 @@ mod tests {
         assert_eq!(available_actions(&target(true, true, true, "hi")), vec![React, Reply, Edit, CopyText, CopyId, Delete]);
         assert_eq!(available_actions(&target(false, false, true, "hi")), vec![React, Reply, CopyText, CopyId]);
         assert_eq!(available_actions(&target(false, true, true, "")), vec![React, Reply, CopyId, Delete]);
-        // A failed local message can only be copied or discarded.
+        // A failed local message can be retried (when retryable), copied or discarded.
         assert_eq!(available_actions(&target(true, true, false, "x")), vec![CopyText, Delete]);
+        let retryable = ActionTarget { can_retry: true, ..target(true, true, false, "x") };
+        assert_eq!(available_actions(&retryable), vec![Retry, CopyText, Delete]);
         // Suppress Embeds sits before the copy actions, only when sent.
         let with_embeds = ActionTarget { can_suppress_embeds: true, ..target(true, true, true, "hi") };
         assert_eq!(

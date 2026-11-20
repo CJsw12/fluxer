@@ -800,6 +800,60 @@ fn reply_sends_a_message_reference(cx: &mut TestAppContext) {
     drop(rt);
 }
 
+#[gpui_kit::test]
+fn failed_message_and_reply_retry_in_place_or_delete_without_dialog(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, cx) = open_general(cx, backend.clone(), events);
+    let target = action_target(&view, 1, cx);
+    view.update_in(cx, |v, window, cx| v.message_action(MessageAction::Reply, &target, window, cx));
+    let _composer = focus_composer(&view, cx);
+    cx.simulate_input("retry me");
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    draw(cx);
+
+    let (_, first_post) = lock_sent(&backend.sent).last().cloned().expect("initial POST");
+    let nonce = Snowflake::parse(&first_post.nonce).expect("nonce");
+    assert_eq!(backend.state().messages.mark_failed(nonce), Some(GENERAL));
+    refresh(&view, cx);
+
+    let failed_target = view.read_with(cx, |v, _| {
+        let rows = v.rows.borrow();
+        let last = rows.last().expect("failed row");
+        assert_eq!(last.id, nonce);
+        assert_eq!(last.state, MessageState::Failed);
+        assert!(last.reply.is_some(), "reply header kept on failed local reply");
+        assert!(last.actions.can_retry);
+        last.actions.clone()
+    });
+
+    // Clicking the inline "Try again" control re-posts under the same nonce with the reply reference.
+    click_selector(cx, format!("retry-msg-{}", nonce.0));
+    assert_eq!(lock_sent(&backend.sent).len(), 2);
+    let (ch, second_post) = lock_sent(&backend.sent).last().cloned().expect("retry POST");
+    assert_eq!(ch, GENERAL);
+    assert_eq!(second_post.nonce, first_post.nonce);
+    assert_eq!(second_post.content, first_post.content);
+    assert_eq!(second_post.message_reference, first_post.message_reference);
+    assert_eq!(second_post.allowed_mentions, first_post.allowed_mentions);
+    assert_eq!(
+        view.read_with(cx, |v, _| v.rows.borrow().last().map(|r| r.state)),
+        Some(MessageState::Sending),
+    );
+
+    // Mark failed again and delete via MessageAction::Delete: no confirm dialog opens for an unsent row.
+    use gpui_kit::component::WindowExt as _;
+    assert_eq!(backend.state().messages.mark_failed(nonce), Some(GENERAL));
+    refresh(&view, cx);
+    view.update_in(cx, |v, window, cx| v.message_action(MessageAction::Delete, &failed_target, window, cx));
+    cx.run_until_parked();
+    draw(cx);
+    assert!(!cx.update(|window, cx| window.has_active_dialog(cx)));
+    assert!(view.read_with(cx, |v, _| v.rows.borrow().iter().all(|r| r.id != nonce)));
+    drop(rt);
+}
+
 fn own_message_create(n: u64, content: &str) -> Dispatch {
     Dispatch {
         t: "MESSAGE_CREATE".to_owned(),

@@ -112,17 +112,23 @@ impl Backend {
         true
     }
 
-    /// Optimistic reply: a pending row now, then `POST .../messages` with a
-    /// `message_reference` to `reply_to` and `allowed_mentions.replied_user
-    /// = mention` (`useMessageSubmission.tsx`). The pending row has no reply
-    /// header; the server message that replaces it does. Returns false
-    /// before READY (no current user).
+    /// Optimistic reply: a pending row now (with reply reference and
+    /// mention flag preserved on the local row), then `POST .../messages`
+    /// with a `message_reference` to `reply_to` and
+    /// `allowed_mentions.replied_user = mention` (`useMessageSubmission.tsx`).
+    /// Returns false before READY (no current user).
     pub fn send_reply(&self, channel_id: Snowflake, content: String, reply_to: Snowflake, mention: bool) -> bool {
         let nonce = self.next_nonce();
         let guild_id = {
             let mut state = self.state();
             let Some(author) = state.current_user.clone() else { return false };
-            state.messages.insert_pending(channel_id, nonce, content.clone(), author);
+            state.messages.insert_pending_with_reply(
+                channel_id,
+                nonce,
+                content.clone(),
+                author,
+                Some((reply_to, mention)),
+            );
             state.channels.get(&channel_id).and_then(|c| c.guild_id)
         };
         let request = SendMessageRequest {
@@ -138,6 +144,58 @@ impl Backend {
             flags: 0,
         };
         self.post_message(channel_id, nonce, request, |err| UiEvent::ActionFailed { error: format!("Reply not sent: {err}") });
+        true
+    }
+
+    /// Retries a failed local message (`MessageRetryUtils.retryFailedMessage`):
+    /// transitions `Failed -> Sending` in place under the same nonce and
+    /// re-posts its content (and reply reference + `replied_user` mention
+    /// setting, if any). Returns false when the row is not in `Failed` state
+    /// or sending in the channel is not currently allowed.
+    pub fn retry_failed_message(&self, channel_id: Snowflake, nonce: Snowflake) -> bool {
+        let (request, is_reply) = {
+            let mut state = self.state();
+            if state.current_user_id().is_none() || !state.can_send_messages(channel_id) {
+                return false;
+            }
+            let Some(message) = state.messages.message(channel_id, nonce).cloned() else {
+                return false;
+            };
+            if message.state != MessageState::Failed
+                || message.channel_id != channel_id
+                || !message.attachments.is_empty()
+            {
+                return false;
+            }
+            let Some(nonce_str) = message.nonce.clone() else {
+                return false;
+            };
+            if state.messages.mark_sending(nonce) != Some(channel_id) {
+                return false;
+            }
+            let guild_id = state.channels.get(&channel_id).and_then(|c| c.guild_id);
+            let reply_target = message.reply_to();
+            let mention = !message.mentions.is_empty();
+            let request = SendMessageRequest {
+                content: (!message.content.is_empty()).then_some(message.content),
+                nonce: nonce_str,
+                message_reference: reply_target.map(|reply_to| MessageReference {
+                    message_id: reply_to.to_string(),
+                    channel_id: Some(channel_id.to_string()),
+                    guild_id: guild_id.map(|id| id.to_string()),
+                    kind: Some(0),
+                }),
+                allowed_mentions: reply_target.map(|_| json!({ "replied_user": mention })),
+                flags: u32::try_from(message.flags).unwrap_or(0),
+            };
+            (request, reply_target.is_some())
+        };
+        let failed: fn(String) -> UiEvent = if is_reply {
+            |err| UiEvent::ActionFailed { error: format!("Reply not sent: {err}") }
+        } else {
+            |error| UiEvent::SendFailed { error }
+        };
+        self.post_message(channel_id, nonce, request, failed);
         true
     }
 
@@ -317,7 +375,7 @@ mod tests {
             state.apply(&local_dispatch(
                 "READY",
                 json!({ "session_id": "session-1", "user": { "id": "100", "username": "me" },
-                        "guilds": [], "private_channels": [], "read_states": [] }),
+                        "guilds": [], "private_channels": [{ "id": CHANNEL.to_string(), "type": 1 }], "read_states": [] }),
             ));
             let page: Vec<Message> = [(2, "200", "second"), (1, "100", "first")]
                 .iter()
@@ -431,22 +489,31 @@ mod tests {
     }
 
     #[test]
-    fn failed_reply_marks_the_pending_row() {
+    fn failed_reply_marks_the_pending_row_and_retries_in_place() {
         let rt = runtime();
         let (backend, mut events) = backend(&rt);
         assert!(backend.send_reply(CHANNEL, "re".to_owned(), message_id(2), false));
         let error = next_failure(&rt, &mut events);
         assert!(error.starts_with("Reply not sent"), "{error}");
-        let state = backend.state();
-        let window = state.messages.window(CHANNEL).expect("window");
-        let last = window.messages.last().expect("pending row");
-        assert_eq!((last.content.as_str(), last.state), ("re", MessageState::Failed));
-        drop(state);
+        let nonce = {
+            let state = backend.state();
+            let window = state.messages.window(CHANNEL).expect("window");
+            let last = window.messages.last().expect("pending row");
+            assert_eq!((last.content.as_str(), last.state), ("re", MessageState::Failed));
+            assert_eq!(last.reply_to(), Some(message_id(2)));
+            last.id
+        };
+        // Retry transitions Failed -> Sending under the same nonce and re-posts with the reply reference.
+        assert!(!backend.retry_failed_message(CHANNEL, message_id(2)), "sent message cannot be retried");
+        assert!(backend.retry_failed_message(CHANNEL, nonce));
+        let error = next_failure(&rt, &mut events);
+        assert!(error.starts_with("Reply not sent"), "{error}");
+        assert_eq!(
+            backend.state().messages.message(CHANNEL, nonce).map(|m| m.state),
+            Some(MessageState::Failed),
+        );
         // A failed local row is deleted without REST.
-        let id = backend.state().messages.window(CHANNEL).and_then(|w| w.messages.last()).map(|m| m.id);
-        if let Some(id) = id {
-            backend.delete_message(CHANNEL, id);
-        }
+        backend.delete_message(CHANNEL, nonce);
         assert_eq!(backend.state().messages.window(CHANNEL).map(|w| w.messages.len()), Some(2));
     }
 

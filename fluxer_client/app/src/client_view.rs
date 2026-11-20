@@ -1441,7 +1441,8 @@ impl ClientView {
         if self.loading_history || !self.has_more_before {
             return;
         }
-        let (Some(channel_id), Some(oldest)) = (self.selected_channel, self.rows.borrow().first().map(|r| r.id)) else {
+        let oldest = self.rows.borrow().iter().find(|r| r.state == MessageState::Sent).map(|r| r.id);
+        let (Some(channel_id), Some(oldest)) = (self.selected_channel, oldest) else {
             return;
         };
         self.loading_history = true;

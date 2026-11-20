@@ -655,13 +655,14 @@ fn replace_keeps_unsent_messages_not_in_the_page() {
     assert_eq!(summary[5..], [("lost", MessageState::Failed), ("delivered", MessageState::Sent)]);
     assert_eq!(w.messages.len(), 7);
 
-    // A Before load into a window that is not ready replaces it, and unsent
-    // messages survive only a latest-page replace (`isWindowReplacement`).
+    // A Before load into a window that is not ready replaces the visible slice.
     store.invalidate();
     store.load(sf(CH), page(CH, 0, 2), LoadMode::Before);
     let w = store.window(sf(CH)).unwrap();
     assert!(w.ready);
+    assert!(w.has_more_after);
     assert_eq!(w.messages.iter().map(|m| m.id).collect::<Vec<_>>(), vec![mid(0), mid(1)]);
+    assert_eq!(store.message(sf(CH), mid(11)).unwrap().state, MessageState::Failed);
 }
 
 #[test]

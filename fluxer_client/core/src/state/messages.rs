@@ -1,9 +1,8 @@
 //! Per-channel message windows (`messaging/state/ChannelMessages.ts`,
 //! `ChannelMessagesLoadStateMachine.ts`, `ChannelIncomingMessageStateMachine.ts`).
-//! Jump/around loads and the before/after side buffers are not ported:
-//! trimmed messages are dropped and must be re-fetched.
+//! Trimmed server history is dropped and must be re-fetched.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 use serde::Serialize;
 
@@ -49,6 +48,10 @@ pub struct MessageWindow {
     pub pinned_to_end: bool,
     #[serde(skip)]
     history_discarded: bool,
+    #[serde(skip)]
+    parked_unsent: Vec<Message>,
+    #[serde(skip)]
+    recent_confirmations: VecDeque<(Snowflake, Snowflake)>,
 }
 
 impl MessageWindow {
@@ -92,44 +95,63 @@ impl MessageWindow {
         }
     }
 
-    /// Unsent messages to keep across a replace (`collectUnsentMessages`):
-    /// Prefer a matching nonce. After dropping history, content matching
-    /// also requires a server ID newer than the pending message's nonce.
-    fn take_unsent(&mut self, records: &[Message]) -> Vec<Message> {
+    fn park_unsent(&mut self) {
+        self.parked_unsent.extend(self.messages.extract_if(.., |m| m.state != MessageState::Sent));
+    }
+
+    fn show_unsent_at_latest(&mut self) {
+        if !self.has_more_after && !self.parked_unsent.is_empty() {
+            let unsent = std::mem::take(&mut self.parked_unsent);
+            self.merge(unsent);
+        }
+    }
+
+    fn remove_pending(&mut self, matches: impl Fn(&Message) -> bool) -> bool {
+        for rows in [&mut self.parked_unsent, &mut self.messages] {
+            if let Some(i) = rows.iter().position(|m| m.state != MessageState::Sent && matches(m)) {
+                rows.remove(i);
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Only latest pages can infer delivery from content. After dropping history
+    /// or visiting an older slice, require a server ID newer than the nonce.
+    fn reconcile_unsent(&mut self, records: &[Message], allow_content_match: bool) {
+        if self.parked_unsent.is_empty() {
+            return;
+        }
         let mut unmatched: Vec<&Message> = records
             .iter()
-            .filter(|r| self.position(r.id).is_none())
+            .filter(|r| r.nonce_id().is_some() || self.position(r.id).is_none())
             .collect();
         let reply_to = |m: &Message| m.message_reference.as_ref().and_then(|r| r.message_id);
-        let history_discarded = self.history_discarded;
-        let mut kept = Vec::new();
-        for m in self.messages.drain(..) {
-            if m.state == MessageState::Sent {
-                continue;
-            }
+        let require_newer = self.history_discarded || self.has_more_after;
+        self.parked_unsent.retain(|m| {
             let hit = unmatched.iter().position(|r| r.author.id == m.author.id && r.nonce_id() == Some(m.id))
                 .or_else(|| {
                     unmatched.iter().position(|r| {
-                        r.nonce_id().is_none()
-                            && (!history_discarded || r.id > m.id)
+                        allow_content_match && r.nonce_id().is_none()
+                            && (!require_newer || r.id > m.id)
                             && r.author.id == m.author.id
-                            && reply_to(r) == reply_to(&m)
+                            && reply_to(r) == reply_to(m)
                             && r.content == m.content
                     })
                 });
             match hit {
                 Some(i) => {
                     unmatched.swap_remove(i);
+                    false
                 }
-                None => kept.push(m),
+                None => true,
             }
-        }
-        kept
+        });
     }
 
     fn discard_remote_history(&mut self) {
-        self.messages.retain(|message| message.state != MessageState::Sent);
-        let messages = std::mem::take(&mut self.messages);
+        self.park_unsent();
+        let messages = std::mem::take(&mut self.parked_unsent);
         *self = Self { messages, history_discarded: true, ..Self::new() };
     }
 }
@@ -167,30 +189,29 @@ impl MessageStore {
     ///
     /// `hasMore*` follows `MessagePageStateMachine.getBasePageState`; the
     /// merge follows `ChannelMessagesLoadStateMachine`: a window that is not
-    /// ready is replaced whatever `mode` says, but unsent messages survive
-    /// only a real latest-page replace (`isWindowReplacement`). Before/after
-    /// merges keep the other side's flag and trim the far side to
-    /// `TRUNCATED_MESSAGE_VIEW_SIZE` once over `MAX_LOADED_MESSAGES`.
+    /// ready is replaced whatever `mode` says. Unsent messages are shown
+    /// only at the latest edge. Before/after merges keep the other side's
+    /// flag and trim the far side once over `MAX_LOADED_MESSAGES`.
     pub fn load(&mut self, channel_id: Snowflake, newest_first: Vec<Message>, mode: LoadMode) {
         let full_page = newest_first.len() == PAGE_SIZE;
+        if mode == LoadMode::Around {
+            self.apply_around_slice(channel_id, newest_first, full_page, full_page);
+            return;
+        }
         let page_more_before = full_page && mode != LoadMode::After;
         let page_more_after = full_page && mode == LoadMode::After;
         let mut records = newest_first;
         records.reverse();
         let window = self.entry(channel_id);
-        let effective = if window.ready || mode == LoadMode::Around { mode } else { LoadMode::Replace };
+        let effective = if window.ready { mode } else { LoadMode::Replace };
+        window.park_unsent();
+        window.reconcile_unsent(&records, mode != LoadMode::Before && !page_more_after);
         match effective {
             LoadMode::Replace => {
-                let unsent = if mode == LoadMode::Replace {
-                    window.take_unsent(&records)
-                } else {
-                    Vec::new()
-                };
                 window.messages.clear();
                 window.merge(records);
-                window.merge(unsent);
                 window.has_more_before = page_more_before;
-                window.has_more_after = page_more_after;
+                window.has_more_after = page_more_after || mode == LoadMode::Before;
                 if mode == LoadMode::Replace {
                     window.pinned_to_end = true;
                 }
@@ -209,21 +230,10 @@ impl MessageStore {
                 }
                 window.has_more_after = page_more_after;
             }
-            LoadMode::Around => {
-                let unsent = if !full_page {
-                    window.take_unsent(&records)
-                } else {
-                    Vec::new()
-                };
-                window.messages.clear();
-                window.merge(records);
-                window.merge(unsent);
-                window.has_more_before = full_page;
-                window.has_more_after = full_page;
-                window.pinned_to_end = !full_page;
-            }
+            LoadMode::Around => unreachable!(),
         }
         window.ready = true;
+        window.show_unsent_at_latest();
     }
 
     /// Replaces the channel window with an `?around=<target>` slice using
@@ -257,18 +267,15 @@ impl MessageStore {
     ) {
         newest_first.reverse();
         let window = self.entry(channel_id);
-        let unsent = if !has_more_after {
-            window.take_unsent(&newest_first)
-        } else {
-            Vec::new()
-        };
+        window.park_unsent();
+        window.reconcile_unsent(&newest_first, !has_more_after);
         window.messages.clear();
         window.merge(newest_first);
-        window.merge(unsent);
         window.has_more_before = has_more_before;
         window.has_more_after = has_more_after;
         window.pinned_to_end = !has_more_after;
         window.ready = true;
+        window.show_unsent_at_latest();
     }
 
     /// Record whether the channel's view is scrolled to the newest message.
@@ -312,15 +319,21 @@ impl MessageStore {
             nonce: Some(nonce.to_string()),
             state: MessageState::Sending,
         };
-        self.entry(channel_id).merge(vec![message]);
+        let window = self.entry(channel_id);
+        if window.has_more_after {
+            window.parked_unsent.push(message);
+        } else {
+            window.merge(vec![message]);
+        }
     }
 
     /// A server message from `MESSAGE_CREATE` or the `POST` response.
     /// Returns true if the window changed.
     ///
     /// Order (`ChannelIncomingMessageStateMachine`): a pending message with
-    /// id == nonce and the same author is replaced; otherwise ignored if the
-    /// window is not ready or newer pages exist (`has_more_after`);
+    /// id == nonce and the same author is confirmed. A confirmation beyond
+    /// the visible slice is fetched by pagination. Other events are ignored
+    /// if the window is not ready or newer pages exist (`has_more_after`);
     /// otherwise appended (`appendIncomingMessage`). While pinned to the
     /// end the window is trimmed to `TRUNCATED_MESSAGE_VIEW_SIZE` from the
     /// top; when scrolled up and already over `MAX_LOADED_MESSAGES` it is
@@ -335,25 +348,34 @@ impl MessageStore {
         let Some(window) = self.windows.get_mut(&channel_id) else {
             return false;
         };
+        let author = message.author.id;
         if let Some(nonce) = message.nonce_id()
-            && let Some(i) = window.position(nonce)
-            && window.messages[i].author.id == message.author.id
+            && window.remove_pending(|m| m.id == nonce && m.author.id == author)
         {
-            // Re-sort: the server id may differ from the nonce's position.
-            window.messages.remove(i);
-            window.merge(vec![message]);
+            // A page load may drop the confirmed row while the upload request still finishes.
+            if window.recent_confirmations.len() == MAX_LOADED_MESSAGES {
+                window.recent_confirmations.pop_front();
+            }
+            window.recent_confirmations.push_back((author, nonce));
+            if !window.has_more_after || window.position(message.id).is_some() {
+                window.merge(vec![message]);
+            }
             return true;
         }
         if !window.ready || window.has_more_after {
             return false;
         }
-        let previous_len = window.messages.len();
+        let scrolled_over_cap = !window.pinned_to_end && window.messages.len() > MAX_LOADED_MESSAGES
+            && window.messages.iter().filter(|m| m.state == MessageState::Sent).count() > MAX_LOADED_MESSAGES;
         window.merge(vec![message]);
-        if window.pinned_to_end {
+        if window.pinned_to_end && window.messages.len() > TRUNCATED_MESSAGE_VIEW_SIZE {
+            window.park_unsent();
             window.trim_oldest(TRUNCATED_MESSAGE_VIEW_SIZE);
-        } else if previous_len > MAX_LOADED_MESSAGES {
+        } else if scrolled_over_cap {
+            window.park_unsent();
             window.trim_newest(TRUNCATED_MESSAGE_VIEW_SIZE);
         }
+        window.show_unsent_at_latest();
         true
     }
 
@@ -363,9 +385,11 @@ impl MessageStore {
     }
 
     pub fn has_confirmed_nonce(&self, channel: Snowflake, author: Snowflake, nonce: Snowflake) -> bool {
-        self.window(channel).is_some_and(|window| window.messages.iter().any(|message| {
-            message.state == MessageState::Sent && message.author.id == author && message.nonce_id() == Some(nonce)
-        }))
+        self.window(channel).is_some_and(|window| {
+            window.recent_confirmations.contains(&(author, nonce)) || window.messages.iter().any(|message| {
+                message.state == MessageState::Sent && message.author.id == author && message.nonce_id() == Some(nonce)
+            })
+        })
     }
 
     /// Retry: `Failed` -> `Sending`. Returns the channel to redraw.
@@ -375,16 +399,7 @@ impl MessageStore {
 
     /// Drop a local pending/failed message (user discarded it).
     pub fn remove_pending(&mut self, channel_id: Snowflake, nonce: Snowflake) -> bool {
-        let Some(window) = self.windows.get_mut(&channel_id) else {
-            return false;
-        };
-        match window.position(nonce) {
-            Some(i) if window.messages[i].state != MessageState::Sent => {
-                window.messages.remove(i);
-                true
-            }
-            _ => false,
-        }
+        self.windows.get_mut(&channel_id).is_some_and(|window| window.remove_pending(|m| m.id == nonce))
     }
 
     /// `MESSAGE_UPDATE`: shallow merge of a possibly partial payload.
@@ -418,7 +433,7 @@ impl MessageStore {
         window.messages.retain(|m| !ids.contains(&m.id));
         let mut changed = window.messages.len() != before;
         // The target may be gone even when it was not loaded itself.
-        for m in &mut window.messages {
+        for m in window.messages.iter_mut().chain(&mut window.parked_unsent) {
             if m.reply_to().is_some_and(|target| ids.contains(&target)) && m.referenced_message != Some(None) {
                 m.referenced_message = Some(None);
                 changed = true;
@@ -443,9 +458,10 @@ impl MessageStore {
         }
     }
 
-    /// A loaded message by id.
+    /// A loaded message or an unsent row by id.
     pub fn message(&self, channel_id: Snowflake, id: Snowflake) -> Option<&Message> {
-        self.windows.get(&channel_id)?.messages.iter().find(|m| m.id == id)
+        let window = self.windows.get(&channel_id)?;
+        window.messages.iter().chain(&window.parked_unsent).find(|m| m.id == id)
     }
 
     pub(crate) fn remove_channel(&mut self, channel_id: Snowflake) {
@@ -490,7 +506,9 @@ impl MessageStore {
 
     fn set_pending_state(&mut self, nonce: Snowflake, from: MessageState, to: MessageState) -> Option<Snowflake> {
         for (channel_id, window) in &mut self.windows {
-            if let Some(m) = window.messages.iter_mut().find(|m| m.id == nonce && m.state == from) {
+            if let Some(m) = window.messages.iter_mut().chain(&mut window.parked_unsent)
+                .find(|m| m.id == nonce && m.state == from)
+            {
                 m.state = to;
                 return Some(*channel_id);
             }
@@ -628,5 +646,89 @@ mod around_tests {
         assert!(win.has_more_before);
         assert!(!win.has_more_after);
         assert!(win.pinned_to_end);
+    }
+
+    #[test]
+    fn historical_jump_preserves_pending_without_advancing_the_history_cursor() {
+        let mut store = MessageStore::new();
+        let channel = Snowflake(10);
+        let latest = test_msg(300, 10, "latest");
+        let author = latest.author.clone();
+        store.load(channel, vec![latest], LoadMode::Replace);
+        let (failed, confirmed, discarded, while_hidden) = (Snowflake(301), Snowflake(302), Snowflake(303), Snowflake(304));
+        store.insert_pending(channel, failed, "same text".to_owned(), author.clone());
+        store.insert_pending(channel, confirmed, "delivered".to_owned(), author.clone());
+        store.insert_pending(channel, discarded, "discarded".to_owned(), author.clone());
+
+        let older = (51..=100).rev().map(|id| test_msg(id, 10, "same text")).collect();
+        store.load_around(channel, older, Snowflake(75), Some(Snowflake(300)));
+        store.insert_pending(channel, while_hidden, "still sending".to_owned(), author.clone());
+        assert_eq!(store.mark_failed(failed), Some(channel));
+        assert_eq!(store.mark_sending(failed), Some(channel));
+        assert_eq!(store.mark_failed(failed), Some(channel));
+        assert!(store.remove_pending(channel, discarded));
+
+        let mut delivered = test_msg(310, 10, "delivered");
+        delivered.nonce = Some(confirmed.to_string());
+        delivered.author.id = Snowflake(5);
+        assert!(!store.apply_incoming(delivered.clone()));
+        assert!(store.message(channel, confirmed).is_some());
+
+        delivered.author = author.clone();
+        assert!(store.apply_incoming(delivered.clone()));
+        assert!(store.message(channel, confirmed).is_none());
+        assert!(store.has_confirmed_nonce(channel, author.id, confirmed));
+        let window = store.window(channel).unwrap();
+        assert!(window.has_more_after);
+        assert_eq!(window.messages.len(), 50);
+        assert_eq!(window.messages.last().unwrap().id, Snowflake(100));
+
+        let intervening = (101..=150).rev().map(|id| test_msg(id, 10, "same text")).collect();
+        store.load(channel, intervening, LoadMode::After);
+        assert_eq!(store.window(channel).unwrap().messages.last().unwrap().id, Snowflake(150));
+
+        delivered.nonce = None;
+        let tail = vec![delivered, test_msg(300, 10, "same text")];
+        store.load(channel, tail, LoadMode::After);
+        let window = store.window(channel).unwrap();
+        assert!(!window.has_more_after);
+        assert_eq!(window.messages.len(), 104);
+        assert_eq!(store.message(channel, failed).unwrap().state, MessageState::Failed);
+        assert_eq!(store.message(channel, while_hidden).unwrap().state, MessageState::Sending);
+        assert!(store.message(channel, discarded).is_none());
+        assert!(store.has_confirmed_nonce(channel, author.id, confirmed));
+    }
+
+    #[test]
+    fn history_trims_keep_failed_messages_separate_from_the_server_window() {
+        let mut store = MessageStore::new();
+        let channel = Snowflake(10);
+        let latest = (201..=250).rev().map(|id| test_msg(id, 10, "sent")).collect();
+        store.load(channel, latest, LoadMode::Replace);
+        let author = store.window(channel).unwrap().messages[0].author.clone();
+        let failed = Snowflake(1);
+        store.insert_pending(channel, failed, "failed".to_owned(), author);
+        store.mark_failed(failed);
+
+        let older = (151..=200).rev().map(|id| test_msg(id, 10, "sent")).collect();
+        store.load(channel, older, LoadMode::Before);
+        assert!(store.apply_incoming(test_msg(251, 10, "sent")));
+        let window = store.window(channel).unwrap();
+        assert_eq!(window.messages.len(), TRUNCATED_MESSAGE_VIEW_SIZE + 1);
+        assert_eq!(window.messages[0].state, MessageState::Failed);
+
+        for start in [102, 52, 2] {
+            let page = (start..start + 50).rev().map(|id| test_msg(id, 10, "sent")).collect();
+            store.load(channel, page, LoadMode::Before);
+        }
+        let window = store.window(channel).unwrap();
+        assert!(window.has_more_after);
+        assert_eq!(window.messages.len(), TRUNCATED_MESSAGE_VIEW_SIZE);
+        assert_eq!(window.messages.first().unwrap().id, Snowflake(2));
+        assert_eq!(window.messages.last().unwrap().id, Snowflake(101));
+        assert_eq!(store.message(channel, failed).unwrap().state, MessageState::Failed);
+
+        store.load(channel, vec![test_msg(251, 10, "sent")], LoadMode::Replace);
+        assert_eq!(store.window(channel).unwrap().messages[0].state, MessageState::Failed);
     }
 }

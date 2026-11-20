@@ -6,7 +6,7 @@
 use fluxer_client_core::rest::{
     MessageContentType, MessageSearchOutcome, MessageSearchPage, MessageSearchScope, MessageSearchSortBy,
 };
-use fluxer_client_core::state::{Channel, LoadMode, Message, Snowflake};
+use fluxer_client_core::state::{Channel, LoadMode, Message, MessageState, Snowflake};
 use gpui_kit::{Focusable as _, Modifiers, TestAppContext};
 use serde_json::json;
 
@@ -325,7 +325,14 @@ fn jump_to_in_window_around_boundaries_and_jump_to_present(cx: &mut TestAppConte
 
     let around_50: Vec<Message> =
         (125..=174).rev().map(|n| make_message(msg_id(n), GENERAL, 201, "Alice", &format!("msg {n}"))).collect();
-    backend.state().messages.load_around(GENERAL, around_50, hist_target, Some(msg_id(250)));
+    let pending = msg_id(251);
+    {
+        let mut state = backend.state();
+        let author = state.current_user.clone().expect("fixture user");
+        state.messages.insert_pending(GENERAL, pending, "pending send".into(), author);
+        state.messages.load_around(GENERAL, around_50, hist_target, Some(msg_id(250)));
+        assert_eq!(state.messages.mark_failed(pending), Some(GENERAL));
+    }
     view.update(cx, |v, cx| {
         v.handle_events(vec![backend.history_loaded(GENERAL, None)], cx);
     });
@@ -343,6 +350,7 @@ fn jump_to_in_window_around_boundaries_and_jump_to_present(cx: &mut TestAppConte
     );
     assert!(cx.debug_bounds("highlighted-message").is_some());
     assert!(cx.debug_bounds("jump-to-present").is_some());
+    assert!(view.read_with(cx, |v, _| v.rows.borrow().iter().all(|row| row.id != pending)));
 
     // 4. Jump to present fires Replace once and ignores duplicate click while loading_history=true
     lock_sent(&backend.page_loads).clear();
@@ -364,6 +372,9 @@ fn jump_to_in_window_around_boundaries_and_jump_to_present(cx: &mut TestAppConte
 
     assert_eq!(view.read_with(cx, |v, _| (v.highlighted_message, v.has_more_after)), (None, false));
     assert!(cx.debug_bounds("jump-to-present").is_none());
+    assert!(view.read_with(cx, |v, _| {
+        v.rows.borrow().iter().any(|row| row.id == pending && row.state == MessageState::Failed)
+    }));
 
     drop(rt);
 }

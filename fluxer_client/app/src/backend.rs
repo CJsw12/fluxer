@@ -73,6 +73,7 @@ pub enum UiEvent {
     ChannelUpdated { seq: u64, channel_id: Snowflake, error: Option<String> },
     /// `DELETE /channels/{channel_id}` finished for a guild channel or category.
     ChannelDeleted { seq: u64, channel_id: Snowflake, error: Option<String> },
+    AccessChanged { seq: u64, error: Option<String> },
     /// Kick / ban / timeout / nickname update finished for a guild member.
     MemberModerated { seq: u64, guild_id: Snowflake, user_id: Snowflake, error: Option<String> },
     /// `GET /guilds/{guild_id}/bans` finished.
@@ -113,18 +114,17 @@ pub fn instance_from_endpoints(endpoints: Endpoints, allow_insecure_loopback: bo
     Ok(Instance { endpoints, rest: Arc::new(rest) })
 }
 
-pub fn lock(state: &Mutex<ClientState>) -> MutexGuard<'_, ClientState> {
+pub fn lock<T>(state: &Mutex<T>) -> MutexGuard<'_, T> {
     state.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 #[cfg(test)]
-pub(crate) fn lock_sent<T>(sent: &Mutex<T>) -> MutexGuard<'_, T> {
-    sent.lock().unwrap_or_else(PoisonError::into_inner)
-}
+pub(crate) use lock as lock_sent;
 
 mod actions;
 
 pub use actions::TypingSender;
+pub(crate) mod access;
 mod channels;
 mod group_dm;
 mod members;
@@ -170,6 +170,7 @@ pub struct Backend {
     history_seq: Arc<Mutex<BTreeMap<Snowflake, u64>>>,
     /// Per-channel monotonic counter so stale group DM rename replies never overwrite a newer edit.
     rename_group_dm_seq: Arc<Mutex<BTreeMap<Snowflake, u64>>>,
+    parent_syncs: channels::PendingChannelSyncs,
     /// Every `POST .../messages` body, in order (tests check what the
     /// composer sent; the test runtime never runs the request).
     #[cfg(test)]
@@ -257,6 +258,8 @@ impl Backend {
             backend.state.clone(),
             backend.events.clone(),
             backend.focus.clone(),
+            backend.rest.clone(),
+            backend.parent_syncs.clone(),
         ));
         let _ = backend.events.send(UiEvent::Gateway(GatewayStatus::Connecting));
         Ok((backend, rx))
@@ -284,6 +287,7 @@ impl Backend {
             guild_settings_seq: Arc::default(),
             history_seq: Arc::default(),
             rename_group_dm_seq: Arc::default(),
+            parent_syncs: Default::default(),
             #[cfg(test)]
             sent: Arc::default(),
             #[cfg(test)]
@@ -583,12 +587,15 @@ async fn pump_gateway(
     state: Arc<Mutex<ClientState>>,
     events: mpsc::UnboundedSender<UiEvent>,
     focus: Arc<NotifyFocus>,
+    rest: Arc<RestClient>,
+    parent_syncs: channels::PendingChannelSyncs,
 ) {
     let mut closed = false;
     while let Some(event) = gateway_events.recv().await {
         let ui = match event {
             GatewayEvent::Dispatch(dispatch) => {
                 let (changed, notification) = apply_dispatch(&state, &dispatch, &focus, now_ms());
+                channels::recheck_parent_sync(&dispatch, &state, &rest, &events, &parent_syncs);
                 if let Some(notification) = notification
                     && events.send(UiEvent::Notify(notification)).is_err()
                 {

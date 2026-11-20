@@ -180,6 +180,55 @@ fn channel_mgmt_permissions_gate_sidebar_header_and_category_scope(cx: &mut Test
 }
 
 #[gpui_kit::test]
+fn access_editor_uses_scoped_permissions_and_closes_on_gateway_revocation(cx: &mut TestAppContext) {
+    let (_rt, backend, view, cx) = open_guild(cx, OWNER, bits::MANAGE_ROLES, 0);
+    assert!(cx.debug_bounds("guild-roles-btn").is_some());
+    assert!(cx.debug_bounds("channel-permissions-11").is_some());
+    assert!(cx.debug_bounds("edit-channel-11").is_none());
+    let permissions = cx.debug_bounds("channel-permissions-11").unwrap().center();
+    cx.simulate_click(permissions, Modifiers::default());
+    cx.run_until_parked();
+    assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::Access(_))));
+    cx.simulate_keystrokes("ctrl-k alt-down");
+    assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::Access(_)) && v.selected_channel == Some(GENERAL)));
+    backend.state().apply(&Dispatch {
+        t: "GUILD_ROLE_UPDATE".to_owned(),
+        s: 2,
+        d: json!({ "guild_id": GUILD, "role": {"id": GUILD, "name": "@everyone", "permissions": bits::DEFAULT.to_string()} }),
+    });
+    view.update(cx, |v, cx| v.handle_events(vec![UiEvent::StateChanged], cx));
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| !v.overlay.is_open()));
+    assert!(cx.debug_bounds("guild-roles-btn").is_none());
+    assert!(cx.debug_bounds("channel-permissions-11").is_none());
+}
+
+#[gpui_kit::test]
+fn category_sync_move_retains_other_channel_settings(cx: &mut TestAppContext) {
+    let (_rt, backend, view, cx) = open_guild(cx, ME, 0, 0);
+    cx.update(|window, cx| {
+        view.update(cx, |v, cx| {
+            v.open_edit_channel(GENERAL, window, cx);
+            v.set_edit_channel_parent(Some(CAT_OTHER), cx);
+            let Overlay::EditChannel(modal) = &mut v.overlay else { panic!("expected channel editor") };
+            assert!(modal.can_sync_parent);
+            modal.sync_permissions = true;
+            modal.name_input.update(cx, |input, cx| input.set_value("moved-general", window, cx));
+            v.submit_edit_channel(cx);
+        });
+    });
+    assert_eq!(
+        *lock_sent(&backend.sent_guild_channels),
+        vec![GuildChannelCall::SyncMove {
+            channel_id: GENERAL,
+            parent_id: CAT_OTHER,
+            settings: GuildChannelPatch { name: Some("moved-general".into()), ..Default::default() },
+        }]
+    );
+}
+
+#[gpui_kit::test]
 fn create_channel_validation_payloads_dedup_stale_seq_and_selection(cx: &mut TestAppContext) {
     let (_rt, backend, view, cx) = open_guild(cx, ME, 0, 0);
     assert!(cx.debug_bounds("create-channel-btn").is_some());

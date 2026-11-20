@@ -3,8 +3,8 @@
 
 use super::client::{ClientState, now_ms};
 use super::ids::Snowflake;
-use super::model::{Channel, ChannelKind};
-use super::permissions::{bits, can_manage_target_member, compute_permissions, has};
+use super::model::{Channel, ChannelKind, Guild, PermissionOverwrite};
+use super::permissions::{bits, can_manage_target_member, compute_permissions, has, highest_role, is_role_higher};
 
 impl ClientState {
     /// `AttachmentPermissionUtils.ts:8-11` and `ChannelMessages.tsx:105`:
@@ -79,6 +79,83 @@ impl ClientState {
             return false;
         }
         has(self.channel_permissions(channel_id), bits::MANAGE_CHANNELS)
+    }
+
+    fn allows_elevated_role_management(&self, guild: &Guild) -> bool {
+        self.current_user_id().is_some_and(|me| {
+            !guild.visiting
+                && (guild.owner_id == Some(me)
+                    || guild.mfa_level != Some(1)
+                    || self.current_user_mfa_enabled == Some(true))
+        })
+    }
+
+    pub fn can_manage_guild_roles(&self, guild_id: Snowflake) -> bool {
+        self.guilds.get(&guild_id).is_some_and(|guild| self.allows_elevated_role_management(guild))
+            && has(self.guild_permissions(guild_id), bits::MANAGE_ROLES)
+    }
+
+    pub fn can_manage_role(&self, guild_id: Snowflake, role_id: Snowflake) -> bool {
+        if !self.can_manage_guild_roles(guild_id) {
+            return false;
+        }
+        let Some(me) = self.current_user_id() else { return false };
+        let Some(guild) = self.guilds.get(&guild_id) else { return false };
+        let Some(role) = guild.roles.get(&role_id) else { return false };
+        let member = self.members.get(&guild_id).and_then(|members| members.get(&me));
+        is_role_higher(guild, me, highest_role(guild, member), Some(role))
+    }
+
+    pub fn can_manage_channel_permissions(&self, channel_id: Snowflake) -> bool {
+        let Some(channel) = self.channels.get(&channel_id) else { return false };
+        if channel.kind.is_private() || channel.kind.is_thread() {
+            return false;
+        }
+        channel.guild_id.and_then(|id| self.guilds.get(&id)).is_some_and(|guild| {
+            self.allows_elevated_role_management(guild)
+                && has(self.channel_permissions(channel_id), bits::VIEW_CHANNEL | bits::MANAGE_ROLES)
+        })
+    }
+
+    pub fn can_write_role_permissions(&self, guild_id: Snowflake, permissions: u64) -> bool {
+        let own = self.guild_permissions(guild_id);
+        let own = if has(own, bits::ADMINISTRATOR) { own | bits::THREAD_AWARE_ALL } else { own };
+        has(own, permissions)
+    }
+
+    pub fn can_write_channel_overwrite(
+        &self,
+        channel_id: Snowflake,
+        before: Option<&PermissionOverwrite>,
+        after: Option<&PermissionOverwrite>,
+    ) -> bool {
+        if !self.can_manage_channel_permissions(channel_id) {
+            return false;
+        }
+        let permissions = self.channel_permissions(channel_id);
+        let (old_allow, old_deny) = before.map_or((0, 0), |o| (o.allow, o.deny));
+        let (new_allow, new_deny) = after.map_or((0, 0), |o| (o.allow, o.deny));
+        let granted = (new_allow & !old_allow) | (old_deny & !new_deny);
+        has(permissions, bits::ADMINISTRATOR) || has(permissions, granted)
+    }
+
+    pub fn can_sync_channel_parent(&self, channel_id: Snowflake, parent_id: Snowflake) -> bool {
+        let Some(channel) = self.channels.get(&channel_id) else { return false };
+        let Some(parent) = self.channels.get(&parent_id) else { return false };
+        let Some(guild) = channel.guild_id else { return false };
+        if channel.kind.is_category() || channel.parent_id == Some(parent_id) || parent.guild_id != Some(guild)
+            || !parent.kind.is_category() || !self.can_manage_guild_channels(guild)
+            || !self.can_manage_channel_permissions(channel_id) || !self.can_manage_channel(parent_id)
+        {
+            return false;
+        }
+        let before = &channel.permission_overwrites;
+        let after = &parent.permission_overwrites;
+        before.iter().all(|item| {
+            self.can_write_channel_overwrite(channel_id, Some(item), after.iter().find(|o| o.id == item.id))
+        }) && after.iter().filter(|item| !before.iter().any(|o| o.id == item.id)).all(|item| {
+            self.can_write_channel_overwrite(channel_id, None, Some(item))
+        })
     }
 
     pub fn can_kick_members(&self, guild_id: Snowflake) -> bool {
@@ -251,6 +328,72 @@ mod tests {
         let changes = state.apply(&dispatch("READY", ready_payload()));
         assert_eq!(changes, vec![crate::state::StateChange::Ready]);
         state
+    }
+
+    #[test]
+    fn role_management_respects_mfa_and_equal_position_hierarchy() {
+        let mut payload = ready_payload();
+        payload["user"]["mfa_enabled"] = json!(false);
+        payload["guilds"][0]["properties"]["mfa_level"] = json!(1);
+        payload["guilds"][0]["roles"] = json!([
+            role_json(GUILD, "@everyone", bits::DEFAULT),
+            {"id": "1001", "name": "higher", "position": 5},
+            {"id": "1002", "name": "actor", "position": 5, "permissions": bits::MANAGE_ROLES.to_string()},
+            {"id": "1003", "name": "lower", "position": 5}
+        ]);
+        payload["guilds"][0]["members"][0]["roles"] = json!(["1002"]);
+        let mut state = ClientState::new();
+        state.apply(&dispatch("READY", payload));
+
+        assert!(!state.can_manage_guild_roles(sf(GUILD)));
+        assert!(!state.can_manage_channel_permissions(sf(GENERAL)));
+        state.apply(&dispatch("USER_UPDATE", json!({ "id": sf(ME), "mfa_enabled": true })));
+        assert!(state.can_manage_guild_roles(sf(GUILD)));
+        assert!(state.can_manage_channel_permissions(sf(GENERAL)));
+        assert!(!state.can_manage_role(sf(GUILD), sf(1001)));
+        assert!(!state.can_manage_role(sf(GUILD), sf(1002)));
+        assert!(state.can_manage_role(sf(GUILD), sf(1003)));
+        assert!(!state.can_write_role_permissions(sf(GUILD), bits::ADMINISTRATOR));
+        state.current_user_mfa_enabled = Some(false);
+        state.guilds.get_mut(&sf(GUILD)).unwrap().owner_id = Some(sf(ME));
+        assert!(state.can_manage_role(sf(GUILD), sf(1001)));
+    }
+
+    #[test]
+    fn overwrite_grants_include_removed_denies_and_parent_sync() {
+        let mut state = ready_state();
+        state.guilds.get_mut(&sf(GUILD)).unwrap().roles.get_mut(&sf(GUILD)).unwrap().permissions
+            |= bits::MANAGE_ROLES | bits::MANAGE_CHANNELS;
+        state.apply(&dispatch("CHANNEL_CREATE", json!({
+            "id": "2105", "guild_id": sf(GUILD), "type": 4,
+            "permission_overwrites": [overwrite(GUILD, 0, bits::MANAGE_MESSAGES, 0)]
+        })));
+        let old = PermissionOverwrite { id: sf(GUILD), kind: 0, allow: 0, deny: bits::MANAGE_MESSAGES };
+        assert!(!state.can_write_channel_overwrite(sf(GENERAL), Some(&old), None));
+        assert!(state.can_write_channel_overwrite(sf(GENERAL), None, Some(&old)));
+        assert!(!state.can_sync_channel_parent(sf(GENERAL), sf(2105)));
+        state.guilds.get_mut(&sf(GUILD)).unwrap().owner_id = Some(sf(ME));
+        assert!(state.can_sync_channel_parent(sf(GENERAL), sf(2105)));
+        assert!(!state.can_manage_channel_permissions(sf(DM)));
+    }
+
+    #[test]
+    fn confirmed_channel_denial_survives_move_batch_without_discarding_channel() {
+        let mut state = ready_state();
+        let channel = sf(GENERAL);
+        assert!(state.can_view_channel(channel));
+        state.set_denied_channel_access(channel, true);
+        let mut move_update = dispatch("CHANNEL_UPDATE_BULK", json!({
+            "channels": [{ "id": channel, "parent_id": "2105", "permission_overwrites": [] }]
+        }));
+        move_update.s = 2;
+        state.apply(&move_update);
+        assert_eq!(state.channels[&channel].parent_id, Some(sf(2105)));
+        assert!(!state.can_view_channel(channel));
+        let mut confirmed = dispatch("CHANNEL_UPDATE", json!({ "id": channel, "permission_overwrites": [] }));
+        confirmed.s = 3;
+        state.apply(&confirmed);
+        assert!(state.can_view_channel(channel));
     }
 
     #[test]

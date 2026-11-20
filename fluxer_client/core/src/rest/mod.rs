@@ -25,6 +25,7 @@ mod upload;
 mod tests;
 
 pub use altcha::{ALTCHA_MAX_COUNTER, ALTCHA_SOLVE_TIMEOUT, solve_altcha_challenge};
+pub use api::{RolePatch, validate_role_name};
 pub use api::{
     AckRequest, BanMemberRequest, ChannelOverride, CreateGuildChannelRequest, CreateInviteRequest, CustomStatus,
     EditMessageRequest, GroupDmPatch, GuildBanEntry, GuildChannelPatch, GuildMemberPatch, GuildSettingsPatch,

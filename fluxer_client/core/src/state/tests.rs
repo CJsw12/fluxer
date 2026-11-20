@@ -156,6 +156,7 @@ fn guild(owner: Option<u64>, roles: &[(u64, u64)]) -> Guild {
         name: "g".into(),
         icon: None,
         owner_id: owner.map(sf),
+        mfa_level: None,
         joined_at: None,
         member_count: None,
         visiting: false,

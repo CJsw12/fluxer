@@ -24,6 +24,9 @@ impl ClientState {
             && me.id == id
         {
             *me = user.clone();
+            if let Some(enabled) = d.get("mfa_enabled").and_then(Value::as_bool) {
+                self.current_user_mfa_enabled = Some(enabled);
+            }
         }
         self.users.insert(id, user);
         out.push(StateChange::UserUpdated { user_id: id });

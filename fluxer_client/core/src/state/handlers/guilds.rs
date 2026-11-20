@@ -35,6 +35,7 @@ impl ClientState {
             name: props.name,
             icon: props.icon,
             owner_id: props.owner_id,
+            mfa_level: props.mfa_level,
             joined_at: g.get("joined_at").and_then(Value::as_str).map(str::to_owned),
             member_count: g.get("member_count").and_then(Value::as_u64),
             visiting: g.get("visiting").and_then(Value::as_bool).unwrap_or(false),
@@ -52,6 +53,7 @@ impl ClientState {
         self.unavailable_guilds.remove(&id);
         for mut c in channels {
             c.guild_id = Some(id);
+            self.denied_channel_access.remove(&c.id);
             self.channels.insert(c.id, c);
         }
         let members = self.members.entry(id).or_default();
@@ -87,6 +89,7 @@ impl ClientState {
             .map(|c| c.id)
             .collect();
         for id in gone {
+            self.denied_channel_access.remove(&id);
             self.channels.remove(&id);
             if drop_read_states {
                 self.read_states.remove(&id);
@@ -116,6 +119,9 @@ impl ClientState {
         guild.name = props.name;
         guild.icon = props.icon;
         guild.owner_id = props.owner_id;
+        if props.mfa_level.is_some() {
+            guild.mfa_level = props.mfa_level;
+        }
         if let Some(n) = d.get("member_count").and_then(Value::as_u64) {
             guild.member_count = Some(n);
         }

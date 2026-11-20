@@ -212,6 +212,7 @@ pub struct ClientView {
     create_group_dm_seq: u64,
     /// Sequence counter for guild channel create/edit/delete responses.
     channel_mgmt_seq: u64,
+    pub(crate) access_pending: Option<u64>,
     /// Sequence counter for guild member moderation / ban list responses.
     moderation_seq: u64,
     /// Snapshot of the open Group DM channel (members, owner, addable friends).
@@ -390,6 +391,7 @@ impl ClientView {
             group_dm_panel_open: true,
             create_group_dm_seq: 0,
             channel_mgmt_seq: 0,
+            access_pending: None,
             moderation_seq: 0,
             group_dm: None,
             group_dm_rename,
@@ -462,6 +464,7 @@ impl ClientView {
                 | Overlay::EditChannel(_)
                 | Overlay::MemberModeration(_)
                 | Overlay::GuildBans(_)
+                | Overlay::Access(_)
         );
         self.overlay = Overlay::None;
         if restore_composer {
@@ -702,6 +705,9 @@ impl ClientView {
                 }
                 UiEvent::ChannelUpdated { seq, error, .. } => {
                     if !matches!(&self.overlay, Overlay::EditChannel(m) if m.seq == seq) {
+                        if self.channel_mgmt_seq == seq && let Some(error) = error {
+                            self.error = Some(error.into());
+                        }
                         continue;
                     }
                     match error {
@@ -717,6 +723,7 @@ impl ClientView {
                         }
                     }
                 }
+                UiEvent::AccessChanged { seq, error } => self.finish_access_change(seq, error, cx),
                 UiEvent::ChannelDeleted { seq, channel_id, error } => {
                     match error {
                         Some(err) => {
@@ -941,6 +948,11 @@ impl ClientView {
                         .map(|c| c.id);
                     fallback_guild_channel = Some(next);
                 }
+            } else if self.selected_channel.is_some_and(|id| state.has_denied_channel_access(id))
+                && matches!(self.place, Place::Guild(_))
+            {
+                let next = channel_items(&state, self.place).into_iter().find(|c| c.has_messages).map(|c| c.id);
+                fallback_guild_channel = Some(next);
             }
             if !state.channels.is_empty() {
                 self.drafts.retain(|id, _| state.channels.contains_key(id));
@@ -985,6 +997,7 @@ impl ClientView {
                         || !state.guilds.contains_key(&m.guild_id)
                         || !state.can_ban_members(m.guild_id)
                 }
+                Overlay::Access(m) => !m.allowed(self.place, &state),
                 _ => false,
             };
             if dismiss_modal || fallback_guild_channel.is_some() {
@@ -1335,7 +1348,11 @@ impl ClientView {
         auto_load_latest: bool,
         cx: &mut Context<Self>,
     ) -> bool {
-        let opens_pane = self.backend.state().channels.get(&channel_id).is_some_and(|c| opens_message_pane(c.kind));
+        let opens_pane = {
+            let state = self.backend.state();
+            !state.has_denied_channel_access(channel_id)
+                && state.channels.get(&channel_id).is_some_and(|c| opens_message_pane(c.kind))
+        };
         if !opens_pane {
             return false;
         }
@@ -2071,6 +2088,7 @@ impl Render for ClientView {
             Overlay::EditChannel(modal) => Some(ui::channel_modal::render_edit(modal, &theme, cx)),
             Overlay::MemberModeration(modal) => Some(ui::moderation_modal::render_action(modal, &theme, cx)),
             Overlay::GuildBans(modal) => Some(ui::moderation_modal::render_bans(modal, &theme, cx)),
+            Overlay::Access(modal) => Some(ui::access::render(self, modal, &theme, cx)),
             Overlay::None => None,
         };
         // Every image below without its own cache (avatars, custom emoji,

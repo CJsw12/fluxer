@@ -361,6 +361,7 @@ mod tests {
             name: name.to_owned(),
             icon: None,
             owner_id: None,
+            mfa_level: None,
             joined_at: None,
             member_count: None,
             visiting: false,

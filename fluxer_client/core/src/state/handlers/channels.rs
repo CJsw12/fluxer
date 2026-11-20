@@ -19,6 +19,7 @@ impl ClientState {
             self.users.entry(r.id).or_insert_with(|| r.clone());
         }
         let (channel_id, guild_id) = (channel.id, channel.guild_id);
+        self.denied_channel_access.remove(&channel_id);
         self.channels.insert(channel_id, channel);
         out.push(StateChange::ChannelUpserted { channel_id, guild_id });
     }
@@ -47,6 +48,7 @@ impl ClientState {
 
     pub(in crate::state) fn apply_channel_delete(&mut self, d: &Value, out: &mut Vec<StateChange>) {
         let Some(id) = id_field(d, "id") else { return };
+        self.denied_channel_access.remove(&id);
         let Some(channel) = self.channels.remove(&id) else { return };
         self.read_states.remove(&id);
         self.messages.remove_channel(id);

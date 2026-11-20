@@ -15,7 +15,7 @@ use gpui_kit::{Action, App, Context, Div, KeyBinding, NoAction, prelude::*};
 
 use crate::client_view::ClientView;
 use crate::nav::ChannelFilter;
-use crate::ui::{account_switcher, channel_modal, moderation_modal, quick_switcher, search_panel};
+use crate::ui::{access, account_switcher, channel_modal, moderation_modal, quick_switcher, search_panel};
 
 gpui_kit::actions!(
     fluxer,
@@ -54,6 +54,7 @@ const IN_CREATE_CHANNEL_INPUT: &str = "CreateChannelModal > Input";
 const IN_EDIT_CHANNEL_INPUT: &str = "EditChannelModal > Input";
 const IN_MODERATION_INPUT: &str = "MemberModerationModal > Input";
 const IN_BANS_INPUT: &str = "GuildBansModal > Input";
+const IN_ACCESS_INPUT: &str = "AccessEditor > Input";
 
 /// Binds `keys` in the layout and inside the composer, and disables them
 /// inside the quick switcher and search panel (whose inputs would otherwise
@@ -68,6 +69,7 @@ fn both<A: Action + Clone>(out: &mut Vec<KeyBinding>, keys: &'static str, action
     out.push(KeyBinding::new(keys, NoAction, Some(channel_modal::EDIT_CONTEXT)));
     out.push(KeyBinding::new(keys, NoAction, Some(moderation_modal::ACTION_CONTEXT)));
     out.push(KeyBinding::new(keys, NoAction, Some(moderation_modal::BANS_CONTEXT)));
+    out.push(KeyBinding::new(keys, NoAction, Some(access::CONTEXT)));
 }
 
 /// Every shortcut binding of the client layout.
@@ -98,6 +100,8 @@ fn bindings() -> Vec<KeyBinding> {
     out.push(KeyBinding::new("ctrl-k", NoAction, Some(IN_MODERATION_INPUT)));
     out.push(KeyBinding::new("ctrl-k", NoAction, Some(moderation_modal::BANS_CONTEXT)));
     out.push(KeyBinding::new("ctrl-k", NoAction, Some(IN_BANS_INPUT)));
+    out.push(KeyBinding::new("ctrl-k", NoAction, Some(access::CONTEXT)));
+    out.push(KeyBinding::new("ctrl-k", NoAction, Some(IN_ACCESS_INPUT)));
     both(&mut out, "ctrl-e", ToggleEmojiPicker);
     both(&mut out, "ctrl-,", OpenSettings);
     both(&mut out, "ctrl-=", ZoomIn);
@@ -165,6 +169,6 @@ mod tests {
             let key = (format!("{:?}", b.keystrokes()), b.predicate().map(|p| p.to_string()));
             assert!(seen.insert(key.clone()), "{key:?} bound twice");
         }
-        assert_eq!(seen.len(), 185);
+        assert_eq!(seen.len(), 206);
     }
 }

@@ -67,6 +67,8 @@ pub struct EditChannelModal {
     pub original_slowmode: u32,
     pub can_manage_root: bool,
     pub can_change_parent: bool,
+    pub can_sync_parent: bool,
+    pub sync_permissions: bool,
     pub categories: Vec<(Snowflake, SharedString)>,
     pub name_input: Entity<InputState>,
     pub topic_input: Option<Entity<InputState>>,
@@ -83,6 +85,14 @@ pub struct EditChannelModal {
 impl EditChannelModal {
     pub fn sync_state(&mut self, state: &ClientState) {
         self.categories = manageable_categories(state, self.guild_id);
+        if let Some(channel) = state.channels.get(&self.channel_id)
+            && channel.parent_id == self.parent_id
+            && channel.parent_id != self.original_parent_id
+        {
+            self.original_parent_id = channel.parent_id;
+            self.sync_permissions = false;
+        }
+        self.can_sync_parent = self.parent_id.is_some_and(|parent| state.can_sync_channel_parent(self.channel_id, parent));
         let valid_cat = |pid: Snowflake| {
             state
                 .channels
@@ -456,6 +466,8 @@ impl ClientView {
             original_slowmode: slowmode,
             can_manage_root,
             can_change_parent,
+            can_sync_parent: false,
+            sync_permissions: false,
             categories,
             name_input,
             topic_input,
@@ -519,12 +531,14 @@ impl ClientView {
             }
         }
         modal.parent_id = parent_id;
+        modal.sync_permissions = false;
+        modal.can_sync_parent = parent_id.is_some_and(|parent| self.backend.state().can_sync_channel_parent(modal.channel_id, parent));
         modal.error = None;
         cx.notify();
     }
 
     pub(crate) fn submit_edit_channel(&mut self, cx: &mut Context<Self>) {
-        let (channel_id, patch) = {
+        let (channel_id, patch, sync_move) = {
             let Overlay::EditChannel(modal) = &mut self.overlay else { return };
             if modal.submitting {
                 return;
@@ -559,7 +573,18 @@ impl ClientView {
                 cx.notify();
                 return;
             }
-            (modal.channel_id, patch)
+            let sync_move = if modal.sync_permissions {
+                let Some(parent) = modal.parent_id else { return };
+                if !modal.can_sync_parent {
+                    modal.error = Some(l10n::tr("You no longer have permission to sync with this category."));
+                    cx.notify();
+                    return;
+                }
+                Some((modal.guild_id, modal.original_parent_id, parent))
+            } else {
+                None
+            };
+            (modal.channel_id, patch, sync_move)
         };
         let seq = self.next_channel_mgmt_seq();
         if let Overlay::EditChannel(modal) = &mut self.overlay {
@@ -570,7 +595,12 @@ impl ClientView {
         } else {
             return;
         }
-        self.backend.update_guild_channel(seq, channel_id, patch);
+        if let Some((guild, before, parent)) = sync_move {
+            let other = GuildChannelPatch { parent_id: None, ..patch };
+            self.backend.move_channel_and_sync(seq, guild, channel_id, before, parent, other);
+        } else {
+            self.backend.update_guild_channel(seq, channel_id, patch);
+        }
         cx.notify();
     }
 
@@ -881,7 +911,19 @@ pub fn render_edit(modal: &EditChannelModal, theme: &Theme, cx: &mut Context<Cli
                 ),
             );
         }
-        Some(div().flex().flex_col().gap_1().child(section_label(l10n::tr("Category"), theme)).child(row))
+        Some(div().flex().flex_col().gap_1().child(section_label(l10n::tr("Category"), theme)).child(row)
+            .when(modal.can_sync_parent || modal.sync_permissions, |d| d.child(
+                Button::new("edit-channel-sync-parent").small().ghost().selected(modal.sync_permissions)
+                    .label(l10n::tr("Sync permissions with category")).disabled(modal.submitting)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if let Overlay::EditChannel(modal) = &mut this.overlay
+                            && !modal.submitting && (modal.can_sync_parent || modal.sync_permissions)
+                        {
+                            modal.sync_permissions = !modal.sync_permissions;
+                            cx.notify();
+                        }
+                    }))
+            )))
     } else {
         None
     };

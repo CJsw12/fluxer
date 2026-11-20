@@ -4,6 +4,7 @@ use gpui_kit::{Anchor, AnyElement, App, MouseButton, Pixels, Point, Window, anch
 
 use crate::theme::Theme;
 use crate::ui::account_switcher::AccountSwitcherModal;
+use crate::ui::access::AccessModal;
 use crate::ui::channel_modal::{CreateChannelModal, EditChannelModal};
 use crate::ui::emoji_picker::EmojiPicker;
 use crate::ui::group_dm::{CreateGroupDmModal, LeaveGroupDmModal};
@@ -35,6 +36,7 @@ pub enum Overlay {
     EditChannel(EditChannelModal),
     MemberModeration(MemberModerationModal),
     GuildBans(GuildBansModal),
+    Access(AccessModal),
 }
 
 impl Overlay {

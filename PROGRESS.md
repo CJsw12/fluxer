@@ -753,7 +753,21 @@
   - `docs/progress/progress.json` `guilds`의 `멤버 관리(킥·밴)`를 `partial`로 갱신하여 SVG 기준 `overall 65% (93 items)`, `daily driver 72% (73 items, 10 areas)` 반영.
 - **Verification**: `cargo check -p fluxer_client_app --bin fluxer_client` 경고 0, `cargo test --workspace -- --test-threads=2` → **534 통과, 0 실패, 경고 0**(app 225, core 260, i18n 10, markdown 36 [+1 ignored doctest], e2e 3).
 - **Blockers / Unverified**: 실서버 `DELETE/PUT /guilds/{id}/bans/{user}`, `DELETE/PATCH /guilds/{id}/members/{user|@me}`, `GET /guilds/{id}/bans` 권한·MFA·실시간 게이트웨이 반영 및 GUI 실기 확인은 미검증.
-- **Next Steps**: Milestone 10 계획 수립(`역할·권한 편집`, `안읽음·멘션 점프`, `재연결·장시간 안정성` 등 우선순위 선정).
+- **Next Steps**: 아래 Milestone 10에서 역할·권한 편집을 진행.
+
+## 역할·권한 편집 (Milestone 10, 2026-11-20)
+- **Baseline**: `desktop-rs` `81eb71d3a` (Milestone 9 완료 커밋). 추적 브랜치와 일치하며 기존 미추적 파일은 인계 목록 참조.
+- **Done**:
+  - 길드 헤더의 역할 편집기에서 역할 목록·생성·이름·권한·별도 표시·멘션 설정·삭제·순서 변경을 지원한다. 기존 역할 계층을 재사용하고, `@everyone`은 권한만 편집할 수 있다.
+  - 채널과 카테고리에서 역할 및 멤버 오버라이드를 허용·상속·거부로 설정하거나 삭제할 수 있다. 편집 중 권한이 사라지거나 저장 대상이 바뀌면 쓰기를 차단한다. 권한 마스크는 10진 문자열로 전송한다.
+  - 카테고리 이동에서 `lock_permissions`로 권한 복사를 요청한다. 이동만 적용된 오류에서는 채널을 다시 조회하고 부분 성공을 알린다. 이동 전 권한을 담은 늦은 게이트웨이 배치가 도착하면 최신 값을 다시 조회한다.
+  - DeepSeek Flash가 서버 계약을 대조했고 GPT-6 Luna가 회귀 테스트 범위를 정리했다. Claude Opus 5.5 High 독립 검토에서 발견한 P2 두 건을 반영해 재조회 실패와 관련 없는 게이트웨이 이벤트 뒤에도 채널을 재확인한다. 서버가 채널 접근을 거부하면 로컬 드래프트나 채널 데이터를 삭제하지 않고 접근을 제한한다.
+- **Decisions**:
+  - 권한 경계는 서버에서 최종 판정한다. Rust 편집기는 길드 MFA 레벨과 본인의 MFA 상태, 역할 계층과 보유 권한을 저장 전에 확인한다. 오버라이드 저장 후에는 수정한 대상만 반영해 형제 오버라이드를 보존한다.
+  - 진행표의 역할·권한 편집을 `partial`로 표시했다. 역할 색상·아이콘과 서버에서 숨긴 스레드 권한 비트를 편집하는 UI는 후속 범위다. 멤버 선택은 현재 로드된 멤버와 기존 오버라이드에서 제공한다.
+- **Verification**: `cargo check --locked -p fluxer_client_app --bin fluxer_client` 경고 0건. `cargo test --locked --workspace -- --test-threads=2` 542건 통과, 실패 0건, doctest 1건 제외. REST 픽스처, 역할 계층·MFA와 권한 상승 가드, 늦은 게이트웨이 상태, GPUI 헤드리스 진입·해제 및 카테고리 이동을 검증했다.
+- **Blockers / Unverified**: 실서버 GUI 검증이 남아 있다.
+- **Next Steps**: 자체 검증 서버에서 MFA 가입 여부에 따른 역할 편집과 카테고리 이동·권한 복사를 확인한다.
 
 ## 인계 (2026-11-19, 다음 에이전트용 — 이 절부터 읽을 것)
 - **기준**: `desktop-rs` (`833d7404c` 이후 Milestone 9 길드 멤버 관리 커밋 반영), 워킹 트리 깨끗함(미공개 파일·`dist/` 제외). 미공개 유지 파일(커밋 금지): `RUST_*_PLAN.md`, `RUST_MIGRATION_REFERENCE_REVIEW.md`, `RUST_PORT_RESEARCH_*`, `IPC_M0_FINDINGS.md`, `tools/h265_livekit_probe/`.
@@ -764,4 +778,4 @@
 - **PC 부하 규칙**(사용자 PC가 여러 번 멈춤): `fluxer_client/.cargo/config.toml` `build.jobs=4` 유지, 동시에 빌드하는 작업 최대 2개, 앱 테스트는 항상 `timeout 300 … -- --test-threads=2`, 빌드 디렉터리는 `target/fc-root`만(추가로 만들었으면 끝나고 삭제). 헤드리스 GPUI 테스트가 무한 루프로 CPU를 먹은 전례(uniform_list의 0..1 측정 호출) — 렌더/레이아웃 콜백에서 상태 변경·notify 금지.
 - **GUI 실기**: `tools/agents/gui.ps1`는 다른 창이 대상 창을 가리면 입력을 거부한다(사용자가 PC 사용 중일 수 있음). 마우스 대신 키보드(Ctrl+K 등) 위주로 확인.
 - **커밋 규칙**: 기능 단위로 커밋 후 `git push origin desktop-rs`. push 전 `git fetch`, 사용자가 GitHub에서 README를 직접 고치므로 `git pull --rebase`로 올리고 그 문장은 되돌리지 말 것. 커밋 전 `docs/progress/progress.json` 갱신 + `python scripts/progress_svg.py`. 서버 IP·키 경로·친구 서버 도메인·사용자 홈 경로를 커밋에 넣지 말 것.
-- **위임 규칙(사용자 지시)**: Codex 금지. DeepSeek은 `deepseek/deepseek-flash`(V4.1 Flash 1017)만, 다른 DeepSeek 모델 금지. 백그라운드 작업은 완료 알림을 받을 수 있게 작업마다 따로 실행.
+- **위임 규칙(사용자 지시)**: GPT-6 Luna는 저위험 보조 작업에만 허용. DeepSeek은 `deepseek/deepseek-flash`(V4.1 Flash 1017)만 사용. 백그라운드 작업은 완료 알림을 받을 수 있게 작업마다 따로 실행.

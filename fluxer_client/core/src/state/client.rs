@@ -80,10 +80,12 @@ pub struct ChannelTreeNode {
 pub struct ClientState {
     pub session_id: Option<String>,
     pub current_user: Option<User>,
+    pub(super) current_user_mfa_enabled: Option<bool>,
     pub users: BTreeMap<Snowflake, User>,
     pub guilds: BTreeMap<Snowflake, Guild>,
     pub unavailable_guilds: BTreeSet<Snowflake>,
     pub channels: BTreeMap<Snowflake, Channel>,
+    pub(super) denied_channel_access: BTreeSet<Snowflake>,
     /// guild id -> user id -> member. READY carries only some members;
     /// the current user's member is the one that matters here.
     pub members: BTreeMap<Snowflake, BTreeMap<Snowflake, Member>>,
@@ -162,7 +164,14 @@ impl ClientState {
             "GUILD_MEMBER_LIST_UPDATE" => self.apply_member_list_update(d, out_ref),
             // handlers/channels.rs
             "CHANNEL_CREATE" => self.apply_channel_create(d, out_ref),
-            "CHANNEL_UPDATE" => self.apply_channel_update(d, out_ref),
+            "CHANNEL_UPDATE" => {
+                if dispatch.s != 0 && d.get("permission_overwrites").is_some()
+                    && let Some(id) = d.get("id").and_then(|id| id.as_str()).and_then(Snowflake::parse)
+                {
+                    self.denied_channel_access.remove(&id);
+                }
+                self.apply_channel_update(d, out_ref);
+            }
             "CHANNEL_UPDATE_BULK" => self.apply_channel_update_bulk(d, out_ref),
             "CHANNEL_DELETE" => self.apply_channel_delete(d, out_ref),
             "CHANNEL_RECIPIENT_ADD" => self.apply_channel_recipient_add(d, out_ref),
@@ -249,7 +258,7 @@ impl ClientState {
                 .collect();
             // Categories with no visible children are hidden to members, but shown
             // to managers so newly created empty categories stay reachable.
-            if !children.is_empty() || self.can_manage_channel(category.id) {
+            if !children.is_empty() || self.can_manage_channel(category.id) || self.can_manage_channel_permissions(category.id) {
                 nodes.push(ChannelTreeNode { channel: (*category).clone(), children });
             }
         }
@@ -352,6 +361,9 @@ impl ClientState {
     /// (`Permission.ts:117-140`, `thread_view_permissions`); a thread whose
     /// parent is unknown gets 0.
     pub fn channel_permissions(&self, channel_id: Snowflake) -> u64 {
+        if self.has_denied_channel_access(channel_id) {
+            return 0;
+        }
         let Some(channel) = self.channels.get(&channel_id) else { return 0 };
         if channel.kind.is_thread() {
             return match channel.parent_id {
@@ -365,6 +377,19 @@ impl ClientState {
         let Some(guild) = channel.guild_id.and_then(|g| self.guilds.get(&g)) else { return 0 };
         let member = self.members.get(&guild.id).and_then(|m| m.get(&me));
         compute_permissions(guild, me, member, Some(channel))
+    }
+
+    pub fn has_denied_channel_access(&self, channel: Snowflake) -> bool {
+        self.denied_channel_access.contains(&channel)
+    }
+
+    /// A confirmed REST access denial can arrive before a permission update.
+    pub fn set_denied_channel_access(&mut self, channel: Snowflake, denied: bool) {
+        if denied {
+            self.denied_channel_access.insert(channel);
+        } else {
+            self.denied_channel_access.remove(&channel);
+        }
     }
 
     /// Private channels are always viewable (they come from READY /

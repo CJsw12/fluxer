@@ -3,6 +3,7 @@
 //! touch the same file. Bodies are raw JSON until state DTOs are wired in;
 //! guild/channel/DM lists come from the gateway READY payload.
 
+mod access;
 mod channels;
 mod guild_membership;
 mod guilds;
@@ -17,6 +18,7 @@ mod settings;
 mod typing;
 mod users;
 
+pub use access::{RolePatch, validate_role_name};
 pub use channels::{
     CreateGuildChannelRequest, GroupDmPatch, GuildChannelPatch, MAX_CHANNEL_NAME_UTF16,
     MAX_CHANNEL_RATE_LIMIT_PER_USER, MAX_CHANNEL_TOPIC_UTF16, MAX_GROUP_DM_OTHER_RECIPIENTS,

@@ -113,6 +113,8 @@ pub struct Guild {
     pub name: String,
     pub icon: Option<String>,
     pub owner_id: Option<Snowflake>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mfa_level: Option<u8>,
     pub joined_at: Option<String>,
     pub member_count: Option<u64>,
     /// Guild-visit (preview) session; permissions are masked.
@@ -150,6 +152,8 @@ pub(crate) struct GuildProperties {
     pub icon: Option<String>,
     #[serde(default)]
     pub owner_id: Option<Snowflake>,
+    #[serde(default)]
+    pub mfa_level: Option<u8>,
     #[serde(default, deserialize_with = "null_default")]
     pub default_message_notifications: i8,
     #[serde(default, deserialize_with = "null_default")]

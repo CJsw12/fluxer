@@ -94,6 +94,7 @@ pub struct ChannelItem {
     /// channels are listed but not selectable.
     pub has_messages: bool,
     pub can_manage: bool,
+    pub can_manage_permissions: bool,
     pub nested: bool,
     pub unread: Unread,
     pub muted: bool,
@@ -243,6 +244,7 @@ fn channel_item(state: &ClientState, channel: &Channel, nested: bool, now_ms: i6
         is_category: channel.kind.is_category(),
         has_messages: opens_message_pane(channel.kind),
         can_manage: state.can_manage_channel(channel.id),
+        can_manage_permissions: state.can_manage_channel_permissions(channel.id),
         nested,
         unread: state.channel_unread(channel.id),
         muted: state.is_channel_muted(channel.guild_id, channel.id, now_ms),

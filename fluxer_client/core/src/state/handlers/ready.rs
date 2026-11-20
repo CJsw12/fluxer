@@ -33,6 +33,10 @@ impl ClientState {
         }
         self.users.insert(user.id, user.clone());
         self.current_user = Some(user);
+        self.current_user_mfa_enabled = d
+            .get("user")
+            .and_then(|user| user.get("mfa_enabled"))
+            .and_then(Value::as_bool);
 
         for g in d.get("guilds").and_then(Value::as_array).into_iter().flatten() {
             self.insert_guild_payload(g);

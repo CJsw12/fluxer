@@ -21,6 +21,59 @@ fn l(method: &str, target: String) -> (String, String) {
 }
 
 #[tokio::test]
+async fn role_and_channel_access_routes_preserve_wire_bitfields() {
+    use crate::state::{PermissionOverwrite, Snowflake};
+
+    let guild = Snowflake(120);
+    let role = Snowflake(121);
+    let channel = Snowflake(122);
+    let parent = Snowflake(123);
+    let role_body = json!({ "id": role, "name": "Helpers", "permissions": "9007199254740992" });
+    let fixture = Fixture::start(move |req, _| match (req.method.as_str(), req.target.as_str()) {
+        ("GET", "/api/v1/guilds/120/roles") => Resp::json(200, json!([role_body])),
+        ("POST", "/api/v1/guilds/120/roles") | ("PATCH", "/api/v1/guilds/120/roles/121") => {
+            Resp::json(200, role_body.clone())
+        }
+        ("GET", "/api/v1/channels/122") => Resp::json(200, json!({ "id": channel, "permission_overwrites": [] })),
+        _ => Resp::empty(204),
+    }).await;
+    let client = authed(&fixture).await;
+
+    assert_eq!(client.list_guild_roles(guild).await.unwrap()[0].id, role);
+    assert_eq!(client.create_guild_role(guild, "  Helpers ").await.unwrap().id, role);
+    let patch = RolePatch { permissions: Some(1 << 53), mentionable: Some(false), ..RolePatch::default() };
+    assert_eq!(client.update_guild_role(guild, role, &patch).await.unwrap().permissions, 1 << 53);
+    client.reorder_guild_roles(guild, &[(role, 2)]).await.unwrap();
+    client.delete_guild_role(guild, role).await.unwrap();
+    assert!(client.delete_guild_role(guild, guild).await.is_err());
+    let overwrite = PermissionOverwrite { id: role, kind: 0, allow: 1 << 53, deny: 1 << 11 };
+    client.set_channel_overwrite(channel, &overwrite).await.unwrap();
+    assert!(client.set_channel_overwrite(channel, &PermissionOverwrite { deny: 1 << 53, ..overwrite }).await.is_err());
+    client.delete_channel_overwrite(channel, role).await.unwrap();
+    client.move_channel_and_sync(guild, channel, parent).await.unwrap();
+    assert_eq!(client.get_guild_channel(channel).await.unwrap()["id"], "122");
+
+    let expected = [
+        ("GET", "/api/v1/guilds/120/roles"),
+        ("POST", "/api/v1/guilds/120/roles"),
+        ("PATCH", "/api/v1/guilds/120/roles/121"),
+        ("PATCH", "/api/v1/guilds/120/roles"),
+        ("DELETE", "/api/v1/guilds/120/roles/121"),
+        ("PUT", "/api/v1/channels/122/permissions/121"),
+        ("DELETE", "/api/v1/channels/122/permissions/121"),
+        ("PATCH", "/api/v1/guilds/120/channels"),
+        ("GET", "/api/v1/channels/122"),
+    ].map(|(method, path)| l(method, path.to_owned()));
+    assert_eq!(lines(&fixture), expected);
+    let reqs = fixture.requests();
+    assert_eq!(reqs[1].json(), json!({ "name": "Helpers" }));
+    assert_eq!(reqs[2].json(), json!({ "permissions": "9007199254740992", "mentionable": false }));
+    assert_eq!(reqs[3].json(), json!([{ "id": "121", "position": 2 }]));
+    assert_eq!(reqs[5].json(), json!({ "type": 0, "allow": "9007199254740992", "deny": "2048" }));
+    assert_eq!(reqs[7].json(), json!([{ "id": "122", "parent_id": "123", "lock_permissions": true }]));
+}
+
+#[tokio::test]
 async fn relationship_routes() {
     let fixture = Fixture::start(ok_fixture()).await;
     let client = authed(&fixture).await;

@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-19",
+  "updated": "2026-11-20",
   "areas": [
     {
       "key": "core",
@@ -337,7 +337,7 @@
         },
         {
           "name": "역할·권한 편집",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "멤버 관리(킥·밴)",

@@ -6,7 +6,7 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{AnyElement, Context, FontWeight, MouseButton, div, prelude::*, px};
 
-use super::{badge, user_panel};
+use super::{access::Scope, badge, user_panel};
 use crate::client_view::ClientView;
 use crate::theme::Theme;
 use crate::ui::l10n;
@@ -42,6 +42,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .map(|g| g.name.clone())
                 .unwrap_or_default();
             let can_leave = !view.current_guild_is_owner();
+            let can_manage_roles = view.backend.state().can_manage_guild_roles(id);
             div()
                 .flex()
                 .flex_row()
@@ -73,6 +74,12 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 .on_click(cx.listener(|this, _, window, cx| this.open_guild_bans(window, cx))),
                         ),
                     )
+                })
+                .when(can_manage_roles, |d| {
+                    d.child(div().debug_selector(|| "guild-roles-btn".to_owned()).child(
+                        Button::new("guild-roles-btn").ghost().xsmall().label(l10n::tr("Roles"))
+                            .on_click(cx.listener(move |this, _, window, cx| this.open_access(Scope::Guild(id), window, cx))),
+                    ))
                 })
                 .when(can_leave, |d| {
                     d.child(
@@ -142,6 +149,22 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
 
 fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
     let (muted_fg, fg) = (theme.muted_foreground, theme.foreground);
+    let permissions = match view.place {
+        Place::Guild(guild) if c.can_manage_permissions => {
+            let channel = c.id;
+            Some(div().id(("channel-permissions-wrap", channel.0))
+                .debug_selector(move || format!("channel-permissions-{}", channel.0))
+                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                .on_click(|_, _, cx| cx.stop_propagation())
+                .child(Button::new(("channel-permissions", channel.0)).ghost().xsmall()
+                    .label(l10n::tr("Permissions"))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        cx.stop_propagation();
+                        this.open_access(Scope::Channel { guild, channel }, window, cx);
+                    }))))
+        }
+        _ => None,
+    };
     if c.is_category {
         let cat_id = c.id;
         let create_sel = format!("create-in-category-{}", cat_id.0);
@@ -183,6 +206,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                     ),
                 )
             })
+            .children(permissions)
             .into_any_element();
     }
     let selected = view.selected_channel == Some(c.id);
@@ -236,5 +260,5 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         let id = c.id;
         row = row.on_click(cx.listener(move |this, _, _, cx| this.select_channel(id, cx)));
     }
-    row.into_any_element()
+    row.children(permissions).into_any_element()
 }

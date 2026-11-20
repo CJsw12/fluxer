@@ -179,14 +179,13 @@ impl AttachmentTray {
     }
 
     /// Puts files of a send that failed back in front of the channel's
-    /// tray, keeping at most `max_count` (files queued meanwhile go last).
+    /// tray. Files queued meanwhile stay in the tray even if it exceeds the send limit.
     pub fn restore(&mut self, channel_id: Snowflake, mut files: Vec<PendingAttachment>) {
         if files.is_empty() {
             return;
         }
         let list = self.by_channel.entry(channel_id).or_default();
         files.append(list);
-        files.truncate(self.max_count);
         *list = files;
     }
 
@@ -329,7 +328,7 @@ mod tests {
         assert!(tray.files(ch).is_empty());
     }
 
-    /// Files of a failed send come back first; the count limit holds.
+    /// Files of a failed send come back first without dropping newly queued files.
     #[test]
     fn restore_puts_failed_files_back() {
         let mut tray = AttachmentTray::default();
@@ -339,8 +338,9 @@ mod tests {
         tray.add(ch, (0..9).map(|i| file(&format!("new{i}"), 1)).collect()).expect("added");
         tray.restore(ch, taken);
         let names: Vec<&str> = tray.files(ch).iter().map(|f| f.file.name.as_str()).collect();
-        assert_eq!(names.len(), 10);
+        assert_eq!(names.len(), 11);
         assert_eq!(&names[..3], ["a", "b", "new0"]);
+        assert_eq!(names.last(), Some(&"new8"));
         tray.retain_channels(|id| id != ch);
         assert!(tray.files(ch).is_empty());
     }

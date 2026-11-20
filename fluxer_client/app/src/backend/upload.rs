@@ -11,7 +11,7 @@ use fluxer_client_core::rest::{
 use fluxer_client_core::state::{Message, Snowflake};
 use serde_json::json;
 
-use super::{Backend, UiEvent, lock};
+use super::{Backend, UiEvent, UploadFailure, lock};
 
 /// One multipart send as the test log records it.
 #[cfg(test)]
@@ -31,7 +31,7 @@ impl Backend {
     /// now ("Uploading… N%" while `UiEvent::UploadProgress` arrives), then
     /// the multipart POST. Returns the pending row's nonce; `None` before
     /// READY (no current user). `UiEvent::UploadEnded` reports the end
-    /// either way (the row is `Failed` when the upload failed).
+    /// either way, including failure after the message window was reset.
     pub fn send_with_files(
         &self,
         channel_id: Snowflake,
@@ -41,11 +41,15 @@ impl Backend {
         max_file_size: u64,
     ) -> Option<Snowflake> {
         let nonce = self.next_nonce();
-        let guild_id = {
+        let (guild_id, author_id) = {
             let mut state = self.state();
+            if !state.can_attach_files(channel_id) {
+                return None;
+            }
             let author = state.current_user.clone()?;
+            let author_id = author.id;
             state.messages.insert_pending(channel_id, nonce, pending_text(&content, &files), author);
-            state.channels.get(&channel_id).and_then(|c| c.guild_id)
+            (state.channels.get(&channel_id).and_then(|c| c.guild_id), author_id)
         };
         let request = SendMessageRequest {
             content: (!content.is_empty()).then_some(content),
@@ -83,15 +87,20 @@ impl Backend {
                     None
                 }
                 Err(err) => {
-                    lock(&state).messages.mark_failed(nonce);
-                    Some(upload_error(&err, &files))
+                    let mut state = lock(&state);
+                    if state.messages.has_confirmed_nonce(channel_id, author_id, nonce) {
+                        None
+                    } else {
+                        state.messages.mark_failed(nonce);
+                        let uncertain = matches!(
+                            &err,
+                            RestError::Transport(_) | RestError::Decode(_) | RestError::ResponseTooLarge { .. }
+                        ) || err.status().is_some_and(|status| status >= 500);
+                        Some(UploadFailure { message: upload_error(&err, &files), uncertain })
+                    }
                 }
             };
-            let _ = events.send(UiEvent::UploadEnded { nonce });
-            if let Some(error) = failure {
-                let _ = events.send(UiEvent::SendFailed { error });
-            }
-            let _ = events.send(UiEvent::StateChanged);
+            let _ = events.send(UiEvent::UploadEnded { nonce, error: failure });
         });
         Some(nonce)
     }

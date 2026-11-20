@@ -2,11 +2,13 @@
 //! attachment tray and multipart send (the backend's test log).
 
 use bytes::Bytes;
+use fluxer_client_core::Dispatch;
 use fluxer_client_core::rest::UploadSource;
 use fluxer_client_core::state::{ATTACHMENT_FLAG_SPOILER, MessageState, NotificationKind, Snowflake};
 use gpui_kit::{ClipboardItem, TestAppContext};
+use serde_json::json;
 
-use crate::backend::{UiEvent, lock_sent};
+use crate::backend::{UiEvent, UploadFailure, lock_sent};
 use crate::notify::Sound;
 use crate::notify::tests::{Recorder, notification};
 use crate::tests::{backend_with_fixture, draw, focus_composer, open_client, open_general, runtime};
@@ -15,6 +17,10 @@ use crate::view_model::Place;
 
 const GUILD: Snowflake = Snowflake(1);
 const GENERAL: Snowflake = Snowflake(11);
+
+fn upload_failure(nonce: Snowflake, message: &str, uncertain: bool) -> UiEvent {
+    UiEvent::UploadEnded { nonce, error: Some(UploadFailure { message: message.to_owned(), uncertain }) }
+}
 
 fn bytes_file(name: &str, size: u64) -> NewFile {
     NewFile {
@@ -192,7 +198,8 @@ fn files_without_text_send(cx: &mut TestAppContext) {
     drop(rt);
 }
 
-/// A failed upload puts its files back in the tray; a sent one does not.
+/// A failed upload puts its files back. A gateway-confirmed upload cannot
+/// restore files on a late HTTP error.
 #[gpui_kit::test]
 fn failed_upload_restores_the_files(cx: &mut TestAppContext) {
     let rt = runtime();
@@ -208,23 +215,101 @@ fn failed_upload_restores_the_files(cx: &mut TestAppContext) {
     view.read_with(cx, |v, _| assert!(v.attachments.files(GENERAL).is_empty(), "tray emptied while sending"));
 
     backend.state().messages.mark_failed(nonce);
-    view.update(cx, |v, cx| v.handle_events(vec![UiEvent::UploadEnded { nonce }], cx));
+    view.update(cx, |v, cx| {
+        v.handle_events(vec![upload_failure(nonce, "upload failed", false)], cx);
+    });
     view.read_with(cx, |v, _| {
         let names: Vec<&str> = v.attachments.files(GENERAL).iter().map(|f| f.file.name.as_str()).collect();
         assert_eq!(names, ["cat.png"], "back in the tray to send again");
         assert!(v.sent_files.is_empty());
     });
+
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    let upload = lock_sent(&backend.sent_uploads).last().cloned().expect("retried upload");
+    let retry = Snowflake::parse(&upload.request.nonce).unwrap();
+    assert_ne!(retry, nonce);
+    backend.state().apply(&Dispatch {
+        t: "MESSAGE_CREATE".to_owned(),
+        s: 3,
+        d: json!({
+            "id": crate::tests::msg_id(10), "channel_id": GENERAL, "nonce": retry,
+            "author": { "id": "100", "username": "me" }, "content": "sent",
+        }),
+    });
+    view.update(cx, |v, cx| v.handle_events(vec![upload_failure(retry, "late transport failure", true)], cx));
+    assert!(view.read_with(cx, |v, _| v.attachments.files(GENERAL).is_empty() && v.sent_files.is_empty() && v.error.is_none()));
     drop(rt);
 }
 
-/// Without ATTACH_FILES nothing is queued (the server would answer 403
-/// after the tray was emptied).
+#[gpui_kit::test]
+fn failed_upload_restores_files_without_a_message_window(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, cx) = open_general(cx, backend.clone(), events);
+    view.update(cx, |v, cx| v.add_files(vec![bytes_file("retry.txt", 4)], cx));
+    focus_composer(&view, cx);
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    let upload = lock_sent(&backend.sent_uploads).last().cloned().expect("a multipart POST");
+    let nonce = Snowflake::parse(&upload.request.nonce).unwrap();
+
+    backend.state().apply(&Dispatch {
+        t: "GUILD_DELETE".to_owned(),
+        s: 2,
+        d: json!({ "id": GUILD, "unavailable": true }),
+    });
+    assert!(backend.state().messages.window(GENERAL).is_none());
+    view.update(cx, |v, cx| {
+        v.handle_events(vec![upload_failure(nonce, "upload interrupted", true)], cx);
+    });
+    view.read_with(cx, |v, _| {
+        assert_eq!(v.attachments.files(GENERAL)[0].file.name, "retry.txt");
+        assert!(v.sent_files.is_empty());
+        assert!(v.error.as_ref().is_some_and(|error| error.contains("Check the channel before retrying")));
+    });
+}
+
+#[gpui_kit::test]
+fn failed_upload_keeps_newly_queued_files_and_checks_the_next_send_limit(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, cx) = open_general(cx, backend.clone(), events);
+    view.update(cx, |v, cx| {
+        v.attachments.max_count = 1;
+        v.add_files(vec![bytes_file("first.txt", 4)], cx);
+    });
+    focus_composer(&view, cx);
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    let upload = lock_sent(&backend.sent_uploads).last().cloned().unwrap();
+    let nonce = Snowflake::parse(&upload.request.nonce).unwrap();
+    view.update(cx, |v, cx| {
+        v.add_files(vec![bytes_file("second.txt", 4)], cx);
+        v.handle_events(vec![upload_failure(nonce, "upload failed", false)], cx);
+    });
+    cx.simulate_input("still my draft");
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    assert_eq!(lock_sent(&backend.sent_uploads).len(), 1);
+    assert!(view.read_with(cx, |v, cx| {
+        let names: Vec<_> = v.attachments.files(GENERAL).iter().map(|file| file.file.name.as_str()).collect();
+        names == ["first.txt", "second.txt"]
+            && v.composer.read(cx).value().as_ref() == "still my draft"
+            && v.error.as_ref().is_some_and(|error| error.contains("up to 1"))
+    }));
+}
+
+/// Revoking ATTACH_FILES blocks both adding files and sending existing ones.
 #[gpui_kit::test]
 fn attach_files_permission_gates_the_tray(cx: &mut TestAppContext) {
-    use fluxer_client_core::Dispatch;
     use fluxer_client_core::state::bits;
     let rt = runtime();
     let (backend, events) = backend_with_fixture(&rt);
+    let (view, cx) = open_general(cx, backend.clone(), events);
+    view.update(cx, |v, cx| v.add_files(vec![bytes_file("already-queued.png", 4)], cx));
+    let composer = focus_composer(&view, cx);
+    cx.simulate_input("keep this text");
     let send_only = bits::VIEW_CHANNEL | bits::SEND_MESSAGES | bits::READ_MESSAGE_HISTORY;
     backend.state().apply(&Dispatch {
         t: "GUILD_ROLE_UPDATE".to_owned(),
@@ -232,11 +317,15 @@ fn attach_files_permission_gates_the_tray(cx: &mut TestAppContext) {
         d: serde_json::json!({ "guild_id": GUILD.to_string(),
             "role": { "id": GUILD.to_string(), "name": "@everyone", "permissions": send_only.to_string() } }),
     });
-    let (view, cx) = open_general(cx, backend.clone(), events);
     view.update(cx, |v, cx| v.add_files(vec![bytes_file("cat.png", 4)], cx));
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    assert!(lock_sent(&backend.sent_uploads).is_empty());
+    assert_eq!(crate::tests::composer_text(&composer, cx), "keep this text");
     view.read_with(cx, |v, _| {
         assert!(v.can_send, "sending text is still allowed");
-        assert!(v.attachments.files(GENERAL).is_empty());
+        let names: Vec<_> = v.attachments.files(GENERAL).iter().map(|file| file.file.name.as_str()).collect();
+        assert_eq!(names, ["already-queued.png"]);
         let error = v.error.clone().expect("error shown");
         assert!(error.contains("permission to attach files"), "{error}");
     });

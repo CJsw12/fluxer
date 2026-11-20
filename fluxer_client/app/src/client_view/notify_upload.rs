@@ -3,11 +3,11 @@
 
 use std::path::PathBuf;
 
-use fluxer_client_core::state::{MessageState, Snowflake};
+use fluxer_client_core::state::Snowflake;
 use gpui_kit::{ClipboardEntry, ClipboardItem, Context, PathPromptOptions, Window};
 
 use super::ClientView;
-use crate::backend::Backend;
+use crate::backend::{Backend, UploadFailure};
 use crate::notify::{Notification, Notifier, Outcome};
 use crate::ui::attachments::{self, NewFile, PendingAttachment};
 use crate::ui::composer::ComposerMode;
@@ -231,8 +231,23 @@ impl ClientView {
             ComposerMode::Replying(target) => Some((target.message_id, target.mention)),
             _ => None,
         };
-        if self.backend.state().current_user.is_none() {
+        let max = self.attachments.max_count;
+        if self.attachments.files(channel_id).len() > max {
+            self.error = Some(attachments::AttachError::TooMany { max }.to_string().into());
+            cx.notify();
+            return;
+        }
+        let (signed_in, can_attach) = {
+            let state = self.backend.state();
+            (state.current_user_id().is_some(), state.can_attach_files(channel_id))
+        };
+        if !signed_in {
             self.not_ready(cx);
+            return;
+        }
+        if !can_attach {
+            self.error = Some(l10n::tr("You do not have permission to attach files in this channel.").into());
+            cx.notify();
             return;
         }
         let pending = self.attachments.take(channel_id);
@@ -254,19 +269,31 @@ impl ClientView {
         }
     }
 
-    /// The upload of `nonce` ended: when it failed (the row is `Failed`)
-    /// its files go back to the channel's tray to send again.
-    pub(super) fn upload_ended(&mut self, nonce: Snowflake) {
+    /// Returns failed files to the original channel even after a window reset.
+    pub(super) fn upload_ended(&mut self, nonce: Snowflake, error: Option<UploadFailure>) {
         self.uploads.remove(&nonce);
         let Some((channel_id, files)) = self.sent_files.remove(&nonce) else { return };
-        let failed = self
-            .backend
-            .state()
-            .messages
-            .message(channel_id, nonce)
-            .is_some_and(|m| m.state == MessageState::Failed);
-        if failed && self.backend.state().channels.contains_key(&channel_id) {
+        let Some(error) = error else { return };
+        let (confirmed, channel_retained) = {
+            let state = self.backend.state();
+            (
+                state.current_user_id().is_some_and(|user| {
+                    state.messages.has_confirmed_nonce(channel_id, user, nonce)
+                }),
+                state.channels.contains_key(&channel_id) || state.is_unavailable_channel(channel_id),
+            )
+        };
+        if confirmed {
+            return;
+        }
+        if channel_retained {
             self.attachments.restore(channel_id, files);
         }
+        let title = if error.uncertain {
+            l10n::tr("The message may have been sent. Check the channel before retrying.")
+        } else {
+            l10n::tr("Failed to send message.")
+        };
+        self.error = Some(format!("{title} {}", error.message).into());
     }
 }

@@ -44,8 +44,8 @@ pub enum UiEvent {
     NotificationClicked { guild_id: Option<Snowflake>, channel_id: Snowflake },
     /// Upload progress of the pending message `nonce`, 0..=100.
     UploadProgress { nonce: Snowflake, percent: u8 },
-    /// The upload of `nonce` finished (sent or failed).
-    UploadEnded { nonce: Snowflake },
+    /// The upload finished, even if its optimistic row was evicted.
+    UploadEnded { nonce: Snowflake, error: Option<UploadFailure> },
     /// A user profile fetch finished.
     ProfileLoaded {
         user_id: Snowflake,
@@ -95,6 +95,12 @@ pub enum GatewayStatus {
 pub struct HistoryStamp {
     request: u64,
     ready_generation: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UploadFailure {
+    pub message: String,
+    pub uncertain: bool,
 }
 
 /// Instance endpoints plus a REST client for them (token not set yet).

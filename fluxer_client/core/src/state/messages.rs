@@ -346,6 +346,12 @@ impl MessageStore {
         self.set_pending_state(nonce, MessageState::Sending, MessageState::Failed)
     }
 
+    pub fn has_confirmed_nonce(&self, channel: Snowflake, author: Snowflake, nonce: Snowflake) -> bool {
+        self.window(channel).is_some_and(|window| window.messages.iter().any(|message| {
+            message.state == MessageState::Sent && message.author.id == author && message.nonce_id() == Some(nonce)
+        }))
+    }
+
     /// Retry: `Failed` -> `Sending`. Returns the channel to redraw.
     pub fn mark_sending(&mut self, nonce: Snowflake) -> Option<Snowflake> {
         self.set_pending_state(nonce, MessageState::Failed, MessageState::Sending)

@@ -550,7 +550,7 @@ impl ClientView {
                 UiEvent::UploadProgress { nonce, percent } => {
                     self.uploads.insert(nonce, percent);
                 }
-                UiEvent::UploadEnded { nonce } => self.upload_ended(nonce),
+                UiEvent::UploadEnded { nonce, error } => self.upload_ended(nonce, error),
                 UiEvent::ProfileLoaded { user_id, guild_id, result } => {
                     self.profile_loaded(user_id, guild_id, result, cx);
                 }

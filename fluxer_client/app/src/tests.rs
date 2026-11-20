@@ -1081,6 +1081,87 @@ fn ready_drops_revoked_channel_without_fetching_its_history(cx: &mut TestAppCont
     assert_eq!(*lock_sent(&backend.page_loads), [(ANNOUNCEMENTS, LoadMode::Replace, None)]);
 }
 
+#[gpui_kit::test]
+fn temporary_guild_outage_preserves_composer_and_queued_files_until_recovery(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, cx) = open_general(cx, backend.clone(), events);
+    let composer = view.read_with(cx, |v, _| v.composer.clone());
+    let target = action_target(&view, 1, cx);
+    view.update_in(cx, |v, window, cx| {
+        v.message_action(MessageAction::Reply, &target, window, cx);
+        v.composer.update(cx, |input, cx| input.set_value("keep this draft", window, cx));
+        v.attachments.add(GENERAL, vec![crate::ui::attachments::text_file("keep this file")]).unwrap();
+        v.drafts.insert(ANNOUNCEMENTS, gpui_kit::component::input::InputContent::new("another draft"));
+    });
+    let outage = Dispatch {
+        t: "GUILD_DELETE".to_owned(),
+        s: 2,
+        d: json!({ "id": GUILD, "unavailable": true }),
+    };
+    backend.state().apply(&outage);
+    view.update(cx, |v, cx| v.handle_events(vec![UiEvent::StateChanged], cx));
+    assert!(view.read_with(cx, |v, _| v.guild_unavailable && !v.can_send && v.selected_channel == Some(GENERAL)));
+    assert_eq!(composer_text(&composer, cx), "keep this draft");
+
+    let mut incomplete = ready();
+    incomplete.d["session_id"] = json!("fresh-connection");
+    incomplete.d["guilds"] = json!([{ "id": GUILD, "unavailable": true }]);
+    backend.state().apply(&incomplete);
+    view.update(cx, |v, cx| v.handle_events(vec![UiEvent::Gateway(GatewayStatus::Ready)], cx));
+    assert!(lock_sent(&backend.page_loads).is_empty());
+    assert!(view.read_with(cx, |v, _| v.attachments.files(GENERAL).len() == 1 && v.drafts.contains_key(&ANNOUNCEMENTS)));
+
+    let restored = Dispatch { t: "GUILD_CREATE".to_owned(), s: 3, d: ready().d["guilds"][0].clone() };
+    backend.state().apply(&restored);
+    view.update(cx, |v, cx| v.handle_events(vec![UiEvent::GuildAvailable { guild_id: GUILD }], cx));
+    cx.run_until_parked();
+    assert!(view.read_with(cx, |v, _| !v.guild_unavailable && v.can_send && v.selected_channel == Some(GENERAL)));
+    assert_eq!(composer_text(&composer, cx), "keep this draft");
+    assert_eq!(view.read_with(cx, |v, _| v.attachments.files(GENERAL).len()), 1);
+    assert!(view.read_with(cx, |v, _| matches!(v.composer_mode.mode(), ComposerMode::Replying(_))));
+    assert_eq!(*lock_sent(&backend.page_loads), [(GENERAL, LoadMode::Replace, None)]);
+
+    backend.state().apply(&outage);
+    view.update(cx, |v, cx| v.handle_events(vec![UiEvent::StateChanged], cx));
+    backend.state().apply(&Dispatch {
+        t: "GUILD_DELETE".to_owned(),
+        s: 4,
+        d: json!({ "id": GUILD }),
+    });
+    view.update(cx, |v, cx| v.handle_events(vec![UiEvent::StateChanged], cx));
+    assert!(view.read_with(cx, |v, _| {
+        v.place == Place::Home
+            && v.selected_channel.is_none()
+            && v.attachments.files(GENERAL).is_empty()
+            && !v.drafts.contains_key(&ANNOUNCEMENTS)
+    }));
+}
+
+#[gpui_kit::test]
+fn edit_attempt_before_outage_repaint_preserves_the_edit_text(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, cx) = open_general(cx, backend.clone(), events);
+    backend.state().apply(&own_message_create(4, "original text"));
+    refresh(&view, cx);
+    let composer = focus_composer(&view, cx);
+    cx.simulate_keystrokes("up");
+    cx.run_until_parked();
+    view.update_in(cx, |v, window, cx| {
+        v.composer.update(cx, |input, cx| input.set_value("edited draft", window, cx));
+    });
+    backend.state().apply(&Dispatch {
+        t: "GUILD_DELETE".to_owned(),
+        s: 15,
+        d: json!({ "id": GUILD, "unavailable": true }),
+    });
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    assert_eq!(composer_text(&composer, cx), "edited draft");
+    assert!(view.read_with(cx, |v, _| matches!(v.composer_mode.mode(), ComposerMode::Editing(_))));
+}
+
 /// A failed page of a channel left meanwhile shows no error here.
 #[gpui_kit::test]
 fn history_error_of_another_channel_is_ignored(cx: &mut TestAppContext) {

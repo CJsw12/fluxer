@@ -81,6 +81,9 @@ impl ClientView {
     /// Esc: acks the open channel up to its newest message when it is
     /// unread, and jumps to the present (`ESCAPE_PRESSED`).
     pub(crate) fn mark_channel_read(&mut self, cx: &mut Context<Self>) {
+        if self.guild_unavailable {
+            return;
+        }
         let Some(channel_id) = self.selected_channel else { return };
         let last = {
             let state = self.backend.state();

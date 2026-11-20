@@ -15,8 +15,7 @@ impl ClientState {
     pub(in crate::state) fn insert_guild_payload(&mut self, g: &Value) -> Option<(Snowflake, bool)> {
         let id = id_field(g, "id")?;
         if g.get("unavailable").and_then(Value::as_bool) == Some(true) {
-            self.remove_guild_data(id);
-            self.unavailable_guilds.insert(id);
+            self.set_guild_unavailable(id);
             return Some((id, false));
         }
         let props: GuildProperties = g
@@ -51,6 +50,7 @@ impl ClientState {
         self.remove_guild_channels(id, &keep, true);
         self.members.remove(&id);
         self.unavailable_guilds.remove(&id);
+        self.unavailable_channels.retain(|_, guild_id| *guild_id != id);
         for mut c in channels {
             c.guild_id = Some(id);
             self.denied_channel_access.remove(&c.id);
@@ -67,11 +67,20 @@ impl ClientState {
         Some((id, true))
     }
 
+    fn set_guild_unavailable(&mut self, guild_id: Snowflake) {
+        self.unavailable_channels.extend(
+            self.channels.values().filter(|channel| channel.guild_id == Some(guild_id))
+                .map(|channel| (channel.id, guild_id)),
+        );
+        self.remove_guild_data(guild_id);
+        self.unavailable_guilds.insert(guild_id);
+    }
+
     /// Drop a guild with its channels, members, emojis and member lists.
     /// Read states stay, like the snapshot `GUILD_DELETE` (they are keyed by
     /// channel and cheap; a guild coming back from an outage keeps its
     /// unread markers).
-    pub(in crate::state) fn remove_guild_data(&mut self, guild_id: Snowflake) {
+    fn remove_guild_data(&mut self, guild_id: Snowflake) {
         self.guilds.remove(&guild_id);
         self.members.remove(&guild_id);
         self.emojis.remove(&guild_id);
@@ -134,11 +143,12 @@ impl ClientState {
     pub(in crate::state) fn apply_guild_delete(&mut self, d: &Value, out: &mut Vec<StateChange>) {
         let Some(id) = id_field(d, "id") else { return };
         let unavailable = d.get("unavailable").and_then(Value::as_bool).unwrap_or(false);
-        self.remove_guild_data(id);
         if unavailable {
-            self.unavailable_guilds.insert(id);
+            self.set_guild_unavailable(id);
         } else {
+            self.remove_guild_data(id);
             self.unavailable_guilds.remove(&id);
+            self.unavailable_channels.retain(|_, guild_id| *guild_id != id);
         }
         out.push(StateChange::GuildRemoved { guild_id: id, unavailable });
     }

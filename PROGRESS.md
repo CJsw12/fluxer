@@ -793,9 +793,17 @@
 - **Blockers / Unverified**: 실제 서비스의 장시간 프로세스 메모리는 측정하지 않았다.
 - **Next Steps**: 일시적으로 사용할 수 없는 길드에서 작성 중인 메시지와 첨부 대기 항목을 복구한다.
 
+## 일시적 길드 장애에서 작성 중 메시지 유지 (Milestone 14, 2026-11-20)
+- **Baseline**: `desktop-rs` `70977d61d`의 메시지 캐시 제한.
+- **Done**: `GUILD_DELETE`의 일시 장애 표시와 같은 계정의 `READY` 자리표시자에서 채널 ID를 유지한다. 앱은 열린 채널과 작성 중 텍스트, 저장된 드래프트, 첨부 대기 목록을 유지하고 장애 중 전송을 막는다. 길드가 돌아오면 열린 채널의 목록을 다시 요청한다. 확정 삭제·탈퇴에서는 관련 항목을 제거한다.
+- **Decisions**: 일시 장애 도중에는 채널 ID만 상태에 보존한다. Opus 5.5 High 독립 검토에서 나온 장애 직후 편집 저장 경로를 보완해 제출 시 최신 접근 권한을 확인한다. 캐시 미로딩 중에는 답장 대상을 삭제된 것으로 판단하지 않는다.
+- **Verification**: 바이너리 검사 경고 0건. 워크스페이스 테스트 551건 통과(app 236, core 266, i18n 10, markdown 36, e2e 3), 실패 0건, doctest 1건 제외. 일시 장애와 새 `READY`에서의 드래프트·첨부 보존, 채널 재로딩, 확정 삭제 정리, 화면 갱신 전 편집 제출 차단을 검증했다.
+- **Blockers / Unverified**: 실서버 장애와 장시간 동작은 미검증이다. 검토에서 확인한 기존 제약으로, 전송 중이던 메시지의 표시 행은 창 재설정으로 사라질 수 있다.
+- **Next Steps**: 업로드 결과를 메시지 목록 상태와 독립적으로 받아, 첨부 업로드가 실패하면 원래 채널의 대기 목록으로 복구한다.
+
 ## 인계 (2026-11-20, 다음 에이전트용)
-- **기준**: `desktop-rs`의 Milestone 13 커밋. 미공개 유지 파일(커밋 금지): `RUST_*_PLAN.md`, `RUST_MIGRATION_REFERENCE_REVIEW.md`, `RUST_PORT_RESEARCH_*`, `IPC_M0_FINDINGS.md`, `tools/h265_livekit_probe/`.
-- **현재 주력**: 네이티브 GPUI 클라이언트 `fluxer_client/`(core, app, markdown, i18n, e2e). 최신 검증 결과는 바로 위 Milestone 13에 기록했다.
+- **기준**: `desktop-rs`의 Milestone 14 커밋. 미공개 유지 파일(커밋 금지): `RUST_*_PLAN.md`, `RUST_MIGRATION_REFERENCE_REVIEW.md`, `RUST_PORT_RESEARCH_*`, `IPC_M0_FINDINGS.md`, `tools/h265_livekit_probe/`.
+- **현재 주력**: 네이티브 GPUI 클라이언트 `fluxer_client/`(core, app, markdown, i18n, e2e). 최신 검증 결과는 바로 위 Milestone 14에 기록했다.
 - **우선순위(P0)**: ① 알림·첨부 ✔(코드) ② 임베드 ✔(코드) ③ 릴리스 exe ✔(`scripts/package_fluxer_client.ps1`, 산출 `dist/fluxer_client/fluxer_client.exe` 39.17 MB, SHA256 `9a6a9e34600e5025a1e654ece655542c899cf64f5f5ab6b63f953102c6adcae7`, `PE_SUBSYSTEM=2`) ④ 안정성 실기(재연결·장시간 메모리·한글 IME). P1~P2 진행: 이모지 피커·프로필 팝업·설정 화면·트레이/자동 시작·드래프트 보존·방문 기록 이동·채널 음소거·친구 목록·관계 관리·초대 참가·길드 탈퇴·미디어 뷰어·신뢰 도메인 경고·글꼴/밀도/확대·메시지 검색·점프·그룹 DM UI·다중 계정 전환·딥링크/단일 인스턴스 인계·길드 채널 생성/편집/삭제·길드 멤버 관리(킥/밴/차단 목록/타임아웃/닉네임) ✔(코드/헤드리스).
 - **실기 미확인**: 실서버 길드 멤버 킥·밴·차단 목록/해제·타임아웃·닉네임 변경 동작, 실서버 길드 채널 생성·편집·공지 변환·카테고리 분리·삭제 동작, Windows 실제 HKCU `fluxer://` 프로토콜 실행·다중 프로세스 창 활성화·URI 인계 실서버/실기기 동작, 다중 계정/다중 인스턴스 전환·계정 추가·비활성 계정 제거 실서버 동작, 그룹 DM 생성/이름 변경/멤버 추가·제거/나가기 실서버 동작, 메시지 검색 REST·패널·점프(`POST /search/messages`·`?around=`) 실서버 동작, 미디어 뷰어·신뢰 도메인 경고·글꼴/밀도/확대 실서버/실기기 동작, 친구/관계 관리·초대 참가·그룹 DM 초대·길드 탈퇴 실서버 동작, 채널/DM 음소거 실서버 PATCH, 드래프트·`Alt+Left/Right` 실기, 트레이 아이콘·닫기 최소화·`--autostart` HKCU Run 실제 동작, 이모지 피커·프로필 팝업·설정/테마/로케일 UI 실서버 동작, GIF 애니메이션 수정, 유튜브 카드 중복 수정, Windows 토스트·알림음(사용자 PC가 방해 금지 모드), 첨부 업로드 실서버, 한국어 UI 화면, 릴리스 exe·AUMID 바로가기.
 - **테스트 환경**: 자체 테스트 서버 `fluxer-dev.home.arpa`(SSH 443 터널). 접속·계정·도구는 저장소 밖 `../Logs/fluxer-dev/LOCAL_ACCESS.md`. **친구 서버와 사용자 개인 계정은 테스트에 쓰지 말 것**(개인 정보). 메시지 전송 시험은 자체 서버에서만.

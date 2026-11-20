@@ -100,6 +100,7 @@ pub struct ClientView {
     unread_anchor: Option<Snowflake>,
     pub(crate) loading_history: bool,
     pub(crate) can_send: bool,
+    pub(crate) guild_unavailable: bool,
     pub(crate) gateway_status: GatewayStatus,
     pub(crate) status: SharedString,
     pub(crate) connection: Connection,
@@ -333,6 +334,7 @@ impl ClientView {
             unread_anchor: None,
             loading_history: false,
             can_send: false,
+            guild_unavailable: false,
             gateway_status: GatewayStatus::Connecting,
             status: l10n::tr("Connecting…").into(),
             connection: Connection::Connecting,
@@ -498,9 +500,13 @@ impl ClientView {
 
     pub(crate) fn handle_events(&mut self, batch: Vec<UiEvent>, cx: &mut Context<Self>) {
         let mut connected = false;
+        let mut guild_available = false;
         for event in batch {
             match event {
                 UiEvent::StateChanged => {}
+                UiEvent::GuildAvailable { guild_id } => {
+                    guild_available |= self.place == Place::Guild(guild_id);
+                }
                 UiEvent::Gateway(status) => {
                     // READY/RESUMED: subscriptions are sent again (with
                     // `sync`) by the refresh below.
@@ -825,7 +831,7 @@ impl ClientView {
                 }
             }
         }
-        if connected {
+        if connected || guild_available {
             self.reload_cleared_channel();
         }
         self.refresh(cx);
@@ -846,6 +852,7 @@ impl ClientView {
         }
         if let Some((jump_ch, target)) = self.pending_jump
             && Some(jump_ch) == self.selected_channel
+            && !self.guild_unavailable
             && !self.loading_history
         {
             self.pending_jump = None;
@@ -863,6 +870,9 @@ impl ClientView {
         let Some(channel_id) = self.selected_channel else { return };
         let (can_view, cleared) = {
             let state = self.backend.state();
+            if state.is_unavailable_channel(channel_id) {
+                return;
+            }
             (state.can_view_channel(channel_id), state.messages.window(channel_id).is_none_or(|w| !w.ready))
         };
         if !can_view {
@@ -934,8 +944,13 @@ impl ClientView {
                     self.prefs.set_trusted_domains(state.user_settings.trusted_domains());
                 }
             }
+            self.guild_unavailable = matches!(self.place, Place::Guild(id) if state.unavailable_guilds.contains(&id));
+            if self.guild_unavailable {
+                self.loading_history = false;
+            }
             if let Place::Guild(id) = self.place
                 && !state.guilds.contains_key(&id)
+                && !self.guild_unavailable
             {
                 self.place = Place::Home;
                 self.selected_channel = None;
@@ -945,7 +960,8 @@ impl ClientView {
                 }
             }
             let mut fallback_guild_channel: Option<Option<Snowflake>> = None;
-            if let Some(removed_id) = self.selected_channel.filter(|id| !state.channels.contains_key(id)) {
+            let retains_channel = |id: Snowflake| state.channels.contains_key(&id) || state.is_unavailable_channel(id);
+            if let Some(removed_id) = self.selected_channel.filter(|id| !retains_channel(*id)) {
                 self.drafts.remove(&removed_id);
                 self.last_channel.retain(|_, v| *v != removed_id);
                 self.selected_channel = None;
@@ -958,15 +974,16 @@ impl ClientView {
                 }
             } else if self.selected_channel.is_some_and(|id| !state.can_view_channel(id))
                 && matches!(self.place, Place::Guild(_))
+                && !self.guild_unavailable
             {
                 let next = channel_items(&state, self.place).into_iter().find(|c| c.has_messages).map(|c| c.id);
                 fallback_guild_channel = Some(next);
             }
-            if !state.channels.is_empty() {
-                self.drafts.retain(|id, _| state.channels.contains_key(id));
-                self.last_channel.retain(|_, v| state.channels.contains_key(v));
+            if state.current_user_id().is_some() {
+                self.drafts.retain(|id, _| retains_channel(*id));
+                self.last_channel.retain(|_, v| retains_channel(*v));
             }
-            self.attachments.retain_channels(|id| state.channels.contains_key(&id));
+            self.attachments.retain_channels(retains_channel);
             let dismiss_modal = match &self.overlay {
                 Overlay::CreateChannel(m) => {
                     !state.guilds.contains_key(&m.guild_id)
@@ -1066,7 +1083,11 @@ impl ClientView {
             };
             // A reply whose target was deleted is dropped.
             let reply_gone = match self.composer_mode.mode() {
-                ComposerMode::Replying(t) if state.messages.message(t.channel_id, t.message_id).is_none() => {
+                ComposerMode::Replying(t)
+                    if state.messages.window(t.channel_id).is_some_and(|window| {
+                        window.ready && window.messages.iter().all(|message| message.id != t.message_id)
+                    }) =>
+                {
                     Some(t.message_id)
                 }
                 _ => None,
@@ -1099,7 +1120,7 @@ impl ClientView {
                         .map(SharedString::from);
                     (
                         message_pane(&state, id, self.backend.media(), self.unread_anchor),
-                        state.can_send_messages(id),
+                        !self.guild_unavailable && state.can_send_messages(id),
                         channel.map(channel_name).unwrap_or_default(),
                         topic,
                         channel.map_or("", |c| ChannelIcon::of(c.kind).glyph()),
@@ -1126,6 +1147,9 @@ impl ClientView {
                 ),
             }
         };
+        if self.guild_unavailable {
+            self.cancel_ack();
+        }
         if dismiss_modal {
             self.overlay = Overlay::None;
             self.focus_composer_later(cx);
@@ -1153,7 +1177,7 @@ impl ClientView {
         self.channel_glyph = glyph;
         self.can_manage_guild_channels = can_manage_guild;
         self.can_manage_selected_channel = can_manage_selected;
-        self.backend.notify_focus().set_viewing(self.selected_channel);
+        self.backend.notify_focus().set_viewing(self.selected_channel.filter(|_| !self.guild_unavailable));
         let mut rows = pane.rows;
         if !self.uploads.is_empty() {
             for row in rows.iter_mut().filter(|r| r.state == MessageState::Sending) {
@@ -1448,7 +1472,15 @@ impl ClientView {
         }
         let Some(channel_id) = self.selected_channel else { return };
         let editing = matches!(self.composer_mode.mode(), ComposerMode::Editing(_));
-        if !self.can_send && !editing {
+        let can_submit = {
+            let state = self.backend.state();
+            if editing {
+                state.can_view_channel(channel_id)
+            } else {
+                self.can_send && state.can_send_messages(channel_id)
+            }
+        };
+        if !can_submit {
             return;
         }
         // Mention / channel / custom emoji tokens go out in wire form.
@@ -2133,7 +2165,7 @@ impl Render for ClientView {
                     // Files dropped anywhere on the message pane go to the tray.
                     .on_drop(cx.listener(|v, paths: &ExternalPaths, _, cx| v.add_paths(paths.paths(), cx)))
                     .child(ui::header::render(self, &theme, cx))
-                    .when(self.selected_channel.is_some() && self.unread_anchor.is_some(), |d| {
+                    .when(!self.guild_unavailable && self.selected_channel.is_some() && self.unread_anchor.is_some(), |d| {
                         d.child(self.render_unread_bar(&theme, cx))
                     })
                     .child(ui::message_list::render(self, handle, &theme))

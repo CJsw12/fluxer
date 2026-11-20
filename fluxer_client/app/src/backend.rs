@@ -27,6 +27,7 @@ use crate::notify::{Notification, NotifyFocus, notification_for};
 #[derive(Debug, Clone, PartialEq)]
 pub enum UiEvent {
     StateChanged,
+    GuildAvailable { guild_id: Snowflake },
     Gateway(GatewayStatus),
     /// A REST page for the channel was applied (or failed).
     HistoryLoaded { channel_id: Snowflake, stamp: HistoryStamp, error: Option<String> },
@@ -638,7 +639,15 @@ async fn pump_gateway(
                 if !changed {
                     continue;
                 }
-                UiEvent::StateChanged
+                match dispatch.t.as_str() {
+                    "GUILD_CREATE" | "GUILD_SYNC"
+                        if dispatch.d.get("unavailable").and_then(Value::as_bool) != Some(true) =>
+                    {
+                        dispatch.d.get("id").and_then(Value::as_str).and_then(Snowflake::parse)
+                            .map_or(UiEvent::StateChanged, |guild_id| UiEvent::GuildAvailable { guild_id })
+                    }
+                    _ => UiEvent::StateChanged,
+                }
             }
             GatewayEvent::Ready { .. } | GatewayEvent::Resumed => UiEvent::Gateway(GatewayStatus::Ready),
             GatewayEvent::Reconnecting { attempt, .. } => UiEvent::Gateway(GatewayStatus::Reconnecting { attempt }),

@@ -85,6 +85,8 @@ pub struct ClientState {
     pub users: BTreeMap<Snowflake, User>,
     pub guilds: BTreeMap<Snowflake, Guild>,
     pub unavailable_guilds: BTreeSet<Snowflake>,
+    /// Channel identities retained while a guild is temporarily unavailable.
+    pub(super) unavailable_channels: BTreeMap<Snowflake, Snowflake>,
     pub channels: BTreeMap<Snowflake, Channel>,
     pub(super) denied_channel_access: BTreeSet<Snowflake>,
     /// guild id -> user id -> member. READY carries only some members;
@@ -128,6 +130,10 @@ fn sidebar_rank(kind: ChannelKind) -> u8 {
 impl ClientState {
     pub fn ready_generation(&self) -> u64 {
         self.ready_generation
+    }
+
+    pub fn is_unavailable_channel(&self, channel: Snowflake) -> bool {
+        self.unavailable_channels.contains_key(&channel)
     }
 
     pub fn new() -> Self {

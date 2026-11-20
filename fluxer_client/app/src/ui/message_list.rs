@@ -17,7 +17,9 @@ use crate::view_model::{MessageRow, SystemRow};
 /// `handle` is `view`'s own entity: row clicks (reactions, reply jumps,
 /// the action bar) go to it.
 pub fn render(view: &ClientView, handle: WeakEntity<ClientView>, theme: &Theme) -> AnyElement {
-    let placeholder = if view.selected_channel.is_none() {
+    let placeholder = if view.guild_unavailable {
+        Some(l10n::tr("Community temporarily unavailable"))
+    } else if view.selected_channel.is_none() {
         Some(l10n::tr("Select a channel"))
     } else if view.loading_history && view.rows.borrow().is_empty() {
         Some(l10n::tr("Loading…"))

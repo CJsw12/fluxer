@@ -949,6 +949,8 @@ fn guild_outage_and_return_keeps_read_states() {
     let changes = state.apply(&dispatch("GUILD_DELETE", json!({"id": GUILD.to_string(), "unavailable": true})));
     assert_eq!(changes, vec![StateChange::GuildRemoved { guild_id: sf(GUILD), unavailable: true }]);
     assert!(state.unavailable_guilds.contains(&sf(GUILD)));
+    assert!(state.is_unavailable_channel(sf(GENERAL)));
+    assert!(!state.can_view_channel(sf(GENERAL)));
     assert!(!state.channels.contains_key(&sf(GENERAL)));
     assert!(state.read_states.contains_key(&sf(GENERAL)));
     assert!(state.messages.window(sf(GENERAL)).is_none());
@@ -957,7 +959,28 @@ fn guild_outage_and_return_keeps_read_states() {
     let changes = state.apply(&dispatch("GUILD_CREATE", guild_payload));
     assert_eq!(changes, vec![StateChange::GuildUpserted { guild_id: sf(GUILD) }]);
     assert!(!state.unavailable_guilds.contains(&sf(GUILD)));
+    assert!(!state.is_unavailable_channel(sf(GENERAL)));
     assert_eq!(state.channel_unread(sf(GENERAL)), Unread { unread: true, mention_count: 1 });
+}
+
+#[test]
+fn unavailable_channel_identity_survives_ready_until_a_definitive_removal() {
+    let mut state = ready_state();
+    let mut snapshot = ready_payload();
+    snapshot["session_id"] = json!("another-session");
+    snapshot["guilds"] = json!([{ "id": sf(GUILD), "unavailable": true }]);
+    state.apply(&dispatch("READY", snapshot));
+    assert!(state.is_unavailable_channel(sf(GENERAL)));
+    assert!(state.is_unavailable_channel(sf(ANNOUNCE)));
+    assert!(!state.can_view_channel(sf(ANNOUNCE)));
+
+    assert_eq!(
+        state.apply(&dispatch("CHANNEL_DELETE", json!({ "id": sf(GENERAL) }))),
+        [StateChange::ChannelRemoved { channel_id: sf(GENERAL), guild_id: Some(sf(GUILD)) }],
+    );
+    assert!(!state.is_unavailable_channel(sf(GENERAL)));
+    state.apply(&dispatch("GUILD_DELETE", json!({ "id": sf(GUILD) })));
+    assert!(!state.is_unavailable_channel(sf(ANNOUNCE)));
 }
 
 #[test]

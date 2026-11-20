@@ -49,7 +49,13 @@ impl ClientState {
     pub(in crate::state) fn apply_channel_delete(&mut self, d: &Value, out: &mut Vec<StateChange>) {
         let Some(id) = id_field(d, "id") else { return };
         self.denied_channel_access.remove(&id);
-        let Some(channel) = self.channels.remove(&id) else { return };
+        let Some(channel) = self.channels.remove(&id) else {
+            if let Some(guild_id) = self.unavailable_channels.remove(&id) {
+                self.read_states.remove(&id);
+                out.push(StateChange::ChannelRemoved { channel_id: id, guild_id: Some(guild_id) });
+            }
+            return;
+        };
         self.read_states.remove(&id);
         self.messages.remove_channel(id);
         self.typing.remove(&id);

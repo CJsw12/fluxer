@@ -49,7 +49,7 @@ impl ClientView {
     }
 
     pub(crate) fn jump_to_unread(&mut self, cx: &mut Context<Self>) {
-        if self.loading_history {
+        if self.loading_history || self.guild_unavailable {
             return;
         }
         let (Some(channel), Some(read)) = (self.selected_channel, self.unread_anchor) else {

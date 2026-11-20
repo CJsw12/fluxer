@@ -16,6 +16,12 @@ pub(crate) enum JumpTarget {
 }
 
 impl JumpTarget {
+    pub(super) fn anchor(self) -> Snowflake {
+        match self {
+            Self::Message(id) | Self::FirstUnreadAfter(id) => id,
+        }
+    }
+
     pub(super) fn missing_label(self) -> &'static str {
         match self {
             Self::Message(_) => "Message not found",

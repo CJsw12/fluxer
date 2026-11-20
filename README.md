@@ -6,9 +6,9 @@
 
 [![Rust 클라이언트 전체](docs/progress/badge-overall.svg)](docs/progress/progress.json) [![일상 사용 기준](docs/progress/badge-daily-driver.svg)](docs/progress/progress.json)
 
-**최근 업데이트 · 2026-11-20 · 마일스톤 11**
+**최근 업데이트 · 2026-11-20 · 마일스톤 12**
 
-채널의 첫 읽지 않은 메시지로 이동하고 읽음 처리할 수 있습니다. 워크스페이스 테스트 544건이 통과했으며, 실서버 GUI 검증은 남아 있습니다. [상세 진행 기록](PROGRESS.md)
+게이트웨이가 새 세션을 열 때 진행 중이던 메시지 이동을 다시 시도하고, 재접속 전 요청의 응답이 새 목록에 반영되지 않도록 했습니다. 워크스페이스 테스트 547건이 통과했으며, 실서버 GUI와 장시간 사용 검증은 남아 있습니다. [상세 진행 기록](PROGRESS.md)
 
 [![진행 지도](docs/progress/progress.svg)](docs/progress/progress.json)
 

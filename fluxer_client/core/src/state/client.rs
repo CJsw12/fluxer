@@ -79,6 +79,7 @@ pub struct ChannelTreeNode {
 #[derive(Debug, Default)]
 pub struct ClientState {
     pub session_id: Option<String>,
+    pub(super) ready_generation: u64,
     pub current_user: Option<User>,
     pub(super) current_user_mfa_enabled: Option<bool>,
     pub users: BTreeMap<Snowflake, User>,
@@ -125,6 +126,10 @@ fn sidebar_rank(kind: ChannelKind) -> u8 {
 }
 
 impl ClientState {
+    pub fn ready_generation(&self) -> u64 {
+        self.ready_generation
+    }
+
     pub fn new() -> Self {
         Self::default()
     }

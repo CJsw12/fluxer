@@ -320,7 +320,7 @@ fn dispatches_and_older_pages_update_rows(cx: &mut TestAppContext) {
         .collect();
     backend.state().messages.load(GENERAL, older, LoadMode::Before);
     view.update(cx, |v, cx| {
-        v.handle_events(vec![UiEvent::HistoryLoaded { channel_id: GENERAL, error: None }], cx)
+        v.handle_events(vec![backend.history_loaded(GENERAL, None)], cx)
     });
     cx.run_until_parked();
     draw(cx);
@@ -1037,13 +1037,57 @@ fn ready_reloads_the_open_channel(cx: &mut TestAppContext) {
     drop(rt);
 }
 
+#[gpui_kit::test]
+fn ready_retries_pending_jump_and_ignores_the_previous_completion(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, cx) = open_general(cx, backend.clone(), events);
+    let target = msg_id(40);
+    view.update(cx, |v, cx| v.jump_to_message(GENERAL, target, cx));
+    let previous = backend.history_loaded(GENERAL, Some("stale failure".to_owned()));
+
+    let mut fresh_ready = ready();
+    fresh_ready.d["session_id"] = json!("session-2");
+    backend.state().apply(&fresh_ready);
+    view.update(cx, |v, cx| {
+        v.handle_events(vec![UiEvent::Gateway(GatewayStatus::Ready), previous], cx);
+    });
+
+    assert_eq!(*lock_sent(&backend.page_loads), [
+        (GENERAL, LoadMode::Around, Some(target)),
+        (GENERAL, LoadMode::Around, Some(target)),
+    ]);
+    assert!(view.read_with(cx, |v, _| v.loading_history && v.pending_jump.is_some() && v.error.is_none()));
+    let mut message = general_page().pop().unwrap();
+    message.id = target;
+    backend.state().messages.load_around(GENERAL, vec![message], target, Some(target));
+    view.update(cx, |v, cx| v.handle_events(vec![backend.history_loaded(GENERAL, None)], cx));
+    assert_eq!(view.read_with(cx, |v, _| v.highlighted_message), Some((GENERAL, target)));
+}
+
+#[gpui_kit::test]
+fn ready_drops_revoked_channel_without_fetching_its_history(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, cx) = open_general(cx, backend.clone(), events);
+    view.update(cx, |v, cx| v.jump_to_message(GENERAL, msg_id(40), cx));
+    lock_sent(&backend.page_loads).clear();
+    let mut snapshot = ready();
+    snapshot.d["guilds"][0]["channels"][1]["permission_overwrites"] =
+        json!([{ "id": GUILD, "type": 0, "allow": "0", "deny": bits::VIEW_CHANNEL.to_string() }]);
+    backend.state().apply(&snapshot);
+    view.update(cx, |v, cx| v.handle_events(vec![UiEvent::Gateway(GatewayStatus::Ready)], cx));
+    assert_eq!(view.read_with(cx, |v, _| (v.selected_channel, v.pending_jump)), (Some(ANNOUNCEMENTS), None));
+    assert_eq!(*lock_sent(&backend.page_loads), [(ANNOUNCEMENTS, LoadMode::Replace, None)]);
+}
+
 /// A failed page of a channel left meanwhile shows no error here.
 #[gpui_kit::test]
 fn history_error_of_another_channel_is_ignored(cx: &mut TestAppContext) {
     let rt = runtime();
     let (backend, events) = backend_with_fixture(&rt);
-    let (view, cx) = open_general(cx, backend, events);
-    let failed = |channel_id| UiEvent::HistoryLoaded { channel_id, error: Some("503".to_owned()) };
+    let (view, cx) = open_general(cx, backend.clone(), events);
+    let failed = |channel_id| backend.history_loaded(channel_id, Some("503".to_owned()));
     view.update(cx, |v, cx| v.handle_events(vec![failed(ANNOUNCEMENTS)], cx));
     assert!(view.read_with(cx, |v, _| v.error.is_none()));
     view.update(cx, |v, cx| v.handle_events(vec![failed(GENERAL)], cx));

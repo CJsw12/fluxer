@@ -516,10 +516,10 @@ impl ClientView {
                     self.gateway_status = status;
                     self.refresh_status_text();
                 }
-                UiEvent::HistoryLoaded { channel_id, error } => {
+                UiEvent::HistoryLoaded { channel_id, stamp, error } => {
                     // A page of a channel left meanwhile neither ends this
                     // channel's load nor shows its error here.
-                    if Some(channel_id) == self.selected_channel {
+                    if Some(channel_id) == self.selected_channel && self.backend.history_stamp(channel_id) == stamp {
                         self.loading_history = false;
                         if let Some(error) = error {
                             if self.pending_jump.is_some_and(|(ch, _)| ch == channel_id) {
@@ -857,14 +857,28 @@ impl ClientView {
     }
 
     /// After READY the windows of a new session are cleared (and those of
-    /// the same session invalidated): the open channel loads its latest
-    /// page again instead of staying empty until it is reselected.
+    /// the same session invalidated): retry a pending jump or reload the
+    /// current channel's latest page.
     fn reload_cleared_channel(&mut self) {
         let Some(channel_id) = self.selected_channel else { return };
-        let cleared = self.backend.state().messages.window(channel_id).is_none_or(|w| !w.ready);
+        let (can_view, cleared) = {
+            let state = self.backend.state();
+            (state.can_view_channel(channel_id), state.messages.window(channel_id).is_none_or(|w| !w.ready))
+        };
+        if !can_view {
+            self.loading_history = false;
+            self.pending_jump = None;
+            return;
+        }
         if cleared {
             self.loading_history = true;
-            self.backend.load_messages(channel_id, None);
+            if let Some((channel, target)) = self.pending_jump
+                && channel == channel_id
+            {
+                self.backend.load_around(channel_id, target.anchor());
+            } else {
+                self.backend.load_messages(channel_id, None);
+            }
         }
     }
 
@@ -942,7 +956,7 @@ impl ClientView {
                         .map(|c| c.id);
                     fallback_guild_channel = Some(next);
                 }
-            } else if self.selected_channel.is_some_and(|id| state.has_denied_channel_access(id))
+            } else if self.selected_channel.is_some_and(|id| !state.can_view_channel(id))
                 && matches!(self.place, Place::Guild(_))
             {
                 let next = channel_items(&state, self.place).into_iter().find(|c| c.has_messages).map(|c| c.id);
@@ -1347,7 +1361,7 @@ impl ClientView {
     ) -> bool {
         let opens_pane = {
             let state = self.backend.state();
-            !state.has_denied_channel_access(channel_id)
+            state.can_view_channel(channel_id)
                 && state.channels.get(&channel_id).is_some_and(|c| opens_message_pane(c.kind))
         };
         if !opens_pane {
@@ -1781,7 +1795,7 @@ impl ClientView {
         let (opens, resolved_guild, already_loaded) = {
             let state = self.backend.state();
             let Some(ch) = state.channels.get(&channel_id) else { return };
-            let opens = opens_message_pane(ch.kind);
+            let opens = opens_message_pane(ch.kind) && state.can_view_channel(channel_id);
             let resolved_guild = guild_id.or(ch.guild_id);
             let already_loaded = state
                 .messages

@@ -23,6 +23,7 @@ impl ClientState {
         }
         let messages = std::mem::take(&mut self.messages);
         *self = Self {
+            ready_generation: self.ready_generation.saturating_add(1),
             session_id,
             messages,
             ..Self::default()

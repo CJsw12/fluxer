@@ -308,7 +308,7 @@ fn jump_to_in_window_around_boundaries_and_jump_to_present(cx: &mut TestAppConte
     ];
     backend.state().messages.load_around(ANNOUNCEMENTS, small_around, small_target, Some(msg_id(41)));
     view.update(cx, |v, cx| {
-        v.handle_events(vec![UiEvent::HistoryLoaded { channel_id: ANNOUNCEMENTS, error: None }], cx);
+        v.handle_events(vec![backend.history_loaded(ANNOUNCEMENTS, None)], cx);
     });
     cx.run_until_parked();
     draw(cx);
@@ -327,7 +327,7 @@ fn jump_to_in_window_around_boundaries_and_jump_to_present(cx: &mut TestAppConte
         (125..=174).rev().map(|n| make_message(msg_id(n), GENERAL, 201, "Alice", &format!("msg {n}"))).collect();
     backend.state().messages.load_around(GENERAL, around_50, hist_target, Some(msg_id(250)));
     view.update(cx, |v, cx| {
-        v.handle_events(vec![UiEvent::HistoryLoaded { channel_id: GENERAL, error: None }], cx);
+        v.handle_events(vec![backend.history_loaded(GENERAL, None)], cx);
     });
     cx.run_until_parked();
     draw(cx);
@@ -357,7 +357,7 @@ fn jump_to_in_window_around_boundaries_and_jump_to_present(cx: &mut TestAppConte
     let present_page = vec![make_message(msg_id(250), GENERAL, 201, "Alice", "latest present message")];
     backend.state().messages.load(GENERAL, present_page, LoadMode::Replace);
     view.update(cx, |v, cx| {
-        v.handle_events(vec![UiEvent::HistoryLoaded { channel_id: GENERAL, error: None }], cx);
+        v.handle_events(vec![backend.history_loaded(GENERAL, None)], cx);
     });
     cx.run_until_parked();
     draw(cx);
@@ -425,7 +425,7 @@ fn unread_jump_fetches_around_a_deleted_cursor_without_acknowledging_the_tail(cx
     cx.run_until_parked();
     assert_eq!(*lock_sent(&backend.page_loads), vec![(GENERAL, LoadMode::Around, Some(read))]);
     view.update(cx, |v, cx| {
-        v.handle_events(vec![UiEvent::HistoryLoaded { channel_id: ANNOUNCEMENTS, error: None }], cx);
+        v.handle_events(vec![backend.history_loaded(ANNOUNCEMENTS, None)], cx);
     });
     assert!(view.read_with(cx, |v, _| v.loading_history));
 
@@ -433,7 +433,7 @@ fn unread_jump_fetches_around_a_deleted_cursor_without_acknowledging_the_tail(cx
         .map(|id| make_message(msg_id(id), GENERAL, 201, "Alice", "around read cursor")).collect();
     backend.state().messages.load_around(GENERAL, around, read, Some(latest));
     view.update(cx, |v, cx| {
-        v.handle_events(vec![UiEvent::HistoryLoaded { channel_id: GENERAL, error: None }], cx);
+        v.handle_events(vec![backend.history_loaded(GENERAL, None)], cx);
     });
     cx.run_until_parked();
     draw(cx);

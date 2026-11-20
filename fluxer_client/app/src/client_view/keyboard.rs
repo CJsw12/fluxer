@@ -146,7 +146,7 @@ impl ClientView {
                 let Some(ch) = state.channels.get(&entry.channel_id) else {
                     return false;
                 };
-                if !opens_message_pane(ch.kind) {
+                if !opens_message_pane(ch.kind) || !state.can_view_channel(entry.channel_id) {
                     return false;
                 }
                 match entry.place {

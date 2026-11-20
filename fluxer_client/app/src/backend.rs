@@ -29,7 +29,7 @@ pub enum UiEvent {
     StateChanged,
     Gateway(GatewayStatus),
     /// A REST page for the channel was applied (or failed).
-    HistoryLoaded { channel_id: Snowflake, error: Option<String> },
+    HistoryLoaded { channel_id: Snowflake, stamp: HistoryStamp, error: Option<String> },
     /// A plain message send failed (shown as "Message not sent: ...").
     SendFailed { error: String },
     /// A message action (reply, reaction, edit, delete) failed; `error`
@@ -90,6 +90,12 @@ pub enum GatewayStatus {
     Closed { reason: String },
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HistoryStamp {
+    request: u64,
+    ready_generation: u64,
+}
+
 /// Instance endpoints plus a REST client for them (token not set yet).
 #[derive(Clone)]
 pub struct Instance {
@@ -122,6 +128,8 @@ pub fn lock<T>(state: &Mutex<T>) -> MutexGuard<'_, T> {
 pub(crate) use lock as lock_sent;
 
 mod actions;
+#[cfg(test)]
+mod history_tests;
 
 pub use actions::TypingSender;
 pub(crate) mod access;
@@ -377,32 +385,51 @@ impl Backend {
 
     /// `GET /channels/{id}/messages`: latest page, or the page before `before`.
     pub fn load_messages(&self, channel_id: Snowflake, before: Option<Snowflake>) {
-        match before {
+        drop(match before {
             Some(id) => self.load_page(channel_id, LoadMode::Before, Some(id)),
             None => self.load_page(channel_id, LoadMode::Replace, None),
-        }
+        });
     }
 
     /// The page after `after` (back towards the newest messages once newer
     /// ones were trimmed from the window).
     pub fn load_newer(&self, channel_id: Snowflake, after: Snowflake) {
-        self.load_page(channel_id, LoadMode::After, Some(after));
+        drop(self.load_page(channel_id, LoadMode::After, Some(after)));
     }
 
     /// `GET /channels/{id}/messages?around=<message_id>&limit=50`: loads a
     /// historical slice centered around `message_id`.
     pub fn load_around(&self, channel_id: Snowflake, message_id: Snowflake) {
-        self.load_page(channel_id, LoadMode::Around, Some(message_id));
+        drop(self.load_page(channel_id, LoadMode::Around, Some(message_id)));
     }
 
-    fn load_page(&self, channel_id: Snowflake, mode: LoadMode, anchor: Option<Snowflake>) {
+    pub(crate) fn history_stamp(&self, channel: Snowflake) -> HistoryStamp {
+        let requests = lock(&self.history_seq);
+        HistoryStamp {
+            request: requests.get(&channel).copied().unwrap_or_default(),
+            ready_generation: self.state().ready_generation(),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn history_loaded(&self, channel_id: Snowflake, error: Option<String>) -> UiEvent {
+        UiEvent::HistoryLoaded { channel_id, stamp: self.history_stamp(channel_id), error }
+    }
+
+    fn load_page(
+        &self,
+        channel_id: Snowflake,
+        mode: LoadMode,
+        anchor: Option<Snowflake>,
+    ) -> tokio::task::JoinHandle<()> {
         #[cfg(test)]
         lock_sent(&self.page_loads).push((channel_id, mode, anchor));
-        let seq = {
-            let mut map = self.history_seq.lock().unwrap_or_else(PoisonError::into_inner);
-            let next = map.get(&channel_id).copied().unwrap_or(0).saturating_add(1);
-            map.insert(channel_id, next);
-            next
+        let stamp = {
+            // History takes the request lock before state. Callers must release state snapshots first.
+            let mut map = lock(&self.history_seq);
+            let request = map.entry(channel_id).or_default();
+            *request = request.saturating_add(1);
+            HistoryStamp { request: *request, ready_generation: self.state().ready_generation() }
         };
         let rest = self.rest.clone();
         let state = self.state.clone();
@@ -418,15 +445,20 @@ impl Backend {
                 limit: u8::try_from(PAGE_SIZE).ok(),
                 ..MessageQuery::default()
             };
-            let result = rest.get_messages(&channel_id.to_string(), &query).await;
-            let stale = history_seq.lock().unwrap_or_else(PoisonError::into_inner).get(&channel_id).copied().unwrap_or(0) != seq;
-            if stale {
+            let result = rest.get_messages(&channel_id.to_string(), &query).await
+                .map(|body| parse_messages(&body));
+            // A new request and a new READY must not interleave with committing this page.
+            let requests = lock(&history_seq);
+            if requests.get(&channel_id).copied() != Some(stamp.request) {
+                return;
+            }
+            let mut st = lock(&state);
+            if st.ready_generation() != stamp.ready_generation {
                 return;
             }
             let error = match result {
-                Ok(body) => {
-                    let page = parse_messages(&body);
-                    let mut st = lock(&state);
+                _ if !st.can_view_channel(channel_id) => Some("Missing access".to_owned()),
+                Ok(page) => {
                     if mode == LoadMode::Around {
                         let known_latest = st.channels.get(&channel_id).and_then(|c| c.last_message_id);
                         if let Some(target) = anchor_id {
@@ -441,8 +473,10 @@ impl Backend {
                 }
                 Err(err) => Some(err.to_string()),
             };
-            let _ = events.send(UiEvent::HistoryLoaded { channel_id, error });
-        });
+            drop(st);
+            drop(requests);
+            let _ = events.send(UiEvent::HistoryLoaded { channel_id, stamp, error });
+        })
     }
 
     /// Optimistic send: inserts a pending row now, then POSTs with the nonce.

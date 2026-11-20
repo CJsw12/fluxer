@@ -139,7 +139,9 @@ impl MessageStore {
     /// Mark the channel the user is viewing; it is never evicted.
     pub fn select(&mut self, channel_id: Option<Snowflake>) {
         self.selected = channel_id;
-        if let Some(id) = channel_id {
+        if let Some(id) = channel_id
+            && self.windows.contains_key(&id)
+        {
             self.touch(id);
         }
     }
@@ -485,6 +487,28 @@ impl MessageStore {
 mod around_tests {
     use super::*;
     use crate::state::model::User;
+
+    #[test]
+    fn selecting_unloaded_channels_does_not_grow_the_cache_order() {
+        let mut store = MessageStore::new();
+        let capacity = MAX_CACHED_CHANNELS as u64;
+        for id in 1..=capacity {
+            store.load(Snowflake(id), Vec::new(), LoadMode::Replace);
+        }
+
+        store.select(Some(Snowflake(1)));
+        for id in capacity + 1..=capacity * 16 {
+            store.select(Some(Snowflake(id)));
+        }
+        assert_eq!(store.lru.len(), MAX_CACHED_CHANNELS);
+
+        let last = Snowflake(capacity * 16);
+        store.load(last, Vec::new(), LoadMode::Replace);
+        assert_eq!(store.lru.len(), MAX_CACHED_CHANNELS);
+        assert!(store.window(Snowflake(1)).is_some(), "the last selected cached window was touched");
+        assert!(store.window(Snowflake(2)).is_none(), "the least recent cached window was evicted");
+        assert!(store.window(last).is_some());
+    }
 
     fn test_msg(id: u64, channel_id: u64, content: &str) -> Message {
         Message {

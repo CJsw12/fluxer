@@ -19,7 +19,9 @@ impl ClientState {
         let session_id = d.get("session_id").and_then(Value::as_str).map(str::to_owned);
         let guilds = d.get("guilds").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
         let mut unavailable_channels = std::mem::take(&mut self.unavailable_channels);
-        if self.current_user_id() == Some(user.id) {
+        let same_account = self.current_user_id() == Some(user.id);
+        let same_session = same_account && session_id.is_some() && session_id == self.session_id;
+        if same_account {
             let unavailable: BTreeSet<_> = guilds.iter()
                 .filter(|guild| guild.get("unavailable").and_then(Value::as_bool) == Some(true))
                 .filter_map(|guild| id_field(guild, "id"))
@@ -32,11 +34,15 @@ impl ClientState {
         } else {
             unavailable_channels.clear();
         }
-        // Messages: new session clears windows, same session only invalidates.
-        if session_id.is_some() && session_id == self.session_id {
-            self.messages.invalidate();
-        } else {
+        if !same_account {
             self.messages.clear();
+        } else if same_session {
+            self.messages.invalidate();
+            for &channel_id in unavailable_channels.keys() {
+                self.messages.discard_channel_history(channel_id);
+            }
+        } else {
+            self.messages.discard_remote_history();
         }
         let messages = std::mem::take(&mut self.messages);
         *self = Self {
@@ -65,6 +71,9 @@ impl ClientState {
                 self.users.entry(r.id).or_insert_with(|| r.clone());
             }
             self.channels.insert(c.id, c);
+        }
+        if !same_session {
+            self.messages.retain_channels(|id| self.channels.contains_key(&id) || self.unavailable_channels.contains_key(&id));
         }
         self.load_ready_read_states(d);
         self.load_ready_relationships(d);

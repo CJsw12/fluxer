@@ -52,6 +52,7 @@ impl ClientState {
         let Some(channel) = self.channels.remove(&id) else {
             if let Some(guild_id) = self.unavailable_channels.remove(&id) {
                 self.read_states.remove(&id);
+                self.messages.remove_channel(id);
                 out.push(StateChange::ChannelRemoved { channel_id: id, guild_id: Some(guild_id) });
             }
             return;

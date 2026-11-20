@@ -681,6 +681,44 @@ fn reconnect_same_session_invalidates_new_session_clears() {
 }
 
 #[test]
+fn new_session_retains_local_outgoing_rows_and_avoids_matching_old_history() {
+    let mut state = ready_state();
+    let channel = sf(GENERAL);
+    let me = state.current_user.clone().unwrap();
+    let old = message(mid(1), GENERAL, ME, "same text");
+    state.messages.load(channel, vec![old.clone()], LoadMode::Replace);
+    let failed = mid(10);
+    let sending = mid(11);
+    let no_nonce = mid(12);
+    state.messages.insert_pending(channel, failed, "same text".to_owned(), me.clone());
+    state.messages.insert_pending(channel, sending, "sending".to_owned(), me.clone());
+    state.messages.insert_pending(channel, no_nonce, "received without nonce".to_owned(), me);
+    state.messages.mark_failed(failed);
+
+    let mut next = ready_payload();
+    next["session_id"] = json!("new-session");
+    state.apply(&dispatch("READY", next.clone()));
+    let window = state.messages.window(channel).unwrap();
+    assert!(!window.ready);
+    assert_eq!(window.messages.iter().map(|m| m.state).collect::<Vec<_>>(), [
+        MessageState::Failed, MessageState::Sending, MessageState::Sending,
+    ]);
+
+    let mut confirmed = message(mid(13), GENERAL, ME, "sending");
+    confirmed.nonce = Some(sending.to_string());
+    let newer_no_nonce = message(mid(14), GENERAL, ME, "received without nonce");
+    state.messages.load(channel, vec![newer_no_nonce, confirmed.clone(), old], LoadMode::Replace);
+    assert_eq!(state.messages.message(channel, failed).unwrap().state, MessageState::Failed);
+    assert!(state.messages.message(channel, sending).is_none());
+    assert!(state.messages.message(channel, no_nonce).is_none());
+    assert!(state.messages.message(channel, confirmed.id).is_some());
+
+    next["user"] = user_json(OTHER, "different user");
+    state.apply(&dispatch("READY", next));
+    assert!(state.messages.window(channel).is_none());
+}
+
+#[test]
 fn lru_evicts_least_recent_but_never_selected() {
     let mut store = MessageStore::new();
     store.select(Some(sf(1)));
@@ -966,6 +1004,11 @@ fn guild_outage_and_return_keeps_read_states() {
 #[test]
 fn unavailable_channel_identity_survives_ready_until_a_definitive_removal() {
     let mut state = ready_state();
+    let me = state.current_user.clone().unwrap();
+    state.messages.insert_pending(sf(GENERAL), mid(10), "sending".to_owned(), me.clone());
+    state.messages.insert_pending(sf(ANNOUNCE), mid(11), "also sending".to_owned(), me);
+    state.apply(&dispatch("GUILD_DELETE", json!({ "id": sf(GUILD), "unavailable": true })));
+    assert!(state.messages.message(sf(GENERAL), mid(10)).is_some());
     let mut snapshot = ready_payload();
     snapshot["session_id"] = json!("another-session");
     snapshot["guilds"] = json!([{ "id": sf(GUILD), "unavailable": true }]);
@@ -973,14 +1016,17 @@ fn unavailable_channel_identity_survives_ready_until_a_definitive_removal() {
     assert!(state.is_unavailable_channel(sf(GENERAL)));
     assert!(state.is_unavailable_channel(sf(ANNOUNCE)));
     assert!(!state.can_view_channel(sf(ANNOUNCE)));
+    assert_eq!(state.messages.mark_failed(mid(10)), Some(sf(GENERAL)));
 
     assert_eq!(
         state.apply(&dispatch("CHANNEL_DELETE", json!({ "id": sf(GENERAL) }))),
         [StateChange::ChannelRemoved { channel_id: sf(GENERAL), guild_id: Some(sf(GUILD)) }],
     );
     assert!(!state.is_unavailable_channel(sf(GENERAL)));
+    assert!(state.messages.window(sf(GENERAL)).is_none());
     state.apply(&dispatch("GUILD_DELETE", json!({ "id": sf(GUILD) })));
     assert!(!state.is_unavailable_channel(sf(ANNOUNCE)));
+    assert!(state.messages.window(sf(ANNOUNCE)).is_none());
 }
 
 #[test]

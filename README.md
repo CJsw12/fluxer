@@ -6,9 +6,9 @@
 
 [![Rust 클라이언트 전체](docs/progress/badge-overall.svg)](docs/progress/progress.json) [![일상 사용 기준](docs/progress/badge-daily-driver.svg)](docs/progress/progress.json)
 
-**최근 업데이트 · 2026-11-20 · 마일스톤 15**
+**최근 업데이트 · 2026-11-20 · 마일스톤 16**
 
-첨부 업로드가 실패하면 메시지 창이 초기화된 뒤에도 파일을 원래 채널의 대기 목록으로 복구합니다. 워크스페이스 테스트 553건이 통과했으며, 실서버 GUI와 장시간 사용 검증은 남아 있습니다. [상세 진행 기록](PROGRESS.md)
+같은 계정으로 다시 연결하거나 길드가 일시적으로 내려가도 전송 중이거나 실패한 메시지의 로컬 행을 유지합니다. 워크스페이스 테스트 554건이 통과했으며, 실서버 GUI와 장시간 사용 검증은 남아 있습니다. [상세 진행 기록](PROGRESS.md)
 
 [![진행 지도](docs/progress/progress.svg)](docs/progress/progress.json)
 

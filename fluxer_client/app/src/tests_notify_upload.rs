@@ -254,11 +254,18 @@ fn failed_upload_restores_files_without_a_message_window(cx: &mut TestAppContext
     let upload = lock_sent(&backend.sent_uploads).last().cloned().expect("a multipart POST");
     let nonce = Snowflake::parse(&upload.request.nonce).unwrap();
 
-    backend.state().apply(&Dispatch {
-        t: "GUILD_DELETE".to_owned(),
-        s: 2,
-        d: json!({ "id": GUILD, "unavailable": true }),
-    });
+    {
+        let mut state = backend.state();
+        state.apply(&Dispatch {
+            t: "GUILD_DELETE".to_owned(),
+            s: 2,
+            d: json!({ "id": GUILD, "unavailable": true }),
+        });
+        state.messages.select(None);
+        for id in 0..fluxer_client_core::state::MAX_CACHED_CHANNELS {
+            state.messages.load(Snowflake(1000 + id as u64), Vec::new(), fluxer_client_core::state::LoadMode::Replace);
+        }
+    }
     assert!(backend.state().messages.window(GENERAL).is_none());
     view.update(cx, |v, cx| {
         v.handle_events(vec![upload_failure(nonce, "upload interrupted", true)], cx);

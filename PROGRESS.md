@@ -809,9 +809,17 @@
 - **Blockers / Unverified**: 서버 확인이 복구 후에 도착하는 전송은 뒤늦게 확인될 수 있다. 실서버 장애와 장시간 동작은 미검증이다. 이미 전송을 시작한 일반 텍스트의 실패 행을 재연결 때 보존하는 작업은 남아 있다.
 - **Next Steps**: 같은 계정의 새 `READY`와 일시적 길드 장애에서 전송 중이거나 실패한 메시지의 로컬 행을 보존한다.
 
+## 재연결 시 전송 중·실패 메시지 유지 (Milestone 16, 2026-11-20)
+- **Baseline**: `desktop-rs` `18be1a48e`의 실패한 첨부 업로드 복구.
+- **Done**: 같은 계정의 새 `READY`와 일시적 길드 장애에서 서버 메시지 기록을 비우더라도 전송 중이거나 실패한 로컬 행은 유지한다. 최신 페이지의 nonce 확인을 우선하고, nonce가 없는 서버 행에는 기존 작성자·답장 대상·내용 비교를 적용한다. 계정 변경과 확정 삭제에서는 이전 로컬 행을 제거한다.
+- **Decisions**: Opus 5.5 High 독립 검토를 반영해 서버 기록을 비운 뒤에는 로컬 nonce보다 새 서버 메시지에만 내용 비교를 허용한다. 같은 세션의 목록 무효화에서는 기존 창의 재사용 동작을 유지한다. Gemini 4 Argon High 후속 검토에서 추가 P1·P2 문제를 발견하지 않았다. 로컬 행은 메모리에 보관하고 재전송은 사용자 동작으로 시작한다.
+- **Verification**: 바이너리 검사 경고 0건. 워크스페이스 테스트 554건 통과(app 238, core 267, i18n 10, markdown 36, e2e 3), 실패 0건, doctest 1건 제외. 같은 계정의 재접속, 길드 장애 후 실패 처리, 동일 문구와 실제 nonce 확인의 구분, 계정 전환 및 확정 삭제 정리를 검증했다.
+- **Blockers / Unverified**: 과거 메시지 페이지로 이동하거나 메시지 창이 LRU에서 퇴출되면 로컬 행을 잃을 수 있다. 실제 서비스의 네트워크 장애와 장시간 프로세스는 미검증이다.
+- **Next Steps**: 과거 페이지를 불러올 때 전송 중이거나 실패한 메시지를 별도로 보관하고, 최신 목록으로 돌아올 때 복구한다.
+
 ## 인계 (2026-11-20, 다음 에이전트용)
-- **기준**: `desktop-rs`의 Milestone 15 커밋. 미공개 유지 파일(커밋 금지): `RUST_*_PLAN.md`, `RUST_MIGRATION_REFERENCE_REVIEW.md`, `RUST_PORT_RESEARCH_*`, `IPC_M0_FINDINGS.md`, `tools/h265_livekit_probe/`.
-- **현재 주력**: 네이티브 GPUI 클라이언트 `fluxer_client/`(core, app, markdown, i18n, e2e). 최신 검증 결과는 바로 위 Milestone 15에 기록했다.
+- **기준**: `desktop-rs`의 Milestone 16 커밋. 미공개 유지 파일(커밋 금지): `RUST_*_PLAN.md`, `RUST_MIGRATION_REFERENCE_REVIEW.md`, `RUST_PORT_RESEARCH_*`, `IPC_M0_FINDINGS.md`, `tools/h265_livekit_probe/`.
+- **현재 주력**: 네이티브 GPUI 클라이언트 `fluxer_client/`(core, app, markdown, i18n, e2e). 최신 검증 결과는 바로 위 Milestone 16에 기록했다.
 - **우선순위(P0)**: ① 알림·첨부 ✔(코드) ② 임베드 ✔(코드) ③ 릴리스 exe ✔(`scripts/package_fluxer_client.ps1`, 산출 `dist/fluxer_client/fluxer_client.exe` 39.17 MB, SHA256 `9a6a9e34600e5025a1e654ece655542c899cf64f5f5ab6b63f953102c6adcae7`, `PE_SUBSYSTEM=2`) ④ 안정성 실기(재연결·장시간 메모리·한글 IME). P1~P2 진행: 이모지 피커·프로필 팝업·설정 화면·트레이/자동 시작·드래프트 보존·방문 기록 이동·채널 음소거·친구 목록·관계 관리·초대 참가·길드 탈퇴·미디어 뷰어·신뢰 도메인 경고·글꼴/밀도/확대·메시지 검색·점프·그룹 DM UI·다중 계정 전환·딥링크/단일 인스턴스 인계·길드 채널 생성/편집/삭제·길드 멤버 관리(킥/밴/차단 목록/타임아웃/닉네임) ✔(코드/헤드리스).
 - **실기 미확인**: 실서버 길드 멤버 킥·밴·차단 목록/해제·타임아웃·닉네임 변경 동작, 실서버 길드 채널 생성·편집·공지 변환·카테고리 분리·삭제 동작, Windows 실제 HKCU `fluxer://` 프로토콜 실행·다중 프로세스 창 활성화·URI 인계 실서버/실기기 동작, 다중 계정/다중 인스턴스 전환·계정 추가·비활성 계정 제거 실서버 동작, 그룹 DM 생성/이름 변경/멤버 추가·제거/나가기 실서버 동작, 메시지 검색 REST·패널·점프(`POST /search/messages`·`?around=`) 실서버 동작, 미디어 뷰어·신뢰 도메인 경고·글꼴/밀도/확대 실서버/실기기 동작, 친구/관계 관리·초대 참가·그룹 DM 초대·길드 탈퇴 실서버 동작, 채널/DM 음소거 실서버 PATCH, 드래프트·`Alt+Left/Right` 실기, 트레이 아이콘·닫기 최소화·`--autostart` HKCU Run 실제 동작, 이모지 피커·프로필 팝업·설정/테마/로케일 UI 실서버 동작, GIF 애니메이션 수정, 유튜브 카드 중복 수정, Windows 토스트·알림음(사용자 PC가 방해 금지 모드), 첨부 업로드 실서버, 한국어 UI 화면, 릴리스 exe·AUMID 바로가기.
 - **테스트 환경**: 자체 테스트 서버 `fluxer-dev.home.arpa`(SSH 443 터널). 접속·계정·도구는 저장소 밖 `../Logs/fluxer-dev/LOCAL_ACCESS.md`. **친구 서버와 사용자 개인 계정은 테스트에 쓰지 말 것**(개인 정보). 메시지 전송 시험은 자체 서버에서만.

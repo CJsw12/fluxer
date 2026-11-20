@@ -47,6 +47,8 @@ pub struct MessageWindow {
     /// side only while pinned; otherwise the window grows up to
     /// `MAX_LOADED_MESSAGES`. Defaults to true.
     pub pinned_to_end: bool,
+    #[serde(skip)]
+    history_discarded: bool,
 }
 
 impl MessageWindow {
@@ -91,22 +93,30 @@ impl MessageWindow {
     }
 
     /// Unsent messages to keep across a replace (`collectUnsentMessages`):
-    /// a loaded record that is new to the window and has the same author,
-    /// reply target and content (`unsentCorrelationKey`) consumes one match.
+    /// Prefer a matching nonce. After dropping history, content matching
+    /// also requires a server ID newer than the pending message's nonce.
     fn take_unsent(&mut self, records: &[Message]) -> Vec<Message> {
         let mut unmatched: Vec<&Message> = records
             .iter()
             .filter(|r| self.position(r.id).is_none())
             .collect();
         let reply_to = |m: &Message| m.message_reference.as_ref().and_then(|r| r.message_id);
+        let history_discarded = self.history_discarded;
         let mut kept = Vec::new();
         for m in self.messages.drain(..) {
             if m.state == MessageState::Sent {
                 continue;
             }
-            let hit = unmatched.iter().position(|r| {
-                r.author.id == m.author.id && reply_to(r) == reply_to(&m) && r.content == m.content
-            });
+            let hit = unmatched.iter().position(|r| r.author.id == m.author.id && r.nonce_id() == Some(m.id))
+                .or_else(|| {
+                    unmatched.iter().position(|r| {
+                        r.nonce_id().is_none()
+                            && (!history_discarded || r.id > m.id)
+                            && r.author.id == m.author.id
+                            && reply_to(r) == reply_to(&m)
+                            && r.content == m.content
+                    })
+                });
             match hit {
                 Some(i) => {
                     unmatched.swap_remove(i);
@@ -115,6 +125,12 @@ impl MessageWindow {
             }
         }
         kept
+    }
+
+    fn discard_remote_history(&mut self) {
+        self.messages.retain(|message| message.state != MessageState::Sent);
+        let messages = std::mem::take(&mut self.messages);
+        *self = Self { messages, history_discarded: true, ..Self::new() };
     }
 }
 
@@ -437,10 +453,31 @@ impl MessageStore {
         self.lru.retain(|id| *id != channel_id);
     }
 
-    /// New gateway session: drop everything (`MessagingMessages.ts:676-702`).
+    pub(crate) fn discard_channel_history(&mut self, channel_id: Snowflake) {
+        if let Some(window) = self.windows.get_mut(&channel_id) {
+            window.discard_remote_history();
+            if window.messages.is_empty() {
+                self.remove_channel(channel_id);
+            }
+        }
+    }
+
+    pub(crate) fn discard_remote_history(&mut self) {
+        self.windows.retain(|_, window| {
+            window.discard_remote_history();
+            !window.messages.is_empty()
+        });
+        self.lru.retain(|id| self.windows.contains_key(id));
+    }
+
+    pub(crate) fn retain_channels(&mut self, keep: impl Fn(Snowflake) -> bool) {
+        self.windows.retain(|id, _| keep(*id));
+        self.lru.retain(|id| self.windows.contains_key(id));
+    }
+
+    /// Drop every window when the account changes.
     pub(crate) fn clear(&mut self) {
-        self.windows.clear();
-        self.lru.clear();
+        *self = Self::default();
     }
 
     /// Same session reconnected: keep messages but require a reload

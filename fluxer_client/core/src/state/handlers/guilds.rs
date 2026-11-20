@@ -50,7 +50,7 @@ impl ClientState {
         self.remove_guild_channels(id, &keep, true);
         self.members.remove(&id);
         self.unavailable_guilds.remove(&id);
-        self.unavailable_channels.retain(|_, guild_id| *guild_id != id);
+        self.forget_unavailable_channels(id, &keep);
         for mut c in channels {
             c.guild_id = Some(id);
             self.denied_channel_access.remove(&c.id);
@@ -74,6 +74,18 @@ impl ClientState {
         );
         self.remove_guild_data(guild_id);
         self.unavailable_guilds.insert(guild_id);
+    }
+
+    fn forget_unavailable_channels(&mut self, guild_id: Snowflake, keep: &BTreeSet<Snowflake>) {
+        self.unavailable_channels.retain(|channel_id, guild| {
+            if *guild != guild_id {
+                return true;
+            }
+            if !keep.contains(channel_id) {
+                self.messages.remove_channel(*channel_id);
+            }
+            false
+        });
     }
 
     /// Drop a guild with its channels, members, emojis and member lists.
@@ -103,7 +115,11 @@ impl ClientState {
             if drop_read_states {
                 self.read_states.remove(&id);
             }
-            self.messages.remove_channel(id);
+            if self.is_unavailable_channel(id) {
+                self.messages.discard_channel_history(id);
+            } else {
+                self.messages.remove_channel(id);
+            }
             self.typing.remove(&id);
         }
     }
@@ -148,7 +164,7 @@ impl ClientState {
         } else {
             self.remove_guild_data(id);
             self.unavailable_guilds.remove(&id);
-            self.unavailable_channels.retain(|_, guild_id| *guild_id != id);
+            self.forget_unavailable_channels(id, &BTreeSet::new());
         }
         out.push(StateChange::GuildRemoved { guild_id: id, unavailable });
     }

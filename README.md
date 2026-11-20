@@ -6,9 +6,9 @@
 
 [![Rust 클라이언트 전체](docs/progress/badge-overall.svg)](docs/progress/progress.json) [![일상 사용 기준](docs/progress/badge-daily-driver.svg)](docs/progress/progress.json)
 
-**최근 업데이트 · 2026-11-20 · 마일스톤 17**
+**최근 업데이트 · 2026-11-20 · 마일스톤 18**
 
-재연결과 과거 메시지 탐색 중에 전송 중이거나 실패한 메시지를 보관하고, 최신 목록에서 다시 표시합니다. 워크스페이스 테스트 556건이 통과했으며, 실서버 GUI와 장시간 사용 검증은 남아 있습니다. [상세 진행 기록](PROGRESS.md)
+재연결, 과거 메시지 탐색, 채널 캐시 퇴출 중에도 전송 중이거나 실패한 메시지를 보관하고 최신 목록에서 다시 표시합니다. 워크스페이스 테스트 557건이 통과했으며, 실서버 GUI와 장시간 사용 검증은 남아 있습니다. [상세 진행 기록](PROGRESS.md)
 
 [![진행 지도](docs/progress/progress.svg)](docs/progress/progress.json)
 

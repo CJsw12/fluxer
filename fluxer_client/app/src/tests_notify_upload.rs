@@ -267,6 +267,7 @@ fn failed_upload_restores_files_without_a_message_window(cx: &mut TestAppContext
         }
     }
     assert!(backend.state().messages.window(GENERAL).is_none());
+    assert_eq!(backend.state().messages.mark_failed(nonce), Some(GENERAL));
     view.update(cx, |v, cx| {
         v.handle_events(vec![upload_failure(nonce, "upload interrupted", true)], cx);
     });
@@ -275,6 +276,8 @@ fn failed_upload_restores_files_without_a_message_window(cx: &mut TestAppContext
         assert!(v.sent_files.is_empty());
         assert!(v.error.as_ref().is_some_and(|error| error.contains("Check the channel before retrying")));
     });
+    backend.state().messages.load(GENERAL, Vec::new(), fluxer_client_core::state::LoadMode::Replace);
+    assert_eq!(backend.state().messages.message(GENERAL, nonce).map(|m| m.state), Some(MessageState::Failed));
 }
 
 #[gpui_kit::test]

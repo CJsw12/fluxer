@@ -1,13 +1,14 @@
-//! Typed client commands: member-list LAZY_REQUEST (op 14) and
-//! PRESENCE_UPDATE (op 3), shaped like `GatewaySocket.ts`
-//! (`updateGuildSubscriptions`, `updatePresence`) and `MemberSidebar.ts`
+//! Typed client commands: member-list LAZY_REQUEST (op 14),
+//! PRESENCE_UPDATE (op 3), and VOICE_STATE_UPDATE (op 4), shaped like
+//! `GatewaySocket.ts` (`updateGuildSubscriptions`, `updatePresence`,
+//! `updateVoiceStateExplicit`) and `MemberSidebar.ts`
 //! (`applyChannelSubscription`). Range math ports
 //! `MemberListRangeUtils.ts`.
 
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 
-use super::{GatewayError, GatewayHandle};
+use super::{GatewayError, GatewayHandle, op};
 
 /// `MEMBER_LIST_RANGE_MAX_END` (`GatewayConstants.ts:26`).
 pub const MEMBER_LIST_RANGE_MAX_END: u32 = 100_000;
@@ -127,6 +128,71 @@ pub struct PresenceUpdate {
 
 const PRESENCE_STATUSES: [&str; 4] = ["online", "idle", "dnd", "invisible"];
 
+fn validate_snowflake(id: &str) -> Result<(), GatewayError> {
+    if id.is_empty() || id.len() > 20 || !id.bytes().all(|b| b.is_ascii_digit()) {
+        return Err(GatewayError::InvalidArgument("guild/channel id must be a snowflake"));
+    }
+    Ok(())
+}
+
+/// Payload for VOICE_STATE_UPDATE (op 4), matching `GatewayVoiceStateUpdateParams`
+/// and `buildVoiceStatePayload` in `GatewaySocket.ts`.
+///
+/// `guild_id`, `channel_id`, and `connection_id` are always serialized (as JSON
+/// `null` when `None`) because the server distinguishes `null` leave/DM states.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct VoiceStateUpdate {
+    pub guild_id: Option<String>,
+    pub channel_id: Option<String>,
+    pub self_mute: bool,
+    pub self_deaf: bool,
+    pub self_video: bool,
+    pub self_stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub viewer_stream_keys: Option<Vec<String>>,
+    pub connection_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub p2p: Option<bool>,
+    pub is_mobile: bool,
+}
+
+impl VoiceStateUpdate {
+    /// Joins (or moves to) a guild or DM voice channel with all self flags off.
+    pub fn join(guild_id: Option<String>, channel_id: impl Into<String>, connection_id: Option<String>) -> Self {
+        Self {
+            guild_id,
+            channel_id: Some(channel_id.into()),
+            self_mute: false,
+            self_deaf: false,
+            self_video: false,
+            self_stream: false,
+            viewer_stream_keys: None,
+            connection_id,
+            p2p: None,
+            is_mobile: false,
+        }
+    }
+
+    /// Leaves a guild voice channel (`guild_id: Some(..)`), a DM call
+    /// (`guild_id: None, connection_id: Some(..)`), or disconnects all voice
+    /// sessions (`guild_id: None, connection_id: None`) by sending
+    /// `channel_id: null`.
+    pub fn leave(guild_id: Option<String>, connection_id: Option<String>) -> Self {
+        Self {
+            guild_id,
+            channel_id: None,
+            self_mute: false,
+            self_deaf: false,
+            self_video: false,
+            self_stream: false,
+            viewer_stream_keys: None,
+            connection_id,
+            p2p: None,
+            is_mobile: false,
+        }
+    }
+}
+
 impl GatewayHandle {
     /// LAZY_REQUEST for one channel's member list; see
     /// [`member_list_subscription`]. Rejects non-snowflake ids so they
@@ -138,11 +204,8 @@ impl GatewayHandle {
         ranges: &[(u32, u32)],
         sync: bool,
     ) -> Result<(), GatewayError> {
-        for id in [guild_id, channel_id] {
-            if id.is_empty() || id.len() > 20 || !id.bytes().all(|b| b.is_ascii_digit()) {
-                return Err(GatewayError::InvalidArgument("guild/channel id must be a snowflake"));
-            }
-        }
+        validate_snowflake(guild_id)?;
+        validate_snowflake(channel_id)?;
         self.lazy_request(member_list_subscription(guild_id, channel_id, ranges, sync))
     }
 
@@ -153,6 +216,23 @@ impl GatewayHandle {
             return Err(GatewayError::InvalidArgument("status must be online, idle, dnd or invisible"));
         }
         self.update_presence(serde_json::to_value(presence)?)
+    }
+
+    /// VOICE_STATE_UPDATE (op 4) for joining, updating self state in, or
+    /// leaving (`channel_id: None`) a voice channel.
+    pub fn update_voice_state(&self, state: &VoiceStateUpdate) -> Result<(), GatewayError> {
+        if let Some(guild_id) = state.guild_id.as_deref() {
+            validate_snowflake(guild_id)?;
+        }
+        if let Some(channel_id) = state.channel_id.as_deref() {
+            validate_snowflake(channel_id)?;
+        }
+        if let Some(connection_id) = state.connection_id.as_deref()
+            && connection_id.is_empty()
+        {
+            return Err(GatewayError::InvalidArgument("connection_id must not be empty"));
+        }
+        self.send_raw(op::VOICE_STATE_UPDATE, serde_json::to_value(state)?)
     }
 }
 
@@ -239,5 +319,83 @@ mod tests {
         }
         let bad = PresenceUpdate { status: "away".into(), afk: false, mobile: false, custom_status: None };
         assert!(matches!(gateway.set_presence(&bad), Err(GatewayError::InvalidArgument(_))));
+    }
+
+    #[test]
+    fn handle_validates_and_encodes_voice_state_update() {
+        let (gateway, mut rx) = handle();
+        let mut join = VoiceStateUpdate::join(Some("42".into()), "100", Some("conn-1".into()));
+        join.self_mute = true;
+        join.viewer_stream_keys = Some(vec!["stream:1".into()]);
+        join.p2p = Some(false);
+        gateway.update_voice_state(&join).unwrap();
+        match rx.try_recv() {
+            Ok(Command::Send(frame)) => {
+                let frame: Value = serde_json::from_str(&frame).unwrap();
+                assert_eq!(
+                    frame,
+                    json!({
+                        "op": 4,
+                        "d": {
+                            "guild_id": "42",
+                            "channel_id": "100",
+                            "self_mute": true,
+                            "self_deaf": false,
+                            "self_video": false,
+                            "self_stream": false,
+                            "viewer_stream_keys": ["stream:1"],
+                            "connection_id": "conn-1",
+                            "p2p": false,
+                            "is_mobile": false
+                        }
+                    })
+                );
+            }
+            _ => panic!("expected a VOICE_STATE_UPDATE frame"),
+        }
+
+        let leave = VoiceStateUpdate::leave(None, None);
+        gateway.update_voice_state(&leave).unwrap();
+        match rx.try_recv() {
+            Ok(Command::Send(frame)) => {
+                let frame: Value = serde_json::from_str(&frame).unwrap();
+                assert_eq!(
+                    frame,
+                    json!({
+                        "op": 4,
+                        "d": {
+                            "guild_id": null,
+                            "channel_id": null,
+                            "self_mute": false,
+                            "self_deaf": false,
+                            "self_video": false,
+                            "self_stream": false,
+                            "connection_id": null,
+                            "is_mobile": false
+                        }
+                    })
+                );
+                let obj = frame["d"].as_object().unwrap();
+                assert!(!obj.contains_key("viewer_stream_keys"));
+                assert!(!obj.contains_key("p2p"));
+            }
+            _ => panic!("expected a VOICE_STATE_UPDATE leave frame"),
+        }
+
+        let bad_guild = VoiceStateUpdate::join(Some("abc".into()), "100", None);
+        assert!(matches!(
+            gateway.update_voice_state(&bad_guild),
+            Err(GatewayError::InvalidArgument(_))
+        ));
+        let bad_channel = VoiceStateUpdate::join(Some("42".into()), "", None);
+        assert!(matches!(
+            gateway.update_voice_state(&bad_channel),
+            Err(GatewayError::InvalidArgument(_))
+        ));
+        let bad_conn = VoiceStateUpdate::leave(Some("42".into()), Some(String::new()));
+        assert!(matches!(
+            gateway.update_voice_state(&bad_conn),
+            Err(GatewayError::InvalidArgument(_))
+        ));
     }
 }

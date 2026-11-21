@@ -11,8 +11,8 @@ mod tests;
 
 pub use subscriptions::{
     MEMBER_LIST_RANGE_MAX_END, MEMBER_LIST_RANGE_MAX_RANGES, MEMBER_LIST_RANGE_MAX_SPAN,
-    MEMBER_LIST_RANGE_OVERSCAN_PAGES, MEMBER_LIST_RANGE_PAGE_SIZE, PresenceUpdate, member_list_page_ranges,
-    member_list_subscription, normalize_member_list_ranges,
+    MEMBER_LIST_RANGE_OVERSCAN_PAGES, MEMBER_LIST_RANGE_PAGE_SIZE, PresenceUpdate, VoiceStateUpdate,
+    member_list_page_ranges, member_list_subscription, normalize_member_list_ranges,
 };
 
 use std::fmt;
@@ -39,6 +39,7 @@ pub mod op {
     pub const HEARTBEAT: u8 = 1;
     pub const IDENTIFY: u8 = 2;
     pub const PRESENCE_UPDATE: u8 = 3;
+    pub const VOICE_STATE_UPDATE: u8 = 4;
     pub const RESUME: u8 = 6;
     pub const RECONNECT: u8 = 7;
     pub const INVALID_SESSION: u8 = 9;

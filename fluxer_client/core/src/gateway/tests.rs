@@ -308,6 +308,117 @@ async fn tcp_hello_identify_dispatch_lazy_request_and_close() {
     assert!(timeout(WAIT, events.recv()).await.expect("end").is_none());
 }
 
+#[tokio::test]
+async fn tcp_voice_state_update_join_and_leave_frames() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+    let port = listener.local_addr().expect("addr").port();
+    let mut cfg = config(Compression::None);
+    cfg.url = Url::parse(&format!("ws://127.0.0.1:{port}/")).expect("url");
+    let (handle, mut events) = spawn(cfg).expect("spawn");
+
+    let (stream, _) = timeout(WAIT, listener.accept()).await.expect("accept").expect("tcp");
+    let ws = tokio_tungstenite::accept_async(stream).await.expect("handshake");
+    let mut server = ServerConn { ws, zstd: None };
+
+    server.hello(41_250).await;
+    server.recv_op(2).await;
+    server
+        .dispatch("READY", 1, json!({ "session_id": "sess-voice" }))
+        .await;
+    assert!(matches!(next(&mut events).await, GatewayEvent::Dispatch(d) if d.t == "READY"));
+    assert_eq!(
+        next(&mut events).await,
+        GatewayEvent::Ready {
+            session_id: "sess-voice".into()
+        }
+    );
+
+    let mut guild_join = VoiceStateUpdate::join(Some("42".into()), "100", Some("conn-1".into()));
+    guild_join.self_mute = true;
+    handle.update_voice_state(&guild_join).expect("guild join");
+    let join_frame = server.recv_op(4).await;
+    assert_eq!(
+        join_frame,
+        json!({
+            "op": 4,
+            "d": {
+                "guild_id": "42",
+                "channel_id": "100",
+                "self_mute": true,
+                "self_deaf": false,
+                "self_video": false,
+                "self_stream": false,
+                "connection_id": "conn-1",
+                "is_mobile": false
+            }
+        })
+    );
+
+    let guild_leave = VoiceStateUpdate::leave(Some("42".into()), Some("conn-1".into()));
+    handle.update_voice_state(&guild_leave).expect("guild leave");
+    let leave_frame = server.recv_op(4).await;
+    assert_eq!(
+        leave_frame,
+        json!({
+            "op": 4,
+            "d": {
+                "guild_id": "42",
+                "channel_id": null,
+                "self_mute": false,
+                "self_deaf": false,
+                "self_video": false,
+                "self_stream": false,
+                "connection_id": "conn-1",
+                "is_mobile": false
+            }
+        })
+    );
+
+    let dm_join = VoiceStateUpdate::join(None, "200", None);
+    handle.update_voice_state(&dm_join).expect("dm join");
+    let dm_join_frame = server.recv_op(4).await;
+    assert_eq!(
+        dm_join_frame,
+        json!({
+            "op": 4,
+            "d": {
+                "guild_id": null,
+                "channel_id": "200",
+                "self_mute": false,
+                "self_deaf": false,
+                "self_video": false,
+                "self_stream": false,
+                "connection_id": null,
+                "is_mobile": false
+            }
+        })
+    );
+
+    let dm_leave = VoiceStateUpdate::leave(None, None);
+    handle.update_voice_state(&dm_leave).expect("dm leave");
+    let dm_leave_frame = server.recv_op(4).await;
+    assert_eq!(
+        dm_leave_frame,
+        json!({
+            "op": 4,
+            "d": {
+                "guild_id": null,
+                "channel_id": null,
+                "self_mute": false,
+                "self_deaf": false,
+                "self_video": false,
+                "self_stream": false,
+                "connection_id": null,
+                "is_mobile": false
+            }
+        })
+    );
+
+    handle.close();
+    assert_eq!(server.recv().await, Got::Close(Some(1000)));
+    assert!(timeout(WAIT, events.recv()).await.expect("end").is_none());
+}
+
 #[tokio::test(start_paused = true)]
 async fn heartbeat_interval_seq_and_server_request() {
     let mut fx = Fixture::start(config(Compression::None));

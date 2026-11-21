@@ -330,3 +330,53 @@ fn voice_screen_share_and_audio_toggle_render_voice_panel(cx: &mut TestAppContex
     assert!(!room.screen_share_active.load(Ordering::SeqCst));
     assert!(vcx.debug_bounds("voice-share-audio-btn").is_none());
 }
+
+#[gpui_kit::test]
+fn a11y_labels_and_roles_render_without_panic(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, rx) = Backend::new(rt.handle().clone(), offline_rest(), None);
+    let perms = (bits::VIEW_CHANNEL | bits::CONNECT | bits::SPEAK | bits::MANAGE_CHANNELS).to_string();
+    backend.state().apply(&Dispatch {
+        t: "READY".to_owned(),
+        s: 1,
+        d: json!({
+            "session_id": "sess-a11y-ui",
+            "user": { "id": ME.to_string(), "username": "me" },
+            "guilds": [{
+                "id": GUILD.to_string(),
+                "properties": { "name": "Access Guild", "owner_id": OWNER.to_string() },
+                "roles": [{ "id": GUILD.to_string(), "name": "@everyone", "permissions": perms, "position": 0 }],
+                "members": [{ "user": { "id": ME.to_string(), "username": "me" }, "roles": [] }],
+                "channels": [
+                    { "id": "11", "guild_id": GUILD.to_string(), "type": 4, "name": "Category", "position": 0, "permission_overwrites": [] },
+                    { "id": "12", "guild_id": GUILD.to_string(), "type": 0, "name": "general", "parent_id": "11", "position": 1, "permission_overwrites": [] },
+                    { "id": VOICE_OPEN.to_string(), "guild_id": GUILD.to_string(), "type": 2, "name": "Lounge", "parent_id": "11", "position": 2, "permission_overwrites": [] }
+                ]
+            }]
+        }),
+    });
+    let (view, vcx) = open_client(cx, backend.clone(), rx);
+
+    // Render Home place: guild rail, channel list (Friends + create-group-dm-btn), user panel.
+    view.update(vcx, |v, cx| v.select_place(Place::Home, cx));
+    draw(vcx);
+    assert!(vcx.debug_bounds("join-guild").is_some());
+    assert!(vcx.debug_bounds("home-friends").is_some());
+    assert!(vcx.debug_bounds("create-group-dm-btn").is_some());
+
+    // Render Guild place with active voice connection: voice panel, text/voice channels, header buttons.
+    let _room = connect_voice_in_view(&rt, &backend, &view, vcx);
+    view.update(vcx, |v, cx| {
+        v.select_place(Place::Guild(GUILD), cx);
+        v.select_channel(Snowflake(12), cx);
+    });
+    draw(vcx);
+    assert!(vcx.debug_bounds("create-channel-btn").is_some());
+    assert!(vcx.debug_bounds("voice-panel").is_some());
+    assert!(vcx.debug_bounds("voice-disconnect-btn").is_some());
+    assert!(vcx.debug_bounds("voice-mute-btn").is_some());
+    assert!(vcx.debug_bounds("voice-deaf-btn").is_some());
+    assert!(vcx.debug_bounds("edit-selected-channel-btn").is_some());
+    assert!(vcx.debug_bounds("toggle-search").is_some());
+    assert!(vcx.debug_bounds("toggle-member-list").is_some());
+}

@@ -4,7 +4,7 @@ use fluxer_client_core::state::Unread;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::{Context, Div, ElementId, FontWeight, SharedString, Stateful, div, prelude::*, px};
+use gpui_kit::{Context, Div, ElementId, FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
 
 use super::{badge, l10n};
 use crate::client_view::ClientView;
@@ -14,6 +14,8 @@ use crate::view_model::Place;
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> impl IntoElement {
     let mut rail = div()
         .id("guild-rail")
+        .role(Role::Navigation)
+        .aria_label(l10n::tr("Communities"))
         .flex()
         .flex_col()
         .items_center()
@@ -30,8 +32,15 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         home_selected,
         view.home_unread,
         theme,
-        rail_button("home", l10n::tr("DM").into(), home_selected, view.home_unread, theme)
-            .on_click(cx.listener(|this, _, _, cx| this.select_place(Place::Home, cx))),
+        rail_button(
+            "home",
+            l10n::tr("DM").into(),
+            l10n::tr("Direct messages"),
+            home_selected,
+            view.home_unread,
+            theme,
+        )
+        .on_click(cx.listener(|this, _, _, cx| this.select_place(Place::Home, cx))),
     ));
     for g in &view.guilds {
         let id = g.id;
@@ -40,7 +49,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             selected,
             g.unread,
             theme,
-            rail_button(("guild", id.0), g.initials.clone(), selected, g.unread, theme)
+            rail_button(("guild", id.0), g.initials.clone(), g.name.clone(), selected, g.unread, theme)
                 .on_click(cx.listener(move |this, _, _, cx| this.select_place(Place::Guild(id), cx))),
         ));
     }
@@ -51,6 +60,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .small()
                 .icon(IconName::Plus)
                 .tooltip(l10n::tr("Join a community"))
+                .accessibility_label(l10n::tr("Join a community"))
                 .on_click(cx.listener(|this, _, window, cx| this.open_join_guild(window, cx))),
         ),
     )
@@ -76,6 +86,7 @@ fn rail_item(selected: bool, unread: Unread, theme: &Theme, button: impl IntoEle
 fn rail_button(
     id: impl Into<ElementId>,
     label: SharedString,
+    aria_label: impl Into<SharedString>,
     selected: bool,
     unread: Unread,
     theme: &Theme,
@@ -83,6 +94,9 @@ fn rail_button(
     let size = theme.sizes.rail_button;
     div()
         .id(id)
+        .role(Role::Button)
+        .aria_label(aria_label)
+        .aria_selected(selected)
         .relative()
         .flex()
         .items_center()

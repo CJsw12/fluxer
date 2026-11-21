@@ -5,7 +5,7 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::{Context, FontWeight, MouseButton, SharedString, div, prelude::*, px};
+use gpui_kit::{Context, FontWeight, MouseButton, Role, SharedString, div, prelude::*, px};
 
 use super::l10n;
 use super::member_list::{status_color, status_label};
@@ -38,8 +38,11 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     };
     let self_id = view.user.as_ref().map(|u| u.id);
     let dot_size = sizes.status_dot;
+    let status_aria_label = format!("{}: {}", l10n::tr("Status"), label);
     div()
         .id("user-panel")
+        .role(Role::Region)
+        .aria_label(l10n::tr("User controls"))
         .flex()
         .flex_row()
         .flex_none()
@@ -53,6 +56,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             div().relative().flex_none().child(picture).child(
                 div()
                     .id("user-status-dot")
+                    .role(Role::Button)
+                    .aria_label(status_aria_label)
                     .cursor_pointer()
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -95,6 +100,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .small()
                         .icon(IconName::Users)
                         .tooltip(l10n::tr("Switch accounts"))
+                        .accessibility_label(l10n::tr("Switch accounts"))
                         .on_click(cx.listener(|this, _, window, cx| this.open_account_switcher(window, cx))),
                 ),
             )
@@ -105,6 +111,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .small()
                 .icon(IconName::Settings)
                 .tooltip(l10n::tr("Settings"))
+                .accessibility_label(l10n::tr("Settings"))
                 .on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx))),
         )
         .child(

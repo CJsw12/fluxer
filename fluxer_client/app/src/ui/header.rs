@@ -58,6 +58,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .small()
                         .icon(IconName::Settings)
                         .tooltip(l10n::tr("Channel settings"))
+                        .accessibility_label(l10n::tr("Channel settings"))
                         .on_click(cx.listener(move |this, _, window, cx| this.open_edit_channel(ch_id, window, cx))),
                 ),
             )
@@ -89,23 +90,31 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     .icon(IconName::Search)
                     .selected(search_open)
                     .tooltip(l10n::tr("Search"))
+                    .accessibility_label(l10n::tr("Search"))
                     .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx))),
             )
         })
         .child({
             let enabled = view.notifier.enabled;
+            let notif_label = if enabled {
+                l10n::tr("Mute notifications")
+            } else {
+                l10n::tr("Enable notifications")
+            };
             Button::new("toggle-notifications")
                 .ghost()
                 .small()
                 .icon(if enabled { IconName::Bell } else { IconName::BellOff })
-                .tooltip(if enabled {
-                    l10n::tr("Mute notifications")
-                } else {
-                    l10n::tr("Enable notifications")
-                })
+                .tooltip(notif_label.clone())
+                .accessibility_label(notif_label)
                 .on_click(cx.listener(|this, _, _, cx| this.toggle_notifications(cx)))
         })
         .when(view.member_target.is_some() || view.group_dm.is_some(), |d| {
+            let members_label = if open {
+                l10n::tr("Hide members")
+            } else {
+                l10n::tr("Show members")
+            };
             d.child(
                 div().debug_selector(|| "toggle-member-list".to_owned()).child(
                     Button::new("toggle-member-list")
@@ -113,11 +122,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .small()
                         .icon(IconName::Users)
                         .selected(open)
-                        .tooltip(if open {
-                            l10n::tr("Hide members")
-                        } else {
-                            l10n::tr("Show members")
-                        })
+                        .tooltip(members_label.clone())
+                        .accessibility_label(members_label)
                         .on_click(cx.listener(|this, _, _, cx| this.toggle_member_list(cx))),
                 ),
             )

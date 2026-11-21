@@ -4,7 +4,7 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Icon, Sizable as _};
-use gpui_kit::{AnyElement, Context, FontWeight, MouseButton, div, prelude::*, px};
+use gpui_kit::{AnyElement, Context, FontWeight, MouseButton, Role, div, prelude::*, px};
 
 use super::{access::Scope, badge, user_panel, voice_panel};
 use crate::client_view::ClientView;
@@ -30,6 +30,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .small()
                         .icon(IconName::Plus)
                         .tooltip(l10n::tr("Create group DM"))
+                        .accessibility_label(l10n::tr("Create group DM"))
                         .on_click(cx.listener(|this, _, window, cx| this.open_create_group_dm(window, cx))),
                 ),
             )
@@ -60,6 +61,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 .xsmall()
                                 .icon(IconName::Plus)
                                 .tooltip(l10n::tr("Create channel"))
+                                .accessibility_label(l10n::tr("Create channel"))
                                 .on_click(cx.listener(|this, _, window, cx| this.open_create_channel(None, window, cx))),
                         ),
                     )
@@ -97,6 +99,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     };
     let mut list = div()
         .id("channel-list")
+        .role(Role::Navigation)
+        .aria_label(l10n::tr("Channels"))
         .flex()
         .flex_col()
         .flex_1()
@@ -108,6 +112,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         list = list.child(
             div()
                 .id("home-friends")
+                .role(Role::Button)
+                .aria_label(l10n::tr("Friends"))
+                .aria_selected(active)
                 .debug_selector(|| "home-friends".to_owned())
                 .flex()
                 .flex_row()
@@ -189,6 +196,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                             .xsmall()
                             .icon(IconName::Plus)
                             .tooltip(l10n::tr("Create channel"))
+                            .accessibility_label(l10n::tr("Create channel"))
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.open_create_channel(Some(cat_id), window, cx);
                             })),
@@ -201,6 +209,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                             .xsmall()
                             .icon(IconName::Settings)
                             .tooltip(l10n::tr("Category settings"))
+                            .accessibility_label(l10n::tr("Category settings"))
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.open_edit_channel(cat_id, window, cx);
                             })),
@@ -215,8 +224,16 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
     let selected = view.selected_channel == Some(c.id) || voice_active;
     let highlight_unread = c.unread.unread && !c.muted;
     let can_edit_row = view.place != Place::Home && c.can_manage;
+    let channel_aria_label = if is_voice {
+        format!("{} ({})", c.name, l10n::tr("Voice channel"))
+    } else {
+        c.name.to_string()
+    };
     let mut row = div()
         .id(("channel", c.id.0))
+        .role(Role::Button)
+        .aria_label(channel_aria_label)
+        .aria_selected(selected)
         .flex()
         .flex_row()
         .items_center()
@@ -253,6 +270,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                         .xsmall()
                         .icon(IconName::Settings)
                         .tooltip(l10n::tr("Channel settings"))
+                        .accessibility_label(l10n::tr("Channel settings"))
                         .on_click(cx.listener(move |this, _, window, cx| {
                             cx.stop_propagation();
                             this.open_edit_channel(ch_id, window, cx);

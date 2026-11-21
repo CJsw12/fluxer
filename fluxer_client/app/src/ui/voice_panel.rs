@@ -4,7 +4,7 @@
 
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::{Context, FontWeight, SharedString, div, prelude::*};
+use gpui_kit::{Context, FontWeight, Role, SharedString, div, prelude::*};
 
 use super::l10n;
 use crate::backend::voice::VoiceConnectionState;
@@ -41,6 +41,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     Some(
         div()
             .id("voice-panel")
+            .role(Role::Region)
+            .aria_label(l10n::tr("Voice connection"))
             .debug_selector(|| "voice-panel".to_owned())
             .flex()
             .flex_col()
@@ -96,6 +98,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 .ghost()
                                 .xsmall()
                                 .label(l10n::tr("Disconnect"))
+                                .accessibility_label(l10n::tr("Disconnect"))
                                 .on_click(cx.listener(|this, _, _, cx| this.leave_voice_channel(cx))),
                         ),
                     ),
@@ -112,7 +115,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             Button::new("voice-mute-btn")
                                 .ghost()
                                 .xsmall()
-                                .label(mute_label)
+                                .label(mute_label.clone())
+                                .accessibility_label(mute_label)
                                 .on_click(cx.listener(|this, _, _, cx| this.toggle_voice_mute(cx))),
                         ),
                     )
@@ -121,7 +125,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             Button::new("voice-deaf-btn")
                                 .ghost()
                                 .xsmall()
-                                .label(deaf_label)
+                                .label(deaf_label.clone())
+                                .accessibility_label(deaf_label)
                                 .on_click(cx.listener(|this, _, _, cx| this.toggle_voice_deaf(cx))),
                         ),
                     )
@@ -131,7 +136,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 Button::new("voice-share-btn")
                                     .ghost()
                                     .xsmall()
-                                    .label(share_label)
+                                    .label(share_label.clone())
+                                    .accessibility_label(share_label)
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.toggle_screen_share(false, cx);
                                     })),
@@ -144,7 +150,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 Button::new("voice-share-audio-btn")
                                     .ghost()
                                     .xsmall()
-                                    .label(share_audio_label)
+                                    .label(share_audio_label.clone())
+                                    .accessibility_label(share_audio_label)
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.toggle_screen_share_audio(cx);
                                     })),

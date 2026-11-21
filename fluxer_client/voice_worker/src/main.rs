@@ -27,6 +27,12 @@ enum WorkerCommand {
         active: bool,
         with_audio: bool,
     },
+    SetAudioSettings {
+        input_device: Option<String>,
+        output_device: Option<String>,
+        input_volume: u16,
+        output_volume: u16,
+    },
     Close,
 }
 
@@ -223,6 +229,19 @@ async fn run_worker() -> i32 {
     }
 
     let mut playback_muted = false;
+    #[allow(dead_code)]
+    struct WorkerAudioState {
+        input_device: Option<String>,
+        output_device: Option<String>,
+        input_volume: u16,
+        output_volume: u16,
+    }
+    let mut audio_state = WorkerAudioState {
+        input_device: None,
+        output_device: None,
+        input_volume: 100,
+        output_volume: 100,
+    };
 
     loop {
         tokio::select! {
@@ -247,6 +266,17 @@ async fn run_worker() -> i32 {
                                 apply_playback_mute(&room, playback_muted);
                             }
                             WorkerCommand::SetScreenShare { .. } => {}
+                            WorkerCommand::SetAudioSettings {
+                                input_device,
+                                output_device,
+                                input_volume,
+                                output_volume,
+                            } => {
+                                audio_state.input_device = input_device.filter(|d| !d.trim().is_empty());
+                                audio_state.output_device = output_device.filter(|d| !d.trim().is_empty());
+                                audio_state.input_volume = input_volume.min(200);
+                                audio_state.output_volume = output_volume.min(200);
+                            }
                             WorkerCommand::Close => break,
                             WorkerCommand::Connect { .. } => {}
                         }
@@ -342,6 +372,17 @@ mod tests {
         assert!(json_cmd.contains("\"type\":\"connect\""));
         let decoded_cmd: WorkerCommand = serde_json::from_str(&json_cmd).unwrap();
         assert_eq!(decoded_cmd, cmd);
+
+        let audio_cmd = WorkerCommand::SetAudioSettings {
+            input_device: Some("Mic 1".to_owned()),
+            output_device: None,
+            input_volume: 120,
+            output_volume: 85,
+        };
+        let json_audio_cmd = serde_json::to_string(&audio_cmd).unwrap();
+        assert!(json_audio_cmd.contains("\"type\":\"set_audio_settings\""));
+        let decoded_audio_cmd: WorkerCommand = serde_json::from_str(&json_audio_cmd).unwrap();
+        assert_eq!(decoded_audio_cmd, audio_cmd);
 
         for (ev, expected_type) in [
             (WorkerEvent::Connected, "\"type\":\"connected\""),

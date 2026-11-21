@@ -20,8 +20,8 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 use tokio::sync::{mpsc, oneshot};
 
 use super::voice::{
-    TrackSubscriptionKey, UnconfiguredVoiceTransport, VoiceCredentials, VoiceRoom, VoiceRoomEvent,
-    VoiceTrackSource, VoiceTransport,
+    TrackSubscriptionKey, UnconfiguredVoiceTransport, VoiceAudioSettings, VoiceCredentials,
+    VoiceRoom, VoiceRoomEvent, VoiceTrackSource, VoiceTransport,
 };
 
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
@@ -90,6 +90,12 @@ pub(crate) enum WorkerCommand {
         active: bool,
         with_audio: bool,
     },
+    SetAudioSettings {
+        input_device: Option<String>,
+        output_device: Option<String>,
+        input_volume: u16,
+        output_volume: u16,
+    },
     Close,
 }
 
@@ -112,6 +118,18 @@ impl fmt::Debug for WorkerCommand {
                 .debug_struct("SetScreenShare")
                 .field("active", active)
                 .field("with_audio", with_audio)
+                .finish(),
+            Self::SetAudioSettings {
+                input_device,
+                output_device,
+                input_volume,
+                output_volume,
+            } => f
+                .debug_struct("SetAudioSettings")
+                .field("input_device", input_device)
+                .field("output_device", output_device)
+                .field("input_volume", input_volume)
+                .field("output_volume", output_volume)
                 .finish(),
             Self::Close => f.write_str("Close"),
         }
@@ -301,6 +319,15 @@ impl VoiceRoom for ProcessVoiceRoom {
 
     fn set_screen_share(&self, active: bool, with_audio: bool) {
         self.send_command(WorkerCommand::SetScreenShare { active, with_audio });
+    }
+
+    fn set_audio_settings(&self, settings: &VoiceAudioSettings) {
+        self.send_command(WorkerCommand::SetAudioSettings {
+            input_device: settings.input_device.clone(),
+            output_device: settings.output_device.clone(),
+            input_volume: settings.input_volume,
+            output_volume: settings.output_volume,
+        });
     }
 
     fn subscribed_tracks(&self) -> Vec<TrackSubscriptionKey> {
@@ -542,6 +569,12 @@ mod tests {
             room.set_microphone_muted(true);
             room.set_playback_muted(true);
             room.set_screen_share(true, true);
+            room.set_audio_settings(&VoiceAudioSettings {
+                input_device: Some("USB Mic".to_owned()),
+                output_device: None,
+                input_volume: 135,
+                output_volume: 80,
+            });
             room.close();
             // Duplicate close must be a safe no-op.
             room.close();
@@ -553,6 +586,12 @@ mod tests {
                     WorkerCommand::SetMicMuted { muted: true },
                     WorkerCommand::SetPlaybackMuted { muted: true },
                     WorkerCommand::SetScreenShare { active: true, with_audio: true },
+                    WorkerCommand::SetAudioSettings {
+                        input_device: Some("USB Mic".to_owned()),
+                        output_device: None,
+                        input_volume: 135,
+                        output_volume: 80,
+                    },
                     WorkerCommand::Close,
                 ]
             );

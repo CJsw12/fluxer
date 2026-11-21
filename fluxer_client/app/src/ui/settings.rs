@@ -9,6 +9,7 @@ use gpui_kit::component::input::Escape;
 use gpui_kit::component::switch::Switch;
 use gpui_kit::{AnyElement, Context, FontWeight, ScrollHandle, SharedString, Window, div, prelude::*, px};
 
+use crate::backend::voice::VoiceAudioSettings;
 use crate::client_view::ClientView;
 use crate::prefs::{DEFAULT_VOICE_VOLUME, MAX_VOICE_VOLUME, MIN_VOICE_VOLUME};
 use crate::settings_model::{FONT_SIZE_OPTIONS, LOCALES, SettingsEffect, THEME_OPTIONS, theme_patch_value};
@@ -132,23 +133,36 @@ impl ClientView {
         cx.notify();
     }
 
+    fn sync_voice_audio_settings(&self) {
+        self.backend.set_voice_audio_settings(VoiceAudioSettings {
+            input_device: self.prefs.data.voice_input_device.clone(),
+            output_device: self.prefs.data.voice_output_device.clone(),
+            input_volume: self.prefs.data.voice_input_volume,
+            output_volume: self.prefs.data.voice_output_volume,
+        });
+    }
+
     pub(crate) fn settings_set_voice_input_device(&mut self, device: Option<String>, cx: &mut Context<Self>) {
         self.prefs.set_voice_input_device(device);
+        self.sync_voice_audio_settings();
         cx.notify();
     }
 
     pub(crate) fn settings_set_voice_output_device(&mut self, device: Option<String>, cx: &mut Context<Self>) {
         self.prefs.set_voice_output_device(device);
+        self.sync_voice_audio_settings();
         cx.notify();
     }
 
     pub(crate) fn settings_set_voice_input_volume(&mut self, volume: u16, cx: &mut Context<Self>) {
         self.prefs.set_voice_input_volume(volume);
+        self.sync_voice_audio_settings();
         cx.notify();
     }
 
     pub(crate) fn settings_set_voice_output_volume(&mut self, volume: u16, cx: &mut Context<Self>) {
         self.prefs.set_voice_output_volume(volume);
+        self.sync_voice_audio_settings();
         cx.notify();
     }
 

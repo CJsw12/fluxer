@@ -178,11 +178,53 @@ pub(crate) enum VoiceRoomEvent {
     Disconnected(String),
 }
 
+/// User-configured voice input/output devices and volumes (`0..=200`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VoiceAudioSettings {
+    pub input_device: Option<String>,
+    pub output_device: Option<String>,
+    pub input_volume: u16,
+    pub output_volume: u16,
+}
+
+impl Default for VoiceAudioSettings {
+    fn default() -> Self {
+        Self {
+            input_device: None,
+            output_device: None,
+            input_volume: 100,
+            output_volume: 100,
+        }
+    }
+}
+
+impl VoiceAudioSettings {
+    fn normalize_device(device: Option<String>) -> Option<String> {
+        device.and_then(|d| {
+            if d.trim().is_empty() {
+                None
+            } else {
+                Some(d)
+            }
+        })
+    }
+
+    pub(crate) fn normalized(self) -> Self {
+        Self {
+            input_device: Self::normalize_device(self.input_device),
+            output_device: Self::normalize_device(self.output_device),
+            input_volume: self.input_volume.min(200),
+            output_volume: self.output_volume.min(200),
+        }
+    }
+}
+
 /// Active media room handle owned by the backend session.
 pub(crate) trait VoiceRoom: Send + Sync {
     fn set_microphone_muted(&self, muted: bool);
     fn set_playback_muted(&self, muted: bool);
     fn set_screen_share(&self, active: bool, with_audio: bool);
+    fn set_audio_settings(&self, _settings: &VoiceAudioSettings) {}
     fn subscribed_tracks(&self) -> Vec<TrackSubscriptionKey> {
         Vec::new()
     }
@@ -379,6 +421,7 @@ pub(crate) struct VoiceManager {
     server_deaf: bool,
     speak_denied: bool,
     screen_share_codec: ScreenShareCodecTracker,
+    audio_settings: VoiceAudioSettings,
     connect_task: Option<JoinHandle<()>>,
     media: Option<OwnedVoiceMedia>,
     channel_members: BTreeMap<(Option<Snowflake>, Snowflake), ChannelVoiceMember>,
@@ -403,6 +446,7 @@ impl VoiceManager {
             server_deaf: false,
             speak_denied: false,
             screen_share_codec: ScreenShareCodecTracker::default(),
+            audio_settings: VoiceAudioSettings::default(),
             connect_task: None,
             media: None,
             channel_members: BTreeMap::new(),
@@ -858,6 +902,7 @@ impl VoiceManager {
                 if let Some(mut previous) = self.media.take() {
                     let _ = previous.shutdown();
                 }
+                room.set_audio_settings(&self.audio_settings);
                 self.media = Some(OwnedVoiceMedia::new(room));
                 self.state = VoiceConnectionState::Connected;
                 self.apply_audio_mute_flags();
@@ -1422,6 +1467,16 @@ impl Backend {
         let _ = self.events.send(UiEvent::VoiceChanged);
     }
 
+    /// Stores normalized voice device/volume settings and applies them to any active room.
+    pub fn set_voice_audio_settings(&self, settings: VoiceAudioSettings) {
+        let normalized = settings.normalized();
+        let mut mgr = lock(&self.voice);
+        mgr.audio_settings = normalized.clone();
+        if let Some(media) = &mgr.media {
+            media.room.set_audio_settings(&normalized);
+        }
+    }
+
     /// Starts or updates screen sharing for the active connected voice session.
     pub fn start_screen_share(&self, include_audio: bool) -> Result<(), &'static str> {
         let (guild_id, channel_id) = {
@@ -1562,6 +1617,7 @@ mod tests {
         playback_muted: AtomicBool,
         screen_share_active: AtomicBool,
         screen_share_audio: AtomicBool,
+        audio_settings: Mutex<Vec<VoiceAudioSettings>>,
         closed: AtomicBool,
         close_count: AtomicUsize,
     }
@@ -1573,6 +1629,7 @@ mod tests {
                 playback_muted: AtomicBool::new(false),
                 screen_share_active: AtomicBool::new(false),
                 screen_share_audio: AtomicBool::new(false),
+                audio_settings: Mutex::new(Vec::new()),
                 closed: AtomicBool::new(false),
                 close_count: AtomicUsize::new(0),
             }
@@ -1591,6 +1648,10 @@ mod tests {
         fn set_screen_share(&self, active: bool, with_audio: bool) {
             self.screen_share_active.store(active, Ordering::SeqCst);
             self.screen_share_audio.store(active && with_audio, Ordering::SeqCst);
+        }
+
+        fn set_audio_settings(&self, settings: &VoiceAudioSettings) {
+            self.audio_settings.lock().unwrap().push(settings.clone());
         }
 
         fn close(&self) {
@@ -2831,6 +2892,52 @@ mod tests {
         assert_eq!(
             backend.voice_snapshot().screen_share_codec,
             ScreenShareCodecTracker::default()
+        );
+    }
+
+    #[test]
+    fn set_voice_audio_settings_applies_on_connect_and_updates_active_room() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, mut rx) = test_backend(&rt);
+
+        // Pre-connect settings are normalized and retained until room connects.
+        backend.set_voice_audio_settings(VoiceAudioSettings {
+            input_device: Some("   ".to_owned()),
+            output_device: Some("Headset".to_owned()),
+            input_volume: 250,
+            output_volume: 300,
+        });
+
+        let room = seed_guild_voice_channel_and_connect(
+            &rt,
+            &backend,
+            &mut rx,
+            bits::VIEW_CHANNEL | bits::CONNECT | bits::SPEAK,
+        );
+        let expected_initial = VoiceAudioSettings {
+            input_device: None,
+            output_device: Some("Headset".to_owned()),
+            input_volume: 200,
+            output_volume: 200,
+        };
+        assert_eq!(*room.audio_settings.lock().unwrap(), vec![expected_initial.clone()]);
+
+        // Live update while connected immediately propagates to the active room.
+        backend.set_voice_audio_settings(VoiceAudioSettings {
+            input_device: Some("USB Mic".to_owned()),
+            output_device: Some(String::new()),
+            input_volume: 75,
+            output_volume: 150,
+        });
+        let expected_updated = VoiceAudioSettings {
+            input_device: Some("USB Mic".to_owned()),
+            output_device: None,
+            input_volume: 75,
+            output_volume: 150,
+        };
+        assert_eq!(
+            *room.audio_settings.lock().unwrap(),
+            vec![expected_initial, expected_updated]
         );
     }
 }

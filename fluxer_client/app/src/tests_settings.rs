@@ -285,3 +285,81 @@ fn settings_modal_updates_reduced_motion(cx: &mut TestAppContext) {
 
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn settings_modal_selects_enumerated_voice_devices(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, cx) = open_client(cx, backend, events);
+
+    focus_composer(&view, cx);
+    cx.simulate_keystrokes("ctrl-,");
+    cx.run_until_parked();
+    view.update(cx, |v, cx| {
+        v.audio_devices = crate::audio_devices::AudioDeviceLists {
+            input_devices: vec!["Built-in Mic".to_owned(), "USB Mic".to_owned()],
+            output_devices: vec!["Headphones".to_owned(), "Speakers".to_owned()],
+        };
+        cx.notify();
+    });
+    cx.run_until_parked();
+    draw(cx);
+
+    for selector in [
+        "voice-refresh-devices",
+        "voice-input-device-default",
+        "voice-input-device-0",
+        "voice-input-device-1",
+        "voice-output-device-default",
+        "voice-output-device-0",
+        "voice-output-device-1",
+    ] {
+        assert!(cx.debug_bounds(selector).is_some(), "{selector} should be drawn");
+    }
+
+    view.update_in(cx, |v, window, cx| {
+        v.apply_settings_effect(
+            crate::settings_model::SettingsEffect::VoiceInputDeviceChanged(Some("USB Mic".to_owned())),
+            window,
+            cx,
+        );
+        v.apply_settings_effect(
+            crate::settings_model::SettingsEffect::VoiceOutputDeviceChanged(Some("Headphones".to_owned())),
+            window,
+            cx,
+        );
+    });
+    cx.run_until_parked();
+    draw(cx);
+
+    view.read_with(cx, |v, _| {
+        assert_eq!(v.prefs.data.voice_input_device.as_deref(), Some("USB Mic"));
+        assert_eq!(v.prefs.data.voice_output_device.as_deref(), Some("Headphones"));
+    });
+    assert!(cx.debug_bounds("voice-input-device-reset").is_some());
+    assert!(cx.debug_bounds("voice-output-device-reset").is_some());
+
+    view.update_in(cx, |v, window, cx| {
+        v.apply_settings_effect(
+            crate::settings_model::SettingsEffect::VoiceInputDeviceChanged(None),
+            window,
+            cx,
+        );
+        v.apply_settings_effect(
+            crate::settings_model::SettingsEffect::VoiceOutputDeviceChanged(None),
+            window,
+            cx,
+        );
+    });
+    cx.run_until_parked();
+    draw(cx);
+
+    view.read_with(cx, |v, _| {
+        assert_eq!(v.prefs.data.voice_input_device, None);
+        assert_eq!(v.prefs.data.voice_output_device, None);
+    });
+    assert!(cx.debug_bounds("voice-input-device-reset").is_none());
+    assert!(cx.debug_bounds("voice-output-device-reset").is_none());
+
+    drop(rt);
+}

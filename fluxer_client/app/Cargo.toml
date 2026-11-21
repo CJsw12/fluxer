@@ -36,6 +36,8 @@ image = { version = "0.25", default-features = false }
 notify-rust = "4.19"
 # Message sounds (bundled mp3/ogg from fluxer_app/src/media/sounds).
 rodio = { version = "0.23", default-features = false, features = ["playback", "mp3", "vorbis"] }
+# OS audio input/output device enumeration (already in Cargo.lock via rodio).
+cpal = "0.18"
 
 [target.'cfg(windows)'.dependencies]
 # System tray icon and HKCU Run autostart registry access (cached locally).

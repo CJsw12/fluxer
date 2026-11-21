@@ -2060,6 +2060,7 @@ dependencies = [
  "anyhow",
  "bytes",
  "chrono",
+ "cpal",
  "embed-resource",
  "fluxer_client_core",
  "fluxer_client_i18n",

@@ -32,6 +32,7 @@ impl ClientView {
             return;
         }
         self.prepare_overlay_replace(cx);
+        self.refresh_audio_devices(cx);
         self.overlay = Overlay::Settings(SettingsModal {
             confirm_logout: false,
             locale_scroll: ScrollHandle::new(),
@@ -214,39 +215,92 @@ fn section_heading(title: String, theme: &Theme) -> impl IntoElement {
 fn voice_device_row(
     label: &str,
     device: Option<&str>,
+    available_devices: &[String],
+    id_prefix: &'static str,
     reset_id: &'static str,
     theme: &Theme,
-    make_reset: impl Fn(Option<String>) -> SettingsEffect + 'static,
+    make_select: impl Fn(Option<String>) -> SettingsEffect + Copy + 'static,
     cx: &mut Context<ClientView>,
 ) -> AnyElement {
-    let display_name = device.map(str::to_owned).unwrap_or_else(|| l10n::tr("System default"));
+    let label_text = l10n::tr(label);
+    let default_label = l10n::tr("System default");
+    let display_name = device.map(str::to_owned).unwrap_or_else(|| default_label.clone());
+
+    let default_selected = device.is_none();
+    let default_sel_id = format!("{id_prefix}-default");
+    let mut default_btn = Button::new(default_sel_id.clone())
+        .small()
+        .label(default_label.clone())
+        .accessibility_label(format!("{label_text}: {default_label}"));
+    default_btn = if default_selected {
+        default_btn.primary()
+    } else {
+        default_btn.ghost()
+    };
+    let default_button = div().debug_selector(move || default_sel_id.clone()).child(
+        default_btn.on_click(cx.listener(move |this, _, window, cx| {
+            this.apply_settings_effect(make_select(None), window, cx);
+        })),
+    );
+
+    let device_buttons = available_devices.iter().enumerate().map(|(ix, name)| {
+        let selected = device == Some(name.as_str());
+        let sel_id = format!("{id_prefix}-{ix}");
+        let device_name = name.clone();
+        let mut btn = Button::new((id_prefix, ix + 1))
+            .small()
+            .label(name.clone())
+            .accessibility_label(format!("{label_text}: {name}"));
+        btn = if selected { btn.primary() } else { btn.ghost() };
+        div().debug_selector(move || sel_id.clone()).child(btn.on_click(cx.listener(
+            move |this, _, window, cx| {
+                this.apply_settings_effect(make_select(Some(device_name.clone())), window, cx);
+            },
+        )))
+    });
+
     div()
         .flex()
-        .flex_row()
-        .items_center()
-        .justify_between()
-        .gap_2()
-        .child(div().text_sm().child(l10n::tr(label)))
+        .flex_col()
+        .gap_1()
         .child(
             div()
                 .flex()
                 .flex_row()
                 .items_center()
+                .justify_between()
                 .gap_2()
-                .child(div().text_xs().text_color(theme.muted_foreground).child(display_name))
-                .when(device.is_some(), |d| {
-                    d.child(
-                        div().debug_selector(move || reset_id.to_owned()).child(
-                            Button::new(reset_id)
-                                .ghost()
-                                .small()
-                                .label(l10n::tr("Reset"))
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.apply_settings_effect(make_reset(None), window, cx);
-                                })),
-                        ),
-                    )
-                }),
+                .child(div().text_sm().child(label_text.clone()))
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_2()
+                        .child(div().text_xs().text_color(theme.muted_foreground).child(display_name))
+                        .when(device.is_some(), |d| {
+                            d.child(
+                                div().debug_selector(move || reset_id.to_owned()).child(
+                                    Button::new(reset_id)
+                                        .ghost()
+                                        .small()
+                                        .label(l10n::tr("Reset"))
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            this.apply_settings_effect(make_select(None), window, cx);
+                                        })),
+                                ),
+                            )
+                        }),
+                ),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .flex_wrap()
+                .gap_1()
+                .child(default_button)
+                .children(device_buttons),
         )
         .into_any_element()
 }
@@ -646,10 +700,31 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
                 .flex()
                 .flex_col()
                 .gap_2()
-                .child(section_heading(l10n::tr("Voice & Audio"), theme))
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .child(section_heading(l10n::tr("Voice & Audio"), theme))
+                        .child(
+                            div().debug_selector(|| "voice-refresh-devices".to_owned()).child(
+                                Button::new("voice-refresh-devices")
+                                    .ghost()
+                                    .small()
+                                    .label(l10n::tr("Refresh devices"))
+                                    .accessibility_label(l10n::tr("Refresh devices"))
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.refresh_audio_devices(cx);
+                                    })),
+                            ),
+                        ),
+                )
                 .child(voice_device_row(
                     "Input device",
                     view.prefs.data.voice_input_device.as_deref(),
+                    &view.audio_devices.input_devices,
+                    "voice-input-device",
                     "voice-input-device-reset",
                     theme,
                     SettingsEffect::VoiceInputDeviceChanged,
@@ -667,6 +742,8 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
                 .child(voice_device_row(
                     "Output device",
                     view.prefs.data.voice_output_device.as_deref(),
+                    &view.audio_devices.output_devices,
+                    "voice-output-device",
                     "voice-output-device-reset",
                     theme,
                     SettingsEffect::VoiceOutputDeviceChanged,

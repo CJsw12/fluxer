@@ -231,6 +231,8 @@ pub struct ClientView {
     pub(crate) saved_accounts: Vec<crate::accounts::SavedAccountItem>,
     /// UI-safe snapshot of the active voice session and channel voice members.
     pub(crate) voice: crate::backend::voice::VoiceSnapshot,
+    /// Enumerated OS audio input/output devices for the settings modal.
+    pub(crate) audio_devices: crate::audio_devices::AudioDeviceLists,
     /// Track SID currently synced into `watched_video_frame`.
     pub(crate) watched_video_track_sid: Option<String>,
     /// Generation sequence of the last decoded frame converted for display.
@@ -411,6 +413,7 @@ impl ClientView {
             accounts_enabled: false,
             saved_accounts: Vec::new(),
             voice: crate::backend::voice::VoiceSnapshot::default(),
+            audio_devices: crate::audio_devices::AudioDeviceLists::default(),
             watched_video_track_sid: None,
             watched_video_frame_seq: 0,
             watched_video_frame: None,
@@ -423,6 +426,11 @@ impl ClientView {
         };
         view.refresh(cx);
         view
+    }
+
+    pub(crate) fn refresh_audio_devices(&mut self, cx: &mut Context<Self>) {
+        self.audio_devices = crate::audio_devices::enumerate_audio_devices();
+        cx.notify();
     }
 
     /// Applies device-local preferences loaded from the session directory.

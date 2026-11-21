@@ -16,6 +16,7 @@
 
 mod accounts;
 mod ack;
+mod audio_devices;
 mod backend;
 mod client_view;
 mod deep_links;

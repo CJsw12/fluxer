@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-20",
+  "updated": "2026-11-22",
   "areas": [
     {
       "key": "core",
@@ -437,15 +437,15 @@
       "items": [
         {
           "name": "음성 채널 참가",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "화면 공유 송신",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "화면 공유 수신",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "오디오 장치·볼륨",
@@ -453,7 +453,7 @@
         },
         {
           "name": "음성 UI",
-          "status": "todo"
+          "status": "partial"
         }
       ]
     }

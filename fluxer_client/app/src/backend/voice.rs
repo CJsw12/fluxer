@@ -242,12 +242,14 @@ impl OwnedVoiceMedia {
         }
     }
 
+    #[allow(dead_code)]
     fn set_mic_task(&mut self, task: JoinHandle<()>) {
         if let Some(prev) = self.mic_task.replace(task) {
             prev.abort();
         }
     }
 
+    #[allow(dead_code)]
     fn set_screen_share_tasks(
         &mut self,
         video_task: Option<JoinHandle<()>>,
@@ -280,12 +282,14 @@ impl OwnedVoiceMedia {
         handles
     }
 
+    #[allow(dead_code)]
     fn insert_playback_task(&mut self, key: TrackSubscriptionKey, task: JoinHandle<()>) {
         if let Some(prev) = self.playback_tasks.insert(key, task) {
             prev.abort();
         }
     }
 
+    #[allow(dead_code)]
     fn remove_playback_task(&mut self, key: &TrackSubscriptionKey) -> bool {
         if let Some(task) = self.playback_tasks.remove(key) {
             task.abort();
@@ -890,6 +894,7 @@ impl VoiceManager {
         true
     }
 
+    #[allow(dead_code)]
     pub(crate) fn attach_mic_task(&mut self, attempt_id: u64, task: JoinHandle<()>) -> bool {
         if self.attempt_id != attempt_id {
             task.abort();
@@ -903,6 +908,7 @@ impl VoiceManager {
         true
     }
 
+    #[allow(dead_code)]
     pub(crate) fn attach_screen_share_tasks(
         &mut self,
         attempt_id: u64,
@@ -931,6 +937,7 @@ impl VoiceManager {
         true
     }
 
+    #[allow(dead_code)]
     pub(crate) fn attach_playback_task(
         &mut self,
         attempt_id: u64,
@@ -949,6 +956,7 @@ impl VoiceManager {
         true
     }
 
+    #[allow(dead_code)]
     pub(crate) fn detach_playback_task(&mut self, key: &TrackSubscriptionKey) -> bool {
         self.media
             .as_mut()

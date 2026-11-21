@@ -86,9 +86,10 @@ Write-Host ("SHA256:   {0}" -f $hash.Hash.ToLowerInvariant())
 
 if ($IncludeVoiceWorker) {
     $workerDir = Join-Path $clientDir 'voice_worker'
-    $workerExe = Join-Path $repoRoot 'target\vw\release\fluxer_voice_worker.exe'
+    $workerTargetDir = Join-Path $repoRoot 'target\vw'
+    $workerExe = Join-Path $workerTargetDir 'release\fluxer_voice_worker.exe'
     $previousWorkerTargetDir = $env:CARGO_TARGET_DIR
-    Remove-Item Env:CARGO_TARGET_DIR -ErrorAction SilentlyContinue
+    $env:CARGO_TARGET_DIR = $workerTargetDir
     Push-Location $workerDir
     try {
         & cargo build --release --jobs 4
@@ -98,7 +99,10 @@ if ($IncludeVoiceWorker) {
     }
     finally {
         Pop-Location
-        if ($null -ne $previousWorkerTargetDir) {
+        if ($null -eq $previousWorkerTargetDir) {
+            Remove-Item Env:CARGO_TARGET_DIR -ErrorAction SilentlyContinue
+        }
+        else {
             $env:CARGO_TARGET_DIR = $previousWorkerTargetDir
         }
     }

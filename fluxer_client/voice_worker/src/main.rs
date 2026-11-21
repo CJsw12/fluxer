@@ -138,6 +138,67 @@ fn apply_watched_video_track(room: &Room, watched_sid: Option<&str>) {
     }
 }
 
+struct WorkerAudioState {
+    input_device: Option<String>,
+    output_device: Option<String>,
+    #[allow(dead_code)]
+    input_volume: u16,
+    #[allow(dead_code)]
+    output_volume: u16,
+}
+
+fn match_device_index(requested: Option<&str>, available_names: &[&str]) -> Option<usize> {
+    let query = requested?.trim();
+    if query.is_empty() {
+        return None;
+    }
+
+    let query_lower = query.to_lowercase();
+    if let Some((idx, _)) = available_names
+        .iter()
+        .enumerate()
+        .find(|(_, name)| name.to_lowercase() == query_lower)
+    {
+        return Some(idx);
+    }
+
+    let mut matches = available_names
+        .iter()
+        .enumerate()
+        .filter(|(_, name)| name.to_lowercase().contains(&query_lower));
+    let first = matches.next()?;
+    if matches.next().is_some() {
+        return None;
+    }
+    Some(first.0)
+}
+
+fn apply_audio_settings(platform_audio: Option<&PlatformAudio>, state: &WorkerAudioState) {
+    let Some(audio) = platform_audio else {
+        return;
+    };
+
+    if state.input_device.is_some() {
+        let devices: Vec<_> = audio.recording_devices().collect();
+        let names: Vec<&str> = devices.iter().map(|d| d.name.as_str()).collect();
+        if let Some(idx) = match_device_index(state.input_device.as_deref(), &names) {
+            if let Some(device) = devices.get(idx) {
+                let _ = audio.switch_recording_device(&device.id);
+            }
+        }
+    }
+
+    if state.output_device.is_some() {
+        let devices: Vec<_> = audio.playout_devices().collect();
+        let names: Vec<&str> = devices.iter().map(|d| d.name.as_str()).collect();
+        if let Some(idx) = match_device_index(state.output_device.as_deref(), &names) {
+            if let Some(device) = devices.get(idx) {
+                let _ = audio.switch_playout_device(&device.id);
+            }
+        }
+    }
+}
+
 async fn run_worker() -> i32 {
     let mut stdout = tokio::io::stdout();
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
@@ -243,13 +304,6 @@ async fn run_worker() -> i32 {
 
     let mut playback_muted = false;
     let mut watched_video_track_sid: Option<String> = None;
-    #[allow(dead_code)]
-    struct WorkerAudioState {
-        input_device: Option<String>,
-        output_device: Option<String>,
-        input_volume: u16,
-        output_volume: u16,
-    }
     let mut audio_state = WorkerAudioState {
         input_device: None,
         output_device: None,
@@ -290,6 +344,7 @@ async fn run_worker() -> i32 {
                                 audio_state.output_device = output_device.filter(|d| !d.trim().is_empty());
                                 audio_state.input_volume = input_volume.min(200);
                                 audio_state.output_volume = output_volume.min(200);
+                                apply_audio_settings(platform_audio.as_ref(), &audio_state);
                             }
                             WorkerCommand::SetWatchedVideoTrack { track_sid } => {
                                 watched_video_track_sid = track_sid
@@ -496,5 +551,34 @@ mod tests {
         ] {
             assert!(validate_connect(ok_endpoint, secret_token, "conn-1").is_ok());
         }
+    }
+
+    #[test]
+    fn match_device_index_handles_exact_substring_and_ambiguous_queries() {
+        let devices = ["Built-in Mic", "USB Headset Mic", "USB Headset Pro"];
+
+        assert_eq!(match_device_index(None, &devices), None);
+        assert_eq!(match_device_index(Some(""), &devices), None);
+        assert_eq!(match_device_index(Some("   "), &devices), None);
+        assert_eq!(match_device_index(Some("Mic"), &[]), None);
+
+        // Exact case-insensitive match (with surrounding whitespace trimmed).
+        assert_eq!(
+            match_device_index(Some("  usb headset mic "), &devices),
+            Some(1)
+        );
+
+        // Exact match takes precedence over substring matches.
+        let exact_vs_sub = ["Mic", "Mic (USB)"];
+        assert_eq!(match_device_index(Some("mic"), &exact_vs_sub), Some(0));
+
+        // Unique case-insensitive substring fallback.
+        assert_eq!(match_device_index(Some("built-in"), &devices), Some(0));
+        assert_eq!(match_device_index(Some("pro"), &devices), Some(2));
+
+        // Ambiguous or missing substring returns None.
+        assert_eq!(match_device_index(Some("usb headset"), &devices), None);
+        assert_eq!(match_device_index(Some("mic"), &devices), None);
+        assert_eq!(match_device_index(Some("nonexistent"), &devices), None);
     }
 }

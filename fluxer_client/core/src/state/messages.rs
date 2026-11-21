@@ -2,7 +2,7 @@
 //! `ChannelMessagesLoadStateMachine.ts`, `ChannelIncomingMessageStateMachine.ts`).
 //! Trimmed server history is dropped and must be re-fetched.
 
-use std::collections::{BTreeSet, HashMap, VecDeque};
+use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
 
 use serde::Serialize;
 
@@ -472,14 +472,16 @@ impl MessageStore {
 
     /// Removes `ids` from the channel's window and marks references to them as deleted.
     pub(crate) fn remove(&mut self, channel_id: Snowflake, ids: &[Snowflake]) -> bool {
+        let bulk_ids = (ids.len() > 1).then(|| ids.iter().copied().collect::<HashSet<_>>());
+        let is_deleted = |id| bulk_ids.as_ref().map_or_else(|| ids.first() == Some(&id), |set| set.contains(&id));
         let mut changed = false;
         if let Some(window) = self.windows.get_mut(&channel_id) {
             let before = window.messages.len();
-            window.messages.retain(|m| !ids.contains(&m.id));
+            window.messages.retain(|m| !is_deleted(m.id));
             changed |= window.messages.len() != before;
         }
         // The target may be gone even when it was not loaded itself.
-        for reply in self.replies_to(channel_id, ids) {
+        for reply in self.replies_to(channel_id, is_deleted) {
             if reply.referenced_message != Some(None) {
                 reply.referenced_message = Some(None);
                 changed = true;
@@ -505,7 +507,7 @@ impl MessageStore {
         }
         let replacement = Some(resolved.map(Box::new));
         let mut changed = false;
-        for reply in self.replies_to(target_channel, &[target_id]) {
+        for reply in self.replies_to(target_channel, |id| id == target_id) {
             if reply.referenced_message.is_none() {
                 reply.referenced_message = replacement.clone();
                 changed = true;
@@ -522,8 +524,10 @@ impl MessageStore {
         id: Snowflake,
         payload: &serde_json::Value,
     ) -> BTreeSet<Snowflake> {
-        let ids = [id];
-        let mut replies = self.replies_to(channel, &ids).filter(|reply| reply.referenced_message != Some(None)).peekable();
+        let mut replies = self
+            .replies_to(channel, |target| target == id)
+            .filter(|reply| reply.referenced_message != Some(None))
+            .peekable();
         let mut changed = BTreeSet::new();
         if replies.peek().is_none() {
             return changed;
@@ -544,14 +548,14 @@ impl MessageStore {
     fn replies_to<'a>(
         &'a mut self,
         channel: Snowflake,
-        ids: &'a [Snowflake],
+        is_target: impl Fn(Snowflake) -> bool + 'a,
     ) -> impl Iterator<Item = &'a mut Message> {
         self.windows
             .values_mut()
             .flat_map(|window| &mut window.messages)
             .chain(self.outgoing.values_mut().flat_map(|out| &mut out.parked_unsent))
             .filter(move |m| {
-                m.reply_to().is_some_and(|id| ids.contains(&id))
+                m.reply_to().is_some_and(&is_target)
                     && m.message_reference.as_ref().and_then(|r| r.channel_id).unwrap_or(m.channel_id) == channel
             })
     }

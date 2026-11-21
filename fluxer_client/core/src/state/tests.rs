@@ -769,6 +769,13 @@ fn message_update_merges_partial_payload_and_delete_removes() {
 
     state.apply(&dispatch("MESSAGE_DELETE", json!({"id": mid(1).to_string(), "channel_id": GENERAL.to_string()})));
     assert_eq!(state.messages.window(sf(GENERAL)).unwrap().messages.len(), 3);
+
+    let mut dm_reply = message_json(mid(20), DM, OTHER, "cross-channel reply");
+    dm_reply["message_reference"] = json!({
+        "type": 0, "channel_id": GENERAL.to_string(), "message_id": mid(2).to_string()
+    });
+    state.messages.load(sf(DM), vec![serde_json::from_value(dm_reply).unwrap()], LoadMode::Replace);
+
     let changes = state.apply(&dispatch(
         "MESSAGE_DELETE_BULK",
         json!({"ids": [mid(2).to_string(), mid(3).to_string(), "77"], "channel_id": GENERAL.to_string()}),
@@ -776,6 +783,8 @@ fn message_update_merges_partial_payload_and_delete_removes() {
     assert_eq!(changes, vec![StateChange::MessagesChanged { channel_id: sf(GENERAL) }]);
     let left: Vec<_> = state.messages.window(sf(GENERAL)).unwrap().messages.iter().map(|m| m.id).collect();
     assert_eq!(left, vec![mid(4)]);
+    let reply = state.messages.message(sf(DM), mid(20)).unwrap();
+    assert_eq!(state.reply_preview(reply), ReplyPreview::Deleted);
 }
 
 // ---- unread -------------------------------------------------------------------

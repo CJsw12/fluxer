@@ -14,7 +14,9 @@ use std::sync::{Arc, Mutex};
 use fluxer_client_core::gateway::{GatewayHandle, VoiceStateUpdate};
 use fluxer_client_core::rest::SecretToken;
 use fluxer_client_core::state::{ClientState, Snowflake, bits};
-use fluxer_client_core::voice::{ScreenShareCodecTracker, VideoCodec};
+use fluxer_client_core::voice::{
+    DecodedVideoFrame, LatestVideoFrameQueue, ScreenShareCodecTracker, VideoCodec,
+};
 use serde_json::Value;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
@@ -109,6 +111,7 @@ pub struct VoiceSnapshot {
     pub speak_denied: bool,
     pub screen_share_codec: ScreenShareCodecTracker,
     pub subscribed_tracks: Vec<TrackSubscriptionKey>,
+    pub watched_video_track: Option<TrackSubscriptionKey>,
     pub channel_members: BTreeMap<(Option<Snowflake>, Snowflake), ChannelVoiceMember>,
 }
 
@@ -129,6 +132,7 @@ impl Default for VoiceSnapshot {
             speak_denied: false,
             screen_share_codec: ScreenShareCodecTracker::default(),
             subscribed_tracks: Vec::new(),
+            watched_video_track: None,
             channel_members: BTreeMap::new(),
         }
     }
@@ -424,6 +428,8 @@ pub(crate) struct VoiceManager {
     audio_settings: VoiceAudioSettings,
     connect_task: Option<JoinHandle<()>>,
     media: Option<OwnedVoiceMedia>,
+    watched_video_track: Option<TrackSubscriptionKey>,
+    video_frame_queue: LatestVideoFrameQueue,
     channel_members: BTreeMap<(Option<Snowflake>, Snowflake), ChannelVoiceMember>,
 }
 
@@ -449,6 +455,8 @@ impl VoiceManager {
             audio_settings: VoiceAudioSettings::default(),
             connect_task: None,
             media: None,
+            watched_video_track: None,
+            video_frame_queue: LatestVideoFrameQueue::new(),
             channel_members: BTreeMap::new(),
         }
     }
@@ -469,11 +477,35 @@ impl VoiceManager {
             speak_denied: self.speak_denied,
             screen_share_codec: self.screen_share_codec.clone(),
             subscribed_tracks: self.media.as_ref().map_or_else(Vec::new, OwnedVoiceMedia::subscribed_keys),
+            watched_video_track: self.watched_video_track.clone(),
             channel_members: self.channel_members.clone(),
         }
     }
 
+    fn watch_video_track(
+        &mut self,
+        key: TrackSubscriptionKey,
+    ) -> Result<LatestVideoFrameQueue, &'static str> {
+        if self.state != VoiceConnectionState::Connected {
+            return Err("voice session is not connected");
+        }
+        if !matches!(key.source, VoiceTrackSource::ScreenShare | VoiceTrackSource::Camera) {
+            return Err("only video tracks can be watched");
+        }
+        self.video_frame_queue.close();
+        let queue = LatestVideoFrameQueue::new();
+        self.video_frame_queue = queue.clone();
+        self.watched_video_track = Some(key);
+        Ok(queue)
+    }
+
+    fn stop_watching_video(&mut self) -> bool {
+        self.video_frame_queue.close();
+        self.watched_video_track.take().is_some()
+    }
+
     fn abort_active_media(&mut self) -> Vec<JoinHandle<()>> {
+        self.stop_watching_video();
         let mut handles = Vec::new();
         if let Some(task) = self.connect_task.take() {
             task.abort();
@@ -641,6 +673,9 @@ impl VoiceManager {
         let previous = self.gateway_session_id.replace(session_id);
         let mut changed = !self.channel_members.is_empty();
         self.channel_members.clear();
+        if previous.is_some() && self.stop_watching_video() {
+            changed = true;
+        }
         if previous.is_some()
             && let Some(channel_id) = self.channel_id
             && matches!(
@@ -861,6 +896,7 @@ impl VoiceManager {
         if is_channel_move
             && let Some(mut media) = self.media.take()
         {
+            self.stop_watching_video();
             let _ = media.shutdown();
             self.self_stream = false;
             self.screen_share_audio = false;
@@ -910,6 +946,7 @@ impl VoiceManager {
             }
             Err(err) => {
                 tracing::warn!(attempt_id, error = %err, "voice room connect failed");
+                self.stop_watching_video();
                 self.state = VoiceConnectionState::Failed(VoiceFailure::TransportFailed(err));
                 true
             }
@@ -932,6 +969,7 @@ impl VoiceManager {
             let _ = media.event_task.take();
             let _ = media.shutdown();
         }
+        self.stop_watching_video();
         self.self_stream = false;
         self.screen_share_audio = false;
         self.screen_share_codec.reset();
@@ -1575,6 +1613,31 @@ impl Backend {
     pub fn record_rendered_screen_share_codec(&self, codec: VideoCodec) {
         lock(&self.voice).screen_share_codec.record_rendered(codec);
         let _ = self.events.send(UiEvent::VoiceChanged);
+    }
+
+    /// Begins watching a remote video track (`ScreenShare` or `Camera`), replacing any
+    /// previously watched track and returning a fresh capacity-1 latest-frame queue.
+    pub fn watch_video_track(
+        &self,
+        key: TrackSubscriptionKey,
+    ) -> Result<LatestVideoFrameQueue, &'static str> {
+        let queue = lock(&self.voice).watch_video_track(key)?;
+        let _ = self.events.send(UiEvent::VoiceChanged);
+        Ok(queue)
+    }
+
+    /// Stops watching the currently watched remote video track and closes its frame queue.
+    pub fn stop_watching_video(&self) {
+        if lock(&self.voice).stop_watching_video() {
+            let _ = self.events.send(UiEvent::VoiceChanged);
+        }
+    }
+
+    /// Takes the latest decoded video frame if its generation is newer than `last_generation`.
+    #[allow(dead_code)]
+    pub fn latest_video_frame(&self, last_generation: u64) -> Option<(u64, DecodedVideoFrame)> {
+        let queue = lock(&self.voice).video_frame_queue.clone();
+        queue.take_if_newer(last_generation)
     }
 
     /// Tears down active voice media on session close/logout.
@@ -2939,5 +3002,87 @@ mod tests {
             *room.audio_settings.lock().unwrap(),
             vec![expected_initial, expected_updated]
         );
+    }
+
+    #[test]
+    fn watch_video_track_validates_source_replaces_queue_and_clears_on_stop_or_leave() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, mut rx) = test_backend(&rt);
+
+        let screen_key = TrackSubscriptionKey {
+            participant_identity: "user-2:conn-2".into(),
+            participant_sid: "PA_2".into(),
+            track_sid: "TR_screen_2".into(),
+            source: VoiceTrackSource::ScreenShare,
+        };
+        assert!(backend.watch_video_track(screen_key.clone()).is_err());
+
+        let _room = seed_guild_voice_channel_and_connect(
+            &rt,
+            &backend,
+            &mut rx,
+            bits::VIEW_CHANNEL | bits::CONNECT | bits::SPEAK,
+        );
+
+        let mic_key = TrackSubscriptionKey {
+            participant_identity: "user-2:conn-2".into(),
+            participant_sid: "PA_2".into(),
+            track_sid: "TR_mic_2".into(),
+            source: VoiceTrackSource::Microphone,
+        };
+        let screen_audio_key = TrackSubscriptionKey {
+            participant_identity: "user-2:conn-2".into(),
+            participant_sid: "PA_2".into(),
+            track_sid: "TR_sa_2".into(),
+            source: VoiceTrackSource::ScreenShareAudio,
+        };
+        assert!(backend.watch_video_track(mic_key).is_err());
+        assert!(backend.watch_video_track(screen_audio_key).is_err());
+        assert_eq!(backend.voice_snapshot().watched_video_track, None);
+
+        let queue = backend
+            .watch_video_track(screen_key.clone())
+            .expect("screen share track should be watchable");
+        assert_eq!(backend.voice_snapshot().watched_video_track, Some(screen_key));
+
+        let make_frame = |ts: i64, byte: u8| DecodedVideoFrame {
+            width: 1280,
+            height: 720,
+            timestamp_us: ts,
+            codec: Some(VideoCodec::H264),
+            data: vec![byte],
+        };
+        assert!(queue.push(make_frame(100, 1)));
+        assert!(queue.push(make_frame(200, 2)));
+        assert_eq!(queue.dropped_frames(), 1);
+        let (gen_id, latest) = backend
+            .latest_video_frame(0)
+            .expect("latest frame should be available");
+        assert_eq!(gen_id, 2);
+        assert_eq!(latest.timestamp_us, 200);
+        assert_eq!(latest.data, vec![2]);
+        assert!(backend.latest_video_frame(gen_id).is_none());
+
+        backend.stop_watching_video();
+        assert_eq!(backend.voice_snapshot().watched_video_track, None);
+        assert!(!queue.push(make_frame(300, 3)));
+        assert!(backend.latest_video_frame(0).is_none());
+
+        let camera_key = TrackSubscriptionKey {
+            participant_identity: "user-3:conn-3".into(),
+            participant_sid: "PA_3".into(),
+            track_sid: "TR_cam_3".into(),
+            source: VoiceTrackSource::Camera,
+        };
+        let cam_queue = backend
+            .watch_video_track(camera_key.clone())
+            .expect("camera track should be watchable");
+        assert_eq!(backend.voice_snapshot().watched_video_track, Some(camera_key));
+        assert!(cam_queue.push(make_frame(400, 4)));
+
+        backend.leave_voice();
+        assert_eq!(backend.voice_snapshot().watched_video_track, None);
+        assert!(!cam_queue.push(make_frame(500, 5)));
+        assert!(backend.latest_video_frame(0).is_none());
     }
 }

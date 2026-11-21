@@ -4,15 +4,18 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 use fluxer_client_core::Dispatch;
 use fluxer_client_core::state::{Snowflake, bits};
 use gpui_kit::TestAppContext;
 use serde_json::json;
 
-use crate::backend::voice::{VoiceConnectionState, VoiceCredentials, VoiceFailure, VoiceRoom, VoiceTransport};
+use crate::backend::voice::{
+    TrackSubscriptionKey, VoiceConnectionState, VoiceCredentials, VoiceFailure, VoiceRoom,
+    VoiceTrackSource, VoiceTransport,
+};
 use crate::backend::{Backend, UiEvent, lock};
 use crate::client_view::ClientView;
 use crate::tests::{draw, offline_rest, open_client, runtime};
@@ -171,6 +174,7 @@ fn voice_e2ee_rejection_surfaces_failure_without_leaking_credentials(cx: &mut Te
 struct TestVoiceRoom {
     screen_share_active: AtomicBool,
     screen_share_audio: AtomicBool,
+    subscribed_tracks: Mutex<Vec<TrackSubscriptionKey>>,
 }
 
 impl TestVoiceRoom {
@@ -178,6 +182,7 @@ impl TestVoiceRoom {
         Self {
             screen_share_active: AtomicBool::new(false),
             screen_share_audio: AtomicBool::new(false),
+            subscribed_tracks: Mutex::new(Vec::new()),
         }
     }
 }
@@ -188,6 +193,9 @@ impl VoiceRoom for TestVoiceRoom {
     fn set_screen_share(&self, active: bool, with_audio: bool) {
         self.screen_share_active.store(active, Ordering::SeqCst);
         self.screen_share_audio.store(active && with_audio, Ordering::SeqCst);
+    }
+    fn subscribed_tracks(&self) -> Vec<TrackSubscriptionKey> {
+        self.subscribed_tracks.lock().unwrap().clone()
     }
     fn close(&self) {}
 }
@@ -379,4 +387,41 @@ fn a11y_labels_and_roles_render_without_panic(cx: &mut TestAppContext) {
     assert!(vcx.debug_bounds("edit-selected-channel-btn").is_some());
     assert!(vcx.debug_bounds("toggle-search").is_some());
     assert!(vcx.debug_bounds("toggle-member-list").is_some());
+}
+
+#[gpui_kit::test]
+fn voice_watch_video_track_toggles_and_renders_watch_button(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, rx) = Backend::new(rt.handle().clone(), offline_rest(), None);
+    backend.state().apply(&voice_ready());
+    let (view, vcx) = open_client(cx, backend.clone(), rx);
+    let room = connect_voice_in_view(&rt, &backend, &view, vcx);
+
+    assert!(vcx.debug_bounds("voice-watch-btn").is_none());
+
+    let remote_screen = TrackSubscriptionKey {
+        participant_identity: "peer:conn-peer".into(),
+        participant_sid: "PA_peer".into(),
+        track_sid: "TR_screen_peer".into(),
+        source: VoiceTrackSource::ScreenShare,
+    };
+    room.subscribed_tracks.lock().unwrap().push(remote_screen.clone());
+    view.update(vcx, |v, cx| v.refresh(cx));
+    draw(vcx);
+
+    assert!(vcx.debug_bounds("voice-watch-btn").is_some());
+
+    view.update(vcx, |v, cx| v.toggle_watch_video_track(remote_screen.clone(), cx));
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert_eq!(v.voice.watched_video_track, Some(remote_screen.clone()));
+    });
+    assert!(vcx.debug_bounds("voice-watch-btn").is_some());
+
+    view.update(vcx, |v, cx| v.toggle_watch_video_track(remote_screen, cx));
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert_eq!(v.voice.watched_video_track, None);
+    });
+    assert!(vcx.debug_bounds("voice-watch-btn").is_some());
 }

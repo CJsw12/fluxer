@@ -1459,6 +1459,24 @@ impl ClientView {
         cx.notify();
     }
 
+    pub(crate) fn toggle_watch_video_track(
+        &mut self,
+        key: crate::backend::voice::TrackSubscriptionKey,
+        cx: &mut Context<Self>,
+    ) {
+        if self.voice.watched_video_track.as_ref() == Some(&key) {
+            self.backend.stop_watching_video();
+            self.error = None;
+        } else {
+            match self.backend.watch_video_track(key) {
+                Ok(_) => self.error = None,
+                Err(err) => self.error = Some(l10n::tr(err).into()),
+            }
+        }
+        self.voice = self.backend.voice_snapshot();
+        cx.notify();
+    }
+
     pub(crate) fn voice_channel_name(&self, channel_id: Snowflake) -> SharedString {
         let state = self.backend.state();
         state

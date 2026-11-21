@@ -7,7 +7,7 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::{Context, FontWeight, Role, SharedString, div, prelude::*};
 
 use super::l10n;
-use crate::backend::voice::VoiceConnectionState;
+use crate::backend::voice::{VoiceConnectionState, VoiceTrackSource};
 use crate::client_view::ClientView;
 use crate::theme::Theme;
 
@@ -36,6 +36,15 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         l10n::tr("Audio On")
     } else {
         l10n::tr("Audio Off")
+    };
+    let watchable_video_track = if is_connected {
+        view.voice
+            .subscribed_tracks
+            .iter()
+            .find(|track| matches!(track.source, VoiceTrackSource::ScreenShare | VoiceTrackSource::Camera))
+            .cloned()
+    } else {
+        None
     };
 
     Some(
@@ -154,6 +163,26 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                     .accessibility_label(share_audio_label)
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.toggle_screen_share_audio(cx);
+                                    })),
+                            ),
+                        )
+                    })
+                    .when_some(watchable_video_track, |d, track| {
+                        let is_watching = view.voice.watched_video_track.as_ref() == Some(&track);
+                        let watch_label = if is_watching {
+                            l10n::tr("Stop Watching")
+                        } else {
+                            l10n::tr("Watch Stream")
+                        };
+                        d.child(
+                            div().debug_selector(|| "voice-watch-btn".to_owned()).child(
+                                Button::new("voice-watch-btn")
+                                    .ghost()
+                                    .xsmall()
+                                    .label(watch_label.clone())
+                                    .accessibility_label(watch_label)
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.toggle_watch_video_track(track.clone(), cx);
                                     })),
                             ),
                         )

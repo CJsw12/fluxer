@@ -249,6 +249,49 @@ async fn fetch_reply_target_does_not_restore_a_deleted_target() {
 }
 
 #[tokio::test]
+async fn fetch_reply_target_does_not_overwrite_a_newer_edit() {
+    let (backend, mut events, listener) = reply_fixture().await;
+    let task = backend.fetch_reply_target(CHANNEL, TARGET).unwrap();
+    let request = receive_reply_request(&listener).await;
+    let cross_channel = Snowflake(12);
+    let cross_reply = Snowflake(201);
+    {
+        let mut state = backend.state();
+        state.apply(&Dispatch {
+            t: "CHANNEL_CREATE".to_owned(),
+            s: 2,
+            d: json!({ "id": cross_channel.to_string(), "type": 1 }),
+        });
+        let mut reply = state.messages.message(CHANNEL, REPLY).unwrap().clone();
+        reply.id = cross_reply;
+        reply.channel_id = cross_channel;
+        state.messages.load(cross_channel, vec![reply], LoadMode::Replace);
+    }
+
+    let mut edited = serde_json::from_str::<Value>(&target_body()).unwrap();
+    edited["edited_timestamp"] = json!("2026-11-18T10:00:01Z");
+    for (s, content) in [(3, "first edit"), (4, "second edit")] {
+        edited["content"] = json!(content);
+        let changed = backend.state().apply(&Dispatch { t: "MESSAGE_UPDATE".to_owned(), s, d: edited.clone() });
+        for channel_id in [CHANNEL, cross_channel] {
+            assert!(changed.contains(&fluxer_client_core::state::StateChange::MessagesChanged { channel_id }));
+        }
+    }
+
+    respond(request, "200 OK", &target_body(), task).await;
+    let state = backend.state();
+    for (channel, reply_id) in [(CHANNEL, REPLY), (cross_channel, cross_reply)] {
+        let reply = state.messages.message(channel, reply_id).unwrap();
+        let Some(ReplyLine::Loaded(target)) = reply_line(&state, reply, None) else {
+            panic!("edited reply target should be visible");
+        };
+        assert_eq!(target.excerpt.as_ref(), "second edit");
+    }
+    assert!(state.messages.message(CHANNEL, TARGET).is_none());
+    assert!(matches!(events.try_recv(), Err(mpsc::error::TryRecvError::Empty)));
+}
+
+#[tokio::test]
 async fn fetch_reply_target_ignores_old_ready_and_keeps_new_request_in_flight() {
     let (backend, mut events, listener) = reply_fixture().await;
     let old_task = backend.fetch_reply_target(CHANNEL, TARGET).unwrap();

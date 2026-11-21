@@ -106,6 +106,14 @@ impl ClientState {
         };
         if self.messages.apply_update(channel_id, id, d) {
             out.push(StateChange::MessagesChanged { channel_id });
+        } else if self.can_view_channel(channel_id)
+            && d.get("content").is_some_and(Value::is_string)
+            && d.get("author").is_some_and(Value::is_object)
+            && d.get("timestamp").is_some_and(Value::is_string)
+        {
+            for channel_id in self.messages.update_reply_target(channel_id, id, d) {
+                out.push(StateChange::MessagesChanged { channel_id });
+            }
         }
     }
 

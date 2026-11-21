@@ -2,7 +2,7 @@
 //! `ChannelMessagesLoadStateMachine.ts`, `ChannelIncomingMessageStateMachine.ts`).
 //! Trimmed server history is dropped and must be re-fetched.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeSet, HashMap, VecDeque};
 
 use serde::Serialize;
 
@@ -509,6 +509,33 @@ impl MessageStore {
             if reply.referenced_message.is_none() {
                 reply.referenced_message = replacement.clone();
                 changed = true;
+            }
+        }
+        changed
+    }
+
+    /// A full gateway edit supplies the current text for reply previews even
+    /// when the target has fallen out of the message window.
+    pub(super) fn update_reply_target(
+        &mut self,
+        channel: Snowflake,
+        id: Snowflake,
+        payload: &serde_json::Value,
+    ) -> BTreeSet<Snowflake> {
+        let ids = [id];
+        let mut replies = self.replies_to(channel, &ids).filter(|reply| reply.referenced_message != Some(None)).peekable();
+        let mut changed = BTreeSet::new();
+        if replies.peek().is_none() {
+            return changed;
+        }
+        let Ok(message) = serde_json::from_value::<Message>(payload.clone()) else {
+            return changed;
+        };
+        let updated = Some(Some(Box::new(message)));
+        for reply in replies {
+            if reply.referenced_message != updated {
+                reply.referenced_message.clone_from(&updated);
+                changed.insert(reply.channel_id);
             }
         }
         changed

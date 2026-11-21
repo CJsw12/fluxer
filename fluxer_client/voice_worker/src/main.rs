@@ -1,5 +1,6 @@
 //! Isolated LiveKit voice worker process communicating over private stdio JSON-lines IPC.
 
+use std::fmt;
 use std::net::IpAddr;
 use std::time::{Duration, Instant};
 
@@ -10,22 +11,31 @@ use livekit::prelude::*;
 use livekit::webrtc::video_frame::VideoFormatType;
 use livekit::webrtc::video_stream::native::{NativeVideoStream, NativeVideoStreamOptions};
 use serde::{Deserialize, Serialize};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
 use url::Url;
 
 const MAX_VIDEO_WIDTH: u32 = 960;
 const MAX_VIDEO_HEIGHT: u32 = 540;
 const VIDEO_FRAME_MIN_INTERVAL: Duration = Duration::from_millis(66);
+const MAX_WORKER_COMMAND_LINE_BYTES: usize = 64 * 1024;
+
+fn default_true() -> bool {
+    true
+}
 
 /// Commands received from `fluxer_client` over private stdin.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum WorkerCommand {
     Connect {
         endpoint: String,
         token: String,
         connection_id: String,
+        #[serde(default = "default_true")]
+        initial_mic_muted: bool,
+        #[serde(default)]
+        initial_playback_muted: bool,
     },
     SetMicMuted {
         muted: bool,
@@ -47,6 +57,55 @@ enum WorkerCommand {
         track_sid: Option<String>,
     },
     Close,
+}
+
+impl fmt::Debug for WorkerCommand {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Connect {
+                connection_id,
+                initial_mic_muted,
+                initial_playback_muted,
+                ..
+            } => f
+                .debug_struct("Connect")
+                .field("endpoint", &"<redacted>")
+                .field("token", &"<redacted>")
+                .field("connection_id", connection_id)
+                .field("initial_mic_muted", initial_mic_muted)
+                .field("initial_playback_muted", initial_playback_muted)
+                .finish(),
+            Self::SetMicMuted { muted } => {
+                f.debug_struct("SetMicMuted").field("muted", muted).finish()
+            }
+            Self::SetPlaybackMuted { muted } => f
+                .debug_struct("SetPlaybackMuted")
+                .field("muted", muted)
+                .finish(),
+            Self::SetScreenShare { active, with_audio } => f
+                .debug_struct("SetScreenShare")
+                .field("active", active)
+                .field("with_audio", with_audio)
+                .finish(),
+            Self::SetAudioSettings {
+                input_device,
+                output_device,
+                input_volume,
+                output_volume,
+            } => f
+                .debug_struct("SetAudioSettings")
+                .field("input_device", input_device)
+                .field("output_device", output_device)
+                .field("input_volume", input_volume)
+                .field("output_volume", output_volume)
+                .finish(),
+            Self::SetWatchedVideoTrack { track_sid } => f
+                .debug_struct("SetWatchedVideoTrack")
+                .field("track_sid", track_sid)
+                .finish(),
+            Self::Close => f.write_str("Close"),
+        }
+    }
 }
 
 /// Events emitted to `fluxer_client` over private stdout.
@@ -207,15 +266,70 @@ fn validate_connect(endpoint: &str, token: &str, connection_id: &str) -> Result<
     Ok(())
 }
 
-fn sanitize_error(raw: &str, endpoint: &str, token: &str) -> String {
-    let mut sanitized = raw.to_owned();
-    if !token.is_empty() {
-        sanitized = sanitized.replace(token, "<redacted>");
+fn format_room_connect_error(err: &RoomError) -> &'static str {
+    match err {
+        RoomError::Engine(_) => "livekit room connect failed: engine error",
+        RoomError::Internal(_) => "livekit room connect failed: internal error",
+        RoomError::Rtc(_) => "livekit room connect failed: rtc error",
+        RoomError::TrackAlreadyPublished => {
+            "livekit room connect failed: track already published"
+        }
+        RoomError::AlreadyClosed => "livekit room connect failed: already closed",
+        RoomError::Request { .. } => "livekit room connect failed: request error",
     }
-    if !endpoint.is_empty() {
-        sanitized = sanitized.replace(endpoint, "<redacted>");
+}
+
+async fn read_line_limited<R>(
+    reader: &mut BufReader<R>,
+    max_bytes: usize,
+) -> std::io::Result<Option<String>>
+where
+    R: AsyncRead + Unpin,
+{
+    let mut buf = Vec::new();
+    loop {
+        let available = reader.fill_buf().await?;
+        if available.is_empty() {
+            if buf.is_empty() {
+                return Ok(None);
+            }
+            break;
+        }
+        if let Some(newline_pos) = available.iter().position(|&b| b == b'\n') {
+            let needed = buf.len().saturating_add(newline_pos);
+            if needed > max_bytes {
+                reader.consume(newline_pos + 1);
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "ipc line exceeds maximum length",
+                ));
+            }
+            buf.extend_from_slice(&available[..newline_pos]);
+            reader.consume(newline_pos + 1);
+            break;
+        }
+        let needed = buf.len().saturating_add(available.len());
+        if needed > max_bytes {
+            let len = available.len();
+            reader.consume(len);
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "ipc line exceeds maximum length",
+            ));
+        }
+        buf.extend_from_slice(available);
+        let len = available.len();
+        reader.consume(len);
     }
-    sanitized
+    if buf.last() == Some(&b'\r') {
+        buf.pop();
+    }
+    String::from_utf8(buf).map(Some).map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "ipc line is not valid utf-8",
+        )
+    })
 }
 
 async fn emit_event(stdout: &mut tokio::io::Stdout, event: &WorkerEvent) {
@@ -309,9 +423,9 @@ fn apply_audio_settings(platform_audio: Option<&PlatformAudio>, state: &WorkerAu
 
 async fn run_worker() -> i32 {
     let mut stdout = tokio::io::stdout();
-    let mut lines = BufReader::new(tokio::io::stdin()).lines();
+    let mut reader = BufReader::new(tokio::io::stdin());
 
-    let first_line = match lines.next_line().await {
+    let first_line = match read_line_limited(&mut reader, MAX_WORKER_COMMAND_LINE_BYTES).await {
         Ok(Some(line)) => line,
         Ok(None) => return 0,
         Err(_) => {
@@ -326,33 +440,42 @@ async fn run_worker() -> i32 {
         }
     };
 
-    let (endpoint, token, _connection_id) = match serde_json::from_str::<WorkerCommand>(&first_line) {
-        Ok(WorkerCommand::Connect {
-            endpoint,
-            token,
-            connection_id,
-        }) => (endpoint, token, connection_id),
-        Ok(_) => {
-            emit_event(
-                &mut stdout,
-                &WorkerEvent::Error {
-                    message: "expected connect as first worker command".to_owned(),
-                },
-            )
-            .await;
-            return 1;
-        }
-        Err(_) => {
-            emit_event(
-                &mut stdout,
-                &WorkerEvent::Error {
-                    message: "invalid connect command payload".to_owned(),
-                },
-            )
-            .await;
-            return 1;
-        }
-    };
+    let (endpoint, token, _connection_id, initial_mic_muted, initial_playback_muted) =
+        match serde_json::from_str::<WorkerCommand>(&first_line) {
+            Ok(WorkerCommand::Connect {
+                endpoint,
+                token,
+                connection_id,
+                initial_mic_muted,
+                initial_playback_muted,
+            }) => (
+                endpoint,
+                token,
+                connection_id,
+                initial_mic_muted,
+                initial_playback_muted,
+            ),
+            Ok(_) => {
+                emit_event(
+                    &mut stdout,
+                    &WorkerEvent::Error {
+                        message: "expected connect as first worker command".to_owned(),
+                    },
+                )
+                .await;
+                return 1;
+            }
+            Err(_) => {
+                emit_event(
+                    &mut stdout,
+                    &WorkerEvent::Error {
+                        message: "invalid connect command payload".to_owned(),
+                    },
+                )
+                .await;
+                return 1;
+            }
+        };
 
     if let Err(reason) = validate_connect(&endpoint, &token, &_connection_id) {
         emit_event(
@@ -376,10 +499,7 @@ async fn run_worker() -> i32 {
             emit_event(
                 &mut stdout,
                 &WorkerEvent::Error {
-                    message: format!(
-                        "livekit room connect failed: {}",
-                        sanitize_error(&err.to_string(), &endpoint, &token)
-                    ),
+                    message: format_room_connect_error(&err).to_owned(),
                 },
             )
             .await;
@@ -396,6 +516,9 @@ async fn run_worker() -> i32 {
     let mut mic_pub_sid: Option<TrackSid> = None;
     if let Some(audio) = &platform_audio {
         let track = LocalAudioTrack::create_audio_track("microphone", audio.rtc_source());
+        if initial_mic_muted {
+            track.mute();
+        }
         let publish_opts = TrackPublishOptions {
             source: TrackSource::Microphone,
             ..Default::default()
@@ -410,7 +533,7 @@ async fn run_worker() -> i32 {
         }
     }
 
-    let mut playback_muted = false;
+    let mut playback_muted = initial_playback_muted;
     apply_playback_mute(&room, playback_muted);
     for participant in room.remote_participants().values() {
         for publication in participant.track_publications().values() {
@@ -438,7 +561,7 @@ async fn run_worker() -> i32 {
 
     loop {
         tokio::select! {
-            line_res = lines.next_line() => {
+            line_res = read_line_limited(&mut reader, MAX_WORKER_COMMAND_LINE_BYTES) => {
                 match line_res {
                     Ok(Some(line)) => {
                         let Ok(cmd) = serde_json::from_str::<WorkerCommand>(&line) else {
@@ -650,6 +773,8 @@ mod tests {
             endpoint: "wss://rtc.example.test".to_owned(),
             token: "jwt-1".to_owned(),
             connection_id: "conn-1".to_owned(),
+            initial_mic_muted: true,
+            initial_playback_muted: false,
         };
         let json_cmd = serde_json::to_string(&cmd).unwrap();
         assert!(json_cmd.contains("\"type\":\"connect\""));
@@ -830,5 +955,54 @@ mod tests {
 
         // Extreme aspect ratio clamps smaller dimension to >= 1.
         assert_eq!(compute_scaled_dimensions(4000, 1, 960, 540), Some((960, 1)));
+    }
+
+    #[test]
+    fn worker_command_connect_debug_redacts_endpoint_and_token() {
+        let cmd = WorkerCommand::Connect {
+            endpoint: "wss://secret-voice.example.test/rtc".to_owned(),
+            token: "super-secret-livekit-jwt-token".to_owned(),
+            connection_id: "conn-123".to_owned(),
+            initial_mic_muted: true,
+            initial_playback_muted: false,
+        };
+        let rendered = format!("{cmd:?}");
+        assert!(!rendered.contains("secret-voice.example.test"));
+        assert!(!rendered.contains("super-secret-livekit-jwt-token"));
+        assert!(rendered.contains("<redacted>"));
+        assert!(rendered.contains("conn-123"));
+    }
+
+    #[test]
+    fn worker_command_connect_initial_mic_muted_defaults_to_true_when_omitted() {
+        let json = r#"{"type":"connect","endpoint":"wss://rtc.example.test","token":"jwt-1","connection_id":"conn-1"}"#;
+        let decoded: WorkerCommand = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            decoded,
+            WorkerCommand::Connect {
+                endpoint: "wss://rtc.example.test".to_owned(),
+                token: "jwt-1".to_owned(),
+                connection_id: "conn-1".to_owned(),
+                initial_mic_muted: true,
+                initial_playback_muted: false,
+            }
+        );
+    }
+
+    #[test]
+    fn read_line_limited_rejects_oversized_lines() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let data = b"hello\nworld_too_long\n";
+            let mut reader = BufReader::new(&data[..]);
+            assert_eq!(
+                read_line_limited(&mut reader, 5).await.unwrap().as_deref(),
+                Some("hello")
+            );
+            let err = read_line_limited(&mut reader, 5)
+                .await
+                .expect_err("oversized line must fail");
+            assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        });
     }
 }

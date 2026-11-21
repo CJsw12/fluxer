@@ -161,6 +161,8 @@ pub(crate) struct VoiceCredentials {
     pub(crate) connection_id: String,
     pub(crate) endpoint: String,
     pub(crate) token: SecretToken,
+    pub(crate) initial_mic_muted: bool,
+    pub(crate) initial_playback_muted: bool,
 }
 
 impl fmt::Debug for VoiceCredentials {
@@ -182,6 +184,7 @@ impl fmt::Debug for VoiceCredentials {
 pub(crate) enum VoiceRoomEvent {
     TracksChanged,
     Disconnected(String),
+    VideoFrameReady,
     VideoFrame {
         track_sid: String,
         width: u32,
@@ -245,6 +248,9 @@ pub(crate) trait VoiceRoom: Send + Sync {
         self.subscribed_tracks()
     }
     fn take_event_rx(&self) -> Option<mpsc::UnboundedReceiver<VoiceRoomEvent>> {
+        None
+    }
+    fn take_pending_video_frame(&self) -> Option<(String, u32, u32, Vec<u8>)> {
         None
     }
     fn close(&self);
@@ -945,6 +951,11 @@ impl VoiceManager {
             connection_id: parsed.connection_id,
             endpoint: parsed.endpoint,
             token: parsed.token,
+            initial_mic_muted: self.self_mute
+                || self.self_deaf
+                || self.server_mute
+                || self.speak_denied,
+            initial_playback_muted: self.self_deaf || self.server_deaf,
         }))
     }
 
@@ -1026,6 +1037,29 @@ impl VoiceManager {
                 true
             }
             VoiceRoomEvent::Disconnected(_) => false,
+            VoiceRoomEvent::VideoFrameReady => {
+                let Some((track_sid, width, height, rgba)) = self
+                    .media
+                    .as_ref()
+                    .and_then(|media| media.room.take_pending_video_frame())
+                else {
+                    return false;
+                };
+                if self
+                    .watched_video_track
+                    .as_ref()
+                    .is_some_and(|t| t.track_sid == track_sid)
+                {
+                    return self.video_frame_queue.push(DecodedVideoFrame {
+                        width,
+                        height,
+                        timestamp_us: 0,
+                        codec: None,
+                        data: rgba,
+                    });
+                }
+                false
+            }
             VoiceRoomEvent::VideoFrame {
                 track_sid,
                 width,
@@ -1413,6 +1447,15 @@ fn on_gateway_dispatch_inner(
                                                 break;
                                             }
                                             if mgr.handle_room_event(VoiceRoomEvent::TracksChanged) {
+                                                let _ = events_for_watcher.send(UiEvent::VoiceChanged);
+                                            }
+                                        }
+                                        VoiceRoomEvent::VideoFrameReady => {
+                                            let mut mgr = lock(&voice_for_events);
+                                            if mgr.attempt_id != attempt_id {
+                                                break;
+                                            }
+                                            if mgr.handle_room_event(VoiceRoomEvent::VideoFrameReady) {
                                                 let _ = events_for_watcher.send(UiEvent::VoiceChanged);
                                             }
                                         }
@@ -1885,6 +1928,8 @@ mod tests {
             connection_id: "conn-1".into(),
             endpoint: "wss://secret-rtc.example.test".into(),
             token: SecretToken::new("super-secret-livekit-jwt"),
+            initial_mic_muted: true,
+            initial_playback_muted: false,
         };
         let rendered = format!("{creds:?}");
         assert!(!rendered.contains("super-secret-livekit-jwt"));

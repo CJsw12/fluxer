@@ -30,6 +30,7 @@ const COMMAND_CHANNEL_CAPACITY: usize = 32;
 const MAX_IPC_VIDEO_WIDTH: u32 = 1920;
 const MAX_IPC_VIDEO_HEIGHT: u32 = 1080;
 const MAX_IPC_VIDEO_B64_LEN: usize = 12 * 1024 * 1024;
+const MAX_WORKER_EVENT_LINE_BYTES: usize = 13 * 1024 * 1024;
 const VOICE_WORKER_ENV_VAR: &str = "FLUXER_VOICE_WORKER_PATH";
 #[cfg(windows)]
 const VOICE_WORKER_BIN: &str = "fluxer_voice_worker.exe";
@@ -75,6 +76,10 @@ pub(crate) fn default_voice_transport() -> Arc<dyn VoiceTransport> {
     }
 }
 
+fn default_true() -> bool {
+    true
+}
+
 /// Commands sent from the GPUI app to the voice worker over private stdin.
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -83,6 +88,10 @@ pub(crate) enum WorkerCommand {
         endpoint: String,
         token: String,
         connection_id: String,
+        #[serde(default = "default_true")]
+        initial_mic_muted: bool,
+        #[serde(default)]
+        initial_playback_muted: bool,
     },
     SetMicMuted {
         muted: bool,
@@ -109,11 +118,18 @@ pub(crate) enum WorkerCommand {
 impl fmt::Debug for WorkerCommand {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Connect { connection_id, .. } => f
+            Self::Connect {
+                connection_id,
+                initial_mic_muted,
+                initial_playback_muted,
+                ..
+            } => f
                 .debug_struct("Connect")
                 .field("endpoint", &"<redacted>")
                 .field("token", &"<redacted>")
                 .field("connection_id", connection_id)
+                .field("initial_mic_muted", initial_mic_muted)
+                .field("initial_playback_muted", initial_playback_muted)
                 .finish(),
             Self::SetMicMuted { muted } => {
                 f.debug_struct("SetMicMuted").field("muted", muted).finish()
@@ -191,7 +207,7 @@ fn decode_worker_video_frame(
     width: u32,
     height: u32,
     rgba_b64: &str,
-) -> Option<VoiceRoomEvent> {
+) -> Option<(String, u32, u32, Vec<u8>)> {
     if width < 1
         || height < 1
         || width > MAX_IPC_VIDEO_WIDTH
@@ -209,12 +225,7 @@ fn decode_worker_video_frame(
     if rgba.len() != expected_len {
         return None;
     }
-    Some(VoiceRoomEvent::VideoFrame {
-        track_sid,
-        width,
-        height,
-        rgba,
-    })
+    Some((track_sid, width, height, rgba))
 }
 
 pub(crate) fn parse_track_source(raw: &str) -> VoiceTrackSource {
@@ -336,6 +347,18 @@ impl VoiceTransport for ProcessVoiceTransport {
                 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
                 cmd.creation_flags(CREATE_NO_WINDOW);
             }
+            if credentials.endpoint.starts_with("ws://") {
+                for var in [
+                    "HTTP_PROXY",
+                    "HTTPS_PROXY",
+                    "ALL_PROXY",
+                    "http_proxy",
+                    "https_proxy",
+                    "all_proxy",
+                ] {
+                    cmd.env_remove(var);
+                }
+            }
 
             let mut child = cmd
                 .spawn()
@@ -353,6 +376,8 @@ impl VoiceTransport for ProcessVoiceTransport {
                 endpoint: credentials.endpoint,
                 token: credentials.token.expose().to_owned(),
                 connection_id: credentials.connection_id,
+                initial_mic_muted: credentials.initial_mic_muted,
+                initial_playback_muted: credentials.initial_playback_muted,
             };
 
             let (kill_tx, kill_rx) = oneshot::channel::<()>();
@@ -384,6 +409,8 @@ pub(crate) struct ProcessVoiceRoom {
     kill_tx: Mutex<Option<oneshot::Sender<()>>>,
     subscribed_tracks: Arc<Mutex<BTreeSet<TrackSubscriptionKey>>>,
     published_tracks: Arc<Mutex<BTreeSet<TrackSubscriptionKey>>>,
+    pending_video_frame: Arc<Mutex<Option<(String, u32, u32, Vec<u8>)>>>,
+    video_frame_notified: Arc<AtomicBool>,
     event_rx: Mutex<Option<mpsc::UnboundedReceiver<VoiceRoomEvent>>>,
 }
 
@@ -445,6 +472,14 @@ impl VoiceRoom for ProcessVoiceRoom {
         self.event_rx.lock().ok().and_then(|mut guard| guard.take())
     }
 
+    fn take_pending_video_frame(&self) -> Option<(String, u32, u32, Vec<u8>)> {
+        self.video_frame_notified.store(false, Ordering::Release);
+        self.pending_video_frame
+            .lock()
+            .ok()
+            .and_then(|mut guard| guard.take())
+    }
+
     fn close(&self) {
         if self.closed.swap(true, Ordering::SeqCst) {
             return;
@@ -498,17 +533,72 @@ where
     let _ = writer.shutdown().await;
 }
 
+async fn read_line_limited<R>(
+    reader: &mut BufReader<R>,
+    max_bytes: usize,
+) -> std::io::Result<Option<String>>
+where
+    R: AsyncRead + Unpin,
+{
+    let mut buf = Vec::new();
+    loop {
+        let available = reader.fill_buf().await?;
+        if available.is_empty() {
+            if buf.is_empty() {
+                return Ok(None);
+            }
+            break;
+        }
+        if let Some(newline_pos) = available.iter().position(|&b| b == b'\n') {
+            let needed = buf.len().saturating_add(newline_pos);
+            if needed > max_bytes {
+                reader.consume(newline_pos + 1);
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "ipc line exceeds maximum length",
+                ));
+            }
+            buf.extend_from_slice(&available[..newline_pos]);
+            reader.consume(newline_pos + 1);
+            break;
+        }
+        let needed = buf.len().saturating_add(available.len());
+        if needed > max_bytes {
+            let len = available.len();
+            reader.consume(len);
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "ipc line exceeds maximum length",
+            ));
+        }
+        buf.extend_from_slice(available);
+        let len = available.len();
+        reader.consume(len);
+    }
+    if buf.last() == Some(&b'\r') {
+        buf.pop();
+    }
+    String::from_utf8(buf).map(Some).map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "ipc line is not valid utf-8",
+        )
+    })
+}
+
 async fn run_event_reader<R>(
-    mut lines: tokio::io::Lines<BufReader<R>>,
+    mut reader: BufReader<R>,
     subscribed_tracks: Arc<Mutex<BTreeSet<TrackSubscriptionKey>>>,
     published_tracks: Arc<Mutex<BTreeSet<TrackSubscriptionKey>>>,
+    pending_video_frame: Arc<Mutex<Option<(String, u32, u32, Vec<u8>)>>>,
+    video_frame_notified: Arc<AtomicBool>,
     event_tx: mpsc::UnboundedSender<VoiceRoomEvent>,
     closed: Arc<AtomicBool>,
 ) where
     R: AsyncRead + Unpin + Send + 'static,
 {
     let mut received_disconnect = false;
-    while let Ok(Some(line)) = lines.next_line().await {
+    while let Ok(Some(line)) = read_line_limited(&mut reader, MAX_WORKER_EVENT_LINE_BYTES).await {
         let Ok(event) = serde_json::from_str::<WorkerEvent>(&line) else {
             continue;
         };
@@ -524,8 +614,14 @@ async fn run_event_reader<R>(
                 height,
                 rgba_b64,
             } => {
-                if let Some(ev) = decode_worker_video_frame(track_sid, width, height, &rgba_b64) {
-                    let _ = event_tx.send(ev);
+                if let Some(frame) = decode_worker_video_frame(track_sid, width, height, &rgba_b64)
+                {
+                    if let Ok(mut guard) = pending_video_frame.lock() {
+                        *guard = Some(frame);
+                    }
+                    if !video_frame_notified.swap(true, Ordering::AcqRel) {
+                        let _ = event_tx.send(VoiceRoomEvent::VideoFrameReady);
+                    }
                 }
             }
             other => {
@@ -588,14 +684,16 @@ where
     W: AsyncWrite + Unpin + Send + 'static,
     R: AsyncRead + Unpin + Send + 'static,
 {
-    write_command_line(&mut writer, &connect_cmd).await?;
-
-    let mut lines = BufReader::new(reader).lines();
-    let line = tokio::time::timeout(connect_timeout, lines.next_line())
-        .await
-        .map_err(|_| "voice worker connect timed out".to_owned())?
-        .map_err(|err| format!("failed to read voice worker stdout: {err}"))?
-        .ok_or_else(|| "voice worker exited before connecting".to_owned())?;
+    let mut reader = BufReader::new(reader);
+    let line = tokio::time::timeout(connect_timeout, async {
+        write_command_line(&mut writer, &connect_cmd).await?;
+        read_line_limited(&mut reader, MAX_WORKER_EVENT_LINE_BYTES)
+            .await
+            .map_err(|err| format!("failed to read voice worker stdout: {err}"))?
+            .ok_or_else(|| "voice worker exited before connecting".to_owned())
+    })
+    .await
+    .map_err(|_| "voice worker connect timed out".to_owned())??;
 
     let event: WorkerEvent = serde_json::from_str(&line)
         .map_err(|err| format!("invalid voice worker event: {err}"))?;
@@ -607,11 +705,15 @@ where
             let closed = Arc::new(AtomicBool::new(false));
             let subscribed_tracks = Arc::new(Mutex::new(BTreeSet::new()));
             let published_tracks = Arc::new(Mutex::new(BTreeSet::new()));
+            let pending_video_frame = Arc::new(Mutex::new(None));
+            let video_frame_notified = Arc::new(AtomicBool::new(false));
             tokio::spawn(run_writer(writer, rx));
             tokio::spawn(run_event_reader(
-                lines,
+                reader,
                 subscribed_tracks.clone(),
                 published_tracks.clone(),
+                pending_video_frame.clone(),
+                video_frame_notified.clone(),
                 event_tx,
                 closed.clone(),
             ));
@@ -621,6 +723,8 @@ where
                 kill_tx: Mutex::new(kill_tx),
                 subscribed_tracks,
                 published_tracks,
+                pending_video_frame,
+                video_frame_notified,
                 event_rx: Mutex::new(Some(event_rx)),
             })
         }
@@ -651,6 +755,8 @@ mod tests {
             endpoint: "wss://secret-voice.example.test/rtc".to_owned(),
             token: "super-secret-livekit-jwt-token".to_owned(),
             connection_id: "conn-123".to_owned(),
+            initial_mic_muted: true,
+            initial_playback_muted: false,
         };
         let rendered = format!("{cmd:?}");
         assert!(!rendered.contains("secret-voice.example.test"));
@@ -678,6 +784,8 @@ mod tests {
                         endpoint: "wss://rtc.example.test".to_owned(),
                         token: "secret-jwt".to_owned(),
                         connection_id: "conn-1".to_owned(),
+                        initial_mic_muted: true,
+                        initial_playback_muted: false,
                     }
                 );
 
@@ -704,6 +812,8 @@ mod tests {
                     endpoint: "wss://rtc.example.test".to_owned(),
                     token: "secret-jwt".to_owned(),
                     connection_id: "conn-1".to_owned(),
+                    initial_mic_muted: true,
+                    initial_playback_muted: false,
                 },
                 Duration::from_secs(2),
                 None,
@@ -801,6 +911,8 @@ mod tests {
                     endpoint: "wss://rtc.example.test".to_owned(),
                     token: secret_token.to_owned(),
                     connection_id: "conn-err".to_owned(),
+                    initial_mic_muted: true,
+                    initial_playback_muted: false,
                 },
                 Duration::from_secs(2),
                 None,
@@ -824,6 +936,8 @@ mod tests {
                     endpoint: "wss://rtc.example.test".to_owned(),
                     token: secret_token.to_owned(),
                     connection_id: "conn-eof".to_owned(),
+                    initial_mic_muted: true,
+                    initial_playback_muted: false,
                 },
                 Duration::from_secs(2),
                 None,
@@ -846,6 +960,8 @@ mod tests {
                     endpoint: "wss://rtc.example.test".to_owned(),
                     token: secret_token.to_owned(),
                     connection_id: "conn-timeout".to_owned(),
+                    initial_mic_muted: true,
+                    initial_playback_muted: false,
                 },
                 Duration::from_millis(20),
                 None,
@@ -872,6 +988,8 @@ mod tests {
             connection_id: "conn-missing".to_owned(),
             endpoint: secret_endpoint.to_owned(),
             token: SecretToken::new(secret_token),
+            initial_mic_muted: true,
+            initial_playback_muted: false,
         };
         let err = rt
             .block_on(transport.connect(creds))
@@ -947,6 +1065,8 @@ mod tests {
                     endpoint: "wss://rtc.example.test".to_owned(),
                     token: "secret-jwt".to_owned(),
                     connection_id: "conn-tracks".to_owned(),
+                    initial_mic_muted: true,
+                    initial_playback_muted: false,
                 },
                 Duration::from_secs(2),
                 None,
@@ -1060,6 +1180,8 @@ mod tests {
                     endpoint: "wss://rtc.example.test".to_owned(),
                     token: "secret-jwt".to_owned(),
                     connection_id: "conn-eof-ev".to_owned(),
+                    initial_mic_muted: true,
+                    initial_playback_muted: false,
                 },
                 Duration::from_secs(2),
                 None,
@@ -1117,6 +1239,8 @@ mod tests {
                     endpoint: "wss://rtc.example.test".to_owned(),
                     token: "secret-jwt".to_owned(),
                     connection_id: "conn-video".to_owned(),
+                    initial_mic_muted: true,
+                    initial_playback_muted: false,
                 },
                 Duration::from_secs(2),
                 None,
@@ -1182,13 +1306,13 @@ mod tests {
                 tokio::time::timeout(Duration::from_secs(2), ev_rx.recv())
                     .await
                     .unwrap(),
-                Some(VoiceRoomEvent::VideoFrame {
-                    track_sid: "TR_cam_1".to_owned(),
-                    width: 2,
-                    height: 1,
-                    rgba: valid_rgba,
-                })
+                Some(VoiceRoomEvent::VideoFrameReady)
             );
+            assert_eq!(
+                VoiceRoom::take_pending_video_frame(&room),
+                Some(("TR_cam_1".to_owned(), 2, 1, valid_rgba))
+            );
+            assert_eq!(VoiceRoom::take_pending_video_frame(&room), None);
             assert_eq!(
                 tokio::time::timeout(Duration::from_secs(2), ev_rx.recv())
                     .await
@@ -1216,6 +1340,8 @@ mod tests {
                     endpoint: "wss://rtc.example.test".to_owned(),
                     token: "secret-jwt".to_owned(),
                     connection_id: "conn-pub".to_owned(),
+                    initial_mic_muted: true,
+                    initial_playback_muted: false,
                 },
                 Duration::from_secs(2),
                 None,
@@ -1287,6 +1413,152 @@ mod tests {
             );
             assert!(VoiceRoom::published_tracks(&room).is_empty());
             assert!(VoiceRoom::subscribed_tracks(&room).is_empty());
+        });
+    }
+
+    #[test]
+    fn read_line_limited_rejects_oversized_lines() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let data = b"ok\ntoo_long_line\n";
+            let mut reader = BufReader::new(&data[..]);
+            assert_eq!(
+                read_line_limited(&mut reader, 4).await.unwrap().as_deref(),
+                Some("ok")
+            );
+            let err = read_line_limited(&mut reader, 4)
+                .await
+                .expect_err("oversized line must fail");
+            assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        });
+    }
+
+    #[test]
+    fn connect_over_streams_times_out_when_write_stalls() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let (c_w, _c_r) = tokio::io::duplex(16);
+            let (_w_w, w_r) = tokio::io::duplex(16);
+            let err = connect_over_streams(
+                c_w,
+                w_r,
+                WorkerCommand::Connect {
+                    endpoint: "wss://rtc.example.test".to_owned(),
+                    token: "secret-jwt-payload-larger-than-duplex-buffer".to_owned(),
+                    connection_id: "conn-stall".to_owned(),
+                    initial_mic_muted: true,
+                    initial_playback_muted: false,
+                },
+                Duration::from_millis(20),
+                None,
+            )
+            .await
+            .err()
+            .expect("stalled write must time out");
+            assert!(err.contains("timed out"));
+        });
+    }
+
+    #[test]
+    fn duplex_video_frame_coalesces_multiple_frames_to_latest() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let (c_w, _c_r) = tokio::io::duplex(65536);
+            let (mut w_w, w_r) = tokio::io::duplex(65536);
+
+            let connected = format!("{}\n", serde_json::to_string(&WorkerEvent::Connected).unwrap());
+            w_w.write_all(connected.as_bytes()).await.unwrap();
+            w_w.flush().await.unwrap();
+
+            let room = connect_over_streams(
+                c_w,
+                w_r,
+                WorkerCommand::Connect {
+                    endpoint: "wss://rtc.example.test".to_owned(),
+                    token: "secret-jwt".to_owned(),
+                    connection_id: "conn-coalesce".to_owned(),
+                    initial_mic_muted: true,
+                    initial_playback_muted: false,
+                },
+                Duration::from_secs(2),
+                None,
+            )
+            .await
+            .expect("handshake must succeed");
+
+            let mut ev_rx = VoiceRoom::take_event_rx(&room).expect("event_rx must be present");
+
+            let frame1 = vec![1, 1, 1, 255];
+            let frame2 = vec![2, 2, 2, 255];
+            let frame3 = vec![3, 3, 3, 255];
+            for rgba in [&frame1, &frame2, &frame3] {
+                let ev = WorkerEvent::VideoFrame {
+                    track_sid: "TR_cam_1".to_owned(),
+                    width: 1,
+                    height: 1,
+                    rgba_b64: base64::engine::general_purpose::STANDARD.encode(rgba),
+                };
+                let line = format!("{}\n", serde_json::to_string(&ev).unwrap());
+                w_w.write_all(line.as_bytes()).await.unwrap();
+            }
+            let follow_up = WorkerEvent::TrackSubscribed {
+                participant_identity: "user-2".to_owned(),
+                participant_sid: "PA_2".to_owned(),
+                track_sid: "TR_mic_2".to_owned(),
+                source: "microphone".to_owned(),
+            };
+            let follow_line = format!("{}\n", serde_json::to_string(&follow_up).unwrap());
+            w_w.write_all(follow_line.as_bytes()).await.unwrap();
+            w_w.flush().await.unwrap();
+
+            // Wait until TracksChanged has been processed so all 3 frames were already read.
+            let mut saw_ready = false;
+            let mut saw_tracks = false;
+            for _ in 0..4 {
+                match tokio::time::timeout(Duration::from_secs(2), ev_rx.recv())
+                    .await
+                    .unwrap()
+                {
+                    Some(VoiceRoomEvent::VideoFrameReady) => {
+                        assert!(!saw_ready, "VideoFrameReady must be coalesced to 1 notification");
+                        saw_ready = true;
+                    }
+                    Some(VoiceRoomEvent::TracksChanged) => {
+                        saw_tracks = true;
+                        break;
+                    }
+                    other => panic!("unexpected event: {other:?}"),
+                }
+            }
+            assert!(saw_ready && saw_tracks);
+            assert_eq!(
+                VoiceRoom::take_pending_video_frame(&room),
+                Some(("TR_cam_1".to_owned(), 1, 1, frame3))
+            );
+            assert_eq!(VoiceRoom::take_pending_video_frame(&room), None);
+
+            // A subsequent frame after consumption emits a fresh VideoFrameReady.
+            let frame4 = vec![4, 4, 4, 255];
+            let ev4 = WorkerEvent::VideoFrame {
+                track_sid: "TR_cam_1".to_owned(),
+                width: 1,
+                height: 1,
+                rgba_b64: base64::engine::general_purpose::STANDARD.encode(&frame4),
+            };
+            let line4 = format!("{}\n", serde_json::to_string(&ev4).unwrap());
+            w_w.write_all(line4.as_bytes()).await.unwrap();
+            w_w.flush().await.unwrap();
+
+            assert_eq!(
+                tokio::time::timeout(Duration::from_secs(2), ev_rx.recv())
+                    .await
+                    .unwrap(),
+                Some(VoiceRoomEvent::VideoFrameReady)
+            );
+            assert_eq!(
+                VoiceRoom::take_pending_video_frame(&room),
+                Some(("TR_cam_1".to_owned(), 1, 1, frame4))
+            );
         });
     }
 }

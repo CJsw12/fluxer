@@ -203,6 +203,8 @@ async fn fetch_reply_target_retries_transient_failure_and_shows_the_target() {
     assert_eq!(preview(&backend), UNRESOLVED);
     assert!(matches!(events.try_recv(), Err(mpsc::error::TryRecvError::Empty)));
 
+    assert!(backend.fetch_reply_target(CHANNEL, TARGET).is_none(), "wait before retrying the failed lookup");
+    tokio::time::sleep(REPLY_TARGET_RETRY_DELAY).await;
     let retry = backend.fetch_reply_target(CHANNEL, TARGET).unwrap();
     respond(receive_reply_request(&listener).await, "200 OK", &target_body(), retry).await;
     assert_eq!(events.try_recv().unwrap(), UiEvent::StateChanged);

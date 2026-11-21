@@ -2,10 +2,10 @@
 //! the shared `ClientState`. Everything here runs on the tokio runtime; the
 //! UI only receives `UiEvent`s and reads the state under the mutex.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context as _, Result};
 use fluxer_client_core::gateway::{self, Compression, GatewayConfig, GatewayEvent, GatewayHandle, IdentifyProperties};
@@ -21,6 +21,9 @@ use tokio::runtime::Handle;
 use tokio::sync::mpsc;
 
 use crate::notify::{Notification, NotifyFocus, notification_for};
+
+const REPLY_TARGET_RETRY_DELAY: Duration = Duration::from_secs(2);
+type ReplyTargetRequests = BTreeMap<(u64, Snowflake, Snowflake), Option<Instant>>;
 
 /// Something the UI should react to. The UI re-reads the state on every
 /// event, so events only say *that* something changed plus status/errors.
@@ -185,8 +188,8 @@ pub struct Backend {
     history_seq: Arc<Mutex<BTreeMap<Snowflake, u64>>>,
     /// Per-channel monotonic counter so stale group DM rename replies never overwrite a newer edit.
     rename_group_dm_seq: Arc<Mutex<BTreeMap<Snowflake, u64>>>,
-    /// Reply targets currently being fetched, scoped to the READY generation.
-    reply_target_in_flight: Arc<Mutex<BTreeSet<(u64, Snowflake, Snowflake)>>>,
+    /// Per READY generation, `None` means in flight and `Some` is the next retry time.
+    reply_target_requests: Arc<Mutex<ReplyTargetRequests>>,
     parent_syncs: channels::PendingChannelSyncs,
     /// Every `POST .../messages` body, in order (tests check what the
     /// composer sent; the test runtime never runs the request).
@@ -304,7 +307,7 @@ impl Backend {
             guild_settings_seq: Arc::default(),
             history_seq: Arc::default(),
             rename_group_dm_seq: Arc::default(),
-            reply_target_in_flight: Arc::default(),
+            reply_target_requests: Arc::default(),
             parent_syncs: Default::default(),
             #[cfg(test)]
             sent: Arc::default(),
@@ -415,7 +418,7 @@ impl Backend {
 
     /// `GET /channels/{channel_id}/messages/{message_id}`: resolves an
     /// unloaded reply target (`ReplyPreview::NotLoaded`) in the background.
-    /// Deduplicates in-flight requests per `(channel_id, message_id)`.
+    /// Suppresses duplicate requests and backs off after failed lookups.
     pub fn fetch_reply_target(
         &self,
         channel_id: Snowflake,
@@ -429,12 +432,19 @@ impl Backend {
             state.ready_generation()
         };
         let key = (generation, channel_id, message_id);
-        if !lock(&self.reply_target_in_flight).insert(key) {
-            return None;
+        {
+            let mut requests = lock(&self.reply_target_requests);
+            let now = Instant::now();
+            let blocked = |retry_at: &Option<Instant>| retry_at.is_none_or(|at| at > now);
+            if requests.get(&key).is_some_and(blocked) {
+                return None;
+            }
+            requests.retain(|_, retry_at| blocked(retry_at));
+            requests.insert(key, None);
         }
         let rest = self.rest.clone();
         let state = self.state.clone();
-        let in_flight = self.reply_target_in_flight.clone();
+        let requests = self.reply_target_requests.clone();
         let events = self.events.clone();
         Some(self.runtime.spawn(async move {
             let result = rest.get_message(&channel_id.to_string(), &message_id.to_string()).await;
@@ -452,13 +462,21 @@ impl Backend {
                     None
                 }
             };
+            let failed = resolved.is_none();
             let changed = resolved.is_some_and(|target| {
                 let mut st = lock(&state);
                 st.ready_generation() == generation
                     && st.can_view_channel(channel_id)
                     && st.messages.resolve_reply_target(channel_id, message_id, target)
             });
-            lock(&in_flight).remove(&key);
+            {
+                let mut requests = lock(&requests);
+                if failed {
+                    requests.insert(key, Some(Instant::now() + REPLY_TARGET_RETRY_DELAY));
+                } else {
+                    requests.remove(&key);
+                }
+            }
             if changed {
                 let _ = events.send(UiEvent::StateChanged);
             }

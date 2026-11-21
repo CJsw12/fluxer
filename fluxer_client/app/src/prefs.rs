@@ -13,6 +13,13 @@ use crate::theme::{
 use crate::trusted_domains;
 
 pub const FILE_NAME: &str = "prefs.json";
+pub const MIN_VOICE_VOLUME: u16 = 0;
+pub const MAX_VOICE_VOLUME: u16 = 200;
+pub const DEFAULT_VOICE_VOLUME: u16 = 100;
+
+fn normalize_device_name(raw: Option<&str>) -> Option<String> {
+    raw.filter(|s| !s.trim().is_empty()).map(str::to_owned)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Prefs {
@@ -26,6 +33,10 @@ pub struct Prefs {
     pub ui_zoom: u16,
     pub compact: bool,
     pub trusted_domains: Vec<String>,
+    pub voice_input_device: Option<String>,
+    pub voice_output_device: Option<String>,
+    pub voice_input_volume: u16,
+    pub voice_output_volume: u16,
 }
 
 impl Default for Prefs {
@@ -45,6 +56,10 @@ impl Default for Prefs {
             ui_zoom: DEFAULT_UI_ZOOM,
             compact: false,
             trusted_domains: Vec::new(),
+            voice_input_device: None,
+            voice_output_device: None,
+            voice_input_volume: DEFAULT_VOICE_VOLUME,
+            voice_output_volume: DEFAULT_VOICE_VOLUME,
         }
     }
 }
@@ -115,6 +130,24 @@ impl Prefs {
                 .and_then(Value::as_bool)
                 .unwrap_or(default.compact),
             trusted_domains,
+            voice_input_device: normalize_device_name(
+                value.get("voice_input_device").and_then(Value::as_str),
+            ),
+            voice_output_device: normalize_device_name(
+                value.get("voice_output_device").and_then(Value::as_str),
+            ),
+            voice_input_volume: value
+                .get("voice_input_volume")
+                .and_then(Value::as_u64)
+                .and_then(|n| u16::try_from(n).ok())
+                .unwrap_or(default.voice_input_volume)
+                .clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME),
+            voice_output_volume: value
+                .get("voice_output_volume")
+                .and_then(Value::as_u64)
+                .and_then(|n| u16::try_from(n).ok())
+                .unwrap_or(default.voice_output_volume)
+                .clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME),
         }
     }
 
@@ -130,6 +163,10 @@ impl Prefs {
             "ui_zoom": self.ui_zoom.clamp(MIN_UI_ZOOM, MAX_UI_ZOOM),
             "compact": self.compact,
             "trusted_domains": self.trusted_domains,
+            "voice_input_device": normalize_device_name(self.voice_input_device.as_deref()),
+            "voice_output_device": normalize_device_name(self.voice_output_device.as_deref()),
+            "voice_input_volume": self.voice_input_volume.clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME),
+            "voice_output_volume": self.voice_output_volume.clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME),
         })
     }
 }
@@ -207,6 +244,26 @@ impl PrefsStore {
 
     pub fn set_compact(&mut self, compact: bool) {
         self.data.compact = compact;
+        self.persist();
+    }
+
+    pub fn set_voice_input_device(&mut self, device: Option<String>) {
+        self.data.voice_input_device = normalize_device_name(device.as_deref());
+        self.persist();
+    }
+
+    pub fn set_voice_output_device(&mut self, device: Option<String>) {
+        self.data.voice_output_device = normalize_device_name(device.as_deref());
+        self.persist();
+    }
+
+    pub fn set_voice_input_volume(&mut self, volume: u16) {
+        self.data.voice_input_volume = volume.clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME);
+        self.persist();
+    }
+
+    pub fn set_voice_output_volume(&mut self, volume: u16) {
+        self.data.voice_output_volume = volume.clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME);
         self.persist();
     }
 
@@ -295,6 +352,18 @@ mod tests {
                 } else {
                     Vec::new()
                 },
+                voice_input_device: if theme == ThemeKind::Light {
+                    Some("Built-in Mic".to_owned())
+                } else {
+                    None
+                },
+                voice_output_device: if theme == ThemeKind::Darker {
+                    Some("Studio Headphones".to_owned())
+                } else {
+                    None
+                },
+                voice_input_volume: if theme == ThemeKind::Light { 150 } else { 80 },
+                voice_output_volume: if theme == ThemeKind::Black { 200 } else { 40 },
             };
             store.save().expect("save");
             let loaded = PrefsStore::open(path.clone());
@@ -377,7 +446,7 @@ mod tests {
             .keys()
             .map(String::as_str)
             .collect();
-        assert_eq!(keys.len(), 10);
+        assert_eq!(keys.len(), 14);
         for key in [
             "theme",
             "notifications",
@@ -389,6 +458,10 @@ mod tests {
             "ui_zoom",
             "compact",
             "trusted_domains",
+            "voice_input_device",
+            "voice_output_device",
+            "voice_input_volume",
+            "voice_output_volume",
         ] {
             assert!(keys.contains(&key), "{key}");
         }
@@ -420,6 +493,34 @@ mod tests {
         assert_eq!(reloaded.data.trusted_domains, vec!["docs.rs", "example.com"]);
         store.clear_trusted_domains();
         assert!(PrefsStore::open(path).data.trusted_domains.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn clamps_voice_volume_and_normalizes_empty_device() {
+        let dir = temp_dir("voice-clamp");
+        std::fs::create_dir_all(&dir).expect("dir");
+        let path = dir.join(FILE_NAME);
+        std::fs::write(
+            &path,
+            br#"{"voice_input_device":"","voice_output_device":"   ","voice_input_volume":999,"voice_output_volume":-10}"#,
+        )
+        .expect("write");
+        let mut store = PrefsStore::open(path.clone());
+        assert_eq!(store.data.voice_input_device, None);
+        assert_eq!(store.data.voice_output_device, None);
+        assert_eq!(store.data.voice_input_volume, MAX_VOICE_VOLUME);
+        assert_eq!(store.data.voice_output_volume, DEFAULT_VOICE_VOLUME);
+
+        store.set_voice_input_device(Some("".to_owned()));
+        store.set_voice_output_device(Some("USB Headset".to_owned()));
+        store.set_voice_input_volume(999);
+        store.set_voice_output_volume(0);
+        let reloaded = PrefsStore::open(path);
+        assert_eq!(reloaded.data.voice_input_device, None);
+        assert_eq!(reloaded.data.voice_output_device.as_deref(), Some("USB Headset"));
+        assert_eq!(reloaded.data.voice_input_volume, MAX_VOICE_VOLUME);
+        assert_eq!(reloaded.data.voice_output_volume, MIN_VOICE_VOLUME);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

@@ -145,12 +145,12 @@
   <g><title>자동 업데이트 : 미착수</title><rect x="594" y="489.0" width="10" height="10" rx="2" fill="#484f58"/></g>
   <text x="24" y="534.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">음성·화면 공유</text>
   <rect x="270" y="523.0" width="190" height="10" rx="5" fill="#21262d"/>
-  <rect x="270" y="523.0" width="76.0" height="10" rx="5" fill="#58a6ff"/>
-  <text x="474" y="533.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">40%</text>
+  <rect x="270" y="523.0" width="95.0" height="10" rx="5" fill="#58a6ff"/>
+  <text x="474" y="533.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">50%</text>
   <g><title>음성 채널 참가 : 부분</title><rect x="510" y="523.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <g><title>화면 공유 송신 : 부분</title><rect x="524" y="523.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <g><title>화면 공유 수신 : 부분</title><rect x="538" y="523.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>오디오 장치·볼륨 : 미착수</title><rect x="552" y="523.0" width="10" height="10" rx="2" fill="#484f58"/></g>
+  <g><title>오디오 장치·볼륨 : 부분</title><rect x="552" y="523.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <g><title>음성 UI : 부분</title><rect x="566" y="523.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="590.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12">범례</text>
   <rect x="72" y="581.0" width="10" height="10" rx="2" fill="#3fb950"/>

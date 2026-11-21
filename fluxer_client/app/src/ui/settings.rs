@@ -10,6 +10,7 @@ use gpui_kit::component::switch::Switch;
 use gpui_kit::{AnyElement, Context, FontWeight, ScrollHandle, SharedString, Window, div, prelude::*, px};
 
 use crate::client_view::ClientView;
+use crate::prefs::{DEFAULT_VOICE_VOLUME, MAX_VOICE_VOLUME, MIN_VOICE_VOLUME};
 use crate::settings_model::{FONT_SIZE_OPTIONS, LOCALES, SettingsEffect, THEME_OPTIONS, theme_patch_value};
 use crate::theme::{self, MAX_FONT_SIZE, MAX_UI_ZOOM, MIN_FONT_SIZE, MIN_UI_ZOOM, Theme, ThemeKind};
 use crate::ui::overlay::Overlay;
@@ -48,6 +49,10 @@ impl ClientView {
             SettingsEffect::FontSizeChanged(size) => self.settings_set_font_size(size, cx),
             SettingsEffect::ZoomChanged(zoom) => self.settings_set_zoom(zoom, cx),
             SettingsEffect::CompactChanged(compact) => self.settings_set_compact(compact, cx),
+            SettingsEffect::VoiceInputDeviceChanged(device) => self.settings_set_voice_input_device(device, cx),
+            SettingsEffect::VoiceOutputDeviceChanged(device) => self.settings_set_voice_output_device(device, cx),
+            SettingsEffect::VoiceInputVolumeChanged(volume) => self.settings_set_voice_input_volume(volume, cx),
+            SettingsEffect::VoiceOutputVolumeChanged(volume) => self.settings_set_voice_output_volume(volume, cx),
             SettingsEffect::ClearTrustedDomains => self.settings_clear_trusted_domains(cx),
             SettingsEffect::OpenAccountSwitcher => self.open_account_switcher(window, cx),
             SettingsEffect::LogOutRequested => {
@@ -127,6 +132,26 @@ impl ClientView {
         cx.notify();
     }
 
+    pub(crate) fn settings_set_voice_input_device(&mut self, device: Option<String>, cx: &mut Context<Self>) {
+        self.prefs.set_voice_input_device(device);
+        cx.notify();
+    }
+
+    pub(crate) fn settings_set_voice_output_device(&mut self, device: Option<String>, cx: &mut Context<Self>) {
+        self.prefs.set_voice_output_device(device);
+        cx.notify();
+    }
+
+    pub(crate) fn settings_set_voice_input_volume(&mut self, volume: u16, cx: &mut Context<Self>) {
+        self.prefs.set_voice_input_volume(volume);
+        cx.notify();
+    }
+
+    pub(crate) fn settings_set_voice_output_volume(&mut self, volume: u16, cx: &mut Context<Self>) {
+        self.prefs.set_voice_output_volume(volume);
+        cx.notify();
+    }
+
     pub(crate) fn settings_clear_trusted_domains(&mut self, cx: &mut Context<Self>) {
         self.prefs.clear_trusted_domains();
         self.backend.update_user_settings(UserSettingsPatch {
@@ -165,6 +190,108 @@ fn section_heading(title: String, theme: &Theme) -> impl IntoElement {
         .font_weight(FontWeight::BOLD)
         .text_color(theme.muted_foreground)
         .child(title)
+}
+
+fn voice_device_row(
+    label: &str,
+    device: Option<&str>,
+    reset_id: &'static str,
+    theme: &Theme,
+    make_reset: impl Fn(Option<String>) -> SettingsEffect + 'static,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
+    let display_name = device.map(str::to_owned).unwrap_or_else(|| l10n::tr("System default"));
+    div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_between()
+        .gap_2()
+        .child(div().text_sm().child(l10n::tr(label)))
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_2()
+                .child(div().text_xs().text_color(theme.muted_foreground).child(display_name))
+                .when(device.is_some(), |d| {
+                    d.child(
+                        div().debug_selector(move || reset_id.to_owned()).child(
+                            Button::new(reset_id)
+                                .ghost()
+                                .small()
+                                .label(l10n::tr("Reset"))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.apply_settings_effect(make_reset(None), window, cx);
+                                })),
+                        ),
+                    )
+                }),
+        )
+        .into_any_element()
+}
+
+fn voice_volume_row(
+    label: &str,
+    volume: u16,
+    dec_id: &'static str,
+    inc_id: &'static str,
+    reset_id: &'static str,
+    make_effect: impl Fn(u16) -> SettingsEffect + Copy + 'static,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
+    let clamped = volume.clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME);
+    div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_between()
+        .child(div().text_sm().child(l10n::tr(label)))
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_1()
+                .child(
+                    div().debug_selector(move || dec_id.to_owned()).child(
+                        Button::new(dec_id)
+                            .ghost()
+                            .small()
+                            .label("-")
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                let next = clamped.saturating_sub(10).max(MIN_VOICE_VOLUME);
+                                this.apply_settings_effect(make_effect(next), window, cx);
+                            })),
+                    ),
+                )
+                .child(div().px_2().text_xs().font_weight(FontWeight::SEMIBOLD).child(format!("{clamped}%")))
+                .child(
+                    div().debug_selector(move || inc_id.to_owned()).child(
+                        Button::new(inc_id)
+                            .ghost()
+                            .small()
+                            .label("+")
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                let next = clamped.saturating_add(10).min(MAX_VOICE_VOLUME);
+                                this.apply_settings_effect(make_effect(next), window, cx);
+                            })),
+                    ),
+                )
+                .child(
+                    div().debug_selector(move || reset_id.to_owned()).child(
+                        Button::new(reset_id)
+                            .ghost()
+                            .small()
+                            .label(l10n::tr("Reset"))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.apply_settings_effect(make_effect(DEFAULT_VOICE_VOLUME), window, cx);
+                            })),
+                    ),
+                ),
+        )
+        .into_any_element()
 }
 
 pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
@@ -495,6 +622,47 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
                     .child(close_to_tray_row),
             )
         })
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Voice & Audio"), theme))
+                .child(voice_device_row(
+                    "Input device",
+                    view.prefs.data.voice_input_device.as_deref(),
+                    "voice-input-device-reset",
+                    theme,
+                    SettingsEffect::VoiceInputDeviceChanged,
+                    cx,
+                ))
+                .child(voice_volume_row(
+                    "Input volume",
+                    view.prefs.data.voice_input_volume,
+                    "voice-input-vol-dec",
+                    "voice-input-vol-inc",
+                    "voice-input-vol-reset",
+                    SettingsEffect::VoiceInputVolumeChanged,
+                    cx,
+                ))
+                .child(voice_device_row(
+                    "Output device",
+                    view.prefs.data.voice_output_device.as_deref(),
+                    "voice-output-device-reset",
+                    theme,
+                    SettingsEffect::VoiceOutputDeviceChanged,
+                    cx,
+                ))
+                .child(voice_volume_row(
+                    "Output volume",
+                    view.prefs.data.voice_output_volume,
+                    "voice-output-vol-dec",
+                    "voice-output-vol-inc",
+                    "voice-output-vol-reset",
+                    SettingsEffect::VoiceOutputVolumeChanged,
+                    cx,
+                )),
+        )
         .child(
             div()
                 .flex()

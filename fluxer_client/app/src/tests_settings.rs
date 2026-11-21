@@ -129,3 +129,107 @@ fn settings_modal_updates_theme_switches_locale_and_logs_out(cx: &mut TestAppCon
     assert!(logged_out.load(Ordering::SeqCst));
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn settings_modal_updates_voice_devices_and_volumes(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, cx) = open_client(cx, backend, events);
+
+    focus_composer(&view, cx);
+    cx.simulate_keystrokes("ctrl-,");
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::Settings(_))));
+
+    // Default voice prefs
+    view.read_with(cx, |v, _| {
+        assert_eq!(v.prefs.data.voice_input_device, None);
+        assert_eq!(v.prefs.data.voice_output_device, None);
+        assert_eq!(v.prefs.data.voice_input_volume, 100);
+        assert_eq!(v.prefs.data.voice_output_volume, 100);
+    });
+
+    // Verify all voice volume controls are drawn
+    for selector in [
+        "voice-input-vol-dec",
+        "voice-input-vol-inc",
+        "voice-input-vol-reset",
+        "voice-output-vol-dec",
+        "voice-output-vol-inc",
+        "voice-output-vol-reset",
+    ] {
+        assert!(cx.debug_bounds(selector).is_some(), "{selector} should be drawn");
+    }
+
+    // Step input/output volumes and verify clamping (0..=200) and reset (100)
+    view.update_in(cx, |v, window, cx| {
+        v.apply_settings_effect(crate::settings_model::SettingsEffect::VoiceInputVolumeChanged(90), window, cx);
+        v.apply_settings_effect(crate::settings_model::SettingsEffect::VoiceOutputVolumeChanged(110), window, cx);
+    });
+    cx.run_until_parked();
+    draw(cx);
+    view.read_with(cx, |v, _| {
+        assert_eq!(v.prefs.data.voice_input_volume, 90);
+        assert_eq!(v.prefs.data.voice_output_volume, 110);
+    });
+
+    view.update_in(cx, |v, window, cx| {
+        v.apply_settings_effect(crate::settings_model::SettingsEffect::VoiceInputVolumeChanged(0), window, cx);
+        v.apply_settings_effect(crate::settings_model::SettingsEffect::VoiceOutputVolumeChanged(250), window, cx);
+    });
+    cx.run_until_parked();
+    draw(cx);
+    view.read_with(cx, |v, _| {
+        assert_eq!(v.prefs.data.voice_input_volume, 0);
+        assert_eq!(v.prefs.data.voice_output_volume, 200);
+    });
+
+    view.update_in(cx, |v, window, cx| {
+        v.apply_settings_effect(crate::settings_model::SettingsEffect::VoiceInputVolumeChanged(100), window, cx);
+        v.apply_settings_effect(crate::settings_model::SettingsEffect::VoiceOutputVolumeChanged(100), window, cx);
+    });
+    cx.run_until_parked();
+    draw(cx);
+    view.read_with(cx, |v, _| {
+        assert_eq!(v.prefs.data.voice_input_volume, 100);
+        assert_eq!(v.prefs.data.voice_output_volume, 100);
+    });
+
+    // Set devices, verify reset buttons render, and reset back to None
+    view.update_in(cx, |v, window, cx| {
+        v.apply_settings_effect(
+            crate::settings_model::SettingsEffect::VoiceInputDeviceChanged(Some("USB Mic".to_owned())),
+            window,
+            cx,
+        );
+        v.apply_settings_effect(
+            crate::settings_model::SettingsEffect::VoiceOutputDeviceChanged(Some("Headphones".to_owned())),
+            window,
+            cx,
+        );
+    });
+    cx.run_until_parked();
+    draw(cx);
+    view.read_with(cx, |v, _| {
+        assert_eq!(v.prefs.data.voice_input_device.as_deref(), Some("USB Mic"));
+        assert_eq!(v.prefs.data.voice_output_device.as_deref(), Some("Headphones"));
+    });
+    assert!(cx.debug_bounds("voice-input-device-reset").is_some());
+    assert!(cx.debug_bounds("voice-output-device-reset").is_some());
+
+    view.update_in(cx, |v, window, cx| {
+        v.apply_settings_effect(crate::settings_model::SettingsEffect::VoiceInputDeviceChanged(None), window, cx);
+        v.apply_settings_effect(crate::settings_model::SettingsEffect::VoiceOutputDeviceChanged(None), window, cx);
+    });
+    cx.run_until_parked();
+    draw(cx);
+    view.read_with(cx, |v, _| {
+        assert_eq!(v.prefs.data.voice_input_device, None);
+        assert_eq!(v.prefs.data.voice_output_device, None);
+    });
+    assert!(cx.debug_bounds("voice-input-device-reset").is_none());
+    assert!(cx.debug_bounds("voice-output-device-reset").is_none());
+
+    drop(rt);
+}

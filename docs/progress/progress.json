@@ -449,7 +449,7 @@
         },
         {
           "name": "오디오 장치·볼륨",
-          "status": "todo"
+          "status": "partial"
         },
         {
           "name": "음성 UI",

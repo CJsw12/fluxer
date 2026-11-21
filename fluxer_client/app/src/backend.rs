@@ -156,6 +156,7 @@ mod settings;
 mod social;
 mod upload;
 pub(crate) mod voice;
+pub(crate) mod voice_ipc;
 
 #[cfg(test)]
 pub use channels::GuildChannelCall;

@@ -67,6 +67,8 @@ mod tests_search;
 mod tests_settings;
 #[cfg(test)]
 mod tests_social;
+#[cfg(test)]
+mod tests_voice;
 
 use std::cell::RefCell;
 use std::rc::Rc;

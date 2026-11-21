@@ -228,6 +228,8 @@ pub struct ClientView {
     pub(crate) accounts_enabled: bool,
     /// Token-free list of saved accounts for switching/removing in the UI.
     pub(crate) saved_accounts: Vec<crate::accounts::SavedAccountItem>,
+    /// UI-safe snapshot of the active voice session and channel voice members.
+    pub(crate) voice: crate::backend::voice::VoiceSnapshot,
     /// Deep link deferred until READY completes (`self.user.is_some()`) and target arrives.
     pub(crate) pending_deep_link: Option<(crate::deep_links::DeepLink, std::time::Instant)>,
     /// Keeps the layout's key context reachable when nothing inside has focus.
@@ -401,6 +403,7 @@ impl ClientView {
             group_dm_rename_synced: None,
             accounts_enabled: false,
             saved_accounts: Vec::new(),
+            voice: crate::backend::voice::VoiceSnapshot::default(),
             pending_deep_link: None,
             focus: cx.focus_handle(),
             #[cfg(test)]
@@ -503,7 +506,10 @@ impl ClientView {
         let mut guild_available = false;
         for event in batch {
             match event {
-                UiEvent::StateChanged | UiEvent::VoiceChanged => {}
+                UiEvent::StateChanged => {}
+                UiEvent::VoiceChanged => {
+                    self.voice = self.backend.voice_snapshot();
+                }
                 UiEvent::GuildAvailable { guild_id } => {
                     guild_available |= self.place == Place::Guild(guild_id);
                 }
@@ -917,6 +923,7 @@ impl ClientView {
     /// Re-reads the state and updates every snapshot, the scroller rows and
     /// the composer.
     pub(crate) fn refresh(&mut self, cx: &mut Context<Self>) {
+        self.voice = self.backend.voice_snapshot();
         let (
             pane,
             can_send,
@@ -1380,6 +1387,78 @@ impl ClientView {
 
     pub(crate) fn select_channel(&mut self, channel_id: Snowflake, cx: &mut Context<Self>) {
         self.select_channel_inner(channel_id, true, cx);
+    }
+
+    pub(crate) fn join_voice_channel(&mut self, channel_id: Snowflake, cx: &mut Context<Self>) {
+        let target = {
+            let state = self.backend.state();
+            let Some(ch) = state.channels.get(&channel_id) else { return };
+            if ch.kind != fluxer_client_core::state::ChannelKind::GuildVoice && ch.guild_id.is_some() {
+                return;
+            }
+            if ch.guild_id.is_some() {
+                let perms = state.channel_permissions(channel_id);
+                let required = fluxer_client_core::state::bits::VIEW_CHANNEL
+                    | fluxer_client_core::state::bits::CONNECT;
+                if (perms & required) != required {
+                    self.error = Some(l10n::tr("You do not have permission to connect to this voice channel.").into());
+                    cx.notify();
+                    return;
+                }
+            }
+            ch.guild_id
+        };
+        self.error = None;
+        self.backend.join_voice(target, channel_id);
+        self.voice = self.backend.voice_snapshot();
+        cx.notify();
+    }
+
+    pub(crate) fn leave_voice_channel(&mut self, cx: &mut Context<Self>) {
+        self.backend.leave_voice();
+        self.voice = self.backend.voice_snapshot();
+        cx.notify();
+    }
+
+    pub(crate) fn toggle_voice_mute(&mut self, cx: &mut Context<Self>) {
+        self.backend.set_voice_mute(!self.voice.self_mute);
+        self.voice = self.backend.voice_snapshot();
+        cx.notify();
+    }
+
+    pub(crate) fn toggle_voice_deaf(&mut self, cx: &mut Context<Self>) {
+        self.backend.set_voice_deaf(!self.voice.self_deaf);
+        self.voice = self.backend.voice_snapshot();
+        cx.notify();
+    }
+
+    pub(crate) fn voice_channel_name(&self, channel_id: Snowflake) -> SharedString {
+        let state = self.backend.state();
+        state
+            .channels
+            .get(&channel_id)
+            .and_then(|c| c.name.as_deref())
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| channel_id.to_string())
+            .into()
+    }
+
+    pub(crate) fn voice_member_name(&self, guild_id: Option<Snowflake>, user_id: Snowflake) -> SharedString {
+        let state = self.backend.state();
+        if let Some(gid) = guild_id
+            && let Some(nick) = state
+                .members
+                .get(&gid)
+                .and_then(|m| m.get(&user_id))
+                .and_then(|m| m.nick.as_deref())
+                .filter(|n| !n.is_empty())
+        {
+            return nick.to_owned().into();
+        }
+        if let Some(user) = state.users.get(&user_id) {
+            return user.display_name().to_owned().into();
+        }
+        user_id.to_string().into()
     }
 
     pub(crate) fn select_channel_inner(

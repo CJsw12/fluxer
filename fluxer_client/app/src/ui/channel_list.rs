@@ -6,11 +6,11 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{AnyElement, Context, FontWeight, MouseButton, div, prelude::*, px};
 
-use super::{access::Scope, badge, user_panel};
+use super::{access::Scope, badge, user_panel, voice_panel};
 use crate::client_view::ClientView;
 use crate::theme::Theme;
 use crate::ui::l10n;
-use crate::view_model::{ChannelItem, Place};
+use crate::view_model::{ChannelIcon, ChannelItem, Place};
 
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> impl IntoElement {
     let header_bar = match view.place {
@@ -144,6 +144,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .border_r_1()
         .border_color(theme.border)
         .child(list)
+        .children(voice_panel::render(view, theme, cx))
         .child(user_panel::render(view, theme, cx))
 }
 
@@ -209,7 +210,9 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
             .children(permissions)
             .into_any_element();
     }
-    let selected = view.selected_channel == Some(c.id);
+    let is_voice = c.icon == ChannelIcon::Voice;
+    let voice_active = is_voice && view.voice.channel_id == Some(c.id);
+    let selected = view.selected_channel == Some(c.id) || voice_active;
     let highlight_unread = c.unread.unread && !c.muted;
     let can_edit_row = view.place != Place::Home && c.can_manage;
     let mut row = div()
@@ -221,9 +224,10 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         .px_3()
         .py_1()
         .when(c.nested, |d| d.pl_5())
-        .text_color(if (highlight_unread || selected) && c.has_messages { fg } else { muted_fg })
-        .when(highlight_unread, |d| d.font_weight(FontWeight::BOLD))
+        .text_color(if (highlight_unread || selected) && (c.has_messages || is_voice) { fg } else { muted_fg })
+        .when(highlight_unread || voice_active, |d| d.font_weight(FontWeight::BOLD))
         .when(selected, |d| d.bg(theme.accent))
+        .when(is_voice, |d| d.cursor_pointer())
         .child(div().w(px(18.)).flex_none().text_color(muted_fg).child(c.icon.glyph()))
         .child(div().flex_1().truncate().child(c.name.clone()));
     if c.muted {
@@ -259,6 +263,37 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
     if c.has_messages {
         let id = c.id;
         row = row.on_click(cx.listener(move |this, _, _, cx| this.select_channel(id, cx)));
+    } else if is_voice {
+        let id = c.id;
+        row = row.on_click(cx.listener(move |this, _, _, cx| this.join_voice_channel(id, cx)));
     }
-    row.children(permissions).into_any_element()
+    let row = row.children(permissions);
+    if !is_voice {
+        return row.into_any_element();
+    }
+    let members = view.voice.members_in_channel(c.id);
+    if members.is_empty() {
+        return row.into_any_element();
+    }
+    let mut group = div().flex().flex_col().child(row);
+    for member in members {
+        let display = view.voice_member_name(member.guild_id, member.user_id);
+        let suffix = match (member.self_deaf || member.deaf, member.self_mute || member.mute) {
+            (true, _) => " (deafened)",
+            (false, true) => " (muted)",
+            (false, false) => "",
+        };
+        group = group.child(
+            div()
+                .id(("voice-member", member.user_id.0))
+                .pl_8()
+                .pr_3()
+                .py_0p5()
+                .text_xs()
+                .text_color(muted_fg)
+                .truncate()
+                .child(format!("{display}{suffix}")),
+        );
+    }
+    group.into_any_element()
 }

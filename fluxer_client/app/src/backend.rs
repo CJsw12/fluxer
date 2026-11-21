@@ -289,6 +289,7 @@ impl Backend {
             backend.rest.clone(),
             backend.parent_syncs.clone(),
             backend.voice.clone(),
+            backend.gateway.clone(),
             backend.runtime.clone(),
         ));
         let _ = backend.events.send(UiEvent::Gateway(GatewayStatus::Connecting));
@@ -720,6 +721,7 @@ async fn pump_gateway(
     rest: Arc<RestClient>,
     parent_syncs: channels::PendingChannelSyncs,
     voice: Arc<Mutex<voice::VoiceManager>>,
+    gateway: Option<GatewayHandle>,
     runtime: Handle,
 ) {
     let mut closed = false;
@@ -728,7 +730,7 @@ async fn pump_gateway(
             GatewayEvent::Dispatch(dispatch) => {
                 let (changed, notification) = apply_dispatch(&state, &dispatch, &focus, now_ms());
                 channels::recheck_parent_sync(&dispatch, &state, &rest, &events, &parent_syncs);
-                voice::on_gateway_dispatch(&dispatch, &state, &voice, &runtime, &events);
+                voice::on_gateway_dispatch(&dispatch, &state, &voice, gateway.as_ref(), &runtime, &events);
                 if let Some(notification) = notification
                     && events.send(UiEvent::Notify(notification)).is_err()
                 {
@@ -748,7 +750,7 @@ async fn pump_gateway(
                 }
             }
             GatewayEvent::Ready { session_id } => {
-                voice::on_gateway_ready(&session_id, &voice, &events);
+                voice::on_gateway_ready(&session_id, &voice, gateway.as_ref(), &events);
                 UiEvent::Gateway(GatewayStatus::Ready)
             }
             GatewayEvent::Resumed => UiEvent::Gateway(GatewayStatus::Ready),

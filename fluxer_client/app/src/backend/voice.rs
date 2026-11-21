@@ -101,8 +101,11 @@ pub struct VoiceSnapshot {
     pub attempt_id: u64,
     pub self_mute: bool,
     pub self_deaf: bool,
+    pub self_stream: bool,
+    pub screen_share_audio: bool,
     pub server_mute: bool,
     pub server_deaf: bool,
+    pub speak_denied: bool,
     pub subscribed_tracks: Vec<TrackSubscriptionKey>,
     pub channel_members: BTreeMap<(Option<Snowflake>, Snowflake), ChannelVoiceMember>,
 }
@@ -117,8 +120,11 @@ impl Default for VoiceSnapshot {
             attempt_id: 0,
             self_mute: false,
             self_deaf: false,
+            self_stream: false,
+            screen_share_audio: false,
             server_mute: false,
             server_deaf: false,
+            speak_denied: false,
             subscribed_tracks: Vec::new(),
             channel_members: BTreeMap::new(),
         }
@@ -165,6 +171,7 @@ impl fmt::Debug for VoiceCredentials {
 pub(crate) trait VoiceRoom: Send + Sync {
     fn set_microphone_muted(&self, muted: bool);
     fn set_playback_muted(&self, muted: bool);
+    fn set_screen_share(&self, active: bool, with_audio: bool);
     fn close(&self);
 }
 
@@ -188,23 +195,64 @@ impl VoiceTransport for UnconfiguredVoiceTransport {
     }
 }
 
-/// Room + microphone + per-track playback tasks owned by the current voice attempt.
+/// Room + microphone + screen share + per-track playback tasks owned by the current voice attempt.
 struct OwnedVoiceMedia {
     room: Arc<dyn VoiceRoom>,
     mic_task: Option<JoinHandle<()>>,
+    screen_share_video_task: Option<JoinHandle<()>>,
+    screen_share_audio_task: Option<JoinHandle<()>>,
     playback_tasks: BTreeMap<TrackSubscriptionKey, JoinHandle<()>>,
     closed: bool,
 }
 
 impl OwnedVoiceMedia {
     fn new(room: Arc<dyn VoiceRoom>) -> Self {
-        Self { room, mic_task: None, playback_tasks: BTreeMap::new(), closed: false }
+        Self {
+            room,
+            mic_task: None,
+            screen_share_video_task: None,
+            screen_share_audio_task: None,
+            playback_tasks: BTreeMap::new(),
+            closed: false,
+        }
     }
 
     fn set_mic_task(&mut self, task: JoinHandle<()>) {
         if let Some(prev) = self.mic_task.replace(task) {
             prev.abort();
         }
+    }
+
+    fn set_screen_share_tasks(
+        &mut self,
+        video_task: Option<JoinHandle<()>>,
+        audio_task: Option<JoinHandle<()>>,
+    ) {
+        if let Some(prev) = std::mem::replace(&mut self.screen_share_video_task, video_task) {
+            prev.abort();
+        }
+        if let Some(prev) = std::mem::replace(&mut self.screen_share_audio_task, audio_task) {
+            prev.abort();
+        }
+    }
+
+    fn stop_screen_share_audio(&mut self) -> Option<JoinHandle<()>> {
+        let task = self.screen_share_audio_task.take()?;
+        task.abort();
+        Some(task)
+    }
+
+    fn stop_screen_share(&mut self) -> Vec<JoinHandle<()>> {
+        let mut handles = Vec::new();
+        if let Some(task) = self.screen_share_video_task.take() {
+            task.abort();
+            handles.push(task);
+        }
+        if let Some(task) = self.screen_share_audio_task.take() {
+            task.abort();
+            handles.push(task);
+        }
+        handles
     }
 
     fn insert_playback_task(&mut self, key: TrackSubscriptionKey, task: JoinHandle<()>) {
@@ -232,6 +280,7 @@ impl OwnedVoiceMedia {
             task.abort();
             handles.push(task);
         }
+        handles.extend(self.stop_screen_share());
         for (_, task) in std::mem::take(&mut self.playback_tasks) {
             task.abort();
             handles.push(task);
@@ -289,8 +338,11 @@ pub(crate) struct VoiceManager {
     attempt_id: u64,
     self_mute: bool,
     self_deaf: bool,
+    self_stream: bool,
+    screen_share_audio: bool,
     server_mute: bool,
     server_deaf: bool,
+    speak_denied: bool,
     connect_task: Option<JoinHandle<()>>,
     media: Option<OwnedVoiceMedia>,
     channel_members: BTreeMap<(Option<Snowflake>, Snowflake), ChannelVoiceMember>,
@@ -309,8 +361,11 @@ impl VoiceManager {
             attempt_id: 0,
             self_mute: false,
             self_deaf: false,
+            self_stream: false,
+            screen_share_audio: false,
             server_mute: false,
             server_deaf: false,
+            speak_denied: false,
             connect_task: None,
             media: None,
             channel_members: BTreeMap::new(),
@@ -326,8 +381,11 @@ impl VoiceManager {
             attempt_id: self.attempt_id,
             self_mute: self.self_mute,
             self_deaf: self.self_deaf,
+            self_stream: self.self_stream,
+            screen_share_audio: self.screen_share_audio,
             server_mute: self.server_mute,
             server_deaf: self.server_deaf,
+            speak_denied: self.speak_denied,
             subscribed_tracks: self.media.as_ref().map_or_else(Vec::new, OwnedVoiceMedia::subscribed_keys),
             channel_members: self.channel_members.clone(),
         }
@@ -345,13 +403,27 @@ impl VoiceManager {
         handles
     }
 
+    fn stop_screen_share_media(&mut self) -> Vec<JoinHandle<()>> {
+        self.self_stream = false;
+        self.screen_share_audio = false;
+        if let Some(media) = &mut self.media {
+            let handles = media.stop_screen_share();
+            media.room.set_screen_share(false, false);
+            handles
+        } else {
+            Vec::new()
+        }
+    }
+
     fn current_self_flags(&self) -> (bool, bool) {
         (self.self_mute, self.self_deaf)
     }
 
     fn apply_audio_mute_flags(&self) {
         if let Some(media) = &self.media {
-            media.room.set_microphone_muted(self.self_mute || self.self_deaf || self.server_mute);
+            media.room.set_microphone_muted(
+                self.self_mute || self.self_deaf || self.server_mute || self.speak_denied,
+            );
             media.room.set_playback_muted(self.self_deaf || self.server_deaf);
         }
     }
@@ -377,8 +449,11 @@ impl VoiceManager {
         self.channel_id = Some(channel_id);
         self.connection_id = None;
         self.endpoint = None;
+        self.self_stream = false;
+        self.screen_share_audio = false;
         self.server_mute = false;
         self.server_deaf = false;
+        self.speak_denied = false;
         self.state = VoiceConnectionState::Connecting;
 
         let mut payload = VoiceStateUpdate::join(
@@ -388,6 +463,7 @@ impl VoiceManager {
         );
         payload.self_mute = self.self_mute;
         payload.self_deaf = self.self_deaf;
+        payload.self_stream = self.self_stream;
         Some((payload, handles))
     }
 
@@ -402,8 +478,11 @@ impl VoiceManager {
         self.channel_id = None;
         self.connection_id = None;
         self.endpoint = None;
+        self.self_stream = false;
+        self.screen_share_audio = false;
         self.server_mute = false;
         self.server_deaf = false;
+        self.speak_denied = false;
         self.state = VoiceConnectionState::Disconnected;
 
         let payload = if was_active {
@@ -436,6 +515,7 @@ impl VoiceManager {
         let (self_mute, self_deaf) = self.current_self_flags();
         payload.self_mute = self_mute;
         payload.self_deaf = self_deaf;
+        payload.self_stream = self.self_stream;
         Some(payload)
     }
 
@@ -490,8 +570,11 @@ impl VoiceManager {
             self.attempt_id = self.attempt_id.saturating_add(1);
             self.connection_id = None;
             self.endpoint = None;
+            self.self_stream = false;
+            self.screen_share_audio = false;
             self.server_mute = false;
             self.server_deaf = false;
+            self.speak_denied = false;
             self.state = VoiceConnectionState::Reconnecting;
             let mut payload = VoiceStateUpdate::join(
                 guild_id.map(|id| id.to_string()),
@@ -500,6 +583,7 @@ impl VoiceManager {
             );
             payload.self_mute = self.self_mute;
             payload.self_deaf = self.self_deaf;
+            payload.self_stream = self.self_stream;
             return (true, Some(payload), handles);
         }
         if previous.is_some() && self.media.is_some() {
@@ -509,6 +593,9 @@ impl VoiceManager {
             self.channel_id = None;
             self.connection_id = None;
             self.endpoint = None;
+            self.self_stream = false;
+            self.screen_share_audio = false;
+            self.speak_denied = false;
             self.state = VoiceConnectionState::Disconnected;
             changed = true;
             return (changed, None, handles);
@@ -528,8 +615,11 @@ impl VoiceManager {
         self.channel_id = None;
         self.connection_id = None;
         self.endpoint = None;
+        self.self_stream = false;
+        self.screen_share_audio = false;
         self.server_mute = false;
         self.server_deaf = false;
+        self.speak_denied = false;
         self.state = VoiceConnectionState::Disconnected;
         self.channel_members.clear();
         (changed, handles)
@@ -591,6 +681,9 @@ impl VoiceManager {
                             self.channel_id = None;
                             self.connection_id = None;
                             self.endpoint = None;
+                            self.self_stream = false;
+                            self.screen_share_audio = false;
+                            self.speak_denied = false;
                             self.state = VoiceConnectionState::Disconnected;
                         }
                     }
@@ -636,6 +729,9 @@ impl VoiceManager {
             self.channel_id = None;
             self.connection_id = None;
             self.endpoint = None;
+            self.self_stream = false;
+            self.screen_share_audio = false;
+            self.speak_denied = false;
             self.state = VoiceConnectionState::Failed(VoiceFailure::UnsupportedE2ee);
             return Err(VoiceFailure::UnsupportedE2ee);
         }
@@ -646,6 +742,9 @@ impl VoiceManager {
             self.channel_id = None;
             self.connection_id = None;
             self.endpoint = None;
+            self.self_stream = false;
+            self.screen_share_audio = false;
+            self.speak_denied = false;
             self.state = VoiceConnectionState::Failed(VoiceFailure::UnsupportedP2pMesh);
             return Err(VoiceFailure::UnsupportedP2pMesh);
         }
@@ -672,6 +771,9 @@ impl VoiceManager {
             && let Some(mut media) = self.media.take()
         {
             let _ = media.shutdown();
+            self.self_stream = false;
+            self.screen_share_audio = false;
+            self.speak_denied = false;
         }
 
         Ok(Some(VoiceCredentials {
@@ -731,6 +833,34 @@ impl VoiceManager {
             return false;
         };
         media.set_mic_task(task);
+        true
+    }
+
+    pub(crate) fn attach_screen_share_tasks(
+        &mut self,
+        attempt_id: u64,
+        video_task: Option<JoinHandle<()>>,
+        audio_task: Option<JoinHandle<()>>,
+    ) -> bool {
+        if self.attempt_id != attempt_id {
+            if let Some(task) = video_task {
+                task.abort();
+            }
+            if let Some(task) = audio_task {
+                task.abort();
+            }
+            return false;
+        }
+        let Some(media) = &mut self.media else {
+            if let Some(task) = video_task {
+                task.abort();
+            }
+            if let Some(task) = audio_task {
+                task.abort();
+            }
+            return false;
+        };
+        media.set_screen_share_tasks(video_task, audio_task);
         true
     }
 
@@ -860,6 +990,34 @@ pub(crate) fn on_gateway_dispatch(
     runtime: &Handle,
     events: &mpsc::UnboundedSender<UiEvent>,
 ) {
+    on_gateway_dispatch_inner(
+        dispatch,
+        state,
+        voice,
+        gateway,
+        runtime,
+        events,
+        #[cfg(test)]
+        None,
+    );
+}
+
+fn on_gateway_dispatch_inner(
+    dispatch: &fluxer_client_core::Dispatch,
+    state: &Mutex<ClientState>,
+    voice: &Arc<Mutex<VoiceManager>>,
+    gateway: Option<&GatewayHandle>,
+    runtime: &Handle,
+    events: &mpsc::UnboundedSender<UiEvent>,
+    #[cfg(test)] sent_voice_states: Option<&Arc<Mutex<Vec<VoiceStateUpdate>>>>,
+) {
+    let record_sent = |payload: &VoiceStateUpdate| {
+        #[cfg(test)]
+        if let Some(log) = sent_voice_states {
+            lock(log).push(payload.clone());
+        }
+        let _ = payload;
+    };
     match dispatch.t.as_str() {
         "READY" => {
             if let Some(guilds) = dispatch.d.get("guilds").and_then(Value::as_array) {
@@ -919,19 +1077,49 @@ pub(crate) fn on_gateway_dispatch(
                 }
             };
             if let Some((guild_id, channel_id)) = active {
-                let revoked = {
+                let perms = {
                     let st = lock(state);
-                    st.guilds.contains_key(&guild_id)
-                        && st.channels.contains_key(&channel_id)
-                        && (st.channel_permissions(channel_id) & (bits::VIEW_CHANNEL | bits::CONNECT))
-                            != (bits::VIEW_CHANNEL | bits::CONNECT)
+                    (st.guilds.contains_key(&guild_id) && st.channels.contains_key(&channel_id))
+                        .then(|| st.channel_permissions(channel_id))
                 };
-                if revoked {
-                    let (payload, _handles) = lock(voice).begin_leave();
-                    if let Some(payload) = payload {
-                        let _ = send_voice_gateway_update(gateway, &payload);
+                if let Some(perms) = perms {
+                    if (perms & (bits::VIEW_CHANNEL | bits::CONNECT))
+                        != (bits::VIEW_CHANNEL | bits::CONNECT)
+                    {
+                        let (payload, _handles) = lock(voice).begin_leave();
+                        if let Some(payload) = payload {
+                            record_sent(&payload);
+                            let _ = send_voice_gateway_update(gateway, &payload);
+                        }
+                        let _ = events.send(UiEvent::VoiceChanged);
+                    } else {
+                        let stream_allowed = (perms & bits::STREAM) != 0;
+                        let speak_denied = (perms & bits::SPEAK) == 0;
+                        let mut changed = false;
+                        let mut stream_stop_payload = None;
+                        {
+                            let mut mgr = lock(voice);
+                            if mgr.guild_id == Some(guild_id) && mgr.channel_id == Some(channel_id) {
+                                if !stream_allowed && (mgr.self_stream || mgr.screen_share_audio) {
+                                    let _handles = mgr.stop_screen_share_media();
+                                    stream_stop_payload = mgr.current_state_update_payload();
+                                    changed = true;
+                                }
+                                if mgr.speak_denied != speak_denied {
+                                    mgr.speak_denied = speak_denied;
+                                    mgr.apply_audio_mute_flags();
+                                    changed = true;
+                                }
+                            }
+                        }
+                        if let Some(payload) = stream_stop_payload {
+                            record_sent(&payload);
+                            let _ = send_voice_gateway_update(gateway, &payload);
+                        }
+                        if changed {
+                            let _ = events.send(UiEvent::VoiceChanged);
+                        }
                     }
-                    let _ = events.send(UiEvent::VoiceChanged);
                 }
             }
         }
@@ -1110,6 +1298,78 @@ impl Backend {
         let _ = self.events.send(UiEvent::VoiceChanged);
     }
 
+    /// Starts or updates screen sharing for the active connected voice session.
+    pub fn start_screen_share(&self, include_audio: bool) -> Result<(), &'static str> {
+        let (guild_id, channel_id) = {
+            let mgr = lock(&self.voice);
+            if mgr.state != VoiceConnectionState::Connected {
+                return Err("voice session is not connected");
+            }
+            (mgr.guild_id, mgr.channel_id)
+        };
+
+        if let (Some(guild_id), Some(channel_id)) = (guild_id, channel_id) {
+            let has_stream = {
+                let st = lock(&self.state);
+                if st.guilds.contains_key(&guild_id) && st.channels.contains_key(&channel_id) {
+                    (st.channel_permissions(channel_id) & bits::STREAM) != 0
+                } else {
+                    true
+                }
+            };
+            if !has_stream {
+                return Err("missing STREAM permission");
+            }
+        }
+
+        let payload = {
+            let mut mgr = lock(&self.voice);
+            if mgr.state != VoiceConnectionState::Connected {
+                return Err("voice session is not connected");
+            }
+            mgr.self_stream = true;
+            mgr.screen_share_audio = include_audio;
+            if let Some(media) = &mut mgr.media {
+                if !include_audio {
+                    let _ = media.stop_screen_share_audio();
+                }
+                media.room.set_screen_share(true, include_audio);
+            }
+            mgr.current_state_update_payload()
+        };
+
+        if let Some(payload) = payload {
+            #[cfg(test)]
+            lock(&self.sent_voice_states).push(payload.clone());
+            let _ = send_voice_gateway_update(self.gateway.as_ref(), &payload);
+        }
+        let _ = self.events.send(UiEvent::VoiceChanged);
+        Ok(())
+    }
+
+    /// Stops screen sharing (video and audio tasks) while keeping the voice session active.
+    pub fn stop_screen_share(&self) {
+        let (was_streaming, payload) = {
+            let mut mgr = lock(&self.voice);
+            let was_streaming = mgr.self_stream || mgr.screen_share_audio;
+            let _handles = mgr.stop_screen_share_media();
+            let payload = if was_streaming {
+                mgr.current_state_update_payload()
+            } else {
+                None
+            };
+            (was_streaming, payload)
+        };
+        if let Some(payload) = payload {
+            #[cfg(test)]
+            lock(&self.sent_voice_states).push(payload.clone());
+            let _ = send_voice_gateway_update(self.gateway.as_ref(), &payload);
+        }
+        if was_streaming {
+            let _ = self.events.send(UiEvent::VoiceChanged);
+        }
+    }
+
     /// Tears down active voice media on session close/logout.
     pub(super) fn shutdown_voice(&self) {
         self.leave_voice();
@@ -1122,13 +1382,14 @@ impl Backend {
 
     #[cfg(test)]
     pub(crate) fn feed_voice_dispatch_for_test(&self, dispatch: &fluxer_client_core::Dispatch) {
-        on_gateway_dispatch(
+        on_gateway_dispatch_inner(
             dispatch,
             &self.state,
             &self.voice,
             self.gateway.as_ref(),
             &self.runtime,
             &self.events,
+            Some(&self.sent_voice_states),
         );
     }
 }
@@ -1147,6 +1408,8 @@ mod tests {
     struct FakeRoom {
         mic_muted: AtomicBool,
         playback_muted: AtomicBool,
+        screen_share_active: AtomicBool,
+        screen_share_audio: AtomicBool,
         closed: AtomicBool,
         close_count: AtomicUsize,
     }
@@ -1156,6 +1419,8 @@ mod tests {
             Self {
                 mic_muted: AtomicBool::new(false),
                 playback_muted: AtomicBool::new(false),
+                screen_share_active: AtomicBool::new(false),
+                screen_share_audio: AtomicBool::new(false),
                 closed: AtomicBool::new(false),
                 close_count: AtomicUsize::new(0),
             }
@@ -1169,6 +1434,11 @@ mod tests {
 
         fn set_playback_muted(&self, muted: bool) {
             self.playback_muted.store(muted, Ordering::SeqCst);
+        }
+
+        fn set_screen_share(&self, active: bool, with_audio: bool) {
+            self.screen_share_active.store(active, Ordering::SeqCst);
+            self.screen_share_audio.store(active && with_audio, Ordering::SeqCst);
         }
 
         fn close(&self) {
@@ -1906,6 +2176,340 @@ mod tests {
 
         rt.block_on(backend.leave_voice_and_wait());
         assert!(dropped.load(Ordering::SeqCst));
+        assert!(room.closed.load(Ordering::SeqCst));
+        assert_eq!(backend.voice_snapshot().state, VoiceConnectionState::Disconnected);
+    }
+
+    fn seed_guild_voice_channel_and_connect(
+        rt: &tokio::runtime::Runtime,
+        backend: &Backend,
+        rx: &mut mpsc::UnboundedReceiver<UiEvent>,
+        permissions: u64,
+    ) -> Arc<FakeRoom> {
+        let (transport, room) = FakeTransport::immediate();
+        backend.set_voice_transport_for_test(transport);
+
+        let allow = permissions.to_string();
+        let ready = Dispatch {
+            t: "READY".into(),
+            s: 1,
+            d: json!({
+                "session_id": "sess-1",
+                "user": { "id": "10", "username": "me" },
+                "guilds": [{
+                    "id": "42",
+                    "properties": { "name": "Test", "owner_id": "1" },
+                    "roles": [{ "id": "42", "name": "@everyone", "permissions": allow, "position": 0 }],
+                    "members": [{ "user": { "id": "10", "username": "me" }, "roles": [] }],
+                    "channels": [{ "id": "100", "guild_id": "42", "type": 2, "name": "Voice", "permission_overwrites": [] }]
+                }]
+            }),
+        };
+        backend.state().apply(&ready);
+        on_gateway_ready("sess-1", &backend.voice, None, &backend.events);
+
+        assert!(backend.join_voice(Some(Snowflake(42)), Snowflake(100)));
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            t: "VOICE_SERVER_UPDATE".into(),
+            s: 2,
+            d: json!({
+                "guild_id": "42",
+                "channel_id": "100",
+                "connection_id": "conn-perm",
+                "endpoint": "wss://rtc.example.test",
+                "token": "jwt-perm"
+            }),
+        });
+        rt.block_on(async {
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+            while backend.voice_snapshot().state != VoiceConnectionState::Connected {
+                tokio::time::timeout_at(deadline, rx.recv()).await.unwrap().unwrap();
+            }
+        });
+        room
+    }
+
+    fn spawn_drop_flag_task(
+        rt: &tokio::runtime::Runtime,
+    ) -> (JoinHandle<()>, Arc<AtomicBool>, tokio::sync::oneshot::Receiver<()>) {
+        let dropped = Arc::new(AtomicBool::new(false));
+        let flag = dropped.clone();
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel::<()>();
+        let (dropped_tx, dropped_rx) = tokio::sync::oneshot::channel::<()>();
+        let task = rt.spawn(async move {
+            struct Guard(Arc<AtomicBool>, Option<tokio::sync::oneshot::Sender<()>>);
+            impl Drop for Guard {
+                fn drop(&mut self) {
+                    self.0.store(true, Ordering::SeqCst);
+                    if let Some(tx) = self.1.take() {
+                        let _ = tx.send(());
+                    }
+                }
+            }
+            let _g = Guard(flag, Some(dropped_tx));
+            let _ = started_tx.send(());
+            std::future::pending::<()>().await;
+        });
+        rt.block_on(started_rx).unwrap();
+        (task, dropped, dropped_rx)
+    }
+
+    fn await_task_drop(rt: &tokio::runtime::Runtime, rx: tokio::sync::oneshot::Receiver<()>) {
+        rt.block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(2), rx)
+                .await
+                .expect("task drop timeout")
+                .expect("task drop signal");
+        });
+    }
+
+    #[test]
+    fn start_screen_share_requires_stream_permission_and_sends_no_opcode4() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, mut rx) = test_backend(&rt);
+        let room = seed_guild_voice_channel_and_connect(
+            &rt,
+            &backend,
+            &mut rx,
+            bits::VIEW_CHANNEL | bits::CONNECT | bits::SPEAK,
+        );
+
+        let sent_before = lock(&backend.sent_voice_states).len();
+        assert!(backend.start_screen_share(true).is_err());
+
+        let snap = backend.voice_snapshot();
+        assert!(!snap.self_stream);
+        assert!(!snap.screen_share_audio);
+        assert!(!room.screen_share_active.load(Ordering::SeqCst));
+        assert!(!room.screen_share_audio.load(Ordering::SeqCst));
+        assert_eq!(lock(&backend.sent_voice_states).len(), sent_before);
+    }
+
+    #[test]
+    fn screen_share_separates_video_and_audio_and_prevents_stale_audio() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, mut rx) = test_backend(&rt);
+        let room = seed_guild_voice_channel_and_connect(
+            &rt,
+            &backend,
+            &mut rx,
+            bits::VIEW_CHANNEL | bits::CONNECT | bits::SPEAK | bits::STREAM,
+        );
+        let attempt_id = backend.voice_snapshot().attempt_id;
+
+        // Stale attempt_id must abort tasks immediately and return false.
+        let (stale_v, stale_v_dropped, stale_v_rx) = spawn_drop_flag_task(&rt);
+        let (stale_a, stale_a_dropped, stale_a_rx) = spawn_drop_flag_task(&rt);
+        assert!(!lock(&backend.voice).attach_screen_share_tasks(
+            attempt_id.wrapping_sub(1),
+            Some(stale_v),
+            Some(stale_a),
+        ));
+        await_task_drop(&rt, stale_v_rx);
+        await_task_drop(&rt, stale_a_rx);
+        assert!(stale_v_dropped.load(Ordering::SeqCst));
+        assert!(stale_a_dropped.load(Ordering::SeqCst));
+
+        // Start with audio enabled.
+        assert!(backend.start_screen_share(true).is_ok());
+        let snap = backend.voice_snapshot();
+        assert!(snap.self_stream);
+        assert!(snap.screen_share_audio);
+        assert!(room.screen_share_active.load(Ordering::SeqCst));
+        assert!(room.screen_share_audio.load(Ordering::SeqCst));
+        assert!(lock(&backend.sent_voice_states).last().unwrap().self_stream);
+
+        let (video_task, video_dropped, video_rx) = spawn_drop_flag_task(&rt);
+        let (audio_task, audio_dropped, audio_rx) = spawn_drop_flag_task(&rt);
+        assert!(lock(&backend.voice).attach_screen_share_tasks(
+            attempt_id,
+            Some(video_task),
+            Some(audio_task),
+        ));
+
+        // Switching to include_audio == false aborts the audio task while keeping video alive.
+        assert!(backend.start_screen_share(false).is_ok());
+        await_task_drop(&rt, audio_rx);
+        assert!(audio_dropped.load(Ordering::SeqCst));
+        assert!(!video_dropped.load(Ordering::SeqCst));
+        let snap = backend.voice_snapshot();
+        assert!(snap.self_stream);
+        assert!(!snap.screen_share_audio);
+        assert!(room.screen_share_active.load(Ordering::SeqCst));
+        assert!(!room.screen_share_audio.load(Ordering::SeqCst));
+
+        // Stopping screen share aborts video too and sends self_stream: false.
+        backend.stop_screen_share();
+        await_task_drop(&rt, video_rx);
+        assert!(video_dropped.load(Ordering::SeqCst));
+        let snap = backend.voice_snapshot();
+        assert!(!snap.self_stream);
+        assert!(!snap.screen_share_audio);
+        assert!(!room.screen_share_active.load(Ordering::SeqCst));
+        assert!(!lock(&backend.sent_voice_states).last().unwrap().self_stream);
+    }
+
+    #[test]
+    fn revoking_stream_permission_stops_screen_share_only_and_keeps_voice() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, mut rx) = test_backend(&rt);
+        let room = seed_guild_voice_channel_and_connect(
+            &rt,
+            &backend,
+            &mut rx,
+            bits::VIEW_CHANNEL | bits::CONNECT | bits::SPEAK | bits::STREAM,
+        );
+        let attempt_id = backend.voice_snapshot().attempt_id;
+
+        let (mic_task, mic_dropped, _mic_rx) = spawn_drop_flag_task(&rt);
+        assert!(lock(&backend.voice).attach_mic_task(attempt_id, mic_task));
+
+        assert!(backend.start_screen_share(true).is_ok());
+        let (video_task, video_dropped, video_rx) = spawn_drop_flag_task(&rt);
+        let (audio_task, audio_dropped, audio_rx) = spawn_drop_flag_task(&rt);
+        assert!(lock(&backend.voice).attach_screen_share_tasks(
+            attempt_id,
+            Some(video_task),
+            Some(audio_task),
+        ));
+
+        let deny_stream = bits::STREAM.to_string();
+        let channel_update = Dispatch {
+            t: "CHANNEL_UPDATE".into(),
+            s: 3,
+            d: json!({
+                "id": "100",
+                "guild_id": "42",
+                "type": 2,
+                "name": "Voice",
+                "permission_overwrites": [{
+                    "id": "42",
+                    "type": 0,
+                    "allow": "0",
+                    "deny": deny_stream
+                }]
+            }),
+        };
+        backend.state().apply(&channel_update);
+        backend.feed_voice_dispatch_for_test(&channel_update);
+
+        await_task_drop(&rt, video_rx);
+        await_task_drop(&rt, audio_rx);
+
+        assert!(video_dropped.load(Ordering::SeqCst));
+        assert!(audio_dropped.load(Ordering::SeqCst));
+        assert!(!mic_dropped.load(Ordering::SeqCst));
+
+        let snap = backend.voice_snapshot();
+        assert_eq!(snap.state, VoiceConnectionState::Connected);
+        assert!(!snap.self_stream);
+        assert!(!snap.screen_share_audio);
+        assert!(!room.closed.load(Ordering::SeqCst));
+        assert!(!room.screen_share_active.load(Ordering::SeqCst));
+        assert!(!room.screen_share_audio.load(Ordering::SeqCst));
+
+        let last_sent = lock(&backend.sent_voice_states).last().unwrap().clone();
+        assert_eq!(last_sent.channel_id.as_deref(), Some("100"));
+        assert!(!last_sent.self_stream);
+    }
+
+    #[test]
+    fn revoking_and_restoring_speak_permission_mutes_mic_without_leaving() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, mut rx) = test_backend(&rt);
+        let room = seed_guild_voice_channel_and_connect(
+            &rt,
+            &backend,
+            &mut rx,
+            bits::VIEW_CHANNEL | bits::CONNECT | bits::SPEAK,
+        );
+
+        assert!(!backend.voice_snapshot().speak_denied);
+        assert!(!room.mic_muted.load(Ordering::SeqCst));
+
+        let deny_speak = bits::SPEAK.to_string();
+        let revoke_update = Dispatch {
+            t: "CHANNEL_UPDATE".into(),
+            s: 3,
+            d: json!({
+                "id": "100",
+                "guild_id": "42",
+                "type": 2,
+                "name": "Voice",
+                "permission_overwrites": [{
+                    "id": "42",
+                    "type": 0,
+                    "allow": "0",
+                    "deny": deny_speak
+                }]
+            }),
+        };
+        backend.state().apply(&revoke_update);
+        backend.feed_voice_dispatch_for_test(&revoke_update);
+
+        let snap = backend.voice_snapshot();
+        assert_eq!(snap.state, VoiceConnectionState::Connected);
+        assert!(snap.speak_denied);
+        assert!(room.mic_muted.load(Ordering::SeqCst));
+        assert!(!room.closed.load(Ordering::SeqCst));
+
+        let restore_update = Dispatch {
+            t: "CHANNEL_UPDATE".into(),
+            s: 4,
+            d: json!({
+                "id": "100",
+                "guild_id": "42",
+                "type": 2,
+                "name": "Voice",
+                "permission_overwrites": []
+            }),
+        };
+        backend.state().apply(&restore_update);
+        backend.feed_voice_dispatch_for_test(&restore_update);
+
+        let snap = backend.voice_snapshot();
+        assert_eq!(snap.state, VoiceConnectionState::Connected);
+        assert!(!snap.speak_denied);
+        assert!(!room.mic_muted.load(Ordering::SeqCst));
+    }
+
+    #[test]
+    fn leave_voice_and_wait_awaits_mic_screen_share_and_playback_tasks() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, mut rx) = test_backend(&rt);
+        let room = seed_guild_voice_channel_and_connect(
+            &rt,
+            &backend,
+            &mut rx,
+            bits::VIEW_CHANNEL | bits::CONNECT | bits::SPEAK | bits::STREAM,
+        );
+        let attempt_id = backend.voice_snapshot().attempt_id;
+
+        let (mic_task, mic_dropped, _mic_rx) = spawn_drop_flag_task(&rt);
+        let (video_task, video_dropped, _video_rx) = spawn_drop_flag_task(&rt);
+        let (audio_task, audio_dropped, _audio_rx) = spawn_drop_flag_task(&rt);
+        let (playback_task, playback_dropped, _playback_rx) = spawn_drop_flag_task(&rt);
+
+        let key = TrackSubscriptionKey {
+            participant_identity: "user-2:conn-2".into(),
+            participant_sid: "PA_2".into(),
+            track_sid: "TR_audio_2".into(),
+            source: VoiceTrackSource::Microphone,
+        };
+        assert!(lock(&backend.voice).attach_mic_task(attempt_id, mic_task));
+        assert!(lock(&backend.voice).attach_screen_share_tasks(
+            attempt_id,
+            Some(video_task),
+            Some(audio_task),
+        ));
+        assert!(lock(&backend.voice).attach_playback_task(attempt_id, key, playback_task));
+
+        rt.block_on(backend.leave_voice_and_wait());
+
+        assert!(mic_dropped.load(Ordering::SeqCst));
+        assert!(video_dropped.load(Ordering::SeqCst));
+        assert!(audio_dropped.load(Ordering::SeqCst));
+        assert!(playback_dropped.load(Ordering::SeqCst));
         assert!(room.closed.load(Ordering::SeqCst));
         assert_eq!(backend.voice_snapshot().state, VoiceConnectionState::Disconnected);
     }

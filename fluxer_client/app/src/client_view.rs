@@ -241,6 +241,9 @@ pub struct ClientView {
     pub(crate) watched_video_frame: Option<(u32, u32, Arc<RenderImage>)>,
     /// Deep link deferred until READY completes (`self.user.is_some()`) and target arrives.
     pub(crate) pending_deep_link: Option<(crate::deep_links::DeepLink, std::time::Instant)>,
+    /// Latest update check state for Settings -> About & Updates.
+    pub(crate) update_status: crate::updater::UpdateStatus,
+    _update_task: Option<Task<()>>,
     /// Keeps the layout's key context reachable when nothing inside has focus.
     focus: FocusHandle,
     /// Captured external URLs opened via `launch_external_url` in headless tests.
@@ -418,6 +421,8 @@ impl ClientView {
             watched_video_frame_seq: 0,
             watched_video_frame: None,
             pending_deep_link: None,
+            update_status: crate::updater::UpdateStatus::Idle,
+            _update_task: None,
             focus: cx.focus_handle(),
             #[cfg(test)]
             opened_urls: Vec::new(),
@@ -1335,6 +1340,33 @@ impl ClientView {
         self._ack_timer = Some(cx.spawn(async move |this, cx| {
             cx.background_executor().timer(delay).await;
             let _ = this.update(cx, |view, cx| view.flush_ack(cx));
+        }));
+    }
+
+    pub(crate) fn check_for_updates(&mut self, cx: &mut Context<Self>) {
+        if matches!(self.update_status, crate::updater::UpdateStatus::Checking) {
+            return;
+        }
+        self.update_status = crate::updater::UpdateStatus::Checking;
+        cx.notify();
+        let bg = cx.background_executor().clone();
+        self._update_task = Some(cx.spawn(async move |this, cx| {
+            let status = bg
+                .spawn(async move {
+                    let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_all().build() else {
+                        return crate::updater::UpdateStatus::Error("Could not start update runtime".to_owned());
+                    };
+                    rt.block_on(crate::updater::check_for_updates(
+                        crate::updater::DEFAULT_RELEASES_API_URL,
+                        crate::updater::CURRENT_VERSION,
+                    ))
+                })
+                .await;
+            let _ = this.update(cx, |view, cx| {
+                view.update_status = status;
+                view._update_task = None;
+                cx.notify();
+            });
         }));
     }
 

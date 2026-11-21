@@ -363,3 +363,66 @@ fn settings_modal_selects_enumerated_voice_devices(cx: &mut TestAppContext) {
 
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn settings_modal_renders_all_update_statuses(cx: &mut TestAppContext) {
+    use crate::updater::UpdateStatus;
+
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, cx) = open_client(cx, backend, events);
+
+    focus_composer(&view, cx);
+    cx.simulate_keystrokes("ctrl-,");
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::Settings(_))));
+    assert!(cx.debug_bounds("settings-check-updates").is_some());
+
+    // Checking
+    view.update(cx, |v, cx| {
+        v.update_status = UpdateStatus::Checking;
+        cx.notify();
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert!(cx.debug_bounds("settings-update-checking").is_some());
+
+    // UpToDate
+    view.update(cx, |v, cx| {
+        v.update_status = UpdateStatus::UpToDate {
+            current: "0.1.0".to_owned(),
+            latest: "0.1.0".to_owned(),
+        };
+        cx.notify();
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert!(cx.debug_bounds("settings-update-uptodate").is_some());
+
+    // Available + Open release page click
+    let release_url = "https://github.com/CJsw12/fluxer/releases/tag/v0.2.0".to_owned();
+    view.update(cx, |v, cx| {
+        v.update_status = UpdateStatus::Available {
+            current: "0.1.0".to_owned(),
+            latest: "0.2.0".to_owned(),
+            release_url: release_url.clone(),
+        };
+        cx.notify();
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert!(cx.debug_bounds("settings-update-available").is_some());
+    assert!(cx.debug_bounds("settings-open-release").is_some());
+
+    // Error
+    view.update(cx, |v, cx| {
+        v.update_status = UpdateStatus::Error("Network error".to_owned());
+        cx.notify();
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert!(cx.debug_bounds("settings-update-error").is_some());
+
+    drop(rt);
+}

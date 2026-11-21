@@ -3,7 +3,7 @@
 //! and account logout with confirmation.
 
 use fluxer_client_core::rest::UserSettingsPatch;
-use gpui_kit::component::Sizable as _;
+use gpui_kit::component::{Disableable as _, Sizable as _};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::Escape;
 use gpui_kit::component::switch::Switch;
@@ -16,6 +16,7 @@ use crate::settings_model::{FONT_SIZE_OPTIONS, LOCALES, SettingsEffect, THEME_OP
 use crate::theme::{self, MAX_FONT_SIZE, MAX_UI_ZOOM, MIN_FONT_SIZE, MIN_UI_ZOOM, Theme, ThemeKind};
 use crate::ui::overlay::Overlay;
 use crate::ui::{l10n, overlay};
+use crate::updater::{CURRENT_VERSION, UpdateStatus};
 
 pub const CONTEXT: &str = "SettingsModal";
 
@@ -805,6 +806,94 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
                 .gap_2()
                 .child(section_heading(l10n::tr("Language"), theme))
                 .child(locale_list),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("About & Updates"), theme))
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(div().text_sm().child(format!("v{CURRENT_VERSION}")))
+                        .child(
+                            div().debug_selector(|| "settings-check-updates".to_owned()).child(
+                                Button::new("settings-check-updates")
+                                    .ghost()
+                                    .small()
+                                    .label(l10n::tr("Check for updates"))
+                                    .accessibility_label(l10n::tr("Check for updates"))
+                                    .disabled(matches!(view.update_status, UpdateStatus::Checking))
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.check_for_updates(cx);
+                                    })),
+                            ),
+                        ),
+                )
+                .map(|d| match &view.update_status {
+                    UpdateStatus::Idle => d,
+                    UpdateStatus::Checking => d.child(
+                        div()
+                            .debug_selector(|| "settings-update-checking".to_owned())
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child(l10n::tr("Checking for updates…")),
+                    ),
+                    UpdateStatus::UpToDate { .. } => d.child(
+                        div()
+                            .debug_selector(|| "settings-update-uptodate".to_owned())
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child(l10n::tr("Up to date")),
+                    ),
+                    UpdateStatus::Available { latest, release_url, .. } => {
+                        let release_url = release_url.clone();
+                        d.child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .debug_selector(|| "settings-update-available".to_owned())
+                                        .text_xs()
+                                        .text_color(theme.foreground)
+                                        .child(format!("{}: v{latest}", l10n::tr("Update available"))),
+                                )
+                                .child(
+                                    div().debug_selector(|| "settings-open-release".to_owned()).child(
+                                        Button::new("settings-open-release")
+                                            .primary()
+                                            .small()
+                                            .label(l10n::tr("Open release page"))
+                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                #[cfg(test)]
+                                                this.launch_external_url(&release_url, cx);
+                                                #[cfg(not(test))]
+                                                {
+                                                    let _ = this;
+                                                    cx.open_url(&release_url);
+                                                }
+                                            })),
+                                    ),
+                                ),
+                        )
+                    }
+                    UpdateStatus::Error(err) => d.child(
+                        div()
+                            .debug_selector(|| "settings-update-error".to_owned())
+                            .text_xs()
+                            .text_color(theme.danger)
+                            .child(err.clone()),
+                    ),
+                }),
         );
 
     let content = div()

@@ -38,6 +38,7 @@ mod theme;
 mod tray;
 mod trusted_domains;
 mod ui;
+mod updater;
 mod view_model;
 
 #[cfg(test)]

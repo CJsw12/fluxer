@@ -503,7 +503,7 @@ impl ClientView {
         let mut guild_available = false;
         for event in batch {
             match event {
-                UiEvent::StateChanged => {}
+                UiEvent::StateChanged | UiEvent::VoiceChanged => {}
                 UiEvent::GuildAvailable { guild_id } => {
                     guild_available |= self.place == Place::Guild(guild_id);
                 }

@@ -1,0 +1,1313 @@
+//! Voice session ownership, gateway `VOICE_SERVER_UPDATE` / `VOICE_STATE_UPDATE`
+//! routing, and media task lifecycle.
+//!
+//! Credentials (`VoiceCredentials`) issued by `VOICE_SERVER_UPDATE` are kept
+//! strictly private to this module, redacted in `Debug`, and never placed in
+//! `ClientState`, `VoiceSnapshot`, `UiEvent`, or logs.
+
+use std::collections::BTreeMap;
+use std::fmt;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::{Arc, Mutex};
+
+use fluxer_client_core::gateway::{GatewayHandle, VoiceStateUpdate};
+use fluxer_client_core::rest::SecretToken;
+use fluxer_client_core::state::{ClientState, Snowflake};
+use serde_json::Value;
+use tokio::runtime::Handle;
+use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
+use url::Url;
+
+use super::{Backend, UiEvent, lock};
+
+/// Public, UI-safe voice connection phase (contains no credentials).
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum VoiceConnectionState {
+    Disconnected,
+    Connecting,
+    Connected,
+    Reconnecting,
+    Failed(VoiceFailure),
+}
+
+/// Explicit failure reasons for a voice connection attempt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum VoiceFailure {
+    UnsupportedE2ee,
+    UnsupportedP2pMesh,
+    InvalidServerUpdate(&'static str),
+    TransportFailed(String),
+    GatewayUnavailable,
+}
+
+impl fmt::Display for VoiceFailure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnsupportedE2ee => write!(f, "End-to-end encrypted voice channels are not supported yet"),
+            Self::UnsupportedP2pMesh => write!(f, "Peer-to-peer mesh voice channels are not supported yet"),
+            Self::InvalidServerUpdate(reason) => write!(f, "Invalid voice server update: {reason}"),
+            Self::TransportFailed(reason) => write!(f, "Voice transport failed: {reason}"),
+            Self::GatewayUnavailable => write!(f, "Gateway connection is not available"),
+        }
+    }
+}
+
+/// Source kind of a subscribed remote track, matching LiveKit `TrackSource`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[allow(dead_code)]
+pub enum VoiceTrackSource {
+    Microphone,
+    Camera,
+    ScreenShare,
+    ScreenShareAudio,
+    Unknown,
+}
+
+/// Stable ownership key for a remote track subscription.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TrackSubscriptionKey {
+    pub participant_identity: String,
+    pub participant_sid: String,
+    pub track_sid: String,
+    pub source: VoiceTrackSource,
+}
+
+/// Public voice presence for one user in a guild or DM voice channel.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ChannelVoiceMember {
+    pub user_id: Snowflake,
+    pub guild_id: Option<Snowflake>,
+    pub channel_id: Snowflake,
+    pub session_id: String,
+    pub self_mute: bool,
+    pub self_deaf: bool,
+    pub self_video: bool,
+    pub self_stream: bool,
+    pub mute: bool,
+    pub deaf: bool,
+    pub suppress: bool,
+}
+
+/// UI-safe snapshot of the current voice session and channel members.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VoiceSnapshot {
+    pub state: VoiceConnectionState,
+    pub guild_id: Option<Snowflake>,
+    pub channel_id: Option<Snowflake>,
+    pub connection_id: Option<String>,
+    pub attempt_id: u64,
+    pub self_mute: bool,
+    pub self_deaf: bool,
+    pub server_mute: bool,
+    pub server_deaf: bool,
+    pub subscribed_tracks: Vec<TrackSubscriptionKey>,
+    pub channel_members: BTreeMap<(Option<Snowflake>, Snowflake), ChannelVoiceMember>,
+}
+
+impl Default for VoiceSnapshot {
+    fn default() -> Self {
+        Self {
+            state: VoiceConnectionState::Disconnected,
+            guild_id: None,
+            channel_id: None,
+            connection_id: None,
+            attempt_id: 0,
+            self_mute: false,
+            self_deaf: false,
+            server_mute: false,
+            server_deaf: false,
+            subscribed_tracks: Vec::new(),
+            channel_members: BTreeMap::new(),
+        }
+    }
+}
+
+impl VoiceSnapshot {
+    /// Members currently present in `channel_id`, sorted by user id.
+    pub fn members_in_channel(&self, channel_id: Snowflake) -> Vec<ChannelVoiceMember> {
+        self.channel_members
+            .values()
+            .filter(|m| m.channel_id == channel_id)
+            .cloned()
+            .collect()
+    }
+}
+
+/// Server-issued LiveKit credentials for a single voice attempt.
+/// Never exposed to UI, `ClientState`, or logs.
+#[allow(dead_code)]
+pub(crate) struct VoiceCredentials {
+    pub(crate) attempt_id: u64,
+    pub(crate) guild_id: Option<Snowflake>,
+    pub(crate) channel_id: Snowflake,
+    pub(crate) connection_id: String,
+    pub(crate) endpoint: String,
+    pub(crate) token: SecretToken,
+}
+
+impl fmt::Debug for VoiceCredentials {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("VoiceCredentials")
+            .field("attempt_id", &self.attempt_id)
+            .field("guild_id", &self.guild_id)
+            .field("channel_id", &self.channel_id)
+            .field("connection_id", &self.connection_id)
+            .field("endpoint", &self.endpoint)
+            .field("token", &"<redacted>")
+            .finish()
+    }
+}
+
+/// Active media room handle owned by the backend session.
+pub(crate) trait VoiceRoom: Send + Sync {
+    fn set_microphone_muted(&self, muted: bool);
+    fn set_playback_muted(&self, muted: bool);
+    fn close(&self);
+}
+
+/// Factory that turns server-issued credentials into an active `VoiceRoom`.
+pub(crate) trait VoiceTransport: Send + Sync {
+    fn connect(
+        &self,
+        credentials: VoiceCredentials,
+    ) -> Pin<Box<dyn Future<Output = Result<Arc<dyn VoiceRoom>, String>> + Send>>;
+}
+
+/// Placeholder transport until the native LiveKit room/audio pipeline is wired.
+pub(crate) struct UnconfiguredVoiceTransport;
+
+impl VoiceTransport for UnconfiguredVoiceTransport {
+    fn connect(
+        &self,
+        _credentials: VoiceCredentials,
+    ) -> Pin<Box<dyn Future<Output = Result<Arc<dyn VoiceRoom>, String>> + Send>> {
+        Box::pin(async { Err("native LiveKit voice transport is not wired yet".to_owned()) })
+    }
+}
+
+/// Room + microphone + per-track playback tasks owned by the current voice attempt.
+struct OwnedVoiceMedia {
+    room: Arc<dyn VoiceRoom>,
+    mic_task: Option<JoinHandle<()>>,
+    playback_tasks: BTreeMap<TrackSubscriptionKey, JoinHandle<()>>,
+    closed: bool,
+}
+
+impl OwnedVoiceMedia {
+    fn new(room: Arc<dyn VoiceRoom>) -> Self {
+        Self { room, mic_task: None, playback_tasks: BTreeMap::new(), closed: false }
+    }
+
+    fn set_mic_task(&mut self, task: JoinHandle<()>) {
+        if let Some(prev) = self.mic_task.replace(task) {
+            prev.abort();
+        }
+    }
+
+    fn insert_playback_task(&mut self, key: TrackSubscriptionKey, task: JoinHandle<()>) {
+        if let Some(prev) = self.playback_tasks.insert(key, task) {
+            prev.abort();
+        }
+    }
+
+    fn remove_playback_task(&mut self, key: &TrackSubscriptionKey) -> bool {
+        if let Some(task) = self.playback_tasks.remove(key) {
+            task.abort();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn subscribed_keys(&self) -> Vec<TrackSubscriptionKey> {
+        self.playback_tasks.keys().cloned().collect()
+    }
+
+    fn shutdown(&mut self) {
+        if let Some(task) = self.mic_task.take() {
+            task.abort();
+        }
+        for (_, task) in std::mem::take(&mut self.playback_tasks) {
+            task.abort();
+        }
+        if !self.closed {
+            self.closed = true;
+            self.room.close();
+        }
+    }
+}
+
+impl Drop for OwnedVoiceMedia {
+    fn drop(&mut self) {
+        self.shutdown();
+    }
+}
+
+struct ParsedVoiceServerUpdate {
+    guild_id: Option<Snowflake>,
+    channel_id: Option<Snowflake>,
+    endpoint: String,
+    token: SecretToken,
+    connection_id: String,
+    has_e2ee_key: bool,
+    has_ice_servers: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ParsedVoiceStateUpdate {
+    user_id: Snowflake,
+    guild_id: Option<Snowflake>,
+    channel_id: Option<Snowflake>,
+    session_id: String,
+    connection_id: Option<String>,
+    self_mute: bool,
+    self_deaf: bool,
+    self_video: bool,
+    self_stream: bool,
+    mute: bool,
+    deaf: bool,
+    suppress: bool,
+}
+
+/// Backend-owned voice state machine and media handle owner.
+pub(crate) struct VoiceManager {
+    transport: Arc<dyn VoiceTransport>,
+    gateway_session_id: Option<String>,
+    state: VoiceConnectionState,
+    guild_id: Option<Snowflake>,
+    channel_id: Option<Snowflake>,
+    connection_id: Option<String>,
+    attempt_id: u64,
+    self_mute: bool,
+    self_deaf: bool,
+    server_mute: bool,
+    server_deaf: bool,
+    connect_task: Option<JoinHandle<()>>,
+    media: Option<OwnedVoiceMedia>,
+    channel_members: BTreeMap<(Option<Snowflake>, Snowflake), ChannelVoiceMember>,
+}
+
+impl VoiceManager {
+    pub(crate) fn new(transport: Arc<dyn VoiceTransport>) -> Self {
+        Self {
+            transport,
+            gateway_session_id: None,
+            state: VoiceConnectionState::Disconnected,
+            guild_id: None,
+            channel_id: None,
+            connection_id: None,
+            attempt_id: 0,
+            self_mute: false,
+            self_deaf: false,
+            server_mute: false,
+            server_deaf: false,
+            connect_task: None,
+            media: None,
+            channel_members: BTreeMap::new(),
+        }
+    }
+
+    pub(crate) fn snapshot(&self) -> VoiceSnapshot {
+        VoiceSnapshot {
+            state: self.state.clone(),
+            guild_id: self.guild_id,
+            channel_id: self.channel_id,
+            connection_id: self.connection_id.clone(),
+            attempt_id: self.attempt_id,
+            self_mute: self.self_mute,
+            self_deaf: self.self_deaf,
+            server_mute: self.server_mute,
+            server_deaf: self.server_deaf,
+            subscribed_tracks: self.media.as_ref().map_or_else(Vec::new, OwnedVoiceMedia::subscribed_keys),
+            channel_members: self.channel_members.clone(),
+        }
+    }
+
+    fn abort_active_media(&mut self) {
+        if let Some(task) = self.connect_task.take() {
+            task.abort();
+        }
+        if let Some(mut media) = self.media.take() {
+            media.shutdown();
+        }
+    }
+
+    fn current_self_flags(&self) -> (bool, bool) {
+        (self.self_mute, self.self_deaf)
+    }
+
+    fn apply_audio_mute_flags(&self) {
+        if let Some(media) = &self.media {
+            media.room.set_microphone_muted(self.self_mute || self.self_deaf || self.server_mute);
+            media.room.set_playback_muted(self.self_deaf || self.server_deaf);
+        }
+    }
+
+    fn begin_join(&mut self, guild_id: Option<Snowflake>, channel_id: Snowflake) -> VoiceStateUpdate {
+        self.abort_active_media();
+        self.attempt_id = self.attempt_id.saturating_add(1);
+        self.guild_id = guild_id;
+        self.channel_id = Some(channel_id);
+        self.connection_id = None;
+        self.server_mute = false;
+        self.server_deaf = false;
+        self.state = VoiceConnectionState::Connecting;
+
+        let mut payload = VoiceStateUpdate::join(
+            guild_id.map(|id| id.to_string()),
+            channel_id.to_string(),
+            None,
+        );
+        payload.self_mute = self.self_mute;
+        payload.self_deaf = self.self_deaf;
+        payload
+    }
+
+    fn begin_leave(&mut self) -> Option<VoiceStateUpdate> {
+        let was_active = self.channel_id.is_some() || self.state != VoiceConnectionState::Disconnected;
+        let guild_id = self.guild_id;
+        let connection_id = self.connection_id.clone();
+
+        self.abort_active_media();
+        self.attempt_id = self.attempt_id.saturating_add(1);
+        self.guild_id = None;
+        self.channel_id = None;
+        self.connection_id = None;
+        self.server_mute = false;
+        self.server_deaf = false;
+        self.state = VoiceConnectionState::Disconnected;
+
+        if was_active {
+            Some(VoiceStateUpdate::leave(guild_id.map(|id| id.to_string()), connection_id))
+        } else {
+            None
+        }
+    }
+
+    fn set_self_mute(&mut self, muted: bool) -> Option<VoiceStateUpdate> {
+        self.self_mute = muted;
+        self.apply_audio_mute_flags();
+        self.current_state_update_payload()
+    }
+
+    fn set_self_deaf(&mut self, deafened: bool) -> Option<VoiceStateUpdate> {
+        self.self_deaf = deafened;
+        self.apply_audio_mute_flags();
+        self.current_state_update_payload()
+    }
+
+    fn current_state_update_payload(&self) -> Option<VoiceStateUpdate> {
+        let channel_id = self.channel_id?;
+        let mut payload = VoiceStateUpdate::join(
+            self.guild_id.map(|id| id.to_string()),
+            channel_id.to_string(),
+            self.connection_id.clone(),
+        );
+        let (self_mute, self_deaf) = self.current_self_flags();
+        payload.self_mute = self_mute;
+        payload.self_deaf = self_deaf;
+        Some(payload)
+    }
+
+    fn handle_gateway_ready(&mut self, session_id: String) -> bool {
+        let previous = self.gateway_session_id.replace(session_id);
+        self.channel_members.clear();
+        if previous.is_some() && (self.channel_id.is_some() || self.media.is_some()) {
+            self.abort_active_media();
+            self.attempt_id = self.attempt_id.saturating_add(1);
+            self.guild_id = None;
+            self.channel_id = None;
+            self.connection_id = None;
+            self.server_mute = false;
+            self.server_deaf = false;
+            self.state = VoiceConnectionState::Disconnected;
+            return true;
+        }
+        false
+    }
+
+    fn handle_gateway_reset(&mut self) -> bool {
+        self.gateway_session_id = None;
+        let changed = self.channel_id.is_some()
+            || self.media.is_some()
+            || self.state != VoiceConnectionState::Disconnected
+            || !self.channel_members.is_empty();
+        self.abort_active_media();
+        self.attempt_id = self.attempt_id.saturating_add(1);
+        self.guild_id = None;
+        self.channel_id = None;
+        self.connection_id = None;
+        self.server_mute = false;
+        self.server_deaf = false;
+        self.state = VoiceConnectionState::Disconnected;
+        self.channel_members.clear();
+        changed
+    }
+
+    fn handle_voice_state_dispatch(
+        &mut self,
+        payload: &Value,
+        current_user_id: Option<Snowflake>,
+    ) -> bool {
+        let Some(update) = parse_voice_state_update(payload) else {
+            return false;
+        };
+        let key = (update.guild_id, update.user_id);
+        match update.channel_id {
+            Some(channel_id) => {
+                self.channel_members.insert(
+                    key,
+                    ChannelVoiceMember {
+                        user_id: update.user_id,
+                        guild_id: update.guild_id,
+                        channel_id,
+                        session_id: update.session_id.clone(),
+                        self_mute: update.self_mute,
+                        self_deaf: update.self_deaf,
+                        self_video: update.self_video,
+                        self_stream: update.self_stream,
+                        mute: update.mute,
+                        deaf: update.deaf,
+                        suppress: update.suppress,
+                    },
+                );
+            }
+            None => {
+                self.channel_members.remove(&key);
+            }
+        }
+
+        if current_user_id == Some(update.user_id) {
+            let session_matches = self
+                .gateway_session_id
+                .as_deref()
+                .is_none_or(|sid| sid == update.session_id);
+            if session_matches {
+                self.server_mute = update.mute;
+                self.server_deaf = update.deaf;
+                self.apply_audio_mute_flags();
+
+                match update.channel_id {
+                    None if self.guild_id == update.guild_id && self.channel_id.is_some() => {
+                        let conn_matches = match (&self.connection_id, &update.connection_id) {
+                            (Some(current), Some(incoming)) => current == incoming,
+                            _ => true,
+                        };
+                        if conn_matches {
+                            self.abort_active_media();
+                            self.attempt_id = self.attempt_id.saturating_add(1);
+                            self.guild_id = None;
+                            self.channel_id = None;
+                            self.connection_id = None;
+                            self.state = VoiceConnectionState::Disconnected;
+                        }
+                    }
+                    Some(new_channel_id)
+                        if self.guild_id == update.guild_id
+                            && self.channel_id.is_some()
+                            && self.channel_id != Some(new_channel_id) =>
+                    {
+                        self.channel_id = Some(new_channel_id);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        true
+    }
+
+    fn accept_voice_server_dispatch(&mut self, payload: &Value) -> Result<Option<VoiceCredentials>, VoiceFailure> {
+        let parsed = match parse_voice_server_update(payload) {
+            Ok(parsed) => parsed,
+            Err(reason) => {
+                tracing::warn!(reason, "ignoring malformed VOICE_SERVER_UPDATE");
+                return Err(VoiceFailure::InvalidServerUpdate(reason));
+            }
+        };
+
+        let Some(expected_channel_id) = self.channel_id else {
+            return Ok(None);
+        };
+        if self.guild_id != parsed.guild_id {
+            return Ok(None);
+        }
+
+        let is_channel_move = parsed.channel_id.is_some_and(|ch| ch != expected_channel_id);
+        if is_channel_move && self.state != VoiceConnectionState::Connected {
+            return Ok(None);
+        }
+
+        if parsed.has_e2ee_key {
+            self.abort_active_media();
+            self.attempt_id = self.attempt_id.saturating_add(1);
+            self.guild_id = None;
+            self.channel_id = None;
+            self.connection_id = None;
+            self.state = VoiceConnectionState::Failed(VoiceFailure::UnsupportedE2ee);
+            return Err(VoiceFailure::UnsupportedE2ee);
+        }
+        if parsed.has_ice_servers {
+            self.abort_active_media();
+            self.attempt_id = self.attempt_id.saturating_add(1);
+            self.guild_id = None;
+            self.channel_id = None;
+            self.connection_id = None;
+            self.state = VoiceConnectionState::Failed(VoiceFailure::UnsupportedP2pMesh);
+            return Err(VoiceFailure::UnsupportedP2pMesh);
+        }
+
+        let resolved_channel_id = parsed.channel_id.unwrap_or(expected_channel_id);
+        self.channel_id = Some(resolved_channel_id);
+        self.connection_id = Some(parsed.connection_id.clone());
+        self.state = VoiceConnectionState::Connecting;
+
+        if let Some(task) = self.connect_task.take() {
+            task.abort();
+        }
+        if is_channel_move
+            && let Some(mut media) = self.media.take()
+        {
+            media.shutdown();
+        }
+
+        Ok(Some(VoiceCredentials {
+            attempt_id: self.attempt_id,
+            guild_id: parsed.guild_id,
+            channel_id: resolved_channel_id,
+            connection_id: parsed.connection_id,
+            endpoint: parsed.endpoint,
+            token: parsed.token,
+        }))
+    }
+
+    fn finish_connect(
+        &mut self,
+        attempt_id: u64,
+        guild_id: Option<Snowflake>,
+        channel_id: Snowflake,
+        connection_id: &str,
+        result: Result<Arc<dyn VoiceRoom>, String>,
+    ) -> bool {
+        let still_current = self.attempt_id == attempt_id
+            && self.guild_id == guild_id
+            && self.channel_id == Some(channel_id)
+            && self.connection_id.as_deref() == Some(connection_id);
+        if !still_current {
+            if let Ok(room) = result {
+                room.close();
+            }
+            return false;
+        }
+        self.connect_task = None;
+        match result {
+            Ok(room) => {
+                if let Some(mut previous) = self.media.take() {
+                    previous.shutdown();
+                }
+                self.media = Some(OwnedVoiceMedia::new(room));
+                self.state = VoiceConnectionState::Connected;
+                self.apply_audio_mute_flags();
+                true
+            }
+            Err(err) => {
+                tracing::warn!(attempt_id, error = %err, "voice room connect failed");
+                self.state = VoiceConnectionState::Failed(VoiceFailure::TransportFailed(err));
+                true
+            }
+        }
+    }
+
+    pub(crate) fn attach_mic_task(&mut self, attempt_id: u64, task: JoinHandle<()>) -> bool {
+        if self.attempt_id != attempt_id {
+            task.abort();
+            return false;
+        }
+        let Some(media) = &mut self.media else {
+            task.abort();
+            return false;
+        };
+        media.set_mic_task(task);
+        true
+    }
+
+    pub(crate) fn attach_playback_task(
+        &mut self,
+        attempt_id: u64,
+        key: TrackSubscriptionKey,
+        task: JoinHandle<()>,
+    ) -> bool {
+        if self.attempt_id != attempt_id {
+            task.abort();
+            return false;
+        }
+        let Some(media) = &mut self.media else {
+            task.abort();
+            return false;
+        };
+        media.insert_playback_task(key, task);
+        true
+    }
+
+    pub(crate) fn detach_playback_task(&mut self, key: &TrackSubscriptionKey) -> bool {
+        self.media
+            .as_mut()
+            .is_some_and(|media| media.remove_playback_task(key))
+    }
+}
+
+fn parse_optional_snowflake(value: Option<&Value>) -> Result<Option<Snowflake>, &'static str> {
+    match value {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(raw)) => Snowflake::parse(raw)
+            .map(Some)
+            .ok_or("invalid snowflake"),
+        Some(_) => Err("snowflake field must be a string or null"),
+    }
+}
+
+fn parse_voice_server_update(payload: &Value) -> Result<ParsedVoiceServerUpdate, &'static str> {
+    let token = payload
+        .get("token")
+        .and_then(Value::as_str)
+        .filter(|s| !s.trim().is_empty())
+        .ok_or("missing token")?;
+    let endpoint = payload
+        .get("endpoint")
+        .and_then(Value::as_str)
+        .filter(|s| !s.trim().is_empty())
+        .ok_or("missing endpoint")?;
+    let parsed_url = Url::parse(endpoint).map_err(|_| "invalid endpoint url")?;
+    if !matches!(parsed_url.scheme(), "ws" | "wss" | "http" | "https") {
+        return Err("unsupported endpoint scheme");
+    }
+    let connection_id = payload
+        .get("connection_id")
+        .and_then(Value::as_str)
+        .filter(|s| !s.trim().is_empty())
+        .ok_or("missing connection_id")?;
+    let guild_id = parse_optional_snowflake(payload.get("guild_id"))?;
+    let channel_id = parse_optional_snowflake(payload.get("channel_id"))?;
+    let has_e2ee_key = payload
+        .get("e2ee_key")
+        .and_then(Value::as_str)
+        .is_some_and(|s| !s.trim().is_empty());
+    let has_ice_servers = payload
+        .get("ice_servers")
+        .and_then(Value::as_array)
+        .is_some_and(|arr| !arr.is_empty());
+
+    Ok(ParsedVoiceServerUpdate {
+        guild_id,
+        channel_id,
+        endpoint: endpoint.to_owned(),
+        token: SecretToken::new(token),
+        connection_id: connection_id.to_owned(),
+        has_e2ee_key,
+        has_ice_servers,
+    })
+}
+
+fn parse_voice_state_update(payload: &Value) -> Option<ParsedVoiceStateUpdate> {
+    let user_id = payload.get("user_id").and_then(Value::as_str).and_then(Snowflake::parse)?;
+    let guild_id = parse_optional_snowflake(payload.get("guild_id")).ok()?;
+    let channel_id = parse_optional_snowflake(payload.get("channel_id")).ok()?;
+    let session_id = payload.get("session_id").and_then(Value::as_str).unwrap_or_default().to_owned();
+    let connection_id = payload
+        .get("connection_id")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned);
+    let flag = |name: &str| payload.get(name).and_then(Value::as_bool).unwrap_or(false);
+    Some(ParsedVoiceStateUpdate {
+        user_id,
+        guild_id,
+        channel_id,
+        session_id,
+        connection_id,
+        self_mute: flag("self_mute"),
+        self_deaf: flag("self_deaf"),
+        self_video: flag("self_video"),
+        self_stream: flag("self_stream"),
+        mute: flag("mute"),
+        deaf: flag("deaf"),
+        suppress: flag("suppress"),
+    })
+}
+
+pub(crate) fn on_gateway_dispatch(
+    dispatch: &fluxer_client_core::Dispatch,
+    state: &Mutex<ClientState>,
+    voice: &Arc<Mutex<VoiceManager>>,
+    runtime: &Handle,
+    events: &mpsc::UnboundedSender<UiEvent>,
+) {
+    match dispatch.t.as_str() {
+        "VOICE_STATE_UPDATE" => {
+            let current_user_id = lock(state).current_user.as_ref().map(|u| u.id);
+            let changed = lock(voice).handle_voice_state_dispatch(&dispatch.d, current_user_id);
+            if changed {
+                let _ = events.send(UiEvent::VoiceChanged);
+            }
+        }
+        "VOICE_SERVER_UPDATE" => {
+            let decision = {
+                let mut mgr = lock(voice);
+                match mgr.accept_voice_server_dispatch(&dispatch.d) {
+                    Ok(Some(creds)) => Some((mgr.transport.clone(), creds)),
+                    Ok(None) => None,
+                    Err(_) => {
+                        let _ = events.send(UiEvent::VoiceChanged);
+                        None
+                    }
+                }
+            };
+            if let Some((transport, creds)) = decision {
+                let attempt_id = creds.attempt_id;
+                let guild_id = creds.guild_id;
+                let channel_id = creds.channel_id;
+                let connection_id = creds.connection_id.clone();
+                let voice_clone = voice.clone();
+                let events_clone = events.clone();
+                let conn_id_check = creds.connection_id.clone();
+                let task = runtime.spawn(async move {
+                    let result = transport.connect(creds).await;
+                    let changed = lock(&voice_clone).finish_connect(
+                        attempt_id,
+                        guild_id,
+                        channel_id,
+                        &connection_id,
+                        result,
+                    );
+                    if changed {
+                        let _ = events_clone.send(UiEvent::VoiceChanged);
+                    }
+                });
+                let mut mgr = lock(voice);
+                if mgr.attempt_id == attempt_id && mgr.connection_id.as_deref() == Some(conn_id_check.as_str()) {
+                    if let Some(prev) = mgr.connect_task.replace(task) {
+                        prev.abort();
+                    }
+                } else {
+                    task.abort();
+                }
+                let _ = events.send(UiEvent::VoiceChanged);
+            }
+        }
+        _ => {}
+    }
+}
+
+pub(crate) fn on_gateway_ready(
+    session_id: &str,
+    voice: &Mutex<VoiceManager>,
+    events: &mpsc::UnboundedSender<UiEvent>,
+) {
+    if lock(voice).handle_gateway_ready(session_id.to_owned()) {
+        let _ = events.send(UiEvent::VoiceChanged);
+    }
+}
+
+pub(crate) fn on_gateway_reset(
+    voice: &Mutex<VoiceManager>,
+    events: &mpsc::UnboundedSender<UiEvent>,
+) {
+    if lock(voice).handle_gateway_reset() {
+        let _ = events.send(UiEvent::VoiceChanged);
+    }
+}
+
+fn send_voice_gateway_update(gateway: Option<&GatewayHandle>, payload: &VoiceStateUpdate) -> bool {
+    let Some(gateway) = gateway else {
+        return false;
+    };
+    if let Err(err) = gateway.update_voice_state(payload) {
+        tracing::warn!(%err, "failed to send gateway VOICE_STATE_UPDATE");
+        return false;
+    }
+    true
+}
+
+impl Backend {
+    /// Returns a UI-safe snapshot of the current voice session (never includes tokens).
+    pub fn voice_snapshot(&self) -> VoiceSnapshot {
+        lock(&self.voice).snapshot()
+    }
+
+    /// Starts joining a guild or DM voice channel via gateway opcode 4.
+    pub fn join_voice(&self, guild_id: Option<Snowflake>, channel_id: Snowflake) -> bool {
+        let payload = lock(&self.voice).begin_join(guild_id, channel_id);
+        #[cfg(test)]
+        lock(&self.sent_voice_states).push(payload.clone());
+        let sent = if self.gateway.is_some() {
+            send_voice_gateway_update(self.gateway.as_ref(), &payload)
+        } else {
+            #[cfg(test)]
+            {
+                true
+            }
+            #[cfg(not(test))]
+            {
+                false
+            }
+        };
+        if !sent {
+            let mut mgr = lock(&self.voice);
+            mgr.state = VoiceConnectionState::Failed(VoiceFailure::GatewayUnavailable);
+            mgr.channel_id = None;
+            mgr.guild_id = None;
+        }
+        let _ = self.events.send(UiEvent::VoiceChanged);
+        sent
+    }
+
+    /// Leaves the active voice channel (`channel_id: null`) and shuts down owned media tasks.
+    pub fn leave_voice(&self) {
+        let payload = lock(&self.voice).begin_leave();
+        if let Some(payload) = payload {
+            #[cfg(test)]
+            lock(&self.sent_voice_states).push(payload.clone());
+            let _ = send_voice_gateway_update(self.gateway.as_ref(), &payload);
+        }
+        let _ = self.events.send(UiEvent::VoiceChanged);
+    }
+
+    /// Updates local self-mute state and forwards opcode 4 if currently in a voice channel.
+    pub fn set_voice_mute(&self, muted: bool) {
+        let payload = lock(&self.voice).set_self_mute(muted);
+        if let Some(payload) = payload {
+            #[cfg(test)]
+            lock(&self.sent_voice_states).push(payload.clone());
+            let _ = send_voice_gateway_update(self.gateway.as_ref(), &payload);
+        }
+        let _ = self.events.send(UiEvent::VoiceChanged);
+    }
+
+    /// Updates local self-deaf state and forwards opcode 4 if currently in a voice channel.
+    pub fn set_voice_deaf(&self, deafened: bool) {
+        let payload = lock(&self.voice).set_self_deaf(deafened);
+        if let Some(payload) = payload {
+            #[cfg(test)]
+            lock(&self.sent_voice_states).push(payload.clone());
+            let _ = send_voice_gateway_update(self.gateway.as_ref(), &payload);
+        }
+        let _ = self.events.send(UiEvent::VoiceChanged);
+    }
+
+    /// Tears down active voice media on session close/logout.
+    pub(super) fn shutdown_voice(&self) {
+        self.leave_voice();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_voice_transport_for_test(&self, transport: Arc<dyn VoiceTransport>) {
+        lock(&self.voice).transport = transport;
+    }
+
+    #[cfg(test)]
+    pub(crate) fn feed_voice_dispatch_for_test(&self, dispatch: &fluxer_client_core::Dispatch) {
+        on_gateway_dispatch(dispatch, &self.state, &self.voice, &self.runtime, &self.events);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+
+    use fluxer_client_core::Dispatch;
+    use fluxer_client_core::rest::{ClientIdentity, Endpoints, RestClient, RestConfig};
+    use serde_json::json;
+    use tokio::sync::Notify;
+
+    use super::*;
+
+    struct FakeRoom {
+        mic_muted: AtomicBool,
+        playback_muted: AtomicBool,
+        closed: AtomicBool,
+        close_count: AtomicUsize,
+    }
+
+    impl FakeRoom {
+        fn new() -> Self {
+            Self {
+                mic_muted: AtomicBool::new(false),
+                playback_muted: AtomicBool::new(false),
+                closed: AtomicBool::new(false),
+                close_count: AtomicUsize::new(0),
+            }
+        }
+    }
+
+    impl VoiceRoom for FakeRoom {
+        fn set_microphone_muted(&self, muted: bool) {
+            self.mic_muted.store(muted, Ordering::SeqCst);
+        }
+
+        fn set_playback_muted(&self, muted: bool) {
+            self.playback_muted.store(muted, Ordering::SeqCst);
+        }
+
+        fn close(&self) {
+            self.closed.store(true, Ordering::SeqCst);
+            self.close_count.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+
+    struct FakeTransport {
+        rooms: Mutex<Vec<Arc<FakeRoom>>>,
+        gate: Option<Arc<Notify>>,
+    }
+
+    impl FakeTransport {
+        fn immediate() -> (Arc<Self>, Arc<FakeRoom>) {
+            let room = Arc::new(FakeRoom::new());
+            let transport = Arc::new(Self { rooms: Mutex::new(vec![room.clone()]), gate: None });
+            (transport, room)
+        }
+
+        fn gated() -> (Arc<Self>, Arc<FakeRoom>, Arc<Notify>) {
+            let room = Arc::new(FakeRoom::new());
+            let gate = Arc::new(Notify::new());
+            let transport = Arc::new(Self {
+                rooms: Mutex::new(vec![room.clone()]),
+                gate: Some(gate.clone()),
+            });
+            (transport, room, gate)
+        }
+    }
+
+    impl VoiceTransport for FakeTransport {
+        fn connect(
+            &self,
+            _credentials: VoiceCredentials,
+        ) -> Pin<Box<dyn Future<Output = Result<Arc<dyn VoiceRoom>, String>> + Send>> {
+            let room = self.rooms.lock().unwrap().remove(0);
+            let gate = self.gate.clone();
+            Box::pin(async move {
+                if let Some(gate) = gate {
+                    gate.notified().await;
+                }
+                Ok(room as Arc<dyn VoiceRoom>)
+            })
+        }
+    }
+
+    fn test_backend(rt: &tokio::runtime::Runtime) -> (Backend, mpsc::UnboundedReceiver<UiEvent>) {
+        let endpoints = Endpoints {
+            api_code_version: 1,
+            api: "http://127.0.0.1:9/api".into(),
+            gateway: "ws://127.0.0.1:9/gateway".into(),
+            media: None,
+            static_cdn: None,
+            upload_relay: None,
+            invite: None,
+            webapp: None,
+            discovery_url: "http://127.0.0.1:9/.well-known/fluxer".into(),
+            document: json!({}),
+        };
+        let mut config = RestConfig::new(&endpoints, ClientIdentity::default());
+        config.policy = fluxer_client_core::rest::TransportPolicy { allow_insecure_loopback: true };
+        let rest = Arc::new(RestClient::new(config).unwrap());
+        Backend::new(rt.handle().clone(), rest, None)
+    }
+
+    #[test]
+    fn voice_credentials_debug_redacts_token() {
+        let creds = VoiceCredentials {
+            attempt_id: 1,
+            guild_id: Some(Snowflake(42)),
+            channel_id: Snowflake(100),
+            connection_id: "conn-1".into(),
+            endpoint: "wss://rtc.example.test".into(),
+            token: SecretToken::new("super-secret-livekit-jwt"),
+        };
+        let rendered = format!("{creds:?}");
+        assert!(!rendered.contains("super-secret-livekit-jwt"));
+        assert!(rendered.contains("<redacted>"));
+    }
+
+    #[test]
+    fn join_server_update_connect_mute_deaf_and_leave_lifecycle() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, mut rx) = test_backend(&rt);
+        let (transport, room) = FakeTransport::immediate();
+        backend.set_voice_transport_for_test(transport);
+
+        assert!(backend.join_voice(Some(Snowflake(42)), Snowflake(100)));
+        assert_eq!(backend.voice_snapshot().state, VoiceConnectionState::Connecting);
+        assert_eq!(lock(&backend.sent_voice_states).len(), 1);
+        assert_eq!(lock(&backend.sent_voice_states)[0].channel_id.as_deref(), Some("100"));
+
+        // Mismatched guild is ignored.
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            t: "VOICE_SERVER_UPDATE".into(),
+            s: 1,
+            d: json!({
+                "guild_id": "999",
+                "channel_id": "100",
+                "connection_id": "conn-wrong",
+                "endpoint": "wss://rtc.example.test",
+                "token": "jwt-wrong"
+            }),
+        });
+        assert_eq!(backend.voice_snapshot().connection_id, None);
+
+        // Matching server update connects the transport.
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            t: "VOICE_SERVER_UPDATE".into(),
+            s: 2,
+            d: json!({
+                "guild_id": "42",
+                "channel_id": "100",
+                "connection_id": "conn-1",
+                "endpoint": "wss://rtc.example.test",
+                "token": "jwt-secret-1"
+            }),
+        });
+
+        rt.block_on(async {
+            for _ in 0..10 {
+                if backend.voice_snapshot().state == VoiceConnectionState::Connected {
+                    break;
+                }
+                let _ = rx.recv().await;
+            }
+        });
+        let snap = backend.voice_snapshot();
+        assert_eq!(snap.state, VoiceConnectionState::Connected);
+        assert_eq!(snap.connection_id.as_deref(), Some("conn-1"));
+
+        // Attach owned mic + playback tasks keyed by participant/track/source.
+        let (mic_dropped_tx, mic_dropped_rx) = tokio::sync::oneshot::channel::<()>();
+        let mic_task = rt.spawn(async move {
+            struct DropSignal(Option<tokio::sync::oneshot::Sender<()>>);
+            impl Drop for DropSignal {
+                fn drop(&mut self) {
+                    if let Some(tx) = self.0.take() {
+                        let _ = tx.send(());
+                    }
+                }
+            }
+            let _guard = DropSignal(Some(mic_dropped_tx));
+            std::future::pending::<()>().await;
+        });
+        assert!(lock(&backend.voice).attach_mic_task(snap.attempt_id, mic_task));
+
+        let key = TrackSubscriptionKey {
+            participant_identity: "user-2:conn-2".into(),
+            participant_sid: "PA_2".into(),
+            track_sid: "TR_audio_2".into(),
+            source: VoiceTrackSource::Microphone,
+        };
+        let (playback_dropped_tx, playback_dropped_rx) = tokio::sync::oneshot::channel::<()>();
+        let playback_task = rt.spawn(async move {
+            struct DropSignal(Option<tokio::sync::oneshot::Sender<()>>);
+            impl Drop for DropSignal {
+                fn drop(&mut self) {
+                    if let Some(tx) = self.0.take() {
+                        let _ = tx.send(());
+                    }
+                }
+            }
+            let _guard = DropSignal(Some(playback_dropped_tx));
+            std::future::pending::<()>().await;
+        });
+        assert!(lock(&backend.voice).attach_playback_task(snap.attempt_id, key.clone(), playback_task));
+        assert_eq!(backend.voice_snapshot().subscribed_tracks, vec![key.clone()]);
+
+        // Verify explicit per-track detach works too, then re-attach for leave verification.
+        let extra_key = TrackSubscriptionKey {
+            participant_identity: "user-3:conn-3".into(),
+            participant_sid: "PA_3".into(),
+            track_sid: "TR_screen_3".into(),
+            source: VoiceTrackSource::ScreenShareAudio,
+        };
+        let extra_task = rt.spawn(std::future::pending::<()>());
+        assert!(lock(&backend.voice).attach_playback_task(snap.attempt_id, extra_key.clone(), extra_task));
+        assert!(lock(&backend.voice).detach_playback_task(&extra_key));
+        assert_eq!(backend.voice_snapshot().subscribed_tracks, vec![key]);
+
+        backend.set_voice_mute(true);
+        assert!(room.mic_muted.load(Ordering::SeqCst));
+        assert!(!room.playback_muted.load(Ordering::SeqCst));
+
+        backend.set_voice_deaf(true);
+        assert!(room.playback_muted.load(Ordering::SeqCst));
+
+        // Leave stops mic + playback tasks, closes room, and sends channel_id: null.
+        backend.leave_voice();
+        rt.block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(2), mic_dropped_rx)
+                .await
+                .expect("mic task dropped")
+                .expect("mic drop signal");
+            tokio::time::timeout(std::time::Duration::from_secs(2), playback_dropped_rx)
+                .await
+                .expect("playback task dropped")
+                .expect("playback drop signal");
+        });
+        assert_eq!(backend.voice_snapshot().state, VoiceConnectionState::Disconnected);
+        assert!(backend.voice_snapshot().subscribed_tracks.is_empty());
+        assert!(room.closed.load(Ordering::SeqCst));
+        let last_sent = lock(&backend.sent_voice_states).last().unwrap().clone();
+        assert_eq!(last_sent.channel_id, None);
+        assert_eq!(last_sent.guild_id.as_deref(), Some("42"));
+        assert_eq!(last_sent.connection_id.as_deref(), Some("conn-1"));
+    }
+
+    #[test]
+    fn e2ee_and_p2p_mesh_updates_are_explicitly_rejected() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, _rx) = test_backend(&rt);
+
+        backend.join_voice(Some(Snowflake(42)), Snowflake(100));
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            t: "VOICE_SERVER_UPDATE".into(),
+            s: 1,
+            d: json!({
+                "guild_id": "42",
+                "channel_id": "100",
+                "connection_id": "conn-e2ee",
+                "endpoint": "wss://rtc.example.test",
+                "token": "jwt-e2ee",
+                "e2ee_key": "base64-key"
+            }),
+        });
+        assert_eq!(
+            backend.voice_snapshot().state,
+            VoiceConnectionState::Failed(VoiceFailure::UnsupportedE2ee)
+        );
+
+        backend.join_voice(None, Snowflake(200));
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            t: "VOICE_SERVER_UPDATE".into(),
+            s: 2,
+            d: json!({
+                "guild_id": null,
+                "channel_id": "200",
+                "connection_id": "conn-p2p",
+                "endpoint": "wss://rtc.example.test",
+                "token": "jwt-p2p",
+                "ice_servers": [{"urls": "stun:stun.example.test:3478"}]
+            }),
+        });
+        assert_eq!(
+            backend.voice_snapshot().state,
+            VoiceConnectionState::Failed(VoiceFailure::UnsupportedP2pMesh)
+        );
+    }
+
+    #[test]
+    fn late_room_completion_after_leave_is_closed_immediately() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, _rx) = test_backend(&rt);
+        let (transport, room, gate) = FakeTransport::gated();
+        backend.set_voice_transport_for_test(transport);
+
+        backend.join_voice(Some(Snowflake(42)), Snowflake(100));
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            t: "VOICE_SERVER_UPDATE".into(),
+            s: 1,
+            d: json!({
+                "guild_id": "42",
+                "channel_id": "100",
+                "connection_id": "conn-late",
+                "endpoint": "wss://rtc.example.test",
+                "token": "jwt-late"
+            }),
+        });
+
+        // User leaves while transport.connect is still in flight; then connect resolves.
+        let prev_attempt = backend.voice_snapshot().attempt_id;
+        let stale_ok = lock(&backend.voice).finish_connect(
+            prev_attempt.wrapping_sub(1),
+            Some(Snowflake(42)),
+            Snowflake(100),
+            "conn-late",
+            Ok(room.clone()),
+        );
+        assert!(!stale_ok);
+        assert!(room.closed.load(Ordering::SeqCst));
+
+        backend.leave_voice();
+        gate.notify_one();
+        rt.block_on(tokio::task::yield_now());
+        assert_eq!(backend.voice_snapshot().state, VoiceConnectionState::Disconnected);
+    }
+
+    #[test]
+    fn voice_state_dispatch_tracks_members_and_server_disconnect() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, mut rx) = test_backend(&rt);
+        let (transport, room) = FakeTransport::immediate();
+        backend.set_voice_transport_for_test(transport);
+
+        // Seed current user id = 10 and gateway session id = "sess-1".
+        backend.state().apply(&Dispatch {
+            t: "READY".into(),
+            s: 1,
+            d: json!({
+                "session_id": "sess-1",
+                "user": { "id": "10", "username": "me" },
+                "guilds": []
+            }),
+        });
+        on_gateway_ready("sess-1", &backend.voice, &backend.events);
+
+        backend.join_voice(Some(Snowflake(42)), Snowflake(100));
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            t: "VOICE_SERVER_UPDATE".into(),
+            s: 2,
+            d: json!({
+                "guild_id": "42",
+                "channel_id": "100",
+                "connection_id": "conn-1",
+                "endpoint": "wss://rtc.example.test",
+                "token": "jwt-1"
+            }),
+        });
+        rt.block_on(async {
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+            while backend.voice_snapshot().state != VoiceConnectionState::Connected {
+                tokio::time::timeout_at(deadline, rx.recv())
+                    .await
+                    .expect("connected event timeout")
+                    .expect("event channel open");
+            }
+        });
+        assert_eq!(backend.voice_snapshot().state, VoiceConnectionState::Connected);
+
+        // Another member joins the same channel.
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            t: "VOICE_STATE_UPDATE".into(),
+            s: 3,
+            d: json!({
+                "guild_id": "42",
+                "channel_id": "100",
+                "user_id": "20",
+                "session_id": "sess-2",
+                "self_mute": false,
+                "self_deaf": false
+            }),
+        });
+        assert_eq!(backend.voice_snapshot().members_in_channel(Snowflake(100)).len(), 1);
+
+        // Server disconnects our own user from the voice channel.
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            t: "VOICE_STATE_UPDATE".into(),
+            s: 4,
+            d: json!({
+                "guild_id": "42",
+                "channel_id": null,
+                "user_id": "10",
+                "session_id": "sess-1",
+                "connection_id": "conn-1"
+            }),
+        });
+        assert_eq!(backend.voice_snapshot().state, VoiceConnectionState::Disconnected);
+        assert!(room.closed.load(Ordering::SeqCst));
+    }
+}

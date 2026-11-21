@@ -84,6 +84,8 @@ pub enum UiEvent {
     GuildBansLoaded { seq: u64, guild_id: Snowflake, result: Result<Vec<GuildBanEntry>, String> },
     /// `DELETE /guilds/{guild_id}/bans/{user_id}` finished.
     MemberUnbanned { seq: u64, guild_id: Snowflake, user_id: Snowflake, error: Option<String> },
+    /// Voice session or channel voice member state changed (contains no credentials).
+    VoiceChanged,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -153,6 +155,7 @@ mod search;
 mod settings;
 mod social;
 mod upload;
+pub(crate) mod voice;
 
 #[cfg(test)]
 pub use channels::GuildChannelCall;
@@ -191,6 +194,8 @@ pub struct Backend {
     /// Per READY generation, `None` means in flight and `Some` is the next retry time.
     reply_target_requests: Arc<Mutex<ReplyTargetRequests>>,
     parent_syncs: channels::PendingChannelSyncs,
+    /// Backend-owned voice session, server-issued credentials, and media task handles.
+    voice: Arc<Mutex<voice::VoiceManager>>,
     /// Every `POST .../messages` body, in order (tests check what the
     /// composer sent; the test runtime never runs the request).
     #[cfg(test)]
@@ -228,6 +233,9 @@ pub struct Backend {
     /// Recorded guild member moderation actions (tests).
     #[cfg(test)]
     pub(crate) sent_moderation: Arc<Mutex<Vec<ModerationCall>>>,
+    /// Recorded gateway opcode 4 VOICE_STATE_UPDATE payloads (tests).
+    #[cfg(test)]
+    pub(crate) sent_voice_states: Arc<Mutex<Vec<fluxer_client_core::gateway::VoiceStateUpdate>>>,
 }
 
 impl Backend {
@@ -280,6 +288,8 @@ impl Backend {
             backend.focus.clone(),
             backend.rest.clone(),
             backend.parent_syncs.clone(),
+            backend.voice.clone(),
+            backend.runtime.clone(),
         ));
         let _ = backend.events.send(UiEvent::Gateway(GatewayStatus::Connecting));
         Ok((backend, rx))
@@ -309,6 +319,9 @@ impl Backend {
             rename_group_dm_seq: Arc::default(),
             reply_target_requests: Arc::default(),
             parent_syncs: Default::default(),
+            voice: Arc::new(Mutex::new(voice::VoiceManager::new(Arc::new(
+                voice::UnconfiguredVoiceTransport,
+            )))),
             #[cfg(test)]
             sent: Arc::default(),
             #[cfg(test)]
@@ -333,6 +346,8 @@ impl Backend {
             sent_guild_channels: Arc::default(),
             #[cfg(test)]
             sent_moderation: Arc::default(),
+            #[cfg(test)]
+            sent_voice_states: Arc::default(),
         };
         (backend, rx)
     }
@@ -648,6 +663,7 @@ impl Backend {
     }
 
     pub fn close(&self) {
+        self.shutdown_voice();
         if let Some(gateway) = &self.gateway {
             gateway.close();
         }
@@ -703,6 +719,8 @@ async fn pump_gateway(
     focus: Arc<NotifyFocus>,
     rest: Arc<RestClient>,
     parent_syncs: channels::PendingChannelSyncs,
+    voice: Arc<Mutex<voice::VoiceManager>>,
+    runtime: Handle,
 ) {
     let mut closed = false;
     while let Some(event) = gateway_events.recv().await {
@@ -710,6 +728,7 @@ async fn pump_gateway(
             GatewayEvent::Dispatch(dispatch) => {
                 let (changed, notification) = apply_dispatch(&state, &dispatch, &focus, now_ms());
                 channels::recheck_parent_sync(&dispatch, &state, &rest, &events, &parent_syncs);
+                voice::on_gateway_dispatch(&dispatch, &state, &voice, &runtime, &events);
                 if let Some(notification) = notification
                     && events.send(UiEvent::Notify(notification)).is_err()
                 {
@@ -728,11 +747,21 @@ async fn pump_gateway(
                     _ => UiEvent::StateChanged,
                 }
             }
-            GatewayEvent::Ready { .. } | GatewayEvent::Resumed => UiEvent::Gateway(GatewayStatus::Ready),
+            GatewayEvent::Ready { session_id } => {
+                voice::on_gateway_ready(&session_id, &voice, &events);
+                UiEvent::Gateway(GatewayStatus::Ready)
+            }
+            GatewayEvent::Resumed => UiEvent::Gateway(GatewayStatus::Ready),
             GatewayEvent::Reconnecting { attempt, .. } => UiEvent::Gateway(GatewayStatus::Reconnecting { attempt }),
-            GatewayEvent::InvalidSession { .. } => UiEvent::Gateway(GatewayStatus::Connecting),
+            GatewayEvent::InvalidSession { resumable } => {
+                if !resumable {
+                    voice::on_gateway_reset(&voice, &events);
+                }
+                UiEvent::Gateway(GatewayStatus::Connecting)
+            }
             GatewayEvent::Closed { code, reason } => {
                 closed = true;
+                voice::on_gateway_reset(&voice, &events);
                 UiEvent::Gateway(GatewayStatus::Closed { reason: format!("{code} {reason}") })
             }
         };
@@ -740,6 +769,7 @@ async fn pump_gateway(
             return;
         }
     }
+    voice::on_gateway_reset(&voice, &events);
     if !closed {
         let _ = events.send(UiEvent::Gateway(GatewayStatus::Closed { reason: "connection ended".to_owned() }));
     }

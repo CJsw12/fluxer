@@ -1432,6 +1432,32 @@ impl ClientView {
         cx.notify();
     }
 
+    pub(crate) fn toggle_screen_share(&mut self, include_audio: bool, cx: &mut Context<Self>) {
+        if self.voice.self_stream {
+            self.backend.stop_screen_share();
+            self.error = None;
+        } else {
+            match self.backend.start_screen_share(include_audio) {
+                Ok(()) => self.error = None,
+                Err(err) => self.error = Some(l10n::tr(err).into()),
+            }
+        }
+        self.voice = self.backend.voice_snapshot();
+        cx.notify();
+    }
+
+    pub(crate) fn toggle_screen_share_audio(&mut self, cx: &mut Context<Self>) {
+        if !self.voice.self_stream {
+            return;
+        }
+        match self.backend.start_screen_share(!self.voice.screen_share_audio) {
+            Ok(()) => self.error = None,
+            Err(err) => self.error = Some(l10n::tr(err).into()),
+        }
+        self.voice = self.backend.voice_snapshot();
+        cx.notify();
+    }
+
     pub(crate) fn voice_channel_name(&self, channel_id: Snowflake) -> SharedString {
         let state = self.backend.state();
         state

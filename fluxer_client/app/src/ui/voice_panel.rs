@@ -26,6 +26,17 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .unwrap_or_default();
     let mute_label = if view.voice.self_mute { l10n::tr("Unmute") } else { l10n::tr("Mute") };
     let deaf_label = if view.voice.self_deaf { l10n::tr("Undeafen") } else { l10n::tr("Deafen") };
+    let is_connected = view.voice.state == VoiceConnectionState::Connected;
+    let share_label = if view.voice.self_stream {
+        l10n::tr("Stop Sharing")
+    } else {
+        l10n::tr("Share Screen")
+    };
+    let share_audio_label = if view.voice.screen_share_audio {
+        l10n::tr("Audio On")
+    } else {
+        l10n::tr("Audio Off")
+    };
 
     Some(
         div()
@@ -68,6 +79,15 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                         .text_color(theme.muted_foreground)
                                         .child(channel_label),
                                 )
+                            })
+                            .when(view.voice.speak_denied, |d| {
+                                d.child(
+                                    div()
+                                        .truncate()
+                                        .text_xs()
+                                        .text_color(theme.danger)
+                                        .child(l10n::tr("Mic muted by permissions")),
+                                )
                             }),
                     )
                     .child(
@@ -84,6 +104,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 div()
                     .flex()
                     .flex_row()
+                    .flex_wrap()
                     .items_center()
                     .gap_1()
                     .child(
@@ -103,7 +124,33 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 .label(deaf_label)
                                 .on_click(cx.listener(|this, _, _, cx| this.toggle_voice_deaf(cx))),
                         ),
-                    ),
+                    )
+                    .when(is_connected, |d| {
+                        d.child(
+                            div().debug_selector(|| "voice-share-btn".to_owned()).child(
+                                Button::new("voice-share-btn")
+                                    .ghost()
+                                    .xsmall()
+                                    .label(share_label)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.toggle_screen_share(false, cx);
+                                    })),
+                            ),
+                        )
+                    })
+                    .when(is_connected && view.voice.self_stream, |d| {
+                        d.child(
+                            div().debug_selector(|| "voice-share-audio-btn".to_owned()).child(
+                                Button::new("voice-share-audio-btn")
+                                    .ghost()
+                                    .xsmall()
+                                    .label(share_audio_label)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.toggle_screen_share_audio(cx);
+                                    })),
+                            ),
+                        )
+                    }),
             ),
     )
 }

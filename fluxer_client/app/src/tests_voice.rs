@@ -2,12 +2,17 @@
 //! voice connection bar controls (mute/deaf/disconnect), member list display,
 //! and E2EE unsupported failure rendering.
 
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use fluxer_client_core::Dispatch;
 use fluxer_client_core::state::{Snowflake, bits};
 use gpui_kit::TestAppContext;
 use serde_json::json;
 
-use crate::backend::voice::{VoiceConnectionState, VoiceFailure};
+use crate::backend::voice::{VoiceConnectionState, VoiceCredentials, VoiceFailure, VoiceRoom, VoiceTransport};
 use crate::backend::{Backend, UiEvent, lock};
 use crate::client_view::ClientView;
 use crate::tests::{draw, offline_rest, open_client, runtime};
@@ -161,4 +166,167 @@ fn voice_e2ee_rejection_surfaces_failure_without_leaking_credentials(cx: &mut Te
         assert!(!rendered.contains("wss://rtc.example.test"));
     });
     let _ = UiEvent::VoiceChanged;
+}
+
+struct TestVoiceRoom {
+    screen_share_active: AtomicBool,
+    screen_share_audio: AtomicBool,
+}
+
+impl TestVoiceRoom {
+    fn new() -> Self {
+        Self {
+            screen_share_active: AtomicBool::new(false),
+            screen_share_audio: AtomicBool::new(false),
+        }
+    }
+}
+
+impl VoiceRoom for TestVoiceRoom {
+    fn set_microphone_muted(&self, _muted: bool) {}
+    fn set_playback_muted(&self, _muted: bool) {}
+    fn set_screen_share(&self, active: bool, with_audio: bool) {
+        self.screen_share_active.store(active, Ordering::SeqCst);
+        self.screen_share_audio.store(active && with_audio, Ordering::SeqCst);
+    }
+    fn close(&self) {}
+}
+
+struct ImmediateTestTransport(Arc<TestVoiceRoom>);
+
+impl VoiceTransport for ImmediateTestTransport {
+    fn connect(
+        &self,
+        _credentials: VoiceCredentials,
+    ) -> Pin<Box<dyn Future<Output = Result<Arc<dyn VoiceRoom>, String>> + Send>> {
+        let room = self.0.clone();
+        Box::pin(async move { Ok(room as Arc<dyn VoiceRoom>) })
+    }
+}
+
+fn connect_voice_in_view(
+    rt: &tokio::runtime::Runtime,
+    backend: &Backend,
+    view: &gpui_kit::Entity<ClientView>,
+    vcx: &mut gpui_kit::VisualTestContext,
+) -> Arc<TestVoiceRoom> {
+    let room = Arc::new(TestVoiceRoom::new());
+    backend.set_voice_transport_for_test(Arc::new(ImmediateTestTransport(room.clone())));
+
+    view.update(vcx, |v, cx| {
+        v.select_place(Place::Guild(GUILD), cx);
+        v.join_voice_channel(VOICE_OPEN, cx);
+    });
+    backend.feed_voice_dispatch_for_test(&Dispatch {
+        t: "VOICE_SERVER_UPDATE".into(),
+        s: 2,
+        d: json!({
+            "guild_id": GUILD.to_string(),
+            "channel_id": VOICE_OPEN.to_string(),
+            "connection_id": "conn-ui",
+            "endpoint": "wss://rtc.example.test",
+            "token": "jwt-ui"
+        }),
+    });
+    rt.block_on(async {
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+        while backend.voice_snapshot().state != VoiceConnectionState::Connected {
+            assert!(tokio::time::Instant::now() < deadline, "voice connect timeout");
+            tokio::task::yield_now().await;
+        }
+    });
+    view.update(vcx, |v, cx| v.refresh(cx));
+    draw(vcx);
+    room
+}
+
+#[gpui_kit::test]
+fn voice_screen_share_requires_stream_permission_in_ui(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, rx) = Backend::new(rt.handle().clone(), offline_rest(), None);
+    backend.state().apply(&voice_ready());
+    let (view, vcx) = open_client(cx, backend.clone(), rx);
+    let room = connect_voice_in_view(&rt, &backend, &view, vcx);
+
+    let sent_before = lock(&backend.sent_voice_states).len();
+    view.update(vcx, |v, cx| v.toggle_screen_share(false, cx));
+    draw(vcx);
+
+    view.read_with(vcx, |v, _| {
+        assert_eq!(v.voice.state, VoiceConnectionState::Connected);
+        assert!(v.error.is_some());
+        assert!(!v.voice.self_stream);
+        assert!(!v.voice.screen_share_audio);
+    });
+    assert_eq!(lock(&backend.sent_voice_states).len(), sent_before);
+    assert!(!room.screen_share_active.load(Ordering::SeqCst));
+}
+
+#[gpui_kit::test]
+fn voice_screen_share_and_audio_toggle_render_voice_panel(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, rx) = Backend::new(rt.handle().clone(), offline_rest(), None);
+    let stream_perms = (bits::VIEW_CHANNEL | bits::CONNECT | bits::SPEAK | bits::STREAM).to_string();
+    backend.state().apply(&Dispatch {
+        t: "READY".to_owned(),
+        s: 1,
+        d: json!({
+            "session_id": "sess-voice-stream-ui",
+            "user": { "id": ME.to_string(), "username": "me" },
+            "guilds": [{
+                "id": GUILD.to_string(),
+                "properties": { "name": "Voice Guild", "owner_id": OWNER.to_string() },
+                "roles": [{ "id": GUILD.to_string(), "name": "@everyone", "permissions": stream_perms, "position": 0 }],
+                "members": [{ "user": { "id": ME.to_string(), "username": "me" }, "roles": [] }],
+                "channels": [
+                    { "id": VOICE_OPEN.to_string(), "guild_id": GUILD.to_string(), "type": 2, "name": "Lounge", "position": 0, "permission_overwrites": [] }
+                ]
+            }]
+        }),
+    });
+    let (view, vcx) = open_client(cx, backend.clone(), rx);
+    let room = connect_voice_in_view(&rt, &backend, &view, vcx);
+
+    assert!(vcx.debug_bounds("voice-share-btn").is_some());
+    assert!(vcx.debug_bounds("voice-share-audio-btn").is_none());
+
+    // Start screen share (audio off by default).
+    view.update(vcx, |v, cx| v.toggle_screen_share(false, cx));
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert!(v.error.is_none());
+        assert!(v.voice.self_stream);
+        assert!(!v.voice.screen_share_audio);
+    });
+    assert!(room.screen_share_active.load(Ordering::SeqCst));
+    assert!(!room.screen_share_audio.load(Ordering::SeqCst));
+    assert!(vcx.debug_bounds("voice-share-btn").is_some());
+    assert!(vcx.debug_bounds("voice-share-audio-btn").is_some());
+
+    // Toggle screen share audio on, then back off.
+    view.update(vcx, |v, cx| v.toggle_screen_share_audio(cx));
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert!(v.voice.self_stream);
+        assert!(v.voice.screen_share_audio);
+    });
+    assert!(room.screen_share_audio.load(Ordering::SeqCst));
+
+    view.update(vcx, |v, cx| v.toggle_screen_share_audio(cx));
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert!(v.voice.self_stream);
+        assert!(!v.voice.screen_share_audio);
+    });
+    assert!(!room.screen_share_audio.load(Ordering::SeqCst));
+
+    // Stop screen share.
+    view.update(vcx, |v, cx| v.toggle_screen_share(false, cx));
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert!(!v.voice.self_stream);
+        assert!(!v.voice.screen_share_audio);
+    });
+    assert!(!room.screen_share_active.load(Ordering::SeqCst));
+    assert!(vcx.debug_bounds("voice-share-audio-btn").is_none());
 }

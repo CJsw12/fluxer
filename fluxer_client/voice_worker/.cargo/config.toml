@@ -3,5 +3,3 @@ rustflags = ["-C", "target-feature=+crt-static"]
 
 [build]
 jobs = 4
-# Keep webrtc-sys C++ include paths under Windows MAX_PATH (260 chars).
-target-dir = "../../target/vw"

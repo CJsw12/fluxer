@@ -20,7 +20,7 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 use tokio::sync::{mpsc, oneshot};
 
 use super::voice::{
-    TrackSubscriptionKey, UnconfiguredVoiceTransport, VoiceCredentials, VoiceRoom,
+    TrackSubscriptionKey, UnconfiguredVoiceTransport, VoiceCredentials, VoiceRoom, VoiceRoomEvent,
     VoiceTrackSource, VoiceTransport,
 };
 
@@ -270,9 +270,10 @@ impl VoiceTransport for ProcessVoiceTransport {
 /// Active voice room backed by a private stdio IPC channel to the worker process.
 pub(crate) struct ProcessVoiceRoom {
     tx: mpsc::Sender<WorkerCommand>,
-    closed: AtomicBool,
+    closed: Arc<AtomicBool>,
     kill_tx: Mutex<Option<oneshot::Sender<()>>>,
     subscribed_tracks: Arc<Mutex<BTreeSet<TrackSubscriptionKey>>>,
+    event_rx: Mutex<Option<mpsc::UnboundedReceiver<VoiceRoomEvent>>>,
 }
 
 impl ProcessVoiceRoom {
@@ -282,7 +283,6 @@ impl ProcessVoiceRoom {
         }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn subscribed_tracks(&self) -> Vec<TrackSubscriptionKey> {
         self.subscribed_tracks
             .lock()
@@ -305,6 +305,10 @@ impl VoiceRoom for ProcessVoiceRoom {
 
     fn subscribed_tracks(&self) -> Vec<TrackSubscriptionKey> {
         ProcessVoiceRoom::subscribed_tracks(self)
+    }
+
+    fn take_event_rx(&self) -> Option<mpsc::UnboundedReceiver<VoiceRoomEvent>> {
+        self.event_rx.lock().ok().and_then(|mut guard| guard.take())
     }
 
     fn close(&self) {
@@ -363,28 +367,47 @@ where
 async fn run_event_reader<R>(
     mut lines: tokio::io::Lines<BufReader<R>>,
     subscribed_tracks: Arc<Mutex<BTreeSet<TrackSubscriptionKey>>>,
+    event_tx: mpsc::UnboundedSender<VoiceRoomEvent>,
+    closed: Arc<AtomicBool>,
 ) where
     R: AsyncRead + Unpin + Send + 'static,
 {
+    let mut received_disconnect = false;
     while let Ok(Some(line)) = lines.next_line().await {
         let Ok(event) = serde_json::from_str::<WorkerEvent>(&line) else {
             continue;
         };
-        if matches!(event, WorkerEvent::Disconnected { .. }) {
-            break;
-        }
-        if let Some((subscribed, key)) = event.into_track_key()
-            && let Ok(mut guard) = subscribed_tracks.lock()
-        {
-            if subscribed {
-                guard.insert(key);
-            } else {
-                guard.remove(&key);
+        match event {
+            WorkerEvent::Disconnected { reason } => {
+                received_disconnect = true;
+                let _ = event_tx.send(VoiceRoomEvent::Disconnected(reason));
+                break;
+            }
+            other => {
+                if let Some((subscribed, key)) = other.into_track_key() {
+                    let changed = if let Ok(mut guard) = subscribed_tracks.lock() {
+                        if subscribed {
+                            guard.insert(key)
+                        } else {
+                            guard.remove(&key)
+                        }
+                    } else {
+                        false
+                    };
+                    if changed {
+                        let _ = event_tx.send(VoiceRoomEvent::TracksChanged);
+                    }
+                }
             }
         }
     }
     if let Ok(mut guard) = subscribed_tracks.lock() {
         guard.clear();
+    }
+    if !received_disconnect && !closed.load(Ordering::SeqCst) {
+        let _ = event_tx.send(VoiceRoomEvent::Disconnected(
+            "voice worker exited unexpectedly".to_owned(),
+        ));
     }
 }
 
@@ -415,14 +438,22 @@ where
     match event {
         WorkerEvent::Connected => {
             let (tx, rx) = mpsc::channel(COMMAND_CHANNEL_CAPACITY);
+            let (event_tx, event_rx) = mpsc::unbounded_channel();
+            let closed = Arc::new(AtomicBool::new(false));
             let subscribed_tracks = Arc::new(Mutex::new(BTreeSet::new()));
             tokio::spawn(run_writer(writer, rx));
-            tokio::spawn(run_event_reader(lines, subscribed_tracks.clone()));
+            tokio::spawn(run_event_reader(
+                lines,
+                subscribed_tracks.clone(),
+                event_tx,
+                closed.clone(),
+            ));
             Ok(ProcessVoiceRoom {
                 tx,
-                closed: AtomicBool::new(false),
+                closed,
                 kill_tx: Mutex::new(kill_tx),
                 subscribed_tracks,
+                event_rx: Mutex::new(Some(event_rx)),
             })
         }
         WorkerEvent::Error { message } => Err(message),
@@ -793,6 +824,63 @@ mod tests {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
             assert!(room.subscribed_tracks().is_empty());
+        });
+    }
+
+    #[test]
+    fn duplex_track_event_and_unexpected_eof_emit_room_events() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let (c_w, _c_r) = tokio::io::duplex(4096);
+            let (mut w_w, w_r) = tokio::io::duplex(4096);
+
+            let connected = format!("{}\n", serde_json::to_string(&WorkerEvent::Connected).unwrap());
+            w_w.write_all(connected.as_bytes()).await.unwrap();
+            w_w.flush().await.unwrap();
+
+            let room = connect_over_streams(
+                c_w,
+                w_r,
+                WorkerCommand::Connect {
+                    endpoint: "wss://rtc.example.test".to_owned(),
+                    token: "secret-jwt".to_owned(),
+                    connection_id: "conn-eof-ev".to_owned(),
+                },
+                Duration::from_secs(2),
+                None,
+            )
+            .await
+            .expect("handshake must succeed");
+
+            let mut ev_rx = VoiceRoom::take_event_rx(&room).expect("event_rx must be present");
+
+            let sub = WorkerEvent::TrackSubscribed {
+                participant_identity: "user-2".to_owned(),
+                participant_sid: "PA_2".to_owned(),
+                track_sid: "TR_2".to_owned(),
+                source: "microphone".to_owned(),
+            };
+            let line = format!("{}\n", serde_json::to_string(&sub).unwrap());
+            w_w.write_all(line.as_bytes()).await.unwrap();
+            w_w.flush().await.unwrap();
+
+            assert_eq!(
+                tokio::time::timeout(Duration::from_secs(2), ev_rx.recv())
+                    .await
+                    .unwrap(),
+                Some(VoiceRoomEvent::TracksChanged)
+            );
+
+            // Drop worker stdout without close() -> unexpected EOF emits Disconnected.
+            drop(w_w);
+            assert_eq!(
+                tokio::time::timeout(Duration::from_secs(2), ev_rx.recv())
+                    .await
+                    .unwrap(),
+                Some(VoiceRoomEvent::Disconnected(
+                    "voice worker exited unexpectedly".to_owned()
+                ))
+            );
         });
     }
 }

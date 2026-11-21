@@ -167,6 +167,14 @@ impl fmt::Debug for VoiceCredentials {
     }
 }
 
+/// Events emitted by an active `VoiceRoom` implementation (e.g. remote track
+/// subscription changes or unexpected worker termination).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum VoiceRoomEvent {
+    TracksChanged,
+    Disconnected(String),
+}
+
 /// Active media room handle owned by the backend session.
 pub(crate) trait VoiceRoom: Send + Sync {
     fn set_microphone_muted(&self, muted: bool);
@@ -174,6 +182,9 @@ pub(crate) trait VoiceRoom: Send + Sync {
     fn set_screen_share(&self, active: bool, with_audio: bool);
     fn subscribed_tracks(&self) -> Vec<TrackSubscriptionKey> {
         Vec::new()
+    }
+    fn take_event_rx(&self) -> Option<mpsc::UnboundedReceiver<VoiceRoomEvent>> {
+        None
     }
     fn close(&self);
 }
@@ -204,6 +215,7 @@ struct OwnedVoiceMedia {
     mic_task: Option<JoinHandle<()>>,
     screen_share_video_task: Option<JoinHandle<()>>,
     screen_share_audio_task: Option<JoinHandle<()>>,
+    event_task: Option<JoinHandle<()>>,
     playback_tasks: BTreeMap<TrackSubscriptionKey, JoinHandle<()>>,
     closed: bool,
 }
@@ -215,8 +227,15 @@ impl OwnedVoiceMedia {
             mic_task: None,
             screen_share_video_task: None,
             screen_share_audio_task: None,
+            event_task: None,
             playback_tasks: BTreeMap::new(),
             closed: false,
+        }
+    }
+
+    fn set_event_task(&mut self, task: JoinHandle<()>) {
+        if let Some(prev) = self.event_task.replace(task) {
+            prev.abort();
         }
     }
 
@@ -282,6 +301,10 @@ impl OwnedVoiceMedia {
     fn shutdown(&mut self) -> Vec<JoinHandle<()>> {
         let mut handles = Vec::new();
         if let Some(task) = self.mic_task.take() {
+            task.abort();
+            handles.push(task);
+        }
+        if let Some(task) = self.event_task.take() {
             task.abort();
             handles.push(task);
         }
@@ -828,6 +851,28 @@ impl VoiceManager {
         }
     }
 
+    fn handle_room_disconnected(
+        &mut self,
+        attempt_id: u64,
+        connection_id: &str,
+        reason: String,
+    ) -> bool {
+        let still_current = self.attempt_id == attempt_id
+            && self.connection_id.as_deref() == Some(connection_id)
+            && self.state == VoiceConnectionState::Connected;
+        if !still_current {
+            return false;
+        }
+        if let Some(mut media) = self.media.take() {
+            let _ = media.event_task.take();
+            let _ = media.shutdown();
+        }
+        self.self_stream = false;
+        self.screen_share_audio = false;
+        self.state = VoiceConnectionState::Failed(VoiceFailure::TransportFailed(reason));
+        true
+    }
+
     pub(crate) fn attach_mic_task(&mut self, attempt_id: u64, task: JoinHandle<()>) -> bool {
         if self.attempt_id != attempt_id {
             task.abort();
@@ -1157,14 +1202,63 @@ fn on_gateway_dispatch_inner(
                 let conn_id_check = creds.connection_id.clone();
                 let task = runtime.spawn(async move {
                     let result = transport.connect(creds).await;
-                    let changed = lock(&voice_clone).finish_connect(
-                        attempt_id,
-                        guild_id,
-                        channel_id,
-                        &connection_id,
-                        result,
-                    );
-                    if changed {
+                    let watcher = {
+                        let mut mgr = lock(&voice_clone);
+                        let changed = mgr.finish_connect(
+                            attempt_id,
+                            guild_id,
+                            channel_id,
+                            &connection_id,
+                            result,
+                        );
+                        if !changed {
+                            None
+                        } else if mgr.state == VoiceConnectionState::Connected
+                            && let Some(event_rx) = mgr
+                                .media
+                                .as_ref()
+                                .and_then(|media| media.room.take_event_rx())
+                        {
+                            let mut rx = event_rx;
+                            let voice_for_events = voice_clone.clone();
+                            let events_for_watcher = events_clone.clone();
+                            let conn_id_for_watcher = connection_id.clone();
+                            let handle = tokio::spawn(async move {
+                                while let Some(ev) = rx.recv().await {
+                                    match ev {
+                                        VoiceRoomEvent::TracksChanged => {
+                                            if lock(&voice_for_events).attempt_id == attempt_id {
+                                                let _ = events_for_watcher.send(UiEvent::VoiceChanged);
+                                            } else {
+                                                break;
+                                            }
+                                        }
+                                        VoiceRoomEvent::Disconnected(reason) => {
+                                            let changed = lock(&voice_for_events)
+                                                .handle_room_disconnected(
+                                                    attempt_id,
+                                                    &conn_id_for_watcher,
+                                                    reason,
+                                                );
+                                            if changed {
+                                                let _ = events_for_watcher.send(UiEvent::VoiceChanged);
+                                            }
+                                            break;
+                                        }
+                                    }
+                                }
+                            });
+                            if let Some(media) = &mut mgr.media {
+                                media.set_event_task(handle);
+                            } else {
+                                handle.abort();
+                            }
+                            Some(())
+                        } else {
+                            Some(())
+                        }
+                    };
+                    if watcher.is_some() {
                         let _ = events_clone.send(UiEvent::VoiceChanged);
                     }
                 });
@@ -2516,6 +2610,125 @@ mod tests {
         assert!(audio_dropped.load(Ordering::SeqCst));
         assert!(playback_dropped.load(Ordering::SeqCst));
         assert!(room.closed.load(Ordering::SeqCst));
+        assert_eq!(backend.voice_snapshot().state, VoiceConnectionState::Disconnected);
+    }
+
+    #[test]
+    fn room_disconnected_event_fails_connected_session_unless_already_left() {
+        struct EventRoom {
+            event_rx: Mutex<Option<mpsc::UnboundedReceiver<VoiceRoomEvent>>>,
+            closed: AtomicBool,
+        }
+        impl VoiceRoom for EventRoom {
+            fn set_microphone_muted(&self, _muted: bool) {}
+            fn set_playback_muted(&self, _muted: bool) {}
+            fn set_screen_share(&self, _active: bool, _with_audio: bool) {}
+            fn take_event_rx(&self) -> Option<mpsc::UnboundedReceiver<VoiceRoomEvent>> {
+                self.event_rx.lock().unwrap().take()
+            }
+            fn close(&self) {
+                self.closed.store(true, Ordering::SeqCst);
+            }
+        }
+        struct EventTransport {
+            rooms: Mutex<Vec<Arc<EventRoom>>>,
+        }
+        impl VoiceTransport for EventTransport {
+            fn connect(
+                &self,
+                _credentials: VoiceCredentials,
+            ) -> Pin<Box<dyn Future<Output = Result<Arc<dyn VoiceRoom>, String>> + Send>> {
+                let room = self.rooms.lock().unwrap().remove(0);
+                Box::pin(async move { Ok(room as Arc<dyn VoiceRoom>) })
+            }
+        }
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, mut rx) = test_backend(&rt);
+
+        let (ev_tx1, ev_rx1) = mpsc::unbounded_channel();
+        let room1 = Arc::new(EventRoom {
+            event_rx: Mutex::new(Some(ev_rx1)),
+            closed: AtomicBool::new(false),
+        });
+        let (ev_tx2, ev_rx2) = mpsc::unbounded_channel();
+        let room2 = Arc::new(EventRoom {
+            event_rx: Mutex::new(Some(ev_rx2)),
+            closed: AtomicBool::new(false),
+        });
+        backend.set_voice_transport_for_test(Arc::new(EventTransport {
+            rooms: Mutex::new(vec![room1.clone(), room2.clone()]),
+        }));
+
+        // 1. Disconnected event while Connected transitions to Failed(TransportFailed) and emits VoiceChanged.
+        assert!(backend.join_voice(Some(Snowflake(42)), Snowflake(100)));
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            t: "VOICE_SERVER_UPDATE".into(),
+            s: 1,
+            d: json!({
+                "guild_id": "42",
+                "channel_id": "100",
+                "connection_id": "conn-ev-1",
+                "endpoint": "wss://rtc.example.test",
+                "token": "jwt-ev-1"
+            }),
+        });
+        rt.block_on(async {
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+            while backend.voice_snapshot().state != VoiceConnectionState::Connected {
+                tokio::time::timeout_at(deadline, rx.recv()).await.unwrap().unwrap();
+            }
+        });
+
+        assert!(backend.start_screen_share(true).is_ok());
+        while rx.try_recv().is_ok() {}
+
+        ev_tx1
+            .send(VoiceRoomEvent::Disconnected("worker crashed".to_owned()))
+            .unwrap();
+        rt.block_on(async {
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+            loop {
+                tokio::time::timeout_at(deadline, rx.recv()).await.unwrap().unwrap();
+                if matches!(
+                    backend.voice_snapshot().state,
+                    VoiceConnectionState::Failed(VoiceFailure::TransportFailed(_))
+                ) {
+                    break;
+                }
+            }
+        });
+        let snap = backend.voice_snapshot();
+        assert_eq!(
+            snap.state,
+            VoiceConnectionState::Failed(VoiceFailure::TransportFailed("worker crashed".to_owned()))
+        );
+        assert!(!snap.self_stream);
+        assert!(!snap.screen_share_audio);
+        assert!(room1.closed.load(Ordering::SeqCst));
+
+        // 2. Late Disconnected event after leave_voice() is ignored.
+        assert!(backend.join_voice(Some(Snowflake(42)), Snowflake(101)));
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            t: "VOICE_SERVER_UPDATE".into(),
+            s: 2,
+            d: json!({
+                "guild_id": "42",
+                "channel_id": "101",
+                "connection_id": "conn-ev-2",
+                "endpoint": "wss://rtc.example.test",
+                "token": "jwt-ev-2"
+            }),
+        });
+        rt.block_on(async {
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+            while backend.voice_snapshot().state != VoiceConnectionState::Connected {
+                tokio::time::timeout_at(deadline, rx.recv()).await.unwrap().unwrap();
+            }
+        });
+        backend.leave_voice();
+        let _ = ev_tx2.send(VoiceRoomEvent::Disconnected("late disconnect".to_owned()));
+        rt.block_on(tokio::task::yield_now());
         assert_eq!(backend.voice_snapshot().state, VoiceConnectionState::Disconnected);
     }
 }

@@ -470,32 +470,63 @@ impl MessageStore {
         }
     }
 
-    /// Removes `ids` from the channel's window. Replies left in the window or
-    /// parked outgoing buffer whose target was removed get
-    /// `referenced_message: null` (target gone).
+    /// Removes `ids` from the channel's window and marks references to them as deleted.
     pub(crate) fn remove(&mut self, channel_id: Snowflake, ids: &[Snowflake]) -> bool {
         let mut changed = false;
         if let Some(window) = self.windows.get_mut(&channel_id) {
             let before = window.messages.len();
             window.messages.retain(|m| !ids.contains(&m.id));
             changed |= window.messages.len() != before;
-            // The target may be gone even when it was not loaded itself.
-            for m in &mut window.messages {
-                if m.reply_to().is_some_and(|target| ids.contains(&target)) && m.referenced_message != Some(None) {
-                    m.referenced_message = Some(None);
-                    changed = true;
-                }
-            }
         }
-        if let Some(out) = self.outgoing.get_mut(&channel_id) {
-            for m in &mut out.parked_unsent {
-                if m.reply_to().is_some_and(|target| ids.contains(&target)) && m.referenced_message != Some(None) {
-                    m.referenced_message = Some(None);
-                    changed = true;
-                }
+        // The target may be gone even when it was not loaded itself.
+        for reply in self.replies_to(channel_id, ids) {
+            if reply.referenced_message != Some(None) {
+                reply.referenced_message = Some(None);
+                changed = true;
             }
         }
         changed
+    }
+
+    /// Resolves a single reply target fetched via `GET /channels/{c}/messages/{m}`.
+    /// Pass `Some(target)` when found, or `None` when the server confirmed the
+    /// target message is gone (404). Updates every loaded or parked reply in
+    /// the store that still has an unresolved reference to the target.
+    pub fn resolve_reply_target(
+        &mut self,
+        target_channel: Snowflake,
+        target_id: Snowflake,
+        resolved: Option<Message>,
+    ) -> bool {
+        if self.message(target_channel, target_id).is_some()
+            || resolved.as_ref().is_some_and(|m| m.id != target_id || m.channel_id != target_channel)
+        {
+            return false;
+        }
+        let replacement = Some(resolved.map(Box::new));
+        let mut changed = false;
+        for reply in self.replies_to(target_channel, &[target_id]) {
+            if reply.referenced_message.is_none() {
+                reply.referenced_message = replacement.clone();
+                changed = true;
+            }
+        }
+        changed
+    }
+
+    fn replies_to<'a>(
+        &'a mut self,
+        channel: Snowflake,
+        ids: &'a [Snowflake],
+    ) -> impl Iterator<Item = &'a mut Message> {
+        self.windows
+            .values_mut()
+            .flat_map(|window| &mut window.messages)
+            .chain(self.outgoing.values_mut().flat_map(|out| &mut out.parked_unsent))
+            .filter(move |m| {
+                m.reply_to().is_some_and(|id| ids.contains(&id))
+                    && m.message_reference.as_ref().and_then(|r| r.channel_id).unwrap_or(m.channel_id) == channel
+            })
     }
 
     /// Runs `edit` on one loaded message; returns its result (true = changed).
@@ -1005,5 +1036,60 @@ mod around_tests {
         assert!(store.message(evicted, no_nonce).is_none(), "newer message without nonce reconciled");
         assert_eq!(store.message(evicted, failed).unwrap().state, MessageState::Failed);
         assert!(store.has_confirmed_nonce(evicted, author.id, confirmed));
+    }
+
+    #[test]
+    fn resolve_reply_target_updates_loaded_and_parked_replies() {
+        let mut store = MessageStore::new();
+        let ch = Snowflake(10);
+        let mut reply_in_win = test_msg(200, 10, "reply 1");
+        reply_in_win.message_reference = Some(MessageReference {
+            message_id: Some(Snowflake(50)),
+            channel_id: Some(ch),
+            guild_id: None,
+            kind: 0,
+        });
+        store.load(ch, vec![reply_in_win], LoadMode::Replace);
+
+        let author = store.window(ch).unwrap().messages[0].author.clone();
+        store.insert_pending_with_reply(
+            ch,
+            Snowflake(201),
+            "pending reply to unloaded".to_owned(),
+            author,
+            Some((Snowflake(50), true)),
+        );
+        // Jump to an older slice so the pending reply is parked in `outgoing`.
+        let older: Vec<Message> = (60..=109).rev().map(|id| test_msg(id, 10, "hist")).collect();
+        store.load_around(ch, older, Snowflake(80), Some(Snowflake(200)));
+        assert!(store.message(ch, Snowflake(201)).unwrap().referenced_message.is_none());
+
+        // Resolve with `Some(target_msg)` updates the parked reply.
+        let target_msg = test_msg(50, 10, "original target");
+        assert!(store.resolve_reply_target(ch, Snowflake(50), Some(target_msg.clone())));
+        assert!(!store.resolve_reply_target(ch, Snowflake(50), Some(target_msg)), "idempotent second call");
+        assert_eq!(
+            store.message(ch, Snowflake(201)).unwrap().referenced_message.as_ref().and_then(|r| r.as_ref()).map(|m| m.content.as_str()),
+            Some("original target"),
+        );
+
+        // Return to latest and resolve with `None` (404 deleted) -> `Some(None)`.
+        let mut reply_in_win = test_msg(200, 10, "reply 1");
+        reply_in_win.message_reference = Some(MessageReference {
+            message_id: Some(Snowflake(50)),
+            channel_id: Some(ch),
+            guild_id: None,
+            kind: 0,
+        });
+        store.load(ch, vec![reply_in_win], LoadMode::Replace);
+        assert!(store.resolve_reply_target(ch, Snowflake(50), None));
+        assert_eq!(store.message(ch, Snowflake(200)).unwrap().referenced_message, Some(None));
+        assert!(store.message(ch, Snowflake(201)).unwrap().referenced_message.as_ref().unwrap().is_some());
+        let mut cross_channel = test_msg(202, 11, "cross-channel reply");
+        cross_channel.message_reference = store.message(ch, Snowflake(200)).unwrap().message_reference.clone();
+        store.load(Snowflake(11), vec![cross_channel], LoadMode::Replace);
+        assert!(store.remove(ch, &[Snowflake(50)]));
+        assert_eq!(store.message(ch, Snowflake(201)).unwrap().referenced_message, Some(None));
+        assert_eq!(store.message(Snowflake(11), Snowflake(202)).unwrap().referenced_message, Some(None));
     }
 }

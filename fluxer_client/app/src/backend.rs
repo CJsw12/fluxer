@@ -2,7 +2,7 @@
 //! the shared `ClientState`. Everything here runs on the tokio runtime; the
 //! UI only receives `UiEvent`s and reads the state under the mutex.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -185,6 +185,8 @@ pub struct Backend {
     history_seq: Arc<Mutex<BTreeMap<Snowflake, u64>>>,
     /// Per-channel monotonic counter so stale group DM rename replies never overwrite a newer edit.
     rename_group_dm_seq: Arc<Mutex<BTreeMap<Snowflake, u64>>>,
+    /// Reply targets currently being fetched, scoped to the READY generation.
+    reply_target_in_flight: Arc<Mutex<BTreeSet<(u64, Snowflake, Snowflake)>>>,
     parent_syncs: channels::PendingChannelSyncs,
     /// Every `POST .../messages` body, in order (tests check what the
     /// composer sent; the test runtime never runs the request).
@@ -302,6 +304,7 @@ impl Backend {
             guild_settings_seq: Arc::default(),
             history_seq: Arc::default(),
             rename_group_dm_seq: Arc::default(),
+            reply_target_in_flight: Arc::default(),
             parent_syncs: Default::default(),
             #[cfg(test)]
             sent: Arc::default(),
@@ -408,6 +411,58 @@ impl Backend {
     /// historical slice centered around `message_id`.
     pub fn load_around(&self, channel_id: Snowflake, message_id: Snowflake) {
         drop(self.load_page(channel_id, LoadMode::Around, Some(message_id)));
+    }
+
+    /// `GET /channels/{channel_id}/messages/{message_id}`: resolves an
+    /// unloaded reply target (`ReplyPreview::NotLoaded`) in the background.
+    /// Deduplicates in-flight requests per `(channel_id, message_id)`.
+    pub fn fetch_reply_target(
+        &self,
+        channel_id: Snowflake,
+        message_id: Snowflake,
+    ) -> Option<tokio::task::JoinHandle<()>> {
+        let generation = {
+            let state = self.state();
+            if !state.can_view_channel(channel_id) {
+                return None;
+            }
+            state.ready_generation()
+        };
+        let key = (generation, channel_id, message_id);
+        if !lock(&self.reply_target_in_flight).insert(key) {
+            return None;
+        }
+        let rest = self.rest.clone();
+        let state = self.state.clone();
+        let in_flight = self.reply_target_in_flight.clone();
+        let events = self.events.clone();
+        Some(self.runtime.spawn(async move {
+            let result = rest.get_message(&channel_id.to_string(), &message_id.to_string()).await;
+            let resolved = match result {
+                Ok(body) => match serde_json::from_value::<Message>(body) {
+                    Ok(msg) => Some(Some(msg)),
+                    Err(err) => {
+                        tracing::debug!(%err, "reply target response did not parse");
+                        None
+                    }
+                },
+                Err(err) if err.status() == Some(404) => Some(None),
+                Err(err) => {
+                    tracing::debug!(%err, %channel_id, %message_id, "reply target fetch failed");
+                    None
+                }
+            };
+            let changed = resolved.is_some_and(|target| {
+                let mut st = lock(&state);
+                st.ready_generation() == generation
+                    && st.can_view_channel(channel_id)
+                    && st.messages.resolve_reply_target(channel_id, message_id, target)
+            });
+            lock(&in_flight).remove(&key);
+            if changed {
+                let _ = events.send(UiEvent::StateChanged);
+            }
+        }))
     }
 
     pub(crate) fn history_stamp(&self, channel: Snowflake) -> HistoryStamp {

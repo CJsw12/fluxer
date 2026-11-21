@@ -1179,6 +1179,11 @@ impl ClientView {
         self.can_manage_selected_channel = can_manage_selected;
         self.backend.notify_focus().set_viewing(self.selected_channel.filter(|_| !self.guild_unavailable));
         let mut rows = pane.rows;
+        for row in &rows {
+            if let Some(ui::reply::ReplyLine::NotLoaded { channel_id, message_id }) = row.reply {
+                drop(self.backend.fetch_reply_target(channel_id, message_id));
+            }
+        }
         if !self.uploads.is_empty() {
             for row in rows.iter_mut().filter(|r| r.state == MessageState::Sending) {
                 row.upload_percent = self.uploads.get(&row.id).copied();

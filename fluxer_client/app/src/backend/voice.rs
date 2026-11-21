@@ -5,7 +5,7 @@
 //! strictly private to this module, redacted in `Debug`, and never placed in
 //! `ClientState`, `VoiceSnapshot`, `UiEvent`, or logs.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::future::Future;
 use std::pin::Pin;
@@ -172,6 +172,9 @@ pub(crate) trait VoiceRoom: Send + Sync {
     fn set_microphone_muted(&self, muted: bool);
     fn set_playback_muted(&self, muted: bool);
     fn set_screen_share(&self, active: bool, with_audio: bool);
+    fn subscribed_tracks(&self) -> Vec<TrackSubscriptionKey> {
+        Vec::new()
+    }
     fn close(&self);
 }
 
@@ -271,7 +274,9 @@ impl OwnedVoiceMedia {
     }
 
     fn subscribed_keys(&self) -> Vec<TrackSubscriptionKey> {
-        self.playback_tasks.keys().cloned().collect()
+        let mut keys: BTreeSet<TrackSubscriptionKey> = self.playback_tasks.keys().cloned().collect();
+        keys.extend(self.room.subscribed_tracks());
+        keys.into_iter().collect()
     }
 
     fn shutdown(&mut self) -> Vec<JoinHandle<()>> {

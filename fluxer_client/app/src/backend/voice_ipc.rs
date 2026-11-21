@@ -303,6 +303,10 @@ impl VoiceRoom for ProcessVoiceRoom {
         self.send_command(WorkerCommand::SetScreenShare { active, with_audio });
     }
 
+    fn subscribed_tracks(&self) -> Vec<TrackSubscriptionKey> {
+        ProcessVoiceRoom::subscribed_tracks(self)
+    }
+
     fn close(&self) {
         if self.closed.swap(true, Ordering::SeqCst) {
             return;
@@ -729,7 +733,7 @@ mod tests {
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
             assert_eq!(
-                room.subscribed_tracks(),
+                VoiceRoom::subscribed_tracks(&room),
                 vec![
                     TrackSubscriptionKey {
                         participant_identity: "user-2:conn-2".to_owned(),

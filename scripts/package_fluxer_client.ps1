@@ -12,7 +12,9 @@
 # printed for release notes.
 
 [CmdletBinding()]
-param()
+param(
+    [switch]$IncludeVoiceWorker
+)
 
 $ErrorActionPreference = 'Stop'
 
@@ -81,3 +83,32 @@ Write-Host ""
 Write-Host "Packaged: $distExe"
 Write-Host "README:   $readmePath"
 Write-Host ("SHA256:   {0}" -f $hash.Hash.ToLowerInvariant())
+
+if ($IncludeVoiceWorker) {
+    $workerDir = Join-Path $clientDir 'voice_worker'
+    $workerExe = Join-Path $repoRoot 'target\vw\release\fluxer_voice_worker.exe'
+    $previousWorkerTargetDir = $env:CARGO_TARGET_DIR
+    Remove-Item Env:CARGO_TARGET_DIR -ErrorAction SilentlyContinue
+    Push-Location $workerDir
+    try {
+        & cargo build --release --jobs 4
+        if ($LASTEXITCODE -ne 0) {
+            throw "voice_worker cargo build failed with exit code $LASTEXITCODE"
+        }
+    }
+    finally {
+        Pop-Location
+        if ($null -ne $previousWorkerTargetDir) {
+            $env:CARGO_TARGET_DIR = $previousWorkerTargetDir
+        }
+    }
+
+    if (-not (Test-Path -LiteralPath $workerExe -PathType Leaf)) {
+        throw "the release voice worker executable was not produced: $workerExe"
+    }
+    $distWorkerExe = Join-Path $distDir 'fluxer_voice_worker.exe'
+    Copy-Item -LiteralPath $workerExe -Destination $distWorkerExe -Force
+    $workerHash = Get-FileHash -LiteralPath $distWorkerExe -Algorithm SHA256
+    Write-Host "Worker:   $distWorkerExe"
+    Write-Host ("Worker SHA256: {0}" -f $workerHash.Hash.ToLowerInvariant())
+}

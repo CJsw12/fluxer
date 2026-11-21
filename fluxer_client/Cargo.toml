@@ -3,6 +3,7 @@
 # resolve together with the upstream root workspace or fluxer_desktop_rs (gpui 0.2.2).
 [workspace]
 members = ["core", "app", "devserver", "markdown", "i18n"]
+exclude = ["voice_worker"]
 resolver = "2"
 
 [workspace.package]

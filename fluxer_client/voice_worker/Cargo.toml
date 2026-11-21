@@ -1,0 +1,15 @@
+[workspace]
+
+[package]
+name = "fluxer_voice_worker"
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[dependencies]
+livekit = { version = "=0.10.1", features = ["rustls-tls-native-roots"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["io-std", "io-util", "macros", "rt-multi-thread", "sync", "time"] }
+url = "2.5"

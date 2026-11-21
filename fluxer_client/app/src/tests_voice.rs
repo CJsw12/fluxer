@@ -176,6 +176,8 @@ struct TestVoiceRoom {
     screen_share_active: AtomicBool,
     screen_share_audio: AtomicBool,
     subscribed_tracks: Mutex<Vec<TrackSubscriptionKey>>,
+    published_tracks: Mutex<Vec<TrackSubscriptionKey>>,
+    watched_video_tracks: Mutex<Vec<Option<String>>>,
 }
 
 impl TestVoiceRoom {
@@ -184,6 +186,8 @@ impl TestVoiceRoom {
             screen_share_active: AtomicBool::new(false),
             screen_share_audio: AtomicBool::new(false),
             subscribed_tracks: Mutex::new(Vec::new()),
+            published_tracks: Mutex::new(Vec::new()),
+            watched_video_tracks: Mutex::new(Vec::new()),
         }
     }
 }
@@ -195,8 +199,19 @@ impl VoiceRoom for TestVoiceRoom {
         self.screen_share_active.store(active, Ordering::SeqCst);
         self.screen_share_audio.store(active && with_audio, Ordering::SeqCst);
     }
+    fn set_watched_video_track(&self, track_sid: Option<String>) {
+        self.watched_video_tracks.lock().unwrap().push(track_sid);
+    }
     fn subscribed_tracks(&self) -> Vec<TrackSubscriptionKey> {
         self.subscribed_tracks.lock().unwrap().clone()
+    }
+    fn published_tracks(&self) -> Vec<TrackSubscriptionKey> {
+        let published = self.published_tracks.lock().unwrap();
+        if published.is_empty() {
+            self.subscribed_tracks.lock().unwrap().clone()
+        } else {
+            published.clone()
+        }
     }
     fn close(&self) {}
 }
@@ -515,4 +530,41 @@ fn voice_video_viewer_renders_waiting_frame_and_tears_down(cx: &mut TestAppConte
         assert!(v.watched_video_frame.is_none());
     });
     assert!(vcx.debug_bounds("video-viewer").is_none());
+}
+
+#[gpui_kit::test]
+fn voice_published_unsubscribed_screen_share_renders_watch_button_and_triggers_watch(
+    cx: &mut TestAppContext,
+) {
+    let rt = runtime();
+    let (backend, rx) = Backend::new(rt.handle().clone(), offline_rest(), None);
+    backend.state().apply(&voice_ready());
+    let (view, vcx) = open_client(cx, backend.clone(), rx);
+    let room = connect_voice_in_view(&rt, &backend, &view, vcx);
+
+    let remote_screen = TrackSubscriptionKey {
+        participant_identity: "peer:conn-peer".into(),
+        participant_sid: "PA_peer".into(),
+        track_sid: "TR_screen_unsub".into(),
+        source: VoiceTrackSource::ScreenShare,
+    };
+    room.published_tracks.lock().unwrap().push(remote_screen.clone());
+    view.update(vcx, |v, cx| v.refresh(cx));
+    draw(vcx);
+
+    view.read_with(vcx, |v, _| {
+        assert!(v.voice.subscribed_tracks.is_empty());
+        assert_eq!(v.voice.published_tracks, vec![remote_screen.clone()]);
+    });
+    assert!(vcx.debug_bounds("voice-watch-btn").is_some());
+
+    view.update(vcx, |v, cx| v.toggle_watch_video_track(remote_screen.clone(), cx));
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert_eq!(v.voice.watched_video_track, Some(remote_screen));
+    });
+    assert_eq!(
+        *room.watched_video_tracks.lock().unwrap(),
+        vec![Some("TR_screen_unsub".to_owned())]
+    );
 }

@@ -39,7 +39,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     };
     let watchable_video_track = if is_connected {
         view.voice
-            .subscribed_tracks
+            .published_tracks
             .iter()
             .find(|track| matches!(track.source, VoiceTrackSource::ScreenShare | VoiceTrackSource::Camera))
             .cloned()

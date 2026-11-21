@@ -154,6 +154,18 @@ pub(crate) enum WorkerEvent {
     Connected,
     Error { message: String },
     Disconnected { reason: String },
+    TrackPublished {
+        participant_identity: String,
+        participant_sid: String,
+        track_sid: String,
+        source: String,
+    },
+    TrackUnpublished {
+        participant_identity: String,
+        participant_sid: String,
+        track_sid: String,
+        source: String,
+    },
     TrackSubscribed {
         participant_identity: String,
         participant_sid: String,
@@ -215,22 +227,56 @@ pub(crate) fn parse_track_source(raw: &str) -> VoiceTrackSource {
     }
 }
 
+enum TrackEventKind {
+    Published,
+    Unpublished,
+    Subscribed,
+    Unsubscribed,
+}
+
+fn build_track_key(
+    participant_identity: String,
+    participant_sid: String,
+    track_sid: String,
+    source: String,
+) -> TrackSubscriptionKey {
+    TrackSubscriptionKey {
+        participant_identity,
+        participant_sid,
+        track_sid,
+        source: parse_track_source(&source),
+    }
+}
+
 impl WorkerEvent {
-    pub(crate) fn into_track_key(self) -> Option<(bool, TrackSubscriptionKey)> {
+    fn into_track_update(self) -> Option<(TrackEventKind, TrackSubscriptionKey)> {
         match self {
+            Self::TrackPublished {
+                participant_identity,
+                participant_sid,
+                track_sid,
+                source,
+            } => Some((
+                TrackEventKind::Published,
+                build_track_key(participant_identity, participant_sid, track_sid, source),
+            )),
+            Self::TrackUnpublished {
+                participant_identity,
+                participant_sid,
+                track_sid,
+                source,
+            } => Some((
+                TrackEventKind::Unpublished,
+                build_track_key(participant_identity, participant_sid, track_sid, source),
+            )),
             Self::TrackSubscribed {
                 participant_identity,
                 participant_sid,
                 track_sid,
                 source,
             } => Some((
-                true,
-                TrackSubscriptionKey {
-                    participant_identity,
-                    participant_sid,
-                    track_sid,
-                    source: parse_track_source(&source),
-                },
+                TrackEventKind::Subscribed,
+                build_track_key(participant_identity, participant_sid, track_sid, source),
             )),
             Self::TrackUnsubscribed {
                 participant_identity,
@@ -238,13 +284,8 @@ impl WorkerEvent {
                 track_sid,
                 source,
             } => Some((
-                false,
-                TrackSubscriptionKey {
-                    participant_identity,
-                    participant_sid,
-                    track_sid,
-                    source: parse_track_source(&source),
-                },
+                TrackEventKind::Unsubscribed,
+                build_track_key(participant_identity, participant_sid, track_sid, source),
             )),
             Self::Connected
             | Self::Error { .. }
@@ -342,6 +383,7 @@ pub(crate) struct ProcessVoiceRoom {
     closed: Arc<AtomicBool>,
     kill_tx: Mutex<Option<oneshot::Sender<()>>>,
     subscribed_tracks: Arc<Mutex<BTreeSet<TrackSubscriptionKey>>>,
+    published_tracks: Arc<Mutex<BTreeSet<TrackSubscriptionKey>>>,
     event_rx: Mutex<Option<mpsc::UnboundedReceiver<VoiceRoomEvent>>>,
 }
 
@@ -354,6 +396,12 @@ impl ProcessVoiceRoom {
 
     pub(crate) fn subscribed_tracks(&self) -> Vec<TrackSubscriptionKey> {
         self.subscribed_tracks
+            .lock()
+            .map_or_else(|_| Vec::new(), |guard| guard.iter().cloned().collect())
+    }
+
+    pub(crate) fn published_tracks(&self) -> Vec<TrackSubscriptionKey> {
+        self.published_tracks
             .lock()
             .map_or_else(|_| Vec::new(), |guard| guard.iter().cloned().collect())
     }
@@ -387,6 +435,10 @@ impl VoiceRoom for ProcessVoiceRoom {
 
     fn subscribed_tracks(&self) -> Vec<TrackSubscriptionKey> {
         ProcessVoiceRoom::subscribed_tracks(self)
+    }
+
+    fn published_tracks(&self) -> Vec<TrackSubscriptionKey> {
+        ProcessVoiceRoom::published_tracks(self)
     }
 
     fn take_event_rx(&self) -> Option<mpsc::UnboundedReceiver<VoiceRoomEvent>> {
@@ -449,6 +501,7 @@ where
 async fn run_event_reader<R>(
     mut lines: tokio::io::Lines<BufReader<R>>,
     subscribed_tracks: Arc<Mutex<BTreeSet<TrackSubscriptionKey>>>,
+    published_tracks: Arc<Mutex<BTreeSet<TrackSubscriptionKey>>>,
     event_tx: mpsc::UnboundedSender<VoiceRoomEvent>,
     closed: Arc<AtomicBool>,
 ) where
@@ -476,15 +529,32 @@ async fn run_event_reader<R>(
                 }
             }
             other => {
-                if let Some((subscribed, key)) = other.into_track_key() {
-                    let changed = if let Ok(mut guard) = subscribed_tracks.lock() {
-                        if subscribed {
-                            guard.insert(key)
-                        } else {
-                            guard.remove(&key)
+                if let Some((kind, key)) = other.into_track_update() {
+                    let changed = match kind {
+                        TrackEventKind::Published => published_tracks
+                            .lock()
+                            .is_ok_and(|mut guard| guard.insert(key)),
+                        TrackEventKind::Unpublished => {
+                            let pub_removed = published_tracks
+                                .lock()
+                                .is_ok_and(|mut guard| guard.remove(&key));
+                            let sub_removed = subscribed_tracks
+                                .lock()
+                                .is_ok_and(|mut guard| guard.remove(&key));
+                            pub_removed || sub_removed
                         }
-                    } else {
-                        false
+                        TrackEventKind::Subscribed => {
+                            let pub_inserted = published_tracks
+                                .lock()
+                                .is_ok_and(|mut guard| guard.insert(key.clone()));
+                            let sub_inserted = subscribed_tracks
+                                .lock()
+                                .is_ok_and(|mut guard| guard.insert(key));
+                            pub_inserted || sub_inserted
+                        }
+                        TrackEventKind::Unsubscribed => subscribed_tracks
+                            .lock()
+                            .is_ok_and(|mut guard| guard.remove(&key)),
                     };
                     if changed {
                         let _ = event_tx.send(VoiceRoomEvent::TracksChanged);
@@ -494,6 +564,9 @@ async fn run_event_reader<R>(
         }
     }
     if let Ok(mut guard) = subscribed_tracks.lock() {
+        guard.clear();
+    }
+    if let Ok(mut guard) = published_tracks.lock() {
         guard.clear();
     }
     if !received_disconnect && !closed.load(Ordering::SeqCst) {
@@ -533,10 +606,12 @@ where
             let (event_tx, event_rx) = mpsc::unbounded_channel();
             let closed = Arc::new(AtomicBool::new(false));
             let subscribed_tracks = Arc::new(Mutex::new(BTreeSet::new()));
+            let published_tracks = Arc::new(Mutex::new(BTreeSet::new()));
             tokio::spawn(run_writer(writer, rx));
             tokio::spawn(run_event_reader(
                 lines,
                 subscribed_tracks.clone(),
+                published_tracks.clone(),
                 event_tx,
                 closed.clone(),
             ));
@@ -545,6 +620,7 @@ where
                 closed,
                 kill_tx: Mutex::new(kill_tx),
                 subscribed_tracks,
+                published_tracks,
                 event_rx: Mutex::new(Some(event_rx)),
             })
         }
@@ -552,7 +628,9 @@ where
         WorkerEvent::Disconnected { reason } => {
             Err(format!("voice worker disconnected during connect: {reason}"))
         }
-        WorkerEvent::TrackSubscribed { .. }
+        WorkerEvent::TrackPublished { .. }
+        | WorkerEvent::TrackUnpublished { .. }
+        | WorkerEvent::TrackSubscribed { .. }
         | WorkerEvent::TrackUnsubscribed { .. }
         | WorkerEvent::VideoFrame { .. } => {
             Err("unexpected track event before voice worker connected".to_owned())
@@ -1117,6 +1195,98 @@ mod tests {
                     .unwrap(),
                 Some(VoiceRoomEvent::TracksChanged)
             );
+        });
+    }
+
+    #[test]
+    fn duplex_track_published_and_unpublished_manage_published_and_subscribed_tracks() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let (c_w, _c_r) = tokio::io::duplex(4096);
+            let (mut w_w, w_r) = tokio::io::duplex(4096);
+
+            let connected = format!("{}\n", serde_json::to_string(&WorkerEvent::Connected).unwrap());
+            w_w.write_all(connected.as_bytes()).await.unwrap();
+            w_w.flush().await.unwrap();
+
+            let room = connect_over_streams(
+                c_w,
+                w_r,
+                WorkerCommand::Connect {
+                    endpoint: "wss://rtc.example.test".to_owned(),
+                    token: "secret-jwt".to_owned(),
+                    connection_id: "conn-pub".to_owned(),
+                },
+                Duration::from_secs(2),
+                None,
+            )
+            .await
+            .expect("handshake must succeed");
+
+            let mut ev_rx = VoiceRoom::take_event_rx(&room).expect("event_rx must be present");
+
+            let screen_pub = WorkerEvent::TrackPublished {
+                participant_identity: "user-2:conn-2".to_owned(),
+                participant_sid: "PA_2".to_owned(),
+                track_sid: "TR_screen_2".to_owned(),
+                source: "screen_share".to_owned(),
+            };
+            let line = format!("{}\n", serde_json::to_string(&screen_pub).unwrap());
+            w_w.write_all(line.as_bytes()).await.unwrap();
+            w_w.flush().await.unwrap();
+
+            assert_eq!(
+                tokio::time::timeout(Duration::from_secs(2), ev_rx.recv())
+                    .await
+                    .unwrap(),
+                Some(VoiceRoomEvent::TracksChanged)
+            );
+            let expected_key = TrackSubscriptionKey {
+                participant_identity: "user-2:conn-2".to_owned(),
+                participant_sid: "PA_2".to_owned(),
+                track_sid: "TR_screen_2".to_owned(),
+                source: VoiceTrackSource::ScreenShare,
+            };
+            assert_eq!(VoiceRoom::published_tracks(&room), vec![expected_key.clone()]);
+            assert!(VoiceRoom::subscribed_tracks(&room).is_empty());
+
+            // Subscribing adds to subscribed_tracks while keeping it in published_tracks.
+            let screen_sub = WorkerEvent::TrackSubscribed {
+                participant_identity: "user-2:conn-2".to_owned(),
+                participant_sid: "PA_2".to_owned(),
+                track_sid: "TR_screen_2".to_owned(),
+                source: "screen_share".to_owned(),
+            };
+            let line = format!("{}\n", serde_json::to_string(&screen_sub).unwrap());
+            w_w.write_all(line.as_bytes()).await.unwrap();
+            w_w.flush().await.unwrap();
+            assert_eq!(
+                tokio::time::timeout(Duration::from_secs(2), ev_rx.recv())
+                    .await
+                    .unwrap(),
+                Some(VoiceRoomEvent::TracksChanged)
+            );
+            assert_eq!(VoiceRoom::published_tracks(&room), vec![expected_key.clone()]);
+            assert_eq!(VoiceRoom::subscribed_tracks(&room), vec![expected_key]);
+
+            // Unpublishing removes from both published_tracks and subscribed_tracks.
+            let screen_unpub = WorkerEvent::TrackUnpublished {
+                participant_identity: "user-2:conn-2".to_owned(),
+                participant_sid: "PA_2".to_owned(),
+                track_sid: "TR_screen_2".to_owned(),
+                source: "screen_share".to_owned(),
+            };
+            let line = format!("{}\n", serde_json::to_string(&screen_unpub).unwrap());
+            w_w.write_all(line.as_bytes()).await.unwrap();
+            w_w.flush().await.unwrap();
+            assert_eq!(
+                tokio::time::timeout(Duration::from_secs(2), ev_rx.recv())
+                    .await
+                    .unwrap(),
+                Some(VoiceRoomEvent::TracksChanged)
+            );
+            assert!(VoiceRoom::published_tracks(&room).is_empty());
+            assert!(VoiceRoom::subscribed_tracks(&room).is_empty());
         });
     }
 }

@@ -56,6 +56,18 @@ enum WorkerEvent {
     Connected,
     Error { message: String },
     Disconnected { reason: String },
+    TrackPublished {
+        participant_identity: String,
+        participant_sid: String,
+        track_sid: String,
+        source: String,
+    },
+    TrackUnpublished {
+        participant_identity: String,
+        participant_sid: String,
+        track_sid: String,
+        source: String,
+    },
     TrackSubscribed {
         participant_identity: String,
         participant_sid: String,
@@ -399,6 +411,21 @@ async fn run_worker() -> i32 {
     }
 
     let mut playback_muted = false;
+    apply_playback_mute(&room, playback_muted);
+    for participant in room.remote_participants().values() {
+        for publication in participant.track_publications().values() {
+            emit_event(
+                &mut stdout,
+                &WorkerEvent::TrackPublished {
+                    participant_identity: participant.identity().to_string(),
+                    participant_sid: participant.sid().to_string(),
+                    track_sid: publication.sid().to_string(),
+                    source: track_source_label(publication.source()).to_owned(),
+                },
+            )
+            .await;
+        }
+    }
     let mut watched_video_track_sid: Option<String> = None;
     let (video_frame_tx, mut video_frame_rx) = mpsc::channel::<WorkerEvent>(1);
     let mut active_video_task: Option<(String, tokio::task::JoinHandle<()>)> = None;
@@ -472,7 +499,20 @@ async fn run_worker() -> i32 {
             }
             event_opt = room_events.recv() => {
                 match event_opt {
-                    Some(RoomEvent::TrackPublished { publication, .. }) => {
+                    Some(RoomEvent::TrackPublished {
+                        publication,
+                        participant,
+                    }) => {
+                        emit_event(
+                            &mut stdout,
+                            &WorkerEvent::TrackPublished {
+                                participant_identity: participant.identity().to_string(),
+                                participant_sid: participant.sid().to_string(),
+                                track_sid: publication.sid().to_string(),
+                                source: track_source_label(publication.source()).to_owned(),
+                            },
+                        )
+                        .await;
                         if publication.source() == TrackSource::Microphone && !playback_muted {
                             publication.set_subscribed(true);
                         } else if matches!(
@@ -483,6 +523,28 @@ async fn run_worker() -> i32 {
                         {
                             publication.set_subscribed(true);
                         }
+                    }
+                    Some(RoomEvent::TrackUnpublished {
+                        publication,
+                        participant,
+                    }) => {
+                        let track_sid = publication.sid().to_string();
+                        if active_video_task
+                            .as_ref()
+                            .is_some_and(|(active_sid, _)| active_sid == &track_sid)
+                        {
+                            abort_video_task(&mut active_video_task);
+                        }
+                        emit_event(
+                            &mut stdout,
+                            &WorkerEvent::TrackUnpublished {
+                                participant_identity: participant.identity().to_string(),
+                                participant_sid: participant.sid().to_string(),
+                                track_sid,
+                                source: track_source_label(publication.source()).to_owned(),
+                            },
+                        )
+                        .await;
                     }
                     Some(RoomEvent::TrackSubscribed {
                         track,
@@ -635,6 +697,24 @@ mod tests {
                     reason: "ClientInitiated".to_owned(),
                 },
                 "\"type\":\"disconnected\"",
+            ),
+            (
+                WorkerEvent::TrackPublished {
+                    participant_identity: "user-1".to_owned(),
+                    participant_sid: "PA_1".to_owned(),
+                    track_sid: "TR_pub_1".to_owned(),
+                    source: "screen_share".to_owned(),
+                },
+                "\"type\":\"track_published\"",
+            ),
+            (
+                WorkerEvent::TrackUnpublished {
+                    participant_identity: "user-1".to_owned(),
+                    participant_sid: "PA_1".to_owned(),
+                    track_sid: "TR_pub_1".to_owned(),
+                    source: "camera".to_owned(),
+                },
+                "\"type\":\"track_unpublished\"",
             ),
             (
                 WorkerEvent::TrackSubscribed {

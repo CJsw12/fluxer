@@ -111,6 +111,7 @@ pub struct VoiceSnapshot {
     pub speak_denied: bool,
     pub screen_share_codec: ScreenShareCodecTracker,
     pub subscribed_tracks: Vec<TrackSubscriptionKey>,
+    pub published_tracks: Vec<TrackSubscriptionKey>,
     pub watched_video_track: Option<TrackSubscriptionKey>,
     pub channel_members: BTreeMap<(Option<Snowflake>, Snowflake), ChannelVoiceMember>,
 }
@@ -132,6 +133,7 @@ impl Default for VoiceSnapshot {
             speak_denied: false,
             screen_share_codec: ScreenShareCodecTracker::default(),
             subscribed_tracks: Vec::new(),
+            published_tracks: Vec::new(),
             watched_video_track: None,
             channel_members: BTreeMap::new(),
         }
@@ -238,6 +240,9 @@ pub(crate) trait VoiceRoom: Send + Sync {
     fn set_watched_video_track(&self, _track_sid: Option<String>) {}
     fn subscribed_tracks(&self) -> Vec<TrackSubscriptionKey> {
         Vec::new()
+    }
+    fn published_tracks(&self) -> Vec<TrackSubscriptionKey> {
+        self.subscribed_tracks()
     }
     fn take_event_rx(&self) -> Option<mpsc::UnboundedReceiver<VoiceRoomEvent>> {
         None
@@ -355,6 +360,12 @@ impl OwnedVoiceMedia {
     fn subscribed_keys(&self) -> Vec<TrackSubscriptionKey> {
         let mut keys: BTreeSet<TrackSubscriptionKey> = self.playback_tasks.keys().cloned().collect();
         keys.extend(self.room.subscribed_tracks());
+        keys.into_iter().collect()
+    }
+
+    fn published_keys(&self) -> Vec<TrackSubscriptionKey> {
+        let mut keys: BTreeSet<TrackSubscriptionKey> = self.playback_tasks.keys().cloned().collect();
+        keys.extend(self.room.published_tracks());
         keys.into_iter().collect()
     }
 
@@ -484,6 +495,7 @@ impl VoiceManager {
             speak_denied: self.speak_denied,
             screen_share_codec: self.screen_share_codec.clone(),
             subscribed_tracks: self.media.as_ref().map_or_else(Vec::new, OwnedVoiceMedia::subscribed_keys),
+            published_tracks: self.media.as_ref().map_or_else(Vec::new, OwnedVoiceMedia::published_keys),
             watched_video_track: self.watched_video_track.clone(),
             channel_members: self.channel_members.clone(),
         }
@@ -498,6 +510,13 @@ impl VoiceManager {
         }
         if !matches!(key.source, VoiceTrackSource::ScreenShare | VoiceTrackSource::Camera) {
             return Err("only video tracks can be watched");
+        }
+        let published = self
+            .media
+            .as_ref()
+            .map_or_else(Vec::new, OwnedVoiceMedia::published_keys);
+        if !published.is_empty() && !published.contains(&key) {
+            return Err("video track is not published");
         }
         let track_sid = key.track_sid.clone();
         self.video_frame_queue.close();
@@ -994,7 +1013,18 @@ impl VoiceManager {
 
     fn handle_room_event(&mut self, event: VoiceRoomEvent) -> bool {
         match event {
-            VoiceRoomEvent::TracksChanged => true,
+            VoiceRoomEvent::TracksChanged => {
+                if let Some(watched) = &self.watched_video_track {
+                    let published = self
+                        .media
+                        .as_ref()
+                        .map_or_else(Vec::new, OwnedVoiceMedia::published_keys);
+                    if !published.contains(watched) {
+                        self.stop_watching_video();
+                    }
+                }
+                true
+            }
             VoiceRoomEvent::Disconnected(_) => false,
             VoiceRoomEvent::VideoFrame {
                 track_sid,
@@ -1378,10 +1408,12 @@ fn on_gateway_dispatch_inner(
                                 while let Some(ev) = rx.recv().await {
                                     match ev {
                                         VoiceRoomEvent::TracksChanged => {
-                                            if lock(&voice_for_events).attempt_id == attempt_id {
-                                                let _ = events_for_watcher.send(UiEvent::VoiceChanged);
-                                            } else {
+                                            let mut mgr = lock(&voice_for_events);
+                                            if mgr.attempt_id != attempt_id {
                                                 break;
+                                            }
+                                            if mgr.handle_room_event(VoiceRoomEvent::TracksChanged) {
+                                                let _ = events_for_watcher.send(UiEvent::VoiceChanged);
                                             }
                                         }
                                         ev @ VoiceRoomEvent::VideoFrame { .. } => {
@@ -3205,5 +3237,127 @@ mod tests {
         assert_eq!(frame.width, 2);
         assert_eq!(frame.height, 1);
         assert_eq!(frame.data, expected_rgba);
+    }
+
+    #[test]
+    fn published_unsubscribed_screen_share_can_be_watched_and_clears_on_unpublish() {
+        struct PublishedOnlyRoom {
+            published: Mutex<Vec<TrackSubscriptionKey>>,
+            watched: Mutex<Vec<Option<String>>>,
+            event_rx: Mutex<Option<mpsc::UnboundedReceiver<VoiceRoomEvent>>>,
+        }
+
+        impl VoiceRoom for PublishedOnlyRoom {
+            fn set_microphone_muted(&self, _muted: bool) {}
+            fn set_playback_muted(&self, _muted: bool) {}
+            fn set_screen_share(&self, _active: bool, _with_audio: bool) {}
+            fn set_watched_video_track(&self, track_sid: Option<String>) {
+                self.watched.lock().unwrap().push(track_sid);
+            }
+            fn published_tracks(&self) -> Vec<TrackSubscriptionKey> {
+                self.published.lock().unwrap().clone()
+            }
+            fn take_event_rx(&self) -> Option<mpsc::UnboundedReceiver<VoiceRoomEvent>> {
+                self.event_rx.lock().unwrap().take()
+            }
+            fn close(&self) {}
+        }
+
+        struct PublishedOnlyTransport(Arc<PublishedOnlyRoom>);
+        impl VoiceTransport for PublishedOnlyTransport {
+            fn connect(
+                &self,
+                _credentials: VoiceCredentials,
+            ) -> Pin<Box<dyn Future<Output = Result<Arc<dyn VoiceRoom>, String>> + Send>> {
+                let room = self.0.clone();
+                Box::pin(async move { Ok(room as Arc<dyn VoiceRoom>) })
+            }
+        }
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, mut rx) = test_backend(&rt);
+        let (ev_tx, ev_rx) = mpsc::unbounded_channel();
+        let screen_key = TrackSubscriptionKey {
+            participant_identity: "user-2:conn-2".into(),
+            participant_sid: "PA_2".into(),
+            track_sid: "TR_screen_unsub".into(),
+            source: VoiceTrackSource::ScreenShare,
+        };
+        let room = Arc::new(PublishedOnlyRoom {
+            published: Mutex::new(vec![screen_key.clone()]),
+            watched: Mutex::new(Vec::new()),
+            event_rx: Mutex::new(Some(ev_rx)),
+        });
+        backend.set_voice_transport_for_test(Arc::new(PublishedOnlyTransport(room.clone())));
+
+        let mut state = backend.state();
+        state.apply(&Dispatch {
+            s: 1,
+            t: "READY".into(),
+            d: json!({
+                "user": { "id": "1", "username": "me" },
+                "guilds": [{
+                    "id": "10",
+                    "name": "Guild",
+                    "owner_id": "1",
+                    "channels": [{ "id": "100", "type": 2, "name": "Voice" }],
+                    "roles": [{ "id": "10", "name": "@everyone", "permissions": (bits::VIEW_CHANNEL | bits::CONNECT | bits::SPEAK).to_string() }]
+                }]
+            }),
+        });
+        assert!(backend.join_voice(Some(Snowflake(10)), Snowflake(100)));
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            s: 2,
+            t: "VOICE_SERVER_UPDATE".into(),
+            d: json!({
+                "guild_id": "10",
+                "channel_id": "100",
+                "endpoint": "wss://rtc.example.test",
+                "token": "tok",
+                "connection_id": "conn-1"
+            }),
+        });
+        rt.block_on(async {
+            for _ in 0..20 {
+                if backend.voice_snapshot().state == VoiceConnectionState::Connected {
+                    break;
+                }
+                let _ = tokio::time::timeout(std::time::Duration::from_millis(50), rx.recv()).await;
+            }
+        });
+        let snap = backend.voice_snapshot();
+        assert_eq!(snap.state, VoiceConnectionState::Connected);
+        assert_eq!(snap.published_tracks, vec![screen_key.clone()]);
+        assert!(snap.subscribed_tracks.is_empty());
+
+        let queue = backend
+            .watch_video_track(screen_key.clone())
+            .expect("published-but-unsubscribed screen share must be watchable");
+        assert_eq!(backend.voice_snapshot().watched_video_track, Some(screen_key));
+        assert_eq!(
+            *room.watched.lock().unwrap(),
+            vec![Some("TR_screen_unsub".to_owned())]
+        );
+
+        // Unpublish the watched track and emit TracksChanged.
+        room.published.lock().unwrap().clear();
+        ev_tx.send(VoiceRoomEvent::TracksChanged).unwrap();
+        rt.block_on(async {
+            for _ in 0..20 {
+                if backend.voice_snapshot().watched_video_track.is_none() {
+                    break;
+                }
+                let _ = tokio::time::timeout(std::time::Duration::from_millis(50), rx.recv()).await;
+            }
+        });
+        assert_eq!(backend.voice_snapshot().watched_video_track, None);
+        assert!(backend.voice_snapshot().published_tracks.is_empty());
+        assert!(!queue.push(DecodedVideoFrame {
+            width: 2,
+            height: 2,
+            timestamp_us: 1,
+            codec: None,
+            data: vec![0; 16],
+        }));
     }
 }

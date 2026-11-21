@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 use fluxer_client_core::gateway::{GatewayHandle, VoiceStateUpdate};
 use fluxer_client_core::rest::SecretToken;
 use fluxer_client_core::state::{ClientState, Snowflake, bits};
+use fluxer_client_core::voice::{ScreenShareCodecTracker, VideoCodec};
 use serde_json::Value;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc;
@@ -106,6 +107,7 @@ pub struct VoiceSnapshot {
     pub server_mute: bool,
     pub server_deaf: bool,
     pub speak_denied: bool,
+    pub screen_share_codec: ScreenShareCodecTracker,
     pub subscribed_tracks: Vec<TrackSubscriptionKey>,
     pub channel_members: BTreeMap<(Option<Snowflake>, Snowflake), ChannelVoiceMember>,
 }
@@ -125,6 +127,7 @@ impl Default for VoiceSnapshot {
             server_mute: false,
             server_deaf: false,
             speak_denied: false,
+            screen_share_codec: ScreenShareCodecTracker::default(),
             subscribed_tracks: Vec::new(),
             channel_members: BTreeMap::new(),
         }
@@ -371,6 +374,7 @@ pub(crate) struct VoiceManager {
     server_mute: bool,
     server_deaf: bool,
     speak_denied: bool,
+    screen_share_codec: ScreenShareCodecTracker,
     connect_task: Option<JoinHandle<()>>,
     media: Option<OwnedVoiceMedia>,
     channel_members: BTreeMap<(Option<Snowflake>, Snowflake), ChannelVoiceMember>,
@@ -394,6 +398,7 @@ impl VoiceManager {
             server_mute: false,
             server_deaf: false,
             speak_denied: false,
+            screen_share_codec: ScreenShareCodecTracker::default(),
             connect_task: None,
             media: None,
             channel_members: BTreeMap::new(),
@@ -414,6 +419,7 @@ impl VoiceManager {
             server_mute: self.server_mute,
             server_deaf: self.server_deaf,
             speak_denied: self.speak_denied,
+            screen_share_codec: self.screen_share_codec.clone(),
             subscribed_tracks: self.media.as_ref().map_or_else(Vec::new, OwnedVoiceMedia::subscribed_keys),
             channel_members: self.channel_members.clone(),
         }
@@ -434,6 +440,7 @@ impl VoiceManager {
     fn stop_screen_share_media(&mut self) -> Vec<JoinHandle<()>> {
         self.self_stream = false;
         self.screen_share_audio = false;
+        self.screen_share_codec.reset();
         if let Some(media) = &mut self.media {
             let handles = media.stop_screen_share();
             media.room.set_screen_share(false, false);
@@ -482,6 +489,7 @@ impl VoiceManager {
         self.server_mute = false;
         self.server_deaf = false;
         self.speak_denied = false;
+        self.screen_share_codec.reset();
         self.state = VoiceConnectionState::Connecting;
 
         let mut payload = VoiceStateUpdate::join(
@@ -511,6 +519,7 @@ impl VoiceManager {
         self.server_mute = false;
         self.server_deaf = false;
         self.speak_denied = false;
+        self.screen_share_codec.reset();
         self.state = VoiceConnectionState::Disconnected;
 
         let payload = if was_active {
@@ -603,6 +612,7 @@ impl VoiceManager {
             self.server_mute = false;
             self.server_deaf = false;
             self.speak_denied = false;
+            self.screen_share_codec.reset();
             self.state = VoiceConnectionState::Reconnecting;
             let mut payload = VoiceStateUpdate::join(
                 guild_id.map(|id| id.to_string()),
@@ -624,6 +634,7 @@ impl VoiceManager {
             self.self_stream = false;
             self.screen_share_audio = false;
             self.speak_denied = false;
+            self.screen_share_codec.reset();
             self.state = VoiceConnectionState::Disconnected;
             changed = true;
             return (changed, None, handles);
@@ -648,6 +659,7 @@ impl VoiceManager {
         self.server_mute = false;
         self.server_deaf = false;
         self.speak_denied = false;
+        self.screen_share_codec.reset();
         self.state = VoiceConnectionState::Disconnected;
         self.channel_members.clear();
         (changed, handles)
@@ -712,6 +724,7 @@ impl VoiceManager {
                             self.self_stream = false;
                             self.screen_share_audio = false;
                             self.speak_denied = false;
+                            self.screen_share_codec.reset();
                             self.state = VoiceConnectionState::Disconnected;
                         }
                     }
@@ -760,6 +773,7 @@ impl VoiceManager {
             self.self_stream = false;
             self.screen_share_audio = false;
             self.speak_denied = false;
+            self.screen_share_codec.reset();
             self.state = VoiceConnectionState::Failed(VoiceFailure::UnsupportedE2ee);
             return Err(VoiceFailure::UnsupportedE2ee);
         }
@@ -773,6 +787,7 @@ impl VoiceManager {
             self.self_stream = false;
             self.screen_share_audio = false;
             self.speak_denied = false;
+            self.screen_share_codec.reset();
             self.state = VoiceConnectionState::Failed(VoiceFailure::UnsupportedP2pMesh);
             return Err(VoiceFailure::UnsupportedP2pMesh);
         }
@@ -802,6 +817,7 @@ impl VoiceManager {
             self.self_stream = false;
             self.screen_share_audio = false;
             self.speak_denied = false;
+            self.screen_share_codec.reset();
         }
 
         Ok(Some(VoiceCredentials {
@@ -869,6 +885,7 @@ impl VoiceManager {
         }
         self.self_stream = false;
         self.screen_share_audio = false;
+        self.screen_share_codec.reset();
         self.state = VoiceConnectionState::Failed(VoiceFailure::TransportFailed(reason));
         true
     }
@@ -1467,6 +1484,34 @@ impl Backend {
         if was_streaming {
             let _ = self.events.send(UiEvent::VoiceChanged);
         }
+    }
+
+    /// Records the user-requested video codec for the current screen-share session.
+    #[allow(dead_code)]
+    pub fn set_screen_share_requested_codec(&self, codec: VideoCodec) {
+        lock(&self.voice).screen_share_codec.set_requested(codec);
+        let _ = self.events.send(UiEvent::VoiceChanged);
+    }
+
+    /// Applies the negotiated screen-share video codec, returning `Ok(true)` if
+    /// republishing is required, `Ok(false)` if unchanged, or `Err` when capped.
+    #[allow(dead_code)]
+    pub fn apply_negotiated_screen_share_codec(
+        &self,
+        codec: VideoCodec,
+    ) -> Result<bool, &'static str> {
+        let res = lock(&self.voice).screen_share_codec.apply_negotiated(codec);
+        if res == Ok(true) {
+            let _ = self.events.send(UiEvent::VoiceChanged);
+        }
+        res
+    }
+
+    /// Records the video codec actually observed/rendered on the screen-share stream.
+    #[allow(dead_code)]
+    pub fn record_rendered_screen_share_codec(&self, codec: VideoCodec) {
+        lock(&self.voice).screen_share_codec.record_rendered(codec);
+        let _ = self.events.send(UiEvent::VoiceChanged);
     }
 
     /// Tears down active voice media on session close/logout.
@@ -2730,5 +2775,54 @@ mod tests {
         let _ = ev_tx2.send(VoiceRoomEvent::Disconnected("late disconnect".to_owned()));
         rt.block_on(tokio::task::yield_now());
         assert_eq!(backend.voice_snapshot().state, VoiceConnectionState::Disconnected);
+    }
+
+    #[test]
+    fn screen_share_codec_tracker_tracks_stages_and_resets_on_stop_and_leave() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, mut rx) = test_backend(&rt);
+        let _room = seed_guild_voice_channel_and_connect(
+            &rt,
+            &backend,
+            &mut rx,
+            bits::VIEW_CHANNEL | bits::CONNECT | bits::SPEAK | bits::STREAM,
+        );
+
+        assert!(backend.start_screen_share(true).is_ok());
+
+        backend.set_screen_share_requested_codec(VideoCodec::H265);
+        assert_eq!(backend.apply_negotiated_screen_share_codec(VideoCodec::H264), Ok(true));
+        assert_eq!(backend.apply_negotiated_screen_share_codec(VideoCodec::H264), Ok(false));
+        backend.record_rendered_screen_share_codec(VideoCodec::H264);
+
+        let snap = backend.voice_snapshot();
+        assert_eq!(snap.screen_share_codec.requested, Some(VideoCodec::H265));
+        assert_eq!(snap.screen_share_codec.negotiated, Some(VideoCodec::H264));
+        assert_eq!(snap.screen_share_codec.rendered, Some(VideoCodec::H264));
+        assert_eq!(snap.screen_share_codec.republish_count, 0);
+
+        // Exhaust republish budget (MAX_CODEC_REPUBLISH_ATTEMPTS = 3).
+        assert_eq!(backend.apply_negotiated_screen_share_codec(VideoCodec::Vp9), Ok(true));
+        assert_eq!(backend.apply_negotiated_screen_share_codec(VideoCodec::Vp8), Ok(true));
+        assert_eq!(backend.apply_negotiated_screen_share_codec(VideoCodec::Av1), Ok(true));
+        assert!(backend.apply_negotiated_screen_share_codec(VideoCodec::H264).is_err());
+
+        // Stopping screen share resets codec tracker.
+        backend.stop_screen_share();
+        assert_eq!(
+            backend.voice_snapshot().screen_share_codec,
+            ScreenShareCodecTracker::default()
+        );
+
+        // Leaving voice also resets codec tracker.
+        assert!(backend.start_screen_share(false).is_ok());
+        backend.set_screen_share_requested_codec(VideoCodec::Av1);
+        assert_eq!(backend.apply_negotiated_screen_share_codec(VideoCodec::Vp8), Ok(true));
+        backend.record_rendered_screen_share_codec(VideoCodec::Vp8);
+        backend.leave_voice();
+        assert_eq!(
+            backend.voice_snapshot().screen_share_codec,
+            ScreenShareCodecTracker::default()
+        );
     }
 }

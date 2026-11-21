@@ -6,6 +6,7 @@ pub mod rest;
 pub mod search;
 pub mod session;
 pub mod state;
+pub mod voice;
 
 /// A gateway DISPATCH (op 0) frame handed from `gateway` to `state`.
 /// This is the only contract between the two modules.

@@ -33,6 +33,9 @@ enum WorkerCommand {
         input_volume: u16,
         output_volume: u16,
     },
+    SetWatchedVideoTrack {
+        track_sid: Option<String>,
+    },
     Close,
 }
 
@@ -120,6 +123,16 @@ fn apply_playback_mute(room: &Room, playback_muted: bool) {
         for publication in participant.track_publications().values() {
             if publication.source() == TrackSource::Microphone {
                 publication.set_subscribed(!playback_muted);
+            }
+        }
+    }
+}
+
+fn apply_watched_video_track(room: &Room, watched_sid: Option<&str>) {
+    for participant in room.remote_participants().values() {
+        for publication in participant.track_publications().values() {
+            if matches!(publication.source(), TrackSource::Camera | TrackSource::Screenshare) {
+                publication.set_subscribed(watched_sid == Some(publication.sid().as_str()));
             }
         }
     }
@@ -229,6 +242,7 @@ async fn run_worker() -> i32 {
     }
 
     let mut playback_muted = false;
+    let mut watched_video_track_sid: Option<String> = None;
     #[allow(dead_code)]
     struct WorkerAudioState {
         input_device: Option<String>,
@@ -277,6 +291,12 @@ async fn run_worker() -> i32 {
                                 audio_state.input_volume = input_volume.min(200);
                                 audio_state.output_volume = output_volume.min(200);
                             }
+                            WorkerCommand::SetWatchedVideoTrack { track_sid } => {
+                                watched_video_track_sid = track_sid
+                                    .map(|sid| sid.trim().to_owned())
+                                    .filter(|sid| !sid.is_empty());
+                                apply_watched_video_track(&room, watched_video_track_sid.as_deref());
+                            }
                             WorkerCommand::Close => break,
                             WorkerCommand::Connect { .. } => {}
                         }
@@ -288,6 +308,13 @@ async fn run_worker() -> i32 {
                 match event_opt {
                     Some(RoomEvent::TrackPublished { publication, .. }) => {
                         if publication.source() == TrackSource::Microphone && !playback_muted {
+                            publication.set_subscribed(true);
+                        } else if matches!(
+                            publication.source(),
+                            TrackSource::Camera | TrackSource::Screenshare
+                        ) && watched_video_track_sid.as_deref()
+                            == Some(publication.sid().as_str())
+                        {
                             publication.set_subscribed(true);
                         }
                     }
@@ -383,6 +410,23 @@ mod tests {
         assert!(json_audio_cmd.contains("\"type\":\"set_audio_settings\""));
         let decoded_audio_cmd: WorkerCommand = serde_json::from_str(&json_audio_cmd).unwrap();
         assert_eq!(decoded_audio_cmd, audio_cmd);
+
+        let watch_some: WorkerCommand =
+            serde_json::from_str("{\"type\":\"set_watched_video_track\",\"track_sid\":\"TR_cam_1\"}")
+                .unwrap();
+        assert_eq!(
+            watch_some,
+            WorkerCommand::SetWatchedVideoTrack {
+                track_sid: Some("TR_cam_1".to_owned()),
+            }
+        );
+        let watch_none: WorkerCommand =
+            serde_json::from_str("{\"type\":\"set_watched_video_track\",\"track_sid\":null}")
+                .unwrap();
+        assert_eq!(
+            watch_none,
+            WorkerCommand::SetWatchedVideoTrack { track_sid: None }
+        );
 
         for (ev, expected_type) in [
             (WorkerEvent::Connected, "\"type\":\"connected\""),

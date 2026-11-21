@@ -96,6 +96,9 @@ pub(crate) enum WorkerCommand {
         input_volume: u16,
         output_volume: u16,
     },
+    SetWatchedVideoTrack {
+        track_sid: Option<String>,
+    },
     Close,
 }
 
@@ -130,6 +133,10 @@ impl fmt::Debug for WorkerCommand {
                 .field("output_device", output_device)
                 .field("input_volume", input_volume)
                 .field("output_volume", output_volume)
+                .finish(),
+            Self::SetWatchedVideoTrack { track_sid } => f
+                .debug_struct("SetWatchedVideoTrack")
+                .field("track_sid", track_sid)
                 .finish(),
             Self::Close => f.write_str("Close"),
         }
@@ -328,6 +335,10 @@ impl VoiceRoom for ProcessVoiceRoom {
             input_volume: settings.input_volume,
             output_volume: settings.output_volume,
         });
+    }
+
+    fn set_watched_video_track(&self, track_sid: Option<String>) {
+        self.send_command(WorkerCommand::SetWatchedVideoTrack { track_sid });
     }
 
     fn subscribed_tracks(&self) -> Vec<TrackSubscriptionKey> {
@@ -575,6 +586,8 @@ mod tests {
                 input_volume: 135,
                 output_volume: 80,
             });
+            room.set_watched_video_track(Some("TR_screen_1".to_owned()));
+            room.set_watched_video_track(None);
             room.close();
             // Duplicate close must be a safe no-op.
             room.close();
@@ -592,10 +605,39 @@ mod tests {
                         input_volume: 135,
                         output_volume: 80,
                     },
+                    WorkerCommand::SetWatchedVideoTrack {
+                        track_sid: Some("TR_screen_1".to_owned()),
+                    },
+                    WorkerCommand::SetWatchedVideoTrack { track_sid: None },
                     WorkerCommand::Close,
                 ]
             );
         });
+    }
+
+    #[test]
+    fn worker_command_set_watched_video_track_serializes_and_formats_debug() {
+        let watch = WorkerCommand::SetWatchedVideoTrack {
+            track_sid: Some("TR_cam_42".to_owned()),
+        };
+        let watch_json = serde_json::to_string(&watch).unwrap();
+        assert!(watch_json.contains("\"type\":\"set_watched_video_track\""));
+        assert!(watch_json.contains("\"track_sid\":\"TR_cam_42\""));
+        assert_eq!(
+            serde_json::from_str::<WorkerCommand>(&watch_json).unwrap(),
+            watch
+        );
+        assert!(format!("{watch:?}").contains("SetWatchedVideoTrack"));
+        assert!(format!("{watch:?}").contains("TR_cam_42"));
+
+        let unwatch = WorkerCommand::SetWatchedVideoTrack { track_sid: None };
+        let unwatch_json = serde_json::to_string(&unwatch).unwrap();
+        assert!(unwatch_json.contains("\"type\":\"set_watched_video_track\""));
+        assert!(unwatch_json.contains("\"track_sid\":null"));
+        assert_eq!(
+            serde_json::from_str::<WorkerCommand>(&unwatch_json).unwrap(),
+            unwatch
+        );
     }
 
     #[test]

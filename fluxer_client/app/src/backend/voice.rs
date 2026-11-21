@@ -229,6 +229,7 @@ pub(crate) trait VoiceRoom: Send + Sync {
     fn set_playback_muted(&self, muted: bool);
     fn set_screen_share(&self, active: bool, with_audio: bool);
     fn set_audio_settings(&self, _settings: &VoiceAudioSettings) {}
+    fn set_watched_video_track(&self, _track_sid: Option<String>) {}
     fn subscribed_tracks(&self) -> Vec<TrackSubscriptionKey> {
         Vec::new()
     }
@@ -492,16 +493,24 @@ impl VoiceManager {
         if !matches!(key.source, VoiceTrackSource::ScreenShare | VoiceTrackSource::Camera) {
             return Err("only video tracks can be watched");
         }
+        let track_sid = key.track_sid.clone();
         self.video_frame_queue.close();
         let queue = LatestVideoFrameQueue::new();
         self.video_frame_queue = queue.clone();
         self.watched_video_track = Some(key);
+        if let Some(media) = &self.media {
+            media.room.set_watched_video_track(Some(track_sid));
+        }
         Ok(queue)
     }
 
     fn stop_watching_video(&mut self) -> bool {
         self.video_frame_queue.close();
-        self.watched_video_track.take().is_some()
+        let cleared = self.watched_video_track.take().is_some();
+        if cleared && let Some(media) = &self.media {
+            media.room.set_watched_video_track(None);
+        }
+        cleared
     }
 
     fn abort_active_media(&mut self) -> Vec<JoinHandle<()>> {
@@ -1681,6 +1690,7 @@ mod tests {
         screen_share_active: AtomicBool,
         screen_share_audio: AtomicBool,
         audio_settings: Mutex<Vec<VoiceAudioSettings>>,
+        watched_video_tracks: Mutex<Vec<Option<String>>>,
         closed: AtomicBool,
         close_count: AtomicUsize,
     }
@@ -1693,6 +1703,7 @@ mod tests {
                 screen_share_active: AtomicBool::new(false),
                 screen_share_audio: AtomicBool::new(false),
                 audio_settings: Mutex::new(Vec::new()),
+                watched_video_tracks: Mutex::new(Vec::new()),
                 closed: AtomicBool::new(false),
                 close_count: AtomicUsize::new(0),
             }
@@ -1715,6 +1726,10 @@ mod tests {
 
         fn set_audio_settings(&self, settings: &VoiceAudioSettings) {
             self.audio_settings.lock().unwrap().push(settings.clone());
+        }
+
+        fn set_watched_video_track(&self, track_sid: Option<String>) {
+            self.watched_video_tracks.lock().unwrap().push(track_sid);
         }
 
         fn close(&self) {
@@ -3017,7 +3032,7 @@ mod tests {
         };
         assert!(backend.watch_video_track(screen_key.clone()).is_err());
 
-        let _room = seed_guild_voice_channel_and_connect(
+        let room = seed_guild_voice_channel_and_connect(
             &rt,
             &backend,
             &mut rx,
@@ -3084,5 +3099,14 @@ mod tests {
         assert_eq!(backend.voice_snapshot().watched_video_track, None);
         assert!(!cam_queue.push(make_frame(500, 5)));
         assert!(backend.latest_video_frame(0).is_none());
+        assert_eq!(
+            *room.watched_video_tracks.lock().unwrap(),
+            vec![
+                Some("TR_screen_2".to_owned()),
+                None,
+                Some("TR_cam_3".to_owned()),
+                None,
+            ]
+        );
     }
 }

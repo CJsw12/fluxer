@@ -37,6 +37,28 @@ enum WorkerEvent {
     Connected,
     Error { message: String },
     Disconnected { reason: String },
+    TrackSubscribed {
+        participant_identity: String,
+        participant_sid: String,
+        track_sid: String,
+        source: String,
+    },
+    TrackUnsubscribed {
+        participant_identity: String,
+        participant_sid: String,
+        track_sid: String,
+        source: String,
+    },
+}
+
+fn track_source_label(source: TrackSource) -> &'static str {
+    match source {
+        TrackSource::Microphone => "microphone",
+        TrackSource::Camera => "camera",
+        TrackSource::Screenshare => "screen_share",
+        TrackSource::ScreenshareAudio => "screen_share_audio",
+        TrackSource::Unknown => "unknown",
+    }
 }
 
 fn validate_connect(endpoint: &str, token: &str, connection_id: &str) -> Result<(), &'static str> {
@@ -239,6 +261,38 @@ async fn run_worker() -> i32 {
                             publication.set_subscribed(true);
                         }
                     }
+                    Some(RoomEvent::TrackSubscribed {
+                        publication,
+                        participant,
+                        ..
+                    }) => {
+                        emit_event(
+                            &mut stdout,
+                            &WorkerEvent::TrackSubscribed {
+                                participant_identity: participant.identity().to_string(),
+                                participant_sid: participant.sid().to_string(),
+                                track_sid: publication.sid().to_string(),
+                                source: track_source_label(publication.source()).to_owned(),
+                            },
+                        )
+                        .await;
+                    }
+                    Some(RoomEvent::TrackUnsubscribed {
+                        publication,
+                        participant,
+                        ..
+                    }) => {
+                        emit_event(
+                            &mut stdout,
+                            &WorkerEvent::TrackUnsubscribed {
+                                participant_identity: participant.identity().to_string(),
+                                participant_sid: participant.sid().to_string(),
+                                track_sid: publication.sid().to_string(),
+                                source: track_source_label(publication.source()).to_owned(),
+                            },
+                        )
+                        .await;
+                    }
                     Some(RoomEvent::Disconnected { reason }) => {
                         emit_event(
                             &mut stdout,
@@ -302,6 +356,24 @@ mod tests {
                     reason: "ClientInitiated".to_owned(),
                 },
                 "\"type\":\"disconnected\"",
+            ),
+            (
+                WorkerEvent::TrackSubscribed {
+                    participant_identity: "user-1".to_owned(),
+                    participant_sid: "PA_1".to_owned(),
+                    track_sid: "TR_1".to_owned(),
+                    source: "microphone".to_owned(),
+                },
+                "\"type\":\"track_subscribed\"",
+            ),
+            (
+                WorkerEvent::TrackUnsubscribed {
+                    participant_identity: "user-1".to_owned(),
+                    participant_sid: "PA_1".to_owned(),
+                    track_sid: "TR_1".to_owned(),
+                    source: "screen_share_audio".to_owned(),
+                },
+                "\"type\":\"track_unsubscribed\"",
             ),
         ] {
             let encoded = serde_json::to_string(&ev).unwrap();

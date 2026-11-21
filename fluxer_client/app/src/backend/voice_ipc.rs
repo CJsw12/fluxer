@@ -4,6 +4,7 @@
 //! runs in a separate helper process (`fluxer_voice_worker`) while the GPUI app
 //! (`/MD`) communicates exclusively over private stdin/stdout pipes.
 
+use std::collections::BTreeSet;
 use std::ffi::OsStr;
 use std::fmt;
 use std::future::Future;
@@ -18,7 +19,10 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::{mpsc, oneshot};
 
-use super::voice::{UnconfiguredVoiceTransport, VoiceCredentials, VoiceRoom, VoiceTransport};
+use super::voice::{
+    TrackSubscriptionKey, UnconfiguredVoiceTransport, VoiceCredentials, VoiceRoom,
+    VoiceTrackSource, VoiceTransport,
+};
 
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const COMMAND_CHANNEL_CAPACITY: usize = 32;
@@ -121,6 +125,64 @@ pub(crate) enum WorkerEvent {
     Connected,
     Error { message: String },
     Disconnected { reason: String },
+    TrackSubscribed {
+        participant_identity: String,
+        participant_sid: String,
+        track_sid: String,
+        source: String,
+    },
+    TrackUnsubscribed {
+        participant_identity: String,
+        participant_sid: String,
+        track_sid: String,
+        source: String,
+    },
+}
+
+pub(crate) fn parse_track_source(raw: &str) -> VoiceTrackSource {
+    match raw {
+        "microphone" => VoiceTrackSource::Microphone,
+        "camera" => VoiceTrackSource::Camera,
+        "screen_share" => VoiceTrackSource::ScreenShare,
+        "screen_share_audio" => VoiceTrackSource::ScreenShareAudio,
+        _ => VoiceTrackSource::Unknown,
+    }
+}
+
+impl WorkerEvent {
+    pub(crate) fn into_track_key(self) -> Option<(bool, TrackSubscriptionKey)> {
+        match self {
+            Self::TrackSubscribed {
+                participant_identity,
+                participant_sid,
+                track_sid,
+                source,
+            } => Some((
+                true,
+                TrackSubscriptionKey {
+                    participant_identity,
+                    participant_sid,
+                    track_sid,
+                    source: parse_track_source(&source),
+                },
+            )),
+            Self::TrackUnsubscribed {
+                participant_identity,
+                participant_sid,
+                track_sid,
+                source,
+            } => Some((
+                false,
+                TrackSubscriptionKey {
+                    participant_identity,
+                    participant_sid,
+                    track_sid,
+                    source: parse_track_source(&source),
+                },
+            )),
+            Self::Connected | Self::Error { .. } | Self::Disconnected { .. } => None,
+        }
+    }
 }
 
 /// Spawns an isolated `fluxer_voice_worker` subprocess per connection attempt.
@@ -210,6 +272,7 @@ pub(crate) struct ProcessVoiceRoom {
     tx: mpsc::Sender<WorkerCommand>,
     closed: AtomicBool,
     kill_tx: Mutex<Option<oneshot::Sender<()>>>,
+    subscribed_tracks: Arc<Mutex<BTreeSet<TrackSubscriptionKey>>>,
 }
 
 impl ProcessVoiceRoom {
@@ -217,6 +280,13 @@ impl ProcessVoiceRoom {
         if !self.closed.load(Ordering::SeqCst) {
             let _ = self.tx.try_send(cmd);
         }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn subscribed_tracks(&self) -> Vec<TrackSubscriptionKey> {
+        self.subscribed_tracks
+            .lock()
+            .map_or_else(|_| Vec::new(), |guard| guard.iter().cloned().collect())
     }
 }
 
@@ -286,6 +356,34 @@ where
     let _ = writer.shutdown().await;
 }
 
+async fn run_event_reader<R>(
+    mut lines: tokio::io::Lines<BufReader<R>>,
+    subscribed_tracks: Arc<Mutex<BTreeSet<TrackSubscriptionKey>>>,
+) where
+    R: AsyncRead + Unpin + Send + 'static,
+{
+    while let Ok(Some(line)) = lines.next_line().await {
+        let Ok(event) = serde_json::from_str::<WorkerEvent>(&line) else {
+            continue;
+        };
+        if matches!(event, WorkerEvent::Disconnected { .. }) {
+            break;
+        }
+        if let Some((subscribed, key)) = event.into_track_key()
+            && let Ok(mut guard) = subscribed_tracks.lock()
+        {
+            if subscribed {
+                guard.insert(key);
+            } else {
+                guard.remove(&key);
+            }
+        }
+    }
+    if let Ok(mut guard) = subscribed_tracks.lock() {
+        guard.clear();
+    }
+}
+
 /// Performs the initial `Connect` handshake over arbitrary `AsyncWrite`/`AsyncRead` streams.
 pub(crate) async fn connect_over_streams<W, R>(
     mut writer: W,
@@ -313,16 +411,22 @@ where
     match event {
         WorkerEvent::Connected => {
             let (tx, rx) = mpsc::channel(COMMAND_CHANNEL_CAPACITY);
+            let subscribed_tracks = Arc::new(Mutex::new(BTreeSet::new()));
             tokio::spawn(run_writer(writer, rx));
+            tokio::spawn(run_event_reader(lines, subscribed_tracks.clone()));
             Ok(ProcessVoiceRoom {
                 tx,
                 closed: AtomicBool::new(false),
                 kill_tx: Mutex::new(kill_tx),
+                subscribed_tracks,
             })
         }
         WorkerEvent::Error { message } => Err(message),
         WorkerEvent::Disconnected { reason } => {
             Err(format!("voice worker disconnected during connect: {reason}"))
+        }
+        WorkerEvent::TrackSubscribed { .. } | WorkerEvent::TrackUnsubscribed { .. } => {
+            Err("unexpected track event before voice worker connected".to_owned())
         }
     }
 }
@@ -573,5 +677,118 @@ mod tests {
         assert_eq!(resolve_worker_path_in(None, None), None);
 
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn duplex_track_subscribed_and_unsubscribed_update_room_tracks() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let (c_w, _c_r) = tokio::io::duplex(4096);
+            let (mut w_w, w_r) = tokio::io::duplex(4096);
+
+            let connected = format!("{}\n", serde_json::to_string(&WorkerEvent::Connected).unwrap());
+            w_w.write_all(connected.as_bytes()).await.unwrap();
+            w_w.flush().await.unwrap();
+
+            let room = connect_over_streams(
+                c_w,
+                w_r,
+                WorkerCommand::Connect {
+                    endpoint: "wss://rtc.example.test".to_owned(),
+                    token: "secret-jwt".to_owned(),
+                    connection_id: "conn-tracks".to_owned(),
+                },
+                Duration::from_secs(2),
+                None,
+            )
+            .await
+            .expect("handshake must succeed");
+
+            let mic_sub = WorkerEvent::TrackSubscribed {
+                participant_identity: "user-2:conn-2".to_owned(),
+                participant_sid: "PA_2".to_owned(),
+                track_sid: "TR_mic_2".to_owned(),
+                source: "microphone".to_owned(),
+            };
+            let screen_sub = WorkerEvent::TrackSubscribed {
+                participant_identity: "user-3:conn-3".to_owned(),
+                participant_sid: "PA_3".to_owned(),
+                track_sid: "TR_screen_3".to_owned(),
+                source: "screen_share_audio".to_owned(),
+            };
+            for ev in [&mic_sub, &screen_sub] {
+                let line = format!("{}\n", serde_json::to_string(ev).unwrap());
+                w_w.write_all(line.as_bytes()).await.unwrap();
+            }
+            w_w.flush().await.unwrap();
+
+            for _ in 0..50 {
+                if room.subscribed_tracks().len() == 2 {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            assert_eq!(
+                room.subscribed_tracks(),
+                vec![
+                    TrackSubscriptionKey {
+                        participant_identity: "user-2:conn-2".to_owned(),
+                        participant_sid: "PA_2".to_owned(),
+                        track_sid: "TR_mic_2".to_owned(),
+                        source: VoiceTrackSource::Microphone,
+                    },
+                    TrackSubscriptionKey {
+                        participant_identity: "user-3:conn-3".to_owned(),
+                        participant_sid: "PA_3".to_owned(),
+                        track_sid: "TR_screen_3".to_owned(),
+                        source: VoiceTrackSource::ScreenShareAudio,
+                    },
+                ]
+            );
+
+            let mic_unsub = WorkerEvent::TrackUnsubscribed {
+                participant_identity: "user-2:conn-2".to_owned(),
+                participant_sid: "PA_2".to_owned(),
+                track_sid: "TR_mic_2".to_owned(),
+                source: "microphone".to_owned(),
+            };
+            let line = format!("{}\n", serde_json::to_string(&mic_unsub).unwrap());
+            w_w.write_all(line.as_bytes()).await.unwrap();
+            w_w.flush().await.unwrap();
+
+            for _ in 0..50 {
+                if room.subscribed_tracks().len() == 1 {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            assert_eq!(
+                room.subscribed_tracks(),
+                vec![TrackSubscriptionKey {
+                    participant_identity: "user-3:conn-3".to_owned(),
+                    participant_sid: "PA_3".to_owned(),
+                    track_sid: "TR_screen_3".to_owned(),
+                    source: VoiceTrackSource::ScreenShareAudio,
+                }]
+            );
+
+            let disc = format!(
+                "{}\n",
+                serde_json::to_string(&WorkerEvent::Disconnected {
+                    reason: "ServerShutdown".to_owned(),
+                })
+                .unwrap()
+            );
+            w_w.write_all(disc.as_bytes()).await.unwrap();
+            w_w.flush().await.unwrap();
+
+            for _ in 0..50 {
+                if room.subscribed_tracks().is_empty() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            assert!(room.subscribed_tracks().is_empty());
+        });
     }
 }

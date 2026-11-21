@@ -420,6 +420,7 @@ impl ClientView {
         self.notifier.enabled = prefs.data.notifications;
         self.notifier.sounds_enabled = prefs.data.sounds;
         crate::tray::set_close_to_tray(prefs.data.close_to_tray);
+        cx.set_reduce_motion(crate::platform::resolve_reduced_motion(prefs.data.reduced_motion));
         theme::set_display(prefs.data.display(), cx);
         if std::env::var_os("FLUXER_THEME").is_none() {
             theme::set_kind(prefs.data.theme, cx);

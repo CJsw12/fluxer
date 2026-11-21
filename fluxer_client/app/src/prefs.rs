@@ -17,6 +17,32 @@ pub const MIN_VOICE_VOLUME: u16 = 0;
 pub const MAX_VOICE_VOLUME: u16 = 200;
 pub const DEFAULT_VOICE_VOLUME: u16 = 100;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ReducedMotionPref {
+    #[default]
+    System,
+    On,
+    Off,
+}
+
+impl ReducedMotionPref {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::On => "on",
+            Self::Off => "off",
+        }
+    }
+
+    pub fn from_str(raw: &str) -> Self {
+        match raw {
+            "on" => Self::On,
+            "off" => Self::Off,
+            _ => Self::System,
+        }
+    }
+}
+
 fn normalize_device_name(raw: Option<&str>) -> Option<String> {
     raw.filter(|s| !s.trim().is_empty()).map(str::to_owned)
 }
@@ -37,6 +63,7 @@ pub struct Prefs {
     pub voice_output_device: Option<String>,
     pub voice_input_volume: u16,
     pub voice_output_volume: u16,
+    pub reduced_motion: ReducedMotionPref,
 }
 
 impl Default for Prefs {
@@ -60,6 +87,7 @@ impl Default for Prefs {
             voice_output_device: None,
             voice_input_volume: DEFAULT_VOICE_VOLUME,
             voice_output_volume: DEFAULT_VOICE_VOLUME,
+            reduced_motion: ReducedMotionPref::System,
         }
     }
 }
@@ -148,6 +176,11 @@ impl Prefs {
                 .and_then(|n| u16::try_from(n).ok())
                 .unwrap_or(default.voice_output_volume)
                 .clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME),
+            reduced_motion: value
+                .get("reduced_motion")
+                .and_then(Value::as_str)
+                .map(ReducedMotionPref::from_str)
+                .unwrap_or(default.reduced_motion),
         }
     }
 
@@ -167,6 +200,7 @@ impl Prefs {
             "voice_output_device": normalize_device_name(self.voice_output_device.as_deref()),
             "voice_input_volume": self.voice_input_volume.clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME),
             "voice_output_volume": self.voice_output_volume.clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME),
+            "reduced_motion": self.reduced_motion.as_str(),
         })
     }
 }
@@ -267,6 +301,11 @@ impl PrefsStore {
         self.persist();
     }
 
+    pub fn set_reduced_motion(&mut self, pref: ReducedMotionPref) {
+        self.data.reduced_motion = pref;
+        self.persist();
+    }
+
     pub fn add_trusted_domain(&mut self, host: &str) -> bool {
         if trusted_domains::add_trusted_domain(&mut self.data.trusted_domains, host) {
             self.persist();
@@ -364,6 +403,11 @@ mod tests {
                 },
                 voice_input_volume: if theme == ThemeKind::Light { 150 } else { 80 },
                 voice_output_volume: if theme == ThemeKind::Black { 200 } else { 40 },
+                reduced_motion: match theme {
+                    ThemeKind::Light => ReducedMotionPref::On,
+                    ThemeKind::Dark => ReducedMotionPref::Off,
+                    _ => ReducedMotionPref::System,
+                },
             };
             store.save().expect("save");
             let loaded = PrefsStore::open(path.clone());
@@ -446,7 +490,7 @@ mod tests {
             .keys()
             .map(String::as_str)
             .collect();
-        assert_eq!(keys.len(), 14);
+        assert_eq!(keys.len(), 15);
         for key in [
             "theme",
             "notifications",
@@ -462,6 +506,7 @@ mod tests {
             "voice_output_device",
             "voice_input_volume",
             "voice_output_volume",
+            "reduced_motion",
         ] {
             assert!(keys.contains(&key), "{key}");
         }
@@ -521,6 +566,29 @@ mod tests {
         assert_eq!(reloaded.data.voice_output_device.as_deref(), Some("USB Headset"));
         assert_eq!(reloaded.data.voice_input_volume, MAX_VOICE_VOLUME);
         assert_eq!(reloaded.data.voice_output_volume, MIN_VOICE_VOLUME);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn reduced_motion_pref_parses_and_falls_back_to_system() {
+        assert_eq!(ReducedMotionPref::from_str("system"), ReducedMotionPref::System);
+        assert_eq!(ReducedMotionPref::from_str("on"), ReducedMotionPref::On);
+        assert_eq!(ReducedMotionPref::from_str("off"), ReducedMotionPref::Off);
+        assert_eq!(ReducedMotionPref::from_str("unknown"), ReducedMotionPref::System);
+        assert_eq!(ReducedMotionPref::from_str(""), ReducedMotionPref::System);
+
+        assert_eq!(ReducedMotionPref::System.as_str(), "system");
+        assert_eq!(ReducedMotionPref::On.as_str(), "on");
+        assert_eq!(ReducedMotionPref::Off.as_str(), "off");
+
+        let dir = temp_dir("reduced-motion-fallback");
+        std::fs::create_dir_all(&dir).expect("dir");
+        let path = dir.join(FILE_NAME);
+        std::fs::write(&path, br#"{"reduced_motion":"bogus"}"#).expect("write");
+        let mut store = PrefsStore::open(path.clone());
+        assert_eq!(store.data.reduced_motion, ReducedMotionPref::System);
+        store.set_reduced_motion(ReducedMotionPref::On);
+        assert_eq!(PrefsStore::open(path).data.reduced_motion, ReducedMotionPref::On);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

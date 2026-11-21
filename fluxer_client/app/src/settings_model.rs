@@ -1,6 +1,7 @@
 //! Pure data and helpers for the settings surface: the official locale list,
 //! theme options and the effects the UI dispatches after a change.
 
+use crate::prefs::ReducedMotionPref;
 use crate::theme::ThemeKind;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -91,6 +92,7 @@ pub enum SettingsEffect {
     VoiceOutputDeviceChanged(Option<String>),
     VoiceInputVolumeChanged(u16),
     VoiceOutputVolumeChanged(u16),
+    ReducedMotionChanged(ReducedMotionPref),
     ClearTrustedDomains,
     OpenAccountSwitcher,
     LogOutRequested,

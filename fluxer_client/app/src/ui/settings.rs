@@ -11,7 +11,7 @@ use gpui_kit::{AnyElement, Context, FontWeight, ScrollHandle, SharedString, Wind
 
 use crate::backend::voice::VoiceAudioSettings;
 use crate::client_view::ClientView;
-use crate::prefs::{DEFAULT_VOICE_VOLUME, MAX_VOICE_VOLUME, MIN_VOICE_VOLUME};
+use crate::prefs::{DEFAULT_VOICE_VOLUME, MAX_VOICE_VOLUME, MIN_VOICE_VOLUME, ReducedMotionPref};
 use crate::settings_model::{FONT_SIZE_OPTIONS, LOCALES, SettingsEffect, THEME_OPTIONS, theme_patch_value};
 use crate::theme::{self, MAX_FONT_SIZE, MAX_UI_ZOOM, MIN_FONT_SIZE, MIN_UI_ZOOM, Theme, ThemeKind};
 use crate::ui::overlay::Overlay;
@@ -54,6 +54,11 @@ impl ClientView {
             SettingsEffect::VoiceOutputDeviceChanged(device) => self.settings_set_voice_output_device(device, cx),
             SettingsEffect::VoiceInputVolumeChanged(volume) => self.settings_set_voice_input_volume(volume, cx),
             SettingsEffect::VoiceOutputVolumeChanged(volume) => self.settings_set_voice_output_volume(volume, cx),
+            SettingsEffect::ReducedMotionChanged(pref) => {
+                self.prefs.set_reduced_motion(pref);
+                cx.set_reduce_motion(crate::platform::resolve_reduced_motion(pref));
+                cx.notify();
+            }
             SettingsEffect::ClearTrustedDomains => self.settings_clear_trusted_domains(cx),
             SettingsEffect::OpenAccountSwitcher => self.open_account_switcher(window, cx),
             SettingsEffect::LogOutRequested => {
@@ -676,6 +681,45 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
                     SettingsEffect::VoiceOutputVolumeChanged,
                     cx,
                 )),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Accessibility"), theme))
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .child(div().text_sm().child(l10n::tr("Reduced motion")))
+                        .child(
+                            div().flex().flex_row().gap_1().children(
+                                [
+                                    (ReducedMotionPref::System, "System", "reduced-motion-system"),
+                                    (ReducedMotionPref::On, "On", "reduced-motion-on"),
+                                    (ReducedMotionPref::Off, "Off", "reduced-motion-off"),
+                                ]
+                                .into_iter()
+                                .map(|(pref, label, sel_id)| {
+                                    let selected = view.prefs.data.reduced_motion == pref;
+                                    let mut btn = Button::new(sel_id).small().label(l10n::tr(label));
+                                    btn = if selected { btn.primary() } else { btn.ghost() };
+                                    div().debug_selector(move || sel_id.to_owned()).child(btn.on_click(
+                                        cx.listener(move |this, _, window, cx| {
+                                            this.apply_settings_effect(
+                                                SettingsEffect::ReducedMotionChanged(pref),
+                                                window,
+                                                cx,
+                                            );
+                                        }),
+                                    ))
+                                }),
+                            ),
+                        ),
+                ),
         )
         .child(
             div()

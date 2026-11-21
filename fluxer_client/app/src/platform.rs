@@ -43,6 +43,42 @@ pub fn os_integration_enabled() -> bool {
     OS_INTEGRATION_ENABLED.load(std::sync::atomic::Ordering::SeqCst)
 }
 
+/// Returns whether the host OS currently prefers reduced motion.
+pub fn system_prefers_reduced_motion() -> bool {
+    #[cfg(all(target_os = "windows", not(test)))]
+    {
+        use windows::Win32::UI::WindowsAndMessaging::{
+            SPI_GETCLIENTAREAANIMATION, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SystemParametersInfoW,
+        };
+
+        let mut enabled: u32 = 1;
+        // SAFETY: `enabled` is a stack-allocated 32-bit `BOOL` out-parameter for
+        // `SPI_GETCLIENTAREAANIMATION`, and `SystemParametersInfoW` writes one `BOOL`.
+        let ok = unsafe {
+            SystemParametersInfoW(
+                SPI_GETCLIENTAREAANIMATION,
+                0,
+                Some(&mut enabled as *mut _ as *mut _),
+                SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
+            )
+        };
+        ok.is_ok() && enabled == 0
+    }
+    #[cfg(not(all(target_os = "windows", not(test))))]
+    {
+        false
+    }
+}
+
+/// Resolves the user's reduced-motion preference into an effective boolean.
+pub fn resolve_reduced_motion(pref: crate::prefs::ReducedMotionPref) -> bool {
+    match pref {
+        crate::prefs::ReducedMotionPref::System => system_prefers_reduced_motion(),
+        crate::prefs::ReducedMotionPref::On => true,
+        crate::prefs::ReducedMotionPref::Off => false,
+    }
+}
+
 /// Formats the HKCU `Run` command for launching `exe` in autostart mode.
 pub fn format_autostart_command(exe: &std::path::Path) -> String {
     format!("\"{}\" --autostart", exe.display())

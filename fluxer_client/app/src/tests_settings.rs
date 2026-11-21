@@ -233,3 +233,55 @@ fn settings_modal_updates_voice_devices_and_volumes(cx: &mut TestAppContext) {
 
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn settings_modal_updates_reduced_motion(cx: &mut TestAppContext) {
+    use crate::prefs::ReducedMotionPref;
+    use crate::settings_model::SettingsEffect;
+
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, cx) = open_client(cx, backend, events);
+
+    focus_composer(&view, cx);
+    cx.simulate_keystrokes("ctrl-,");
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::Settings(_))));
+
+    for selector in ["reduced-motion-system", "reduced-motion-on", "reduced-motion-off"] {
+        assert!(cx.debug_bounds(selector).is_some(), "{selector} should be drawn");
+    }
+
+    view.update_in(cx, |v, window, cx| {
+        v.apply_settings_effect(SettingsEffect::ReducedMotionChanged(ReducedMotionPref::On), window, cx);
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert!(cx.update(|_window, cx| cx.reduce_motion()));
+    view.read_with(cx, |v, _| {
+        assert_eq!(v.prefs.data.reduced_motion, ReducedMotionPref::On);
+    });
+
+    view.update_in(cx, |v, window, cx| {
+        v.apply_settings_effect(SettingsEffect::ReducedMotionChanged(ReducedMotionPref::Off), window, cx);
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert!(!cx.update(|_window, cx| cx.reduce_motion()));
+    view.read_with(cx, |v, _| {
+        assert_eq!(v.prefs.data.reduced_motion, ReducedMotionPref::Off);
+    });
+
+    view.update_in(cx, |v, window, cx| {
+        v.apply_settings_effect(SettingsEffect::ReducedMotionChanged(ReducedMotionPref::System), window, cx);
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert!(!cx.update(|_window, cx| cx.reduce_motion()));
+    view.read_with(cx, |v, _| {
+        assert_eq!(v.prefs.data.reduced_motion, ReducedMotionPref::System);
+    });
+
+    drop(rt);
+}

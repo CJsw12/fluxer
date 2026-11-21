@@ -711,6 +711,7 @@ fn args_parse() {
             token_env: Some("FLUXER_TOKEN".to_owned()),
             allow_insecure_loopback: true,
             autostart: true,
+            no_os_integration: false,
             deep_link: None,
         }
     );

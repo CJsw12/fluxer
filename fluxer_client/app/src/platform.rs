@@ -30,6 +30,19 @@ pub const RUN_REGISTRY_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\R
 #[cfg_attr(test, allow(dead_code))]
 pub const PROTOCOL_REGISTRY_KEY: &str = r"Software\Classes\fluxer";
 
+static OS_INTEGRATION_ENABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+/// Enables or disables OS integration (Start menu shortcut, protocol handler,
+/// and autostart registry writes). Intended for `--no-os-integration` isolated runs.
+pub fn set_os_integration_enabled(enabled: bool) {
+    OS_INTEGRATION_ENABLED.store(enabled, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Returns whether OS integration (registry and shortcut writes) is enabled.
+pub fn os_integration_enabled() -> bool {
+    OS_INTEGRATION_ENABLED.load(std::sync::atomic::Ordering::SeqCst)
+}
+
 /// Formats the HKCU `Run` command for launching `exe` in autostart mode.
 pub fn format_autostart_command(exe: &std::path::Path) -> String {
     format!("\"{}\" --autostart", exe.display())
@@ -42,6 +55,9 @@ pub fn format_protocol_command(exe: &std::path::Path) -> String {
 
 /// Registers or removes the per-user Windows `Run` entry for Fluxer.
 pub fn set_autostart_enabled(enabled: bool) -> anyhow::Result<()> {
+    if !os_integration_enabled() {
+        return Ok(());
+    }
     #[cfg(all(target_os = "windows", not(test)))]
     {
         use anyhow::Context as _;
@@ -69,7 +85,7 @@ pub fn set_autostart_enabled(enabled: bool) -> anyhow::Result<()> {
 /// Refreshes the autostart registry entry on startup when enabled, keeping the
 /// registered executable path up to date if the binary was moved.
 pub fn sync_autostart_on_startup(enabled: bool) {
-    if !enabled {
+    if !enabled || !os_integration_enabled() {
         return;
     }
     if let Err(err) = set_autostart_enabled(true) {
@@ -94,6 +110,9 @@ pub fn init() {
 
 /// Registers `HKCU\Software\Classes\fluxer` for the current executable if missing or stale.
 pub fn ensure_protocol_handler() {
+    if !os_integration_enabled() {
+        return;
+    }
     #[cfg(all(target_os = "windows", not(test)))]
     {
         if let Err(err) = register_protocol_handler() {
@@ -190,6 +209,9 @@ fn set_app_user_model_id() {}
 
 #[cfg(target_os = "windows")]
 fn ensure_start_menu_shortcut() {
+    if !os_integration_enabled() {
+        return;
+    }
     let spawned = std::thread::Builder::new()
         .name("fluxer-shortcut".to_owned())
         .spawn(|| {
@@ -458,5 +480,18 @@ mod tests {
             format_protocol_command(exe),
             r#""C:\Program Files\Fluxer Client\fluxer_client.exe" --url -- "%1""#
         );
+    }
+
+    #[test]
+    fn disabling_os_integration_skips_writes_and_restores_flag() {
+        assert!(os_integration_enabled());
+        set_os_integration_enabled(false);
+        assert!(!os_integration_enabled());
+        assert!(set_autostart_enabled(true).is_ok());
+        sync_autostart_on_startup(true);
+        ensure_protocol_handler();
+        ensure_start_menu_shortcut();
+        set_os_integration_enabled(true);
+        assert!(os_integration_enabled());
     }
 }

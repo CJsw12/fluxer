@@ -87,6 +87,7 @@ struct Args {
     token_env: Option<String>,
     allow_insecure_loopback: bool,
     autostart: bool,
+    no_os_integration: bool,
     deep_link: Option<String>,
 }
 
@@ -124,6 +125,7 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args> {
             }
             "--allow-insecure-loopback" => out.allow_insecure_loopback = true,
             "--autostart" => out.autostart = true,
+            "--no-os-integration" => out.no_os_integration = true,
             "--" => flags_ended = true,
             _ if deep_links::is_app_protocol_url(&arg) => {
                 if out.deep_link.is_some() {
@@ -141,6 +143,13 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args> {
 }
 
 fn main() {
+    if std::env::args_os()
+        .skip(1)
+        .take_while(|arg| arg != "--")
+        .any(|arg| arg == "--no-os-integration")
+    {
+        platform::set_os_integration_enabled(false);
+    }
     platform::init();
     if let Err(err) = run() {
         let message = format!("{err:#}");
@@ -292,5 +301,27 @@ fn run() -> Result<()> {
     match open_error {
         Some(err) => Err(anyhow!("could not open the window: {err}")),
         None => Ok(()),
+    }
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use super::*;
+
+    #[test]
+    fn parse_args_supports_no_os_integration() {
+        let default_args = parse_args(["--instance".to_owned(), "http://127.0.0.1:8080".to_owned()]).unwrap();
+        assert!(!default_args.no_os_integration);
+
+        let isolated = parse_args([
+            "--instance".to_owned(),
+            "http://127.0.0.1:8080".to_owned(),
+            "--allow-insecure-loopback".to_owned(),
+            "--no-os-integration".to_owned(),
+        ])
+        .unwrap();
+        assert!(isolated.no_os_integration);
+        assert!(isolated.allow_insecure_loopback);
+        assert_eq!(isolated.instance.as_deref(), Some("http://127.0.0.1:8080"));
     }
 }

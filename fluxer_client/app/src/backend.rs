@@ -321,9 +321,9 @@ impl Backend {
             rename_group_dm_seq: Arc::default(),
             reply_target_requests: Arc::default(),
             parent_syncs: Default::default(),
-            voice: Arc::new(Mutex::new(voice::VoiceManager::new(Arc::new(
-                voice::UnconfiguredVoiceTransport,
-            )))),
+            voice: Arc::new(Mutex::new(voice::VoiceManager::new(
+                voice_ipc::default_voice_transport(),
+            ))),
             #[cfg(test)]
             sent: Arc::default(),
             #[cfg(test)]

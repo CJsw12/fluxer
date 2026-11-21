@@ -4,9 +4,10 @@
 //! runs in a separate helper process (`fluxer_voice_worker`) while the GPUI app
 //! (`/MD`) communicates exclusively over private stdin/stdout pipes.
 
+use std::ffi::OsStr;
 use std::fmt;
 use std::future::Future;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,10 +18,54 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::{mpsc, oneshot};
 
-use super::voice::{VoiceCredentials, VoiceRoom, VoiceTransport};
+use super::voice::{UnconfiguredVoiceTransport, VoiceCredentials, VoiceRoom, VoiceTransport};
 
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const COMMAND_CHANNEL_CAPACITY: usize = 32;
+const VOICE_WORKER_ENV_VAR: &str = "FLUXER_VOICE_WORKER_PATH";
+#[cfg(windows)]
+const VOICE_WORKER_BIN: &str = "fluxer_voice_worker.exe";
+#[cfg(not(windows))]
+const VOICE_WORKER_BIN: &str = "fluxer_voice_worker";
+
+/// Pure helper to resolve the voice worker binary path from an optional env
+/// override and executable directory.
+pub(crate) fn resolve_worker_path_in(
+    env_override: Option<&OsStr>,
+    exe_dir: Option<&Path>,
+) -> Option<PathBuf> {
+    if let Some(raw) = env_override.filter(|v| !v.is_empty()) {
+        let path = PathBuf::from(raw);
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+    if let Some(dir) = exe_dir {
+        let candidate = dir.join(VOICE_WORKER_BIN);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+/// Resolves the voice worker executable from `FLUXER_VOICE_WORKER_PATH` or next
+/// to the current executable.
+pub(crate) fn resolve_voice_worker_path() -> Option<PathBuf> {
+    let env_override = std::env::var_os(VOICE_WORKER_ENV_VAR);
+    let exe_path = std::env::current_exe().ok();
+    let exe_dir = exe_path.as_deref().and_then(Path::parent);
+    resolve_worker_path_in(env_override.as_deref(), exe_dir)
+}
+
+/// Returns the default `VoiceTransport`: `ProcessVoiceTransport` when a worker
+/// binary is present, otherwise `UnconfiguredVoiceTransport`.
+pub(crate) fn default_voice_transport() -> Arc<dyn VoiceTransport> {
+    match resolve_voice_worker_path() {
+        Some(path) => Arc::new(ProcessVoiceTransport::new(path)),
+        None => Arc::new(UnconfiguredVoiceTransport),
+    }
+}
 
 /// Commands sent from the GPUI app to the voice worker over private stdin.
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -481,5 +526,52 @@ mod tests {
         assert!(err.contains("failed to spawn voice worker"));
         assert!(!err.contains(secret_token));
         assert!(!err.contains(secret_endpoint));
+    }
+
+    #[test]
+    fn resolve_worker_path_in_prefers_env_then_exe_dir_then_none() {
+        let unique = format!(
+            "fluxer_voice_ipc_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let root = std::env::temp_dir().join(unique);
+        let exe_dir = root.join("bin");
+        let empty_dir = root.join("empty");
+        std::fs::create_dir_all(&exe_dir).unwrap();
+        std::fs::create_dir_all(&empty_dir).unwrap();
+
+        let env_worker = root.join("custom_worker.exe");
+        let exe_worker = exe_dir.join(VOICE_WORKER_BIN);
+        std::fs::write(&env_worker, b"").unwrap();
+        std::fs::write(&exe_worker, b"").unwrap();
+
+        // 1. Env override takes precedence over exe_dir when it is a real file.
+        let resolved = resolve_worker_path_in(Some(env_worker.as_os_str()), Some(&exe_dir));
+        assert_eq!(resolved.as_deref(), Some(env_worker.as_path()));
+
+        // 2. Empty or missing env override falls back to exe_dir/VOICE_WORKER_BIN.
+        assert_eq!(
+            resolve_worker_path_in(Some(OsStr::new("")), Some(&exe_dir)).as_deref(),
+            Some(exe_worker.as_path())
+        );
+        let nonexistent_env = root.join("does_not_exist.exe");
+        assert_eq!(
+            resolve_worker_path_in(Some(nonexistent_env.as_os_str()), Some(&exe_dir)).as_deref(),
+            Some(exe_worker.as_path())
+        );
+        assert_eq!(
+            resolve_worker_path_in(None, Some(&exe_dir)).as_deref(),
+            Some(exe_worker.as_path())
+        );
+
+        // 3. Returns None when neither env override nor exe_dir contains a worker file.
+        assert_eq!(resolve_worker_path_in(None, Some(&empty_dir)), None);
+        assert_eq!(resolve_worker_path_in(None, None), None);
+
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

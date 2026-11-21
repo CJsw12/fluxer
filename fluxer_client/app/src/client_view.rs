@@ -2139,7 +2139,7 @@ impl Render for ClientView {
                 Some(ui::group_dm::render_create_modal(modal, &theme, cx, &query))
             }
             Overlay::LeaveGroupDm(modal) => Some(ui::group_dm::render_leave_modal(modal, &theme, cx)),
-            Overlay::MediaViewer(modal) => Some(ui::media_viewer::render(modal, &theme, cx)),
+            Overlay::MediaViewer(modal) => Some(ui::media_viewer::render(modal, &theme, window, cx)),
             Overlay::LinkWarning(modal) => Some(ui::link_warning::render(modal, &theme, cx)),
             Overlay::CreateChannel(modal) => Some(ui::channel_modal::render_create(modal, &theme, cx)),
             Overlay::EditChannel(modal) => Some(ui::channel_modal::render_edit(modal, &theme, cx)),

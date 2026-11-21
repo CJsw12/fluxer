@@ -2,14 +2,17 @@
 //! (Left/Right arrows & buttons), click-to-zoom (+/-), copy link, and open
 //! externally through the trusted-domain check.
 
+use std::cell::Cell;
+use std::time::{Duration, Instant};
+
 use fluxer_client_core::state::{animated_proxy_url, static_proxy_url};
 use gpui_kit::component::Disableable as _;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::Escape;
 use gpui_kit::{
-    AnyElement, ClipboardItem, Context, FocusHandle, FontWeight, KeyDownEvent, MouseButton, ObjectFit, SharedString,
-    StyledImage as _, Window, div, img, prelude::*, px,
+    AnyElement, ClipboardItem, Context, Corners, FocusHandle, FontWeight, ImageCache, ImageSource, KeyDownEvent,
+    MouseButton, ObjectFit, SharedString, StyledImage as _, Window, canvas, div, img, prelude::*, px,
 };
 
 use super::embed::{self, MediaKind, MediaView};
@@ -46,6 +49,28 @@ pub struct MediaViewerModal {
     pub index: usize,
     pub zoomed: bool,
     pub focus: FocusHandle,
+    playback: Cell<ViewerPlayback>,
+}
+
+#[derive(Clone, Copy, Default)]
+struct ViewerPlayback {
+    frame: usize,
+    deadline: Option<Instant>,
+}
+
+impl ViewerPlayback {
+    fn tick(&mut self, now: Instant, count: usize, active: bool, delay: impl Fn(usize) -> Duration) -> usize {
+        self.frame = self.frame.min(count - 1);
+        if !active {
+            self.deadline = None;
+        } else if self.deadline.is_none_or(|deadline| now >= deadline) {
+            if self.deadline.is_some() {
+                self.frame = (self.frame + 1) % count;
+            }
+            self.deadline = Some(now + delay(self.frame).max(Duration::from_millis(16)));
+        }
+        self.frame
+    }
 }
 
 fn fit_viewer_sizes(width: f32, height: f32, scale: f32, animated: bool) -> (f32, f32, u32, u32) {
@@ -137,6 +162,7 @@ impl ClientView {
             index: clamped,
             zoomed: false,
             focus: focus.clone(),
+            playback: Cell::default(),
         });
         window.focus(&focus, cx);
         cx.notify();
@@ -151,6 +177,7 @@ impl ClientView {
         if next != modal.index {
             modal.index = next;
             modal.zoomed = false;
+            modal.playback.set(ViewerPlayback::default());
             cx.notify();
         }
     }
@@ -172,7 +199,12 @@ impl ClientView {
     }
 }
 
-pub fn render(modal: &MediaViewerModal, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+pub fn render(
+    modal: &MediaViewerModal,
+    theme: &Theme,
+    window: &mut Window,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
     let Some(item) = modal.items.get(modal.index).cloned() else {
         return div().into_any_element();
     };
@@ -188,25 +220,57 @@ pub fn render(modal: &MediaViewerModal, theme: &Theme, cx: &mut Context<ClientVi
     let placeholder_bg = theme.image_placeholder;
     let muted_fg = theme.muted_foreground;
 
-    let mut image_el = img(item.preview_url.clone())
-        .image_cache(&cache)
-        .id(SharedString::from(format!("media-viewer-img-{}", modal.index)))
-        .object_fit(ObjectFit::Contain)
-        .with_loading(move || div().w(px(320.)).h(px(240.)).bg(placeholder_bg).into_any_element())
-        .with_fallback(move || {
-            div()
-                .p_4()
-                .text_xs()
-                .text_color(muted_fg)
-                .child(fallback_url.clone())
-                .into_any_element()
-        });
-
-    if zoomed {
-        image_el = image_el.w(px(item.width * 2.)).h(px(item.height * 2.));
+    // Opening the viewer explicitly plays this GIF, even when GPUI keeps
+    // automatic animations elsewhere still for the user's motion setting.
+    let animation = if item.animated && cx.reduce_motion()
+        && let ImageSource::Resource(resource) = ImageSource::from(item.preview_url.clone())
+    {
+        cache.update(cx, |cache, cx| cache.load(&resource, window, cx))
+            .and_then(Result::ok)
+            .filter(|image| image.frame_count() > 1)
     } else {
-        image_el = image_el.w(px(item.width)).h(px(item.height)).max_w(px(MAX_STAGE_WIDTH)).max_h(px(MAX_STAGE_HEIGHT));
-    }
+        None
+    };
+    let scale = if zoomed { 2. } else { 1. };
+    let (width, height) = (px(item.width * scale), px(item.height * scale));
+    let image_el = if let Some(image) = animation {
+        let mut playback = modal.playback.get();
+        let active = window.is_window_active();
+        let frame = playback.tick(Instant::now(), image.frame_count(), active, |frame| image.delay(frame).into());
+        modal.playback.set(playback);
+        if active {
+            window.request_animation_frame();
+        }
+        canvas(
+            |_, _, _| (),
+            move |bounds, (), window, _| {
+                let image_bounds = ObjectFit::Contain.get_bounds(bounds, image.size(frame));
+                if let Err(error) = window.paint_image(bounds, image_bounds, Corners::default(), image, frame, false) {
+                    tracing::debug!(%error, "could not paint GIF viewer frame");
+                }
+            },
+        )
+        .w(width)
+        .h(height)
+        .into_any_element()
+    } else {
+        img(item.preview_url.clone())
+            .image_cache(&cache)
+            .id(SharedString::from(format!("media-viewer-img-{}", modal.index)))
+            .object_fit(ObjectFit::Contain)
+            .w(width)
+            .h(height)
+            .with_loading(move || div().w(px(320.)).h(px(240.)).bg(placeholder_bg).into_any_element())
+            .with_fallback(move || {
+                div()
+                    .p_4()
+                    .text_xs()
+                    .text_color(muted_fg)
+                    .child(fallback_url.clone())
+                    .into_any_element()
+            })
+            .into_any_element()
+    };
 
     let mut toolbar = div()
         .flex()
@@ -366,4 +430,25 @@ pub fn render(modal: &MediaViewerModal, theme: &Theme, cx: &mut Context<ClientVi
         .child(stage)
         .child(toolbar)
         .into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn media_viewer_plays_selected_frames_and_pauses_without_focus() {
+        let start = Instant::now();
+        let delay = |index| Duration::from_millis(if index == 0 { 100 } else { 200 });
+        let mut playback = ViewerPlayback::default();
+        let mut at = |ms, active| playback.tick(start + Duration::from_millis(ms), 2, active, delay);
+
+        assert_eq!(at(0, true), 0);
+        assert_eq!(at(99, true), 0);
+        assert_eq!(at(100, true), 1);
+        assert_eq!(at(110, false), 1);
+        assert_eq!(at(500, true), 1);
+        assert_eq!(at(699, true), 1);
+        assert_eq!(at(700, true), 0);
+    }
 }

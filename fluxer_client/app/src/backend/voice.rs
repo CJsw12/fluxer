@@ -1643,10 +1643,15 @@ impl Backend {
     }
 
     /// Takes the latest decoded video frame if its generation is newer than `last_generation`.
-    #[allow(dead_code)]
     pub fn latest_video_frame(&self, last_generation: u64) -> Option<(u64, DecodedVideoFrame)> {
         let queue = lock(&self.voice).video_frame_queue.clone();
         queue.take_if_newer(last_generation)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn push_video_frame_for_test(&self, frame: DecodedVideoFrame) -> bool {
+        let queue = lock(&self.voice).video_frame_queue.clone();
+        queue.push(frame)
     }
 
     /// Tears down active voice media on session close/logout.

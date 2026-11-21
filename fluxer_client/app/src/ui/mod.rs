@@ -20,6 +20,7 @@ pub mod message_row;
 pub mod moderation_modal;
 pub mod profile_popout;
 pub mod user_panel;
+pub(crate) mod video_viewer;
 pub mod voice_panel;
 pub mod reactions;
 pub mod reply;

@@ -2066,6 +2066,7 @@ dependencies = [
  "fluxer_client_markdown",
  "gpui-kit",
  "gpui-pre",
+ "image",
  "notify-rust",
  "rand 0.9.5",
  "reqwest",

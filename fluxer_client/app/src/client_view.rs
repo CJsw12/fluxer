@@ -5,6 +5,7 @@
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use fluxer_client_core::rest::UserProfileFull;
 use fluxer_client_core::state::{MessageState, PartialEmoji, Snowflake, Status, Unread};
@@ -14,7 +15,7 @@ use gpui_kit::component::input::{InputContent, InputEvent, InputState};
 use gpui_kit::component::message_scroller::MessageScrollerState;
 use gpui_kit::{
     AnyElement, AnyWindowHandle, Context, Entity, EntityInputHandler as _, EventEmitter, ExternalPaths, FocusHandle,
-    Focusable as _, ScrollHandle, SharedString, Subscription, Task, UniformListScrollHandle, Window, div,
+    Focusable as _, RenderImage, ScrollHandle, SharedString, Subscription, Task, UniformListScrollHandle, Window, div,
     prelude::*, px,
 };
 use tokio::sync::mpsc;
@@ -230,6 +231,12 @@ pub struct ClientView {
     pub(crate) saved_accounts: Vec<crate::accounts::SavedAccountItem>,
     /// UI-safe snapshot of the active voice session and channel voice members.
     pub(crate) voice: crate::backend::voice::VoiceSnapshot,
+    /// Track SID currently synced into `watched_video_frame`.
+    pub(crate) watched_video_track_sid: Option<String>,
+    /// Generation sequence of the last decoded frame converted for display.
+    pub(crate) watched_video_frame_seq: u64,
+    /// Latest decoded remote video frame `(width, height, RenderImage)`.
+    pub(crate) watched_video_frame: Option<(u32, u32, Arc<RenderImage>)>,
     /// Deep link deferred until READY completes (`self.user.is_some()`) and target arrives.
     pub(crate) pending_deep_link: Option<(crate::deep_links::DeepLink, std::time::Instant)>,
     /// Keeps the layout's key context reachable when nothing inside has focus.
@@ -404,6 +411,9 @@ impl ClientView {
             accounts_enabled: false,
             saved_accounts: Vec::new(),
             voice: crate::backend::voice::VoiceSnapshot::default(),
+            watched_video_track_sid: None,
+            watched_video_frame_seq: 0,
+            watched_video_frame: None,
             pending_deep_link: None,
             focus: cx.focus_handle(),
             #[cfg(test)]
@@ -510,6 +520,7 @@ impl ClientView {
                 UiEvent::StateChanged => {}
                 UiEvent::VoiceChanged => {
                     self.voice = self.backend.voice_snapshot();
+                    self.sync_watched_video_frame();
                 }
                 UiEvent::GuildAvailable { guild_id } => {
                     guild_available |= self.place == Place::Guild(guild_id);
@@ -1418,6 +1429,7 @@ impl ClientView {
     pub(crate) fn leave_voice_channel(&mut self, cx: &mut Context<Self>) {
         self.backend.leave_voice();
         self.voice = self.backend.voice_snapshot();
+        self.sync_watched_video_frame();
         cx.notify();
     }
 
@@ -1474,7 +1486,27 @@ impl ClientView {
             }
         }
         self.voice = self.backend.voice_snapshot();
+        self.sync_watched_video_frame();
         cx.notify();
+    }
+
+    pub(crate) fn sync_watched_video_frame(&mut self) {
+        let Some(track) = self.voice.watched_video_track.as_ref() else {
+            self.watched_video_track_sid = None;
+            self.watched_video_frame_seq = 0;
+            self.watched_video_frame = None;
+            return;
+        };
+        if self.watched_video_track_sid.as_deref() != Some(track.track_sid.as_str()) {
+            self.watched_video_track_sid = Some(track.track_sid.clone());
+            self.watched_video_frame_seq = 0;
+            self.watched_video_frame = None;
+        }
+        if let Some((gen_id, frame)) = self.backend.latest_video_frame(self.watched_video_frame_seq) {
+            self.watched_video_frame_seq = gen_id;
+            self.watched_video_frame =
+                ui::video_viewer::decoded_frame_to_render_image(&frame).map(|img| (frame.width, frame.height, img));
+        }
     }
 
     pub(crate) fn voice_channel_name(&self, channel_id: Snowflake) -> SharedString {
@@ -2229,6 +2261,7 @@ impl EventEmitter<ClientEvent> for ClientView {}
 
 impl Render for ClientView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.sync_watched_video_frame();
         let title = self.title_text();
         if title != self.window_title {
             window.set_window_title(&title);
@@ -2309,6 +2342,14 @@ impl Render for ClientView {
                     // Files dropped anywhere on the message pane go to the tray.
                     .on_drop(cx.listener(|v, paths: &ExternalPaths, _, cx| v.add_paths(paths.paths(), cx)))
                     .child(ui::header::render(self, &theme, cx))
+                    .when_some(self.voice.watched_video_track.as_ref(), |d, track| {
+                        d.child(ui::video_viewer::render(
+                            track,
+                            self.watched_video_frame.clone(),
+                            &theme,
+                            cx,
+                        ))
+                    })
                     .when(!self.guild_unavailable && self.selected_channel.is_some() && self.unread_anchor.is_some(), |d| {
                         d.child(self.render_unread_bar(&theme, cx))
                     })

@@ -9,12 +9,13 @@ use std::sync::{Arc, Mutex};
 
 use fluxer_client_core::Dispatch;
 use fluxer_client_core::state::{Snowflake, bits};
+use fluxer_client_core::voice::{DecodedVideoFrame, VideoCodec};
 use gpui_kit::TestAppContext;
 use serde_json::json;
 
 use crate::backend::voice::{
-    TrackSubscriptionKey, VoiceConnectionState, VoiceCredentials, VoiceFailure, VoiceRoom,
-    VoiceTrackSource, VoiceTransport,
+    TrackSubscriptionKey, VoiceConnectionState, VoiceCredentials, VoiceFailure, VoiceRoom, VoiceTrackSource,
+    VoiceTransport,
 };
 use crate::backend::{Backend, UiEvent, lock};
 use crate::client_view::ClientView;
@@ -424,4 +425,94 @@ fn voice_watch_video_track_toggles_and_renders_watch_button(cx: &mut TestAppCont
         assert_eq!(v.voice.watched_video_track, None);
     });
     assert!(vcx.debug_bounds("voice-watch-btn").is_some());
+}
+
+#[gpui_kit::test]
+fn voice_video_viewer_renders_waiting_frame_and_tears_down(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, rx) = Backend::new(rt.handle().clone(), offline_rest(), None);
+    backend.state().apply(&voice_ready());
+    let (view, vcx) = open_client(cx, backend.clone(), rx);
+    let room = connect_voice_in_view(&rt, &backend, &view, vcx);
+
+    let remote_screen = TrackSubscriptionKey {
+        participant_identity: "peer:conn-peer".into(),
+        participant_sid: "PA_peer".into(),
+        track_sid: "TR_screen_peer".into(),
+        source: VoiceTrackSource::ScreenShare,
+    };
+    room.subscribed_tracks.lock().unwrap().push(remote_screen.clone());
+    view.update(vcx, |v, cx| v.refresh(cx));
+    draw(vcx);
+
+    assert!(vcx.debug_bounds("video-viewer").is_none());
+
+    // Start watching: viewer mounts in waiting state (no frame yet).
+    view.update(vcx, |v, cx| v.toggle_watch_video_track(remote_screen.clone(), cx));
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert_eq!(v.voice.watched_video_track, Some(remote_screen.clone()));
+        assert_eq!(v.watched_video_track_sid.as_deref(), Some("TR_screen_peer"));
+        assert_eq!(v.watched_video_frame_seq, 0);
+        assert!(v.watched_video_frame.is_none());
+    });
+    assert!(vcx.debug_bounds("video-viewer").is_some());
+    assert!(vcx.debug_bounds("video-viewer-stop-btn").is_some());
+
+    // Push a decoded 2x2 RGBA frame and render.
+    let frame = DecodedVideoFrame {
+        width: 2,
+        height: 2,
+        timestamp_us: 1000,
+        codec: Some(VideoCodec::H264),
+        data: vec![255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255],
+    };
+    assert!(backend.push_video_frame_for_test(frame));
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert_eq!(v.watched_video_frame_seq, 1);
+        let (w, h, _) = v
+            .watched_video_frame
+            .as_ref()
+            .expect("decoded frame should be converted to RenderImage");
+        assert_eq!((*w, *h), (2, 2));
+    });
+    assert!(vcx.debug_bounds("video-viewer").is_some());
+
+    // Stop Watching tears down the viewer and clears frame state.
+    view.update(vcx, |v, cx| v.toggle_watch_video_track(remote_screen.clone(), cx));
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert_eq!(v.voice.watched_video_track, None);
+        assert_eq!(v.watched_video_track_sid, None);
+        assert_eq!(v.watched_video_frame_seq, 0);
+        assert!(v.watched_video_frame.is_none());
+    });
+    assert!(vcx.debug_bounds("video-viewer").is_none());
+
+    // Watch again, push a frame, then disconnect voice: tears down cleanly.
+    view.update(vcx, |v, cx| v.toggle_watch_video_track(remote_screen, cx));
+    draw(vcx);
+    let frame2 = DecodedVideoFrame {
+        width: 2,
+        height: 2,
+        timestamp_us: 2000,
+        codec: Some(VideoCodec::H264),
+        data: [1u8, 2, 3, 255].repeat(4),
+    };
+    assert!(backend.push_video_frame_for_test(frame2));
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert!(v.watched_video_frame.is_some());
+    });
+
+    view.update(vcx, |v, cx| v.leave_voice_channel(cx));
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert_eq!(v.voice.watched_video_track, None);
+        assert_eq!(v.watched_video_track_sid, None);
+        assert_eq!(v.watched_video_frame_seq, 0);
+        assert!(v.watched_video_frame.is_none());
+    });
+    assert!(vcx.debug_bounds("video-viewer").is_none());
 }

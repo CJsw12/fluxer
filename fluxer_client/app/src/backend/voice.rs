@@ -155,7 +155,7 @@ impl fmt::Debug for VoiceCredentials {
             .field("guild_id", &self.guild_id)
             .field("channel_id", &self.channel_id)
             .field("connection_id", &self.connection_id)
-            .field("endpoint", &self.endpoint)
+            .field("endpoint", &"<redacted>")
             .field("token", &"<redacted>")
             .finish()
     }
@@ -769,36 +769,50 @@ fn parse_optional_snowflake(value: Option<&Value>) -> Result<Option<Snowflake>, 
     }
 }
 
+const MAX_VOICE_TOKEN_BYTES: usize = 65_536;
+const MAX_CONNECTION_ID_BYTES: usize = 256;
+
 fn parse_voice_server_update(payload: &Value) -> Result<ParsedVoiceServerUpdate, &'static str> {
     let token = payload
         .get("token")
         .and_then(Value::as_str)
-        .filter(|s| !s.trim().is_empty())
-        .ok_or("missing token")?;
+        .filter(|s| !s.trim().is_empty() && s.len() <= MAX_VOICE_TOKEN_BYTES)
+        .ok_or("missing or oversized token")?;
     let endpoint = payload
         .get("endpoint")
         .and_then(Value::as_str)
         .filter(|s| !s.trim().is_empty())
         .ok_or("missing endpoint")?;
     let parsed_url = Url::parse(endpoint).map_err(|_| "invalid endpoint url")?;
-    if !matches!(parsed_url.scheme(), "ws" | "wss" | "http" | "https") {
-        return Err("unsupported endpoint scheme");
+    let is_loopback = parsed_url.host_str().is_some_and(|host| {
+        host == "localhost"
+            || host
+                .trim_matches(['[', ']'])
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|ip| ip.is_loopback())
+    });
+    if !(parsed_url.scheme() == "wss" || (parsed_url.scheme() == "ws" && is_loopback)) {
+        return Err("voice endpoint requires wss (or loopback ws)");
+    }
+    if parsed_url.host().is_none()
+        || !parsed_url.username().is_empty()
+        || parsed_url.password().is_some()
+        || parsed_url.query().is_some()
+        || parsed_url.fragment().is_some()
+    {
+        return Err("voice endpoint contains unsupported URL fields");
     }
     let connection_id = payload
         .get("connection_id")
         .and_then(Value::as_str)
-        .filter(|s| !s.trim().is_empty())
-        .ok_or("missing connection_id")?;
+        .filter(|s| !s.trim().is_empty() && s.len() <= MAX_CONNECTION_ID_BYTES)
+        .ok_or("missing or oversized connection_id")?;
     let guild_id = parse_optional_snowflake(payload.get("guild_id"))?;
     let channel_id = parse_optional_snowflake(payload.get("channel_id"))?;
-    let has_e2ee_key = payload
-        .get("e2ee_key")
-        .and_then(Value::as_str)
-        .is_some_and(|s| !s.trim().is_empty());
-    let has_ice_servers = payload
-        .get("ice_servers")
-        .and_then(Value::as_array)
-        .is_some_and(|arr| !arr.is_empty());
+    // Any non-null e2ee_key or ice_servers (including empty array `[]`, which is
+    // truthy in the web client) must be rejected before connecting.
+    let has_e2ee_key = payload.get("e2ee_key").is_some_and(|v| !v.is_null());
+    let has_ice_servers = payload.get("ice_servers").is_some_and(|v| !v.is_null());
 
     Ok(ParsedVoiceServerUpdate {
         guild_id,
@@ -1222,18 +1236,65 @@ mod tests {
     }
 
     #[test]
-    fn voice_credentials_debug_redacts_token() {
+    fn voice_credentials_debug_redacts_token_and_endpoint() {
         let creds = VoiceCredentials {
             attempt_id: 1,
             guild_id: Some(Snowflake(42)),
             channel_id: Snowflake(100),
             connection_id: "conn-1".into(),
-            endpoint: "wss://rtc.example.test".into(),
+            endpoint: "wss://secret-rtc.example.test".into(),
             token: SecretToken::new("super-secret-livekit-jwt"),
         };
         let rendered = format!("{creds:?}");
         assert!(!rendered.contains("super-secret-livekit-jwt"));
+        assert!(!rendered.contains("secret-rtc.example.test"));
         assert!(rendered.contains("<redacted>"));
+    }
+
+    #[test]
+    fn endpoint_validation_rejects_unsafe_urls_and_empty_ice_servers() {
+        for bad_endpoint in [
+            "ws://rtc.example.test",
+            "https://rtc.example.test",
+            "wss://user:secret@rtc.example.test",
+            "wss://rtc.example.test?token=secret",
+            "wss://rtc.example.test#frag",
+        ] {
+            let err = parse_voice_server_update(&json!({
+                "guild_id": "42",
+                "channel_id": "100",
+                "connection_id": "conn-1",
+                "endpoint": bad_endpoint,
+                "token": "jwt-secret"
+            }))
+            .err()
+            .expect("bad endpoint must be rejected");
+            assert!(!err.contains("secret"));
+        }
+
+        // Loopback ws:// and wss:// are accepted.
+        for ok_endpoint in ["wss://rtc.example.test/rtc", "ws://127.0.0.1:7880", "ws://[::1]:7880"] {
+            assert!(parse_voice_server_update(&json!({
+                "guild_id": "42",
+                "channel_id": "100",
+                "connection_id": "conn-1",
+                "endpoint": ok_endpoint,
+                "token": "jwt-1"
+            }))
+            .is_ok());
+        }
+
+        // Empty ice_servers array `[]` is truthy in JS and must be flagged as P2P mesh.
+        let parsed = parse_voice_server_update(&json!({
+            "guild_id": null,
+            "channel_id": "200",
+            "connection_id": "conn-p2p-empty",
+            "endpoint": "wss://rtc.example.test",
+            "token": "jwt-1",
+            "ice_servers": []
+        }))
+        .unwrap();
+        assert!(parsed.has_ice_servers);
     }
 
     #[test]

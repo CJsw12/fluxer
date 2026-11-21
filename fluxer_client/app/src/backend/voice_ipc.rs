@@ -15,6 +15,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::{mpsc, oneshot};
@@ -26,6 +27,9 @@ use super::voice::{
 
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
 const COMMAND_CHANNEL_CAPACITY: usize = 32;
+const MAX_IPC_VIDEO_WIDTH: u32 = 1920;
+const MAX_IPC_VIDEO_HEIGHT: u32 = 1080;
+const MAX_IPC_VIDEO_B64_LEN: usize = 12 * 1024 * 1024;
 const VOICE_WORKER_ENV_VAR: &str = "FLUXER_VOICE_WORKER_PATH";
 #[cfg(windows)]
 const VOICE_WORKER_BIN: &str = "fluxer_voice_worker.exe";
@@ -162,6 +166,43 @@ pub(crate) enum WorkerEvent {
         track_sid: String,
         source: String,
     },
+    VideoFrame {
+        track_sid: String,
+        width: u32,
+        height: u32,
+        rgba_b64: String,
+    },
+}
+
+fn decode_worker_video_frame(
+    track_sid: String,
+    width: u32,
+    height: u32,
+    rgba_b64: &str,
+) -> Option<VoiceRoomEvent> {
+    if width < 1
+        || height < 1
+        || width > MAX_IPC_VIDEO_WIDTH
+        || height > MAX_IPC_VIDEO_HEIGHT
+        || rgba_b64.len() > MAX_IPC_VIDEO_B64_LEN
+    {
+        return None;
+    }
+    let expected_len = (width as usize)
+        .checked_mul(height as usize)?
+        .checked_mul(4)?;
+    let rgba = base64::engine::general_purpose::STANDARD
+        .decode(rgba_b64)
+        .ok()?;
+    if rgba.len() != expected_len {
+        return None;
+    }
+    Some(VoiceRoomEvent::VideoFrame {
+        track_sid,
+        width,
+        height,
+        rgba,
+    })
 }
 
 pub(crate) fn parse_track_source(raw: &str) -> VoiceTrackSource {
@@ -205,7 +246,10 @@ impl WorkerEvent {
                     source: parse_track_source(&source),
                 },
             )),
-            Self::Connected | Self::Error { .. } | Self::Disconnected { .. } => None,
+            Self::Connected
+            | Self::Error { .. }
+            | Self::Disconnected { .. }
+            | Self::VideoFrame { .. } => None,
         }
     }
 }
@@ -421,6 +465,16 @@ async fn run_event_reader<R>(
                 let _ = event_tx.send(VoiceRoomEvent::Disconnected(reason));
                 break;
             }
+            WorkerEvent::VideoFrame {
+                track_sid,
+                width,
+                height,
+                rgba_b64,
+            } => {
+                if let Some(ev) = decode_worker_video_frame(track_sid, width, height, &rgba_b64) {
+                    let _ = event_tx.send(ev);
+                }
+            }
             other => {
                 if let Some((subscribed, key)) = other.into_track_key() {
                     let changed = if let Ok(mut guard) = subscribed_tracks.lock() {
@@ -498,7 +552,9 @@ where
         WorkerEvent::Disconnected { reason } => {
             Err(format!("voice worker disconnected during connect: {reason}"))
         }
-        WorkerEvent::TrackSubscribed { .. } | WorkerEvent::TrackUnsubscribed { .. } => {
+        WorkerEvent::TrackSubscribed { .. }
+        | WorkerEvent::TrackUnsubscribed { .. }
+        | WorkerEvent::VideoFrame { .. } => {
             Err("unexpected track event before voice worker connected".to_owned())
         }
     }
@@ -961,6 +1017,105 @@ mod tests {
                 Some(VoiceRoomEvent::Disconnected(
                     "voice worker exited unexpectedly".to_owned()
                 ))
+            );
+        });
+    }
+
+    #[test]
+    fn duplex_video_frame_decodes_valid_and_drops_invalid_without_breaking_loop() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let (c_w, _c_r) = tokio::io::duplex(65536);
+            let (mut w_w, w_r) = tokio::io::duplex(65536);
+
+            let connected = format!("{}\n", serde_json::to_string(&WorkerEvent::Connected).unwrap());
+            w_w.write_all(connected.as_bytes()).await.unwrap();
+            w_w.flush().await.unwrap();
+
+            let room = connect_over_streams(
+                c_w,
+                w_r,
+                WorkerCommand::Connect {
+                    endpoint: "wss://rtc.example.test".to_owned(),
+                    token: "secret-jwt".to_owned(),
+                    connection_id: "conn-video".to_owned(),
+                },
+                Duration::from_secs(2),
+                None,
+            )
+            .await
+            .expect("handshake must succeed");
+
+            let mut ev_rx = VoiceRoom::take_event_rx(&room).expect("event_rx must be present");
+
+            let valid_rgba = vec![10, 20, 30, 255, 40, 50, 60, 255];
+            let valid_ev = WorkerEvent::VideoFrame {
+                track_sid: "TR_cam_1".to_owned(),
+                width: 2,
+                height: 1,
+                rgba_b64: base64::engine::general_purpose::STANDARD.encode(&valid_rgba),
+            };
+
+            let invalid_zero_dim = WorkerEvent::VideoFrame {
+                track_sid: "TR_cam_1".to_owned(),
+                width: 0,
+                height: 1,
+                rgba_b64: String::new(),
+            };
+            let invalid_oversized_dim = WorkerEvent::VideoFrame {
+                track_sid: "TR_cam_1".to_owned(),
+                width: 1921,
+                height: 1080,
+                rgba_b64: "AAAA".to_owned(),
+            };
+            let invalid_len_mismatch = WorkerEvent::VideoFrame {
+                track_sid: "TR_cam_1".to_owned(),
+                width: 2,
+                height: 2,
+                rgba_b64: base64::engine::general_purpose::STANDARD.encode(&valid_rgba),
+            };
+            let invalid_b64 = WorkerEvent::VideoFrame {
+                track_sid: "TR_cam_1".to_owned(),
+                width: 1,
+                height: 1,
+                rgba_b64: "not!valid!b64!".to_owned(),
+            };
+            let follow_up = WorkerEvent::TrackSubscribed {
+                participant_identity: "user-2".to_owned(),
+                participant_sid: "PA_2".to_owned(),
+                track_sid: "TR_mic_2".to_owned(),
+                source: "microphone".to_owned(),
+            };
+
+            for ev in [
+                &valid_ev,
+                &invalid_zero_dim,
+                &invalid_oversized_dim,
+                &invalid_len_mismatch,
+                &invalid_b64,
+                &follow_up,
+            ] {
+                let line = format!("{}\n", serde_json::to_string(ev).unwrap());
+                w_w.write_all(line.as_bytes()).await.unwrap();
+            }
+            w_w.flush().await.unwrap();
+
+            assert_eq!(
+                tokio::time::timeout(Duration::from_secs(2), ev_rx.recv())
+                    .await
+                    .unwrap(),
+                Some(VoiceRoomEvent::VideoFrame {
+                    track_sid: "TR_cam_1".to_owned(),
+                    width: 2,
+                    height: 1,
+                    rgba: valid_rgba,
+                })
+            );
+            assert_eq!(
+                tokio::time::timeout(Duration::from_secs(2), ev_rx.recv())
+                    .await
+                    .unwrap(),
+                Some(VoiceRoomEvent::TracksChanged)
             );
         });
     }

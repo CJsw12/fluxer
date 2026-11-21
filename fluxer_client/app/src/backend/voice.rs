@@ -180,6 +180,12 @@ impl fmt::Debug for VoiceCredentials {
 pub(crate) enum VoiceRoomEvent {
     TracksChanged,
     Disconnected(String),
+    VideoFrame {
+        track_sid: String,
+        width: u32,
+        height: u32,
+        rgba: Vec<u8>,
+    },
 }
 
 /// User-configured voice input/output devices and volumes (`0..=200`).
@@ -986,6 +992,34 @@ impl VoiceManager {
         true
     }
 
+    fn handle_room_event(&mut self, event: VoiceRoomEvent) -> bool {
+        match event {
+            VoiceRoomEvent::TracksChanged => true,
+            VoiceRoomEvent::Disconnected(_) => false,
+            VoiceRoomEvent::VideoFrame {
+                track_sid,
+                width,
+                height,
+                rgba,
+            } => {
+                if self
+                    .watched_video_track
+                    .as_ref()
+                    .is_some_and(|t| t.track_sid == track_sid)
+                {
+                    return self.video_frame_queue.push(DecodedVideoFrame {
+                        width,
+                        height,
+                        timestamp_us: 0,
+                        codec: None,
+                        data: rgba,
+                    });
+                }
+                false
+            }
+        }
+    }
+
     #[allow(dead_code)]
     pub(crate) fn attach_mic_task(&mut self, attempt_id: u64, task: JoinHandle<()>) -> bool {
         if self.attempt_id != attempt_id {
@@ -1348,6 +1382,15 @@ fn on_gateway_dispatch_inner(
                                                 let _ = events_for_watcher.send(UiEvent::VoiceChanged);
                                             } else {
                                                 break;
+                                            }
+                                        }
+                                        ev @ VoiceRoomEvent::VideoFrame { .. } => {
+                                            let mut mgr = lock(&voice_for_events);
+                                            if mgr.attempt_id != attempt_id {
+                                                break;
+                                            }
+                                            if mgr.handle_room_event(ev) {
+                                                let _ = events_for_watcher.send(UiEvent::VoiceChanged);
                                             }
                                         }
                                         VoiceRoomEvent::Disconnected(reason) => {
@@ -3113,5 +3156,54 @@ mod tests {
                 None,
             ]
         );
+    }
+
+    #[test]
+    fn handle_room_event_pushes_watched_video_frame_and_ignores_unwatched() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, mut rx) = test_backend(&rt);
+        let _room = seed_guild_voice_channel_and_connect(
+            &rt,
+            &backend,
+            &mut rx,
+            bits::VIEW_CHANNEL | bits::CONNECT | bits::SPEAK,
+        );
+        let watched_key = TrackSubscriptionKey {
+            participant_identity: "user-2:conn-2".into(),
+            participant_sid: "PA_2".into(),
+            track_sid: "TR_cam_watched".into(),
+            source: VoiceTrackSource::Camera,
+        };
+        let _queue = backend
+            .watch_video_track(watched_key)
+            .expect("camera track should be watchable");
+
+        {
+            let mut mgr = lock(&backend.voice);
+            assert!(!mgr.handle_room_event(VoiceRoomEvent::VideoFrame {
+                track_sid: "TR_cam_other".to_owned(),
+                width: 2,
+                height: 1,
+                rgba: vec![1, 2, 3, 255, 4, 5, 6, 255],
+            }));
+        }
+        assert!(backend.latest_video_frame(0).is_none());
+
+        let expected_rgba = vec![9, 8, 7, 255, 6, 5, 4, 255];
+        {
+            let mut mgr = lock(&backend.voice);
+            assert!(mgr.handle_room_event(VoiceRoomEvent::VideoFrame {
+                track_sid: "TR_cam_watched".to_owned(),
+                width: 2,
+                height: 1,
+                rgba: expected_rgba.clone(),
+            }));
+        }
+        let (_gen_id, frame) = backend
+            .latest_video_frame(0)
+            .expect("watched video frame should update latest_video_frame");
+        assert_eq!(frame.width, 2);
+        assert_eq!(frame.height, 1);
+        assert_eq!(frame.data, expected_rgba);
     }
 }

@@ -1,12 +1,22 @@
 //! Isolated LiveKit voice worker process communicating over private stdio JSON-lines IPC.
 
 use std::net::IpAddr;
+use std::time::{Duration, Instant};
 
+use base64::Engine as _;
+use futures_util::StreamExt as _;
 use livekit::options::TrackPublishOptions;
 use livekit::prelude::*;
+use livekit::webrtc::video_frame::VideoFormatType;
+use livekit::webrtc::video_stream::native::{NativeVideoStream, NativeVideoStreamOptions};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::sync::mpsc;
 use url::Url;
+
+const MAX_VIDEO_WIDTH: u32 = 960;
+const MAX_VIDEO_HEIGHT: u32 = 540;
+const VIDEO_FRAME_MIN_INTERVAL: Duration = Duration::from_millis(66);
 
 /// Commands received from `fluxer_client` over private stdin.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -58,6 +68,92 @@ enum WorkerEvent {
         track_sid: String,
         source: String,
     },
+    VideoFrame {
+        track_sid: String,
+        width: u32,
+        height: u32,
+        rgba_b64: String,
+    },
+}
+
+fn compute_scaled_dimensions(src_w: u32, src_h: u32, max_w: u32, max_h: u32) -> Option<(u32, u32)> {
+    if src_w == 0 || src_h == 0 || max_w == 0 || max_h == 0 {
+        return None;
+    }
+    if src_w <= max_w && src_h <= max_h {
+        return Some((src_w, src_h));
+    }
+    let scale = (max_w as f64 / src_w as f64).min(max_h as f64 / src_h as f64);
+    let dst_w = ((src_w as f64 * scale).round() as u32).clamp(1, max_w);
+    let dst_h = ((src_h as f64 * scale).round() as u32).clamp(1, max_h);
+    Some((dst_w, dst_h))
+}
+
+fn abort_video_task(active_video_task: &mut Option<(String, tokio::task::JoinHandle<()>)>) {
+    if let Some((_, handle)) = active_video_task.take() {
+        handle.abort();
+    }
+}
+
+fn spawn_video_decode_task(
+    track: livekit::track::RemoteVideoTrack,
+    track_sid: String,
+    video_frame_tx: mpsc::Sender<WorkerEvent>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut stream = NativeVideoStream::with_options(
+            track.rtc_track(),
+            NativeVideoStreamOptions {
+                queue_size_frames: Some(1),
+            },
+        );
+        let mut rgba = Vec::new();
+        let mut last_emitted: Option<Instant> = None;
+        while let Some(frame) = stream.next().await {
+            let now = Instant::now();
+            if let Some(prev) = last_emitted
+                && now.duration_since(prev) < VIDEO_FRAME_MIN_INTERVAL
+            {
+                continue;
+            }
+            let src_w = frame.buffer.width();
+            let src_h = frame.buffer.height();
+            let Some((dst_w, dst_h)) =
+                compute_scaled_dimensions(src_w, src_h, MAX_VIDEO_WIDTH, MAX_VIDEO_HEIGHT)
+            else {
+                continue;
+            };
+            let Some(byte_len) = (dst_w as usize)
+                .checked_mul(dst_h as usize)
+                .and_then(|px| px.checked_mul(4))
+            else {
+                continue;
+            };
+            let Some(stride) = dst_w.checked_mul(4) else {
+                continue;
+            };
+            let (Ok(dst_w_i32), Ok(dst_h_i32)) = (i32::try_from(dst_w), i32::try_from(dst_h))
+            else {
+                continue;
+            };
+            rgba.resize(byte_len, 0);
+            frame.buffer.to_argb(
+                VideoFormatType::RGBA,
+                &mut rgba,
+                stride,
+                dst_w_i32,
+                dst_h_i32,
+            );
+            let rgba_b64 = base64::engine::general_purpose::STANDARD.encode(&rgba);
+            last_emitted = Some(now);
+            let _ = video_frame_tx.try_send(WorkerEvent::VideoFrame {
+                track_sid: track_sid.clone(),
+                width: dst_w,
+                height: dst_h,
+                rgba_b64,
+            });
+        }
+    })
 }
 
 fn track_source_label(source: TrackSource) -> &'static str {
@@ -304,6 +400,8 @@ async fn run_worker() -> i32 {
 
     let mut playback_muted = false;
     let mut watched_video_track_sid: Option<String> = None;
+    let (video_frame_tx, mut video_frame_rx) = mpsc::channel::<WorkerEvent>(1);
+    let mut active_video_task: Option<(String, tokio::task::JoinHandle<()>)> = None;
     let mut audio_state = WorkerAudioState {
         input_device: None,
         output_device: None,
@@ -347,16 +445,29 @@ async fn run_worker() -> i32 {
                                 apply_audio_settings(platform_audio.as_ref(), &audio_state);
                             }
                             WorkerCommand::SetWatchedVideoTrack { track_sid } => {
-                                watched_video_track_sid = track_sid
+                                let next_sid = track_sid
                                     .map(|sid| sid.trim().to_owned())
                                     .filter(|sid| !sid.is_empty());
+                                if active_video_task
+                                    .as_ref()
+                                    .is_some_and(|(active_sid, _)| next_sid.as_deref() != Some(active_sid.as_str()))
+                                {
+                                    abort_video_task(&mut active_video_task);
+                                }
+                                watched_video_track_sid = next_sid;
                                 apply_watched_video_track(&room, watched_video_track_sid.as_deref());
                             }
-                            WorkerCommand::Close => break,
+                            WorkerCommand::Close => {
+                                abort_video_task(&mut active_video_task);
+                                break;
+                            }
                             WorkerCommand::Connect { .. } => {}
                         }
                     }
-                    Ok(None) | Err(_) => break,
+                    Ok(None) | Err(_) => {
+                        abort_video_task(&mut active_video_task);
+                        break;
+                    }
                 }
             }
             event_opt = room_events.recv() => {
@@ -374,38 +485,58 @@ async fn run_worker() -> i32 {
                         }
                     }
                     Some(RoomEvent::TrackSubscribed {
+                        track,
                         publication,
                         participant,
-                        ..
                     }) => {
+                        let track_sid = publication.sid().to_string();
                         emit_event(
                             &mut stdout,
                             &WorkerEvent::TrackSubscribed {
                                 participant_identity: participant.identity().to_string(),
                                 participant_sid: participant.sid().to_string(),
-                                track_sid: publication.sid().to_string(),
+                                track_sid: track_sid.clone(),
                                 source: track_source_label(publication.source()).to_owned(),
                             },
                         )
                         .await;
+                        if let RemoteTrack::Video(video_track) = track
+                            && watched_video_track_sid.as_deref() == Some(track_sid.as_str())
+                        {
+                            abort_video_task(&mut active_video_task);
+                            let handle = spawn_video_decode_task(
+                                video_track,
+                                track_sid.clone(),
+                                video_frame_tx.clone(),
+                            );
+                            active_video_task = Some((track_sid, handle));
+                        }
                     }
                     Some(RoomEvent::TrackUnsubscribed {
                         publication,
                         participant,
                         ..
                     }) => {
+                        let track_sid = publication.sid().to_string();
+                        if active_video_task
+                            .as_ref()
+                            .is_some_and(|(active_sid, _)| active_sid == &track_sid)
+                        {
+                            abort_video_task(&mut active_video_task);
+                        }
                         emit_event(
                             &mut stdout,
                             &WorkerEvent::TrackUnsubscribed {
                                 participant_identity: participant.identity().to_string(),
                                 participant_sid: participant.sid().to_string(),
-                                track_sid: publication.sid().to_string(),
+                                track_sid,
                                 source: track_source_label(publication.source()).to_owned(),
                             },
                         )
                         .await;
                     }
                     Some(RoomEvent::Disconnected { reason }) => {
+                        abort_video_task(&mut active_video_task);
                         emit_event(
                             &mut stdout,
                             &WorkerEvent::Disconnected {
@@ -416,11 +547,19 @@ async fn run_worker() -> i32 {
                         break;
                     }
                     Some(_) => {}
-                    None => break,
+                    None => {
+                        abort_video_task(&mut active_video_task);
+                        break;
+                    }
                 }
+            }
+            Some(frame_ev) = video_frame_rx.recv() => {
+                emit_event(&mut stdout, &frame_ev).await;
             }
         }
     }
+
+    abort_video_task(&mut active_video_task);
 
     if let Some(sid) = mic_pub_sid {
         let _ = room.local_participant().unpublish_track(&sid).await;
@@ -515,6 +654,15 @@ mod tests {
                 },
                 "\"type\":\"track_unsubscribed\"",
             ),
+            (
+                WorkerEvent::VideoFrame {
+                    track_sid: "TR_cam_1".to_owned(),
+                    width: 640,
+                    height: 360,
+                    rgba_b64: "AAAA".to_owned(),
+                },
+                "\"type\":\"video_frame\"",
+            ),
         ] {
             let encoded = serde_json::to_string(&ev).unwrap();
             assert!(encoded.contains(expected_type));
@@ -580,5 +728,27 @@ mod tests {
         assert_eq!(match_device_index(Some("usb headset"), &devices), None);
         assert_eq!(match_device_index(Some("mic"), &devices), None);
         assert_eq!(match_device_index(Some("nonexistent"), &devices), None);
+    }
+
+    #[test]
+    fn compute_scaled_dimensions_preserves_aspect_ratio_and_bounds() {
+        assert_eq!(compute_scaled_dimensions(0, 720, 960, 540), None);
+        assert_eq!(compute_scaled_dimensions(1280, 0, 960, 540), None);
+        assert_eq!(compute_scaled_dimensions(1280, 720, 0, 540), None);
+        assert_eq!(compute_scaled_dimensions(1280, 720, 960, 0), None);
+
+        // Within bounds: unchanged.
+        assert_eq!(compute_scaled_dimensions(640, 360, 960, 540), Some((640, 360)));
+        assert_eq!(compute_scaled_dimensions(960, 540, 960, 540), Some((960, 540)));
+
+        // Landscape downscale.
+        assert_eq!(compute_scaled_dimensions(1920, 1080, 960, 540), Some((960, 540)));
+        assert_eq!(compute_scaled_dimensions(1280, 720, 960, 540), Some((960, 540)));
+
+        // Portrait downscale constrained by max_h.
+        assert_eq!(compute_scaled_dimensions(1080, 1920, 960, 540), Some((304, 540)));
+
+        // Extreme aspect ratio clamps smaller dimension to >= 1.
+        assert_eq!(compute_scaled_dimensions(4000, 1, 960, 540), Some((960, 1)));
     }
 }

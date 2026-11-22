@@ -4,7 +4,7 @@
 
 use std::ops::Range;
 
-use chrono::{DateTime, TimeZone};
+use chrono::{DateTime, Datelike, TimeZone, Weekday};
 use fluxer_client_core::state::{MESSAGE_TYPE_REPLY, Message, Snowflake};
 
 use crate::ui::l10n;
@@ -97,7 +97,152 @@ pub fn format_full_date<Tz: TimeZone>(at: &DateTime<Tz>) -> String
 where
     Tz::Offset: std::fmt::Display,
 {
-    at.format("%A, %B %-d, %Y").to_string()
+    format_date_divider_for_locale(at, l10n::current().locale())
+}
+
+fn base_lang(locale: &str) -> String {
+    locale.split(['-', '_']).next().unwrap_or(locale).to_ascii_lowercase()
+}
+
+/// Formats a chat day-divider date for the given BCP-47 `locale`.
+pub(crate) fn format_date_divider_for_locale<Tz: TimeZone>(at: &DateTime<Tz>, locale: &str) -> String
+where
+    Tz::Offset: std::fmt::Display,
+{
+    let lang = base_lang(locale);
+    let y = at.year();
+    let m = at.month();
+    let d = at.day();
+    let wd = at.weekday();
+    match lang.as_str() {
+        "ko" => {
+            let day_name = match wd {
+                Weekday::Mon => "월요일",
+                Weekday::Tue => "화요일",
+                Weekday::Wed => "수요일",
+                Weekday::Thu => "목요일",
+                Weekday::Fri => "금요일",
+                Weekday::Sat => "토요일",
+                Weekday::Sun => "일요일",
+            };
+            format!("{y}년 {m}월 {d}일 {day_name}")
+        }
+        "ja" => {
+            let day_name = match wd {
+                Weekday::Mon => "月",
+                Weekday::Tue => "火",
+                Weekday::Wed => "水",
+                Weekday::Thu => "木",
+                Weekday::Fri => "金",
+                Weekday::Sat => "土",
+                Weekday::Sun => "日",
+            };
+            format!("{y}年{m}月{d}日 ({day_name})")
+        }
+        "zh" => format!("{y}年{m}月{d}日"),
+        "de" => {
+            let day_name = match wd {
+                Weekday::Mon => "Montag",
+                Weekday::Tue => "Dienstag",
+                Weekday::Wed => "Mittwoch",
+                Weekday::Thu => "Donnerstag",
+                Weekday::Fri => "Freitag",
+                Weekday::Sat => "Samstag",
+                Weekday::Sun => "Sonntag",
+            };
+            let month_name = match m {
+                1 => "Januar",
+                2 => "Februar",
+                3 => "März",
+                4 => "April",
+                5 => "Mai",
+                6 => "Juni",
+                7 => "Juli",
+                8 => "August",
+                9 => "September",
+                10 => "Oktober",
+                11 => "November",
+                _ => "Dezember",
+            };
+            format!("{day_name}, {d}. {month_name} {y}")
+        }
+        "fr" => {
+            let day_name = match wd {
+                Weekday::Mon => "lundi",
+                Weekday::Tue => "mardi",
+                Weekday::Wed => "mercredi",
+                Weekday::Thu => "jeudi",
+                Weekday::Fri => "vendredi",
+                Weekday::Sat => "samedi",
+                Weekday::Sun => "dimanche",
+            };
+            let month_name = match m {
+                1 => "janvier",
+                2 => "février",
+                3 => "mars",
+                4 => "avril",
+                5 => "mai",
+                6 => "juin",
+                7 => "juillet",
+                8 => "août",
+                9 => "septembre",
+                10 => "octobre",
+                11 => "novembre",
+                _ => "décembre",
+            };
+            format!("{day_name} {d} {month_name} {y}")
+        }
+        "es" => {
+            let day_name = match wd {
+                Weekday::Mon => "lunes",
+                Weekday::Tue => "martes",
+                Weekday::Wed => "miércoles",
+                Weekday::Thu => "jueves",
+                Weekday::Fri => "viernes",
+                Weekday::Sat => "sábado",
+                Weekday::Sun => "domingo",
+            };
+            let month_name = match m {
+                1 => "enero",
+                2 => "febrero",
+                3 => "marzo",
+                4 => "abril",
+                5 => "mayo",
+                6 => "junio",
+                7 => "julio",
+                8 => "agosto",
+                9 => "septiembre",
+                10 => "octubre",
+                11 => "noviembre",
+                _ => "diciembre",
+            };
+            format!("{day_name}, {d} de {month_name} de {y}")
+        }
+        _ => at.format("%A, %B %-d, %Y").to_string(),
+    }
+}
+
+/// Formats a non-negative integer with locale-appropriate thousands grouping.
+#[allow(dead_code)]
+pub(crate) fn format_number_for_locale(n: u64, locale: &str) -> String {
+    let s = n.to_string();
+    if s.len() <= 3 {
+        return s;
+    }
+    let sep = match base_lang(locale).as_str() {
+        "de" | "es" | "it" | "pt" | "nl" | "tr" | "vi" | "id" => ".",
+        "fr" | "ru" | "pl" | "cs" | "sv" | "fi" => "\u{202F}",
+        _ => ",",
+    };
+    let mut out = String::with_capacity(s.len() + (s.len() / 3) * sep.len());
+    let rem = s.len() % 3;
+    for (i, ch) in s.chars().enumerate() {
+        if i > 0 && i >= rem && (i - rem) % 3 == 0 {
+            out.push_str(sep);
+        }
+        out.push(ch);
+    }
+    out
 }
 
 /// `AvatarUtils.DEFAULT_AVATAR_PRIMARY_COLORS`; the default avatar images
@@ -368,6 +513,42 @@ mod tests {
         assert_eq!(format_full_date(&at), "Wednesday, November 18, 2026");
         let at = utc().with_ymd_and_hms(2026, 1, 4, 0, 0, 0).single().expect("date");
         assert_eq!(format_full_date(&at), "Sunday, January 4, 2026");
+    }
+
+    #[test]
+    fn date_dividers_localize_by_locale() {
+        let sun = utc().with_ymd_and_hms(2026, 11, 22, 12, 0, 0).single().expect("date");
+        assert_eq!(format_date_divider_for_locale(&sun, "ko"), "2026년 11월 22일 일요일");
+        assert_eq!(format_date_divider_for_locale(&sun, "ko-KR"), "2026년 11월 22일 일요일");
+        assert_eq!(format_date_divider_for_locale(&sun, "ja"), "2026年11月22日 (日)");
+        assert_eq!(format_date_divider_for_locale(&sun, "ja-JP"), "2026年11月22日 (日)");
+        assert_eq!(format_date_divider_for_locale(&sun, "zh-CN"), "2026年11月22日");
+        assert_eq!(format_date_divider_for_locale(&sun, "zh-TW"), "2026年11月22日");
+        assert_eq!(format_date_divider_for_locale(&sun, "de"), "Sonntag, 22. November 2026");
+        assert_eq!(format_date_divider_for_locale(&sun, "fr"), "dimanche 22 novembre 2026");
+        assert_eq!(format_date_divider_for_locale(&sun, "en-US"), "Sunday, November 22, 2026");
+
+        // Switching l10n locale updates format_full_date too.
+        l10n::set_locale("ko");
+        assert_eq!(format_full_date(&sun), "2026년 11월 22일 일요일");
+        l10n::set_locale("en-US");
+        assert_eq!(format_full_date(&sun), "Sunday, November 22, 2026");
+    }
+
+    #[test]
+    fn numbers_group_thousands_by_locale() {
+        for locale in ["en-US", "ko", "ja", "zh-CN", "de", "fr"] {
+            assert_eq!(format_number_for_locale(0, locale), "0");
+            assert_eq!(format_number_for_locale(999, locale), "999");
+        }
+        assert_eq!(format_number_for_locale(1000, "en-US"), "1,000");
+        assert_eq!(format_number_for_locale(1_234_567, "en-US"), "1,234,567");
+        assert_eq!(format_number_for_locale(1000, "ko"), "1,000");
+        assert_eq!(format_number_for_locale(1_234_567, "ja"), "1,234,567");
+        assert_eq!(format_number_for_locale(1000, "de"), "1.000");
+        assert_eq!(format_number_for_locale(1_234_567, "de"), "1.234.567");
+        assert_eq!(format_number_for_locale(1000, "fr"), "1\u{202F}000");
+        assert_eq!(format_number_for_locale(1_234_567, "fr"), "1\u{202F}234\u{202F}567");
     }
 
     #[test]

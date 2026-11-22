@@ -88,7 +88,7 @@ pub fn validate_totp(code: &str) -> Result<Secret, String> {
 }
 
 /// Result of one login request.
-enum Next {
+pub(crate) enum Next {
     Done(Authenticated),
     Totp { instance: Instance, ticket: Secret },
 }
@@ -227,7 +227,7 @@ impl LoginView {
         }));
     }
 
-    fn finish(&mut self, result: Result<Next, String>, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn finish(&mut self, result: Result<Next, String>, window: &mut Window, cx: &mut Context<Self>) {
         self.busy = false;
         self.request = None;
         match result {

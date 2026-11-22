@@ -5,7 +5,7 @@
 use std::sync::Arc;
 
 use fluxer_client_core::Dispatch;
-use fluxer_client_core::rest::{ClientIdentity, Endpoints, RestClient, RestConfig, SecretToken, TransportPolicy};
+use fluxer_client_core::rest::{ClientIdentity, Endpoints, RestClient, RestConfig, Secret, SecretToken, TransportPolicy};
 use fluxer_client_core::session::{
     CachedEndpoints, DisplayInfo, InstanceRecord, NewAccount, SessionError, SessionStore,
 };
@@ -21,7 +21,7 @@ use serde_json::json;
 
 use crate::backend::{Backend, GatewayStatus, Instance, UiEvent, lock_sent};
 use crate::client_view::{ClientView, Connection};
-use crate::login::{Authenticated, LoginEvent, LoginView, Step};
+use crate::login::{Authenticated, LoginEvent, LoginView, Next, Step};
 use crate::root::{AppRoot, ResumeError, Screen};
 use crate::ack::ACK_DELAY;
 use crate::format::format_message_time;
@@ -457,6 +457,89 @@ fn login_form_validates_before_any_request(cx: &mut TestAppContext) {
         assert_eq!(v.error.as_ref().map(|e| e.as_ref()), Some("Enter the instance address."));
         assert!(!v.busy);
     });
+    drop(rt);
+}
+
+#[gpui_kit::test]
+fn login_totp_challenge_submits_code_and_authenticates(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (view, cx) = open_login(cx, &rt);
+    let authed: Arc<std::sync::Mutex<Option<String>>> = Arc::new(std::sync::Mutex::new(None));
+    let authed_cb = authed.clone();
+    let _sub = cx.update(|_, cx| {
+        cx.subscribe(&view, move |_, ev, _| {
+            if let LoginEvent::Authenticated(auth) = ev {
+                *authed_cb.lock().expect("lock") = Some(auth.user_id.clone());
+            }
+        })
+    });
+
+    let (email, password, code_input) =
+        view.read_with(cx, |v, _| (v.email_input.clone(), v.password_input.clone(), v.code_input.clone()));
+
+    // Step 1: submit valid credentials -> busy while waiting for password login.
+    cx.update(|window, cx| {
+        email.update(cx, |s, cx| s.set_value("me@example.com", window, cx));
+        password.update(cx, |s, cx| s.set_value("secret-pw", window, cx));
+        view.update(cx, |v, cx| v.submit(window, cx));
+    });
+    view.read_with(cx, |v, _| {
+        assert!(v.busy);
+        assert!(matches!(v.step, Step::Credentials));
+    });
+
+    // Server responds with an MFA/TOTP challenge ticket.
+    let auth = offline_auth(json!({ "id": "100", "username": "me" }));
+    let instance = auth.instance.clone();
+    cx.update(|window, cx| {
+        view.update(cx, |v, cx| {
+            v.finish(Ok(Next::Totp { instance, ticket: Secret::new("mfa-ticket-1") }), window, cx);
+        });
+    });
+    cx.run_until_parked();
+    draw(cx);
+
+    view.read_with(cx, |v, _| {
+        assert!(!v.busy);
+        assert!(v.error.is_none());
+        match &v.step {
+            Step::Totp { ticket, .. } => assert_eq!(ticket.expose(), "mfa-ticket-1"),
+            Step::Credentials => panic!("expected Step::Totp"),
+        }
+    });
+
+    // Invalid TOTP is rejected client-side before spawning a request.
+    cx.simulate_input("123");
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    view.read_with(cx, |v, _| {
+        assert!(!v.busy);
+        assert!(v.error.is_some());
+        assert!(matches!(v.step, Step::Totp { .. }));
+    });
+
+    // Enter a valid 6-digit TOTP code and submit.
+    cx.update(|window, cx| code_input.update(cx, |s, cx| s.set_value("", window, cx)));
+    cx.simulate_input("123456");
+    cx.simulate_keystrokes("enter");
+    cx.run_until_parked();
+    view.read_with(cx, |v, _| {
+        assert!(v.busy);
+        assert!(v.error.is_none());
+    });
+
+    // Server accepts the TOTP code and returns the authenticated session.
+    cx.update(|window, cx| {
+        view.update(cx, |v, cx| v.finish(Ok(Next::Done(auth)), window, cx));
+    });
+    cx.run_until_parked();
+    draw(cx);
+
+    view.read_with(cx, |v, cx| {
+        assert!(!v.busy);
+        assert!(v.password_input.read(cx).value().is_empty(), "password must be cleared after auth");
+    });
+    assert_eq!(authed.lock().expect("lock").as_deref(), Some("100"));
     drop(rt);
 }
 

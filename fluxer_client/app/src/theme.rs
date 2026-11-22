@@ -567,7 +567,8 @@ impl Theme {
 }
 
 /// Makes the gpui-kit global theme (inputs, buttons, scrollbars) follow
-/// `kind`. Call at startup and whenever the user changes the theme.
+/// `kind` and Fluxer's official brand primary palette (`#5865F2`).
+/// Call at startup and whenever the user changes the theme.
 pub fn apply(kind: ThemeKind, window: &mut Window, cx: &mut App) {
     let resolved = kind.resolve(window.appearance());
     let mode = if resolved.is_dark() {
@@ -576,6 +577,28 @@ pub fn apply(kind: ThemeKind, window: &mut Window, cx: &mut App) {
         ThemeMode::Light
     };
     KitTheme::change(mode, Some(window), cx);
+    let brand = BRAND_PRIMARY.color();
+    let brand_hover = Hsl::new(BRAND_PRIMARY.h, BRAND_PRIMARY.s, (BRAND_PRIMARY.l - 6.0).max(0.0)).color();
+    let brand_active = Hsl::new(BRAND_PRIMARY.h, BRAND_PRIMARY.s, (BRAND_PRIMARY.l - 12.0).max(0.0)).color();
+    let kit = KitTheme::global_mut(cx);
+    kit.colors.primary = brand;
+    kit.colors.primary_hover = brand_hover;
+    kit.colors.primary_active = brand_active;
+    kit.colors.primary_foreground = gpui_kit::white();
+    kit.colors.button_primary = brand;
+    kit.colors.button_primary_hover = brand_hover;
+    kit.colors.button_primary_active = brand_active;
+    kit.colors.button_primary_foreground = gpui_kit::white();
+    kit.colors.ring = brand;
+    kit.tokens.primary = brand.into();
+    kit.tokens.primary_hover = brand_hover.into();
+    kit.tokens.primary_active = brand_active.into();
+    kit.tokens.primary_foreground = gpui_kit::white().into();
+    kit.tokens.button_primary = brand.into();
+    kit.tokens.button_primary_hover = brand_hover.into();
+    kit.tokens.button_primary_active = brand_active.into();
+    kit.tokens.button_primary_foreground = gpui_kit::white().into();
+    kit.tokens.ring = brand.into();
 }
 
 #[cfg(test)]

@@ -2503,8 +2503,10 @@ impl Render for ClientView {
                     .on_drop(cx.listener(|v, paths: &ExternalPaths, _, cx| v.add_paths(paths.paths(), cx)))
                     .child(ui::header::render(self, &theme, cx))
                     .when_some(self.voice.watched_video_track.as_ref(), |d, track| {
+                        let label = ui::video_viewer::participant_display_name(self, track);
                         d.child(ui::video_viewer::render(
                             track,
+                            label,
                             self.watched_video_frame.clone(),
                             &theme,
                             cx,

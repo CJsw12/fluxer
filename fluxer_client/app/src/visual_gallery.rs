@@ -447,6 +447,21 @@ pub fn apply_scenario(
             view.select_channel(CH_EMPTY, cx);
         }
         4 => {
+            {
+                let mut state = view.backend.state();
+                state.apply_at(
+                    &Dispatch {
+                        t: "TYPING_START".to_owned(),
+                        s: 90,
+                        d: json!({
+                            "channel_id": DM_ALICE.to_string(),
+                            "user_id": USER_ALICE.to_string(),
+                            "timestamp": crate::ui::typing::now_ms() / 1000
+                        }),
+                    },
+                    crate::ui::typing::now_ms(),
+                );
+            }
             view.select_place(Place::Home, cx);
             view.select_channel(DM_ALICE, cx);
             view.typing_text = Some("Alice is typing…".into());
@@ -621,6 +636,24 @@ pub fn apply_scenario(
         9 => {
             view.select_place(Place::Guild(GUILD), cx);
             view.select_channel(CH_GENERAL, cx);
+            if let Ok(profile) = serde_json::from_value(json!({
+                "user": {
+                    "id": USER_ALICE.to_string(),
+                    "username": "alice",
+                    "global_name": "Alice",
+                    "avatar": "alicehash"
+                },
+                "user_profile": {
+                    "bio": "Building 1:1 Fluxer GPUI native desktop parity.",
+                    "pronouns": "she/her",
+                    "accent_color": 0x5865F2
+                },
+                "guild_member": {
+                    "joined_at": "2026-01-15T12:00:00Z"
+                }
+            })) {
+                view.profile_cache.insert((USER_ALICE, Some(GUILD)), profile);
+            }
             view.profile_in_flight.insert((USER_ALICE, Some(GUILD)));
             view.open_profile(USER_ALICE, Some(GUILD), point(px(760.), px(120.)), window, cx);
         }
@@ -863,6 +896,37 @@ mod tests {
             }
         }
         assert_eq!(SCENARIOS.len(), 12);
+
+        // Verify M3.2 parity fixes: brand indigo primary button theme, resolved
+        // screen-share participant name, and exact non-overflowing attachment box.
+        vcx.update(|window, cx| theme::apply(ThemeKind::Dark, window, cx));
+        let primary_matches_brand = vcx.read(|cx| {
+            let kit = gpui_kit::component::Theme::global(cx);
+            let brand = Theme::current(cx).brand;
+            kit.colors.primary == brand && kit.tokens.button_primary.color == brand
+        });
+        assert!(primary_matches_brand, "gpui-kit primary button color must match Fluxer brand indigo");
+        let resolved_name = view.read_with(vcx, |v, _| {
+            let track = TrackSubscriptionKey {
+                participant_identity: format!("{}:gallery", USER_ALICE.0),
+                participant_sid: "PA_alice".to_owned(),
+                track_sid: "TR_gallery_screen".to_owned(),
+                source: VoiceTrackSource::ScreenShare,
+            };
+            crate::ui::video_viewer::participant_display_name(v, &track)
+        });
+        assert_eq!(resolved_name.as_ref(), "Alice");
+
+        view.update_in(vcx, |v, window, cx| {
+            apply_scenario(v, 1, Some("http://127.0.0.1:9"), window, cx);
+        });
+        vcx.run_until_parked();
+        draw(vcx);
+        let img0_sel: &'static str = Box::leak(format!("attachment-open-{}-0", msg_id(2).0).into_boxed_str());
+        let img0 = vcx.debug_bounds(img0_sel).expect("first attachment box");
+        assert_eq!(img0.size.width, px(180.));
+        assert_eq!(img0.size.height, px(120.));
+
         drop(rt);
     }
 }

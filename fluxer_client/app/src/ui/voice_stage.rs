@@ -422,10 +422,12 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .bg(theme.background_tertiary);
 
     if let Some(track) = &watched_track {
+        let label = video_viewer::participant_display_name(view, track);
         stage_body = stage_body
             .justify_start()
             .child(video_viewer::render_stage(
                 track,
+                label,
                 view.watched_video_frame.clone(),
                 theme,
                 cx,

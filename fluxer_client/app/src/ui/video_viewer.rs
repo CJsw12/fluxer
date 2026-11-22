@@ -43,25 +43,39 @@ pub(crate) fn decoded_frame_to_render_image(frame: &DecodedVideoFrame) -> Option
 
 pub(crate) fn render(
     track: &TrackSubscriptionKey,
+    participant_label: SharedString,
     frame_image: Option<(u32, u32, Arc<RenderImage>)>,
     theme: &Theme,
     cx: &mut Context<ClientView>,
 ) -> impl IntoElement {
-    render_inner(track, frame_image, false, theme, cx)
+    render_inner(track, participant_label, frame_image, false, theme, cx)
 }
 
 /// Expanded video viewer embedded inside `ui::voice_stage`.
 pub(crate) fn render_stage(
     track: &TrackSubscriptionKey,
+    participant_label: SharedString,
     frame_image: Option<(u32, u32, Arc<RenderImage>)>,
     theme: &Theme,
     cx: &mut Context<ClientView>,
 ) -> impl IntoElement {
-    render_inner(track, frame_image, true, theme, cx)
+    render_inner(track, participant_label, frame_image, true, theme, cx)
+}
+
+/// Resolves a LiveKit participant identity (e.g. `"201:session"`) to the
+/// member's display name when it maps to a known Fluxer `Snowflake`.
+pub(crate) fn participant_display_name(view: &ClientView, track: &TrackSubscriptionKey) -> SharedString {
+    if let Some(id_part) = track.participant_identity.split(':').next()
+        && let Ok(uid) = id_part.parse::<u64>()
+    {
+        return view.voice_member_name(view.voice.guild_id, fluxer_client_core::state::Snowflake(uid));
+    }
+    track.participant_identity.clone().into()
 }
 
 fn render_inner(
     track: &TrackSubscriptionKey,
+    participant_label: SharedString,
     frame_image: Option<(u32, u32, Arc<RenderImage>)>,
     expanded: bool,
     theme: &Theme,
@@ -74,7 +88,6 @@ fn render_inner(
             l10n::tr("Video Stream").into()
         }
     };
-    let participant_label: SharedString = track.participant_identity.clone().into();
     let resolution_label: Option<SharedString> = frame_image
         .as_ref()
         .map(|(w, h, _)| format!("{w}x{h}").into());

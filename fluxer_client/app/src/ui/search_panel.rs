@@ -847,10 +847,8 @@ pub fn render(view: &ClientView, theme: &Theme, window: &Window, cx: &mut Contex
                     let thumb = img(image.source(scale))
                         .image_cache(&cache)
                         .id(SharedString::from(format!("search-attachment-{}-{ix}", message_id.0)))
-                        .w(px(image.width))
-                        .h(px(image.height))
-                        .rounded(px(4.))
-                        .object_fit(ObjectFit::Contain)
+                        .size_full()
+                        .object_fit(ObjectFit::Cover)
                         .with_loading(move || div().size_full().bg(placeholder).into_any_element())
                         .with_fallback(move || {
                             div().text_xs().text_color(muted_fg).child(url.clone()).into_any_element()
@@ -864,6 +862,10 @@ pub fn render(view: &ClientView, theme: &Theme, window: &Window, cx: &mut Contex
                             .relative()
                             .w(px(image.width))
                             .h(px(image.height))
+                            .flex_none()
+                            .rounded(px(4.))
+                            .overflow_hidden()
+                            .bg(placeholder)
                             .cursor_pointer()
                             .on_click(move |_, window, cx| {
                                 let items = (*items_for_click).clone();

@@ -3,7 +3,6 @@
 //! and right scrollable content pane.
 
 use fluxer_client_core::rest::UserSettingsPatch;
-use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
 use gpui_kit::component::switch::Switch;
@@ -12,6 +11,7 @@ use gpui_kit::{AnyElement, Context, Entity, FontWeight, ScrollHandle, SharedStri
 
 use crate::backend::voice::VoiceAudioSettings;
 use crate::client_view::ClientView;
+use crate::icons::AppIcon;
 use crate::prefs::{DEFAULT_VOICE_VOLUME, MAX_VOICE_VOLUME, MIN_VOICE_VOLUME, ReducedMotionPref};
 use crate::settings_model::{FONT_SIZE_OPTIONS, LOCALES, SettingsEffect, THEME_OPTIONS, theme_patch_value};
 use crate::theme::{self, MAX_FONT_SIZE, MAX_UI_ZOOM, MIN_FONT_SIZE, MIN_UI_ZOOM, Theme, ThemeKind};
@@ -78,15 +78,15 @@ impl SettingsTab {
         }
     }
 
-    const fn icon(self) -> IconName {
+    const fn icon(self) -> AppIcon {
         match self {
-            Self::Account => IconName::Users,
-            Self::Appearance => IconName::Eye,
-            Self::Notifications => IconName::Bell,
-            Self::VoiceVideo => IconName::Volume2,
-            Self::Accessibility => IconName::Settings2,
-            Self::Language => IconName::Hash,
-            Self::Advanced => IconName::Settings,
+            Self::Account => AppIcon::UserCircle,
+            Self::Appearance => AppIcon::Palette,
+            Self::Notifications => AppIcon::Bell,
+            Self::VoiceVideo => AppIcon::SpeakerHigh,
+            Self::Accessibility => AppIcon::PersonArmsSpread,
+            Self::Language => AppIcon::Globe,
+            Self::Advanced => AppIcon::Wrench,
         }
     }
 
@@ -1362,7 +1362,7 @@ fn render_sidebar(
                             Button::new("settings-logout")
                                 .danger()
                                 .small()
-                                .icon(IconName::ExternalLink)
+                                .icon(AppIcon::SignOut)
                                 .label(l10n::tr("Sign out"))
                                 .on_click(cx.listener(|this, _, _, cx| this.settings_prompt_logout(true, cx))),
                         ),
@@ -1378,7 +1378,7 @@ fn render_sidebar(
                                 Button::new("settings-switch-accounts")
                                     .ghost()
                                     .small()
-                                    .icon(IconName::Users)
+                                    .icon(AppIcon::Users)
                                     .tooltip(switch_label.clone())
                                     .accessibility_label(switch_label)
                                     .on_click(cx.listener(|this, _, window, cx| {

@@ -2,7 +2,6 @@
 //! status dot, display name, status text and a "Log out" button. Clicking
 //! the dot cycles the own status (online, idle, dnd, invisible).
 
-use gpui_kit::assets::IconName;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::{Context, FontWeight, MouseButton, Role, SharedString, div, prelude::*, px};
@@ -11,6 +10,7 @@ use super::avatar::{AvatarSpec, render_avatar};
 use super::l10n;
 use super::member_list::{status_color, status_label};
 use crate::client_view::{ClientView, Connection};
+use crate::icons::AppIcon;
 use crate::theme::Theme;
 
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> impl IntoElement {
@@ -106,7 +106,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     Button::new("switch-accounts")
                         .ghost()
                         .small()
-                        .icon(IconName::Users)
+                        .icon(AppIcon::Users)
                         .tooltip(l10n::tr("Switch accounts"))
                         .accessibility_label(l10n::tr("Switch accounts"))
                         .on_click(cx.listener(|this, _, window, cx| this.open_account_switcher(window, cx))),
@@ -117,7 +117,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             Button::new("open-settings")
                 .ghost()
                 .small()
-                .icon(IconName::Settings)
+                .icon(AppIcon::Gear)
                 .tooltip(l10n::tr("Settings"))
                 .accessibility_label(l10n::tr("Settings"))
                 .on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx))),
@@ -126,7 +126,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             Button::new("log-out")
                 .ghost()
                 .small()
-                .icon(IconName::ExternalLink)
+                .icon(AppIcon::SignOut)
                 .tooltip(l10n::tr("Log out"))
                 .accessibility_label(l10n::tr("Log out"))
                 .on_click(cx.listener(|this, _, _, cx| this.log_out(cx))),

@@ -8,7 +8,7 @@ use fluxer_client_core::rest::{
     MAX_TIMEOUT_DURATION_SECONDS, RestError, validate_audit_log_reason, validate_ban_request, validate_member_patch,
 };
 use fluxer_client_core::state::Snowflake;
-use gpui_kit::assets::IconName;
+use crate::icons::AppIcon;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
 use gpui_kit::component::{Disableable as _, Icon, Selectable as _, Sizable as _};
@@ -826,7 +826,7 @@ pub fn render_bans(modal: &GuildBansModal, theme: &Theme, cx: &mut Context<Clien
                         .flex_row()
                         .items_center()
                         .gap_2()
-                        .child(Icon::new(IconName::Users).small())
+                        .child(Icon::new(AppIcon::Prohibit).small())
                         .child(div().text_sm().truncate().child(l10n::tr("Bans"))),
                 ),
         )

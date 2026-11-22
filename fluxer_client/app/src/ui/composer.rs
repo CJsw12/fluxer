@@ -6,12 +6,12 @@
 //! (`ClientView`) drives it from the input's events and [`key_hooks`].
 
 use fluxer_client_core::state::{ClientState, MESSAGE_TYPE_REPLY, Message, MessageState, Snowflake};
-use gpui_kit::component::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Enter, Escape, IndentInline, Input, InputContent, MoveDown, MoveUp};
 use gpui_kit::{AnyElement, App, Context, Div, SharedString, Window, div, prelude::*, px};
 
 use crate::client_view::ClientView;
+use crate::icons::AppIcon;
 use crate::theme::Theme;
 use crate::ui::l10n;
 use crate::ui::reply::ReplyingTo;
@@ -41,7 +41,7 @@ pub fn render_with(
         Button::new("composer-upload")
             .ghost()
             .compact()
-            .icon(IconName::Plus)
+            .icon(AppIcon::Plus)
             .tooltip(l10n::tr("Upload a file"))
             .on_click(cx.listener(|v, _, _, cx| v.pick_files(cx)))
     });
@@ -49,7 +49,7 @@ pub fn render_with(
         Button::new("composer-emoji")
             .ghost()
             .compact()
-            .icon(gpui_kit::assets::IconName::FaceSlightlySmilingPlus)
+            .icon(AppIcon::Smiley)
             .tooltip(l10n::tr("Add emoji"))
             .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
                 v.open_emoji_picker(crate::ui::emoji_picker::sections::PickerTarget::Composer, ev.position(), window, cx);
@@ -419,7 +419,7 @@ pub fn editing_bar(theme: &Theme, on_cancel: impl Fn(&mut Window, &mut App) + 's
             Button::new("edit-bar-cancel")
                 .ghost()
                 .compact()
-                .icon(IconName::CircleX)
+                .icon(AppIcon::XCircle)
                 .tooltip(l10n::tr("Cancel editing message"))
                 .on_click(move |_, window, cx| on_cancel(window, cx)),
         )

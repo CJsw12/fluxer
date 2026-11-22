@@ -14,7 +14,6 @@ use fluxer_client_core::state::{
     ATTACHMENT_FLAG_ANIMATED, Channel, ChannelKind, ClientState, Message, Snowflake,
 };
 use fluxer_client_markdown::{Document, LowerOptions, MarkdownContext, MessageMarkdown, TimeFormat, parse};
-use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
 use gpui_kit::component::{Selectable as _, Sizable as _};
@@ -24,6 +23,7 @@ use gpui_kit::{
 };
 
 use crate::client_view::ClientView;
+use crate::icons::AppIcon;
 use crate::format::{default_avatar_index, fit_image, format_message_time, initials, message_time};
 use crate::theme::Theme;
 use crate::ui::avatar::{AvatarSpec, render_avatar};
@@ -956,7 +956,7 @@ pub fn render(view: &ClientView, theme: &Theme, window: &Window, cx: &mut Contex
                     Button::new("close-search")
                         .ghost()
                         .small()
-                        .icon(IconName::Close)
+                        .icon(AppIcon::X)
                         .tooltip(l10n::tr("Close"))
                         .on_click(cx.listener(|v, _, window, cx| v.close_search(window, cx))),
                 ),
@@ -980,7 +980,7 @@ pub fn render(view: &ClientView, theme: &Theme, window: &Window, cx: &mut Contex
                             Button::new("search-submit")
                                 .primary()
                                 .small()
-                                .icon(IconName::Search)
+                                .icon(AppIcon::MagnifyingGlass)
                                 .tooltip(l10n::tr("Search"))
                                 .on_click(cx.listener(|v, _, _, cx| v.search_submit(cx))),
                         ),

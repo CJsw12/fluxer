@@ -1,13 +1,13 @@
 //! Guild rail: the DM button, then one button per guild.
 
 use fluxer_client_core::state::Unread;
-use gpui_kit::assets::IconName;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::{Context, Div, ElementId, FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
 
 use super::{badge, l10n};
 use crate::client_view::ClientView;
+use crate::icons::AppIcon;
 use crate::theme::Theme;
 use crate::view_model::Place;
 
@@ -58,7 +58,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             Button::new("join-guild")
                 .ghost()
                 .small()
-                .icon(IconName::Plus)
+                .icon(AppIcon::Plus)
                 .tooltip(l10n::tr("Join a community"))
                 .accessibility_label(l10n::tr("Join a community"))
                 .on_click(cx.listener(|this, _, window, cx| this.open_join_guild(window, cx))),

@@ -4,7 +4,7 @@
 use std::ops::Range;
 
 use fluxer_client_core::state::{ClientState, Message, ReplyPreview, Snowflake, User};
-use gpui_kit::component::IconName;
+use crate::icons::AppIcon;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::{
     AnyElement, App, ElementId, FontWeight, HighlightStyle, SharedString, StyledText, Window, div, prelude::*, px,
@@ -305,7 +305,7 @@ pub fn replying_to_bar(
             Button::new("reply-bar-cancel")
                 .ghost()
                 .compact()
-                .icon(IconName::CircleX)
+                .icon(AppIcon::XCircle)
                 .tooltip(l10n::tr("Cancel reply"))
                 .on_click(move |_, window, cx| on_cancel(window, cx)),
         )

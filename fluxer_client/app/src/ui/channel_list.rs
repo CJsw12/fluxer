@@ -1,7 +1,6 @@
 //! Channel sidebar: heading, the channels of the selected place, and the
 //! user panel at the bottom.
 
-use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{AnyElement, Context, FontWeight, MouseButton, Role, SharedString, div, prelude::*, px};
@@ -9,6 +8,7 @@ use gpui_kit::{AnyElement, Context, FontWeight, MouseButton, Role, SharedString,
 use super::avatar::{AvatarSpec, render_avatar};
 use super::{access::Scope, badge, user_panel, voice_panel};
 use crate::client_view::ClientView;
+use crate::icons::AppIcon;
 use crate::theme::Theme;
 use crate::ui::l10n;
 use crate::view_model::{ChannelIcon, ChannelItem, Place};
@@ -85,7 +85,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             Button::new("create-channel-btn")
                                 .ghost()
                                 .xsmall()
-                                .icon(IconName::Plus)
+                                .icon(AppIcon::Plus)
                                 .tooltip(l10n::tr("Create channel"))
                                 .accessibility_label(l10n::tr("Create channel"))
                                 .on_click(cx.listener(|this, _, window, cx| this.open_create_channel(None, window, cx))),
@@ -98,7 +98,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             Button::new("guild-bans-btn")
                                 .ghost()
                                 .xsmall()
-                                .icon(IconName::CircleX)
+                                .icon(AppIcon::Prohibit)
                                 .tooltip(l10n::tr("Bans"))
                                 .accessibility_label(l10n::tr("Bans"))
                                 .on_click(cx.listener(|this, _, window, cx| this.open_guild_bans(window, cx))),
@@ -111,7 +111,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             Button::new("guild-roles-btn")
                                 .ghost()
                                 .xsmall()
-                                .icon(IconName::Settings2)
+                                .icon(AppIcon::SlidersHorizontal)
                                 .tooltip(l10n::tr("Roles"))
                                 .accessibility_label(l10n::tr("Roles"))
                                 .on_click(cx.listener(move |this, _, window, cx| this.open_access(Scope::Guild(id), window, cx))),
@@ -124,7 +124,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             Button::new("leave-guild-btn")
                                 .ghost()
                                 .xsmall()
-                                .icon(IconName::ExternalLink)
+                                .icon(AppIcon::SignOut)
                                 .tooltip(l10n::tr("Leave community"))
                                 .accessibility_label(l10n::tr("Leave community"))
                                 .on_click(cx.listener(move |this, _, window, cx| this.open_leave_guild(id, window, cx))),
@@ -173,7 +173,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             .flex_row()
                             .items_center()
                             .gap_2()
-                            .child(Icon::new(IconName::Users).xsmall())
+                            .child(Icon::new(AppIcon::Users).xsmall())
                             .child(div().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("Friends"))),
                     )
                     .when(view.pending_incoming > 0, |d| d.child(badge(view.pending_incoming, theme))),
@@ -203,7 +203,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             Button::new("create-group-dm-btn")
                                 .ghost()
                                 .xsmall()
-                                .icon(IconName::Plus)
+                                .icon(AppIcon::Plus)
                                 .tooltip(l10n::tr("Create group DM"))
                                 .accessibility_label(l10n::tr("Create group DM"))
                                 .on_click(cx.listener(|this, _, window, cx| this.open_create_group_dm(window, cx))),
@@ -240,7 +240,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .on_click(|_, _, cx| cx.stop_propagation())
                 .child(Button::new(("channel-permissions", channel.0)).ghost().xsmall()
-                    .icon(IconName::Settings2)
+                    .icon(AppIcon::SlidersHorizontal)
                     .tooltip(l10n::tr("Permissions"))
                     .accessibility_label(l10n::tr("Permissions"))
                     .on_click(cx.listener(move |this, _, window, cx| {
@@ -265,7 +265,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
             .text_xs()
             .text_color(muted_fg)
             .font_weight(FontWeight::MEDIUM)
-            .child(div().flex_none().text_size(px(10.)).child("▾"))
+            .child(div().flex_none().child(Icon::new(AppIcon::CaretDown).xsmall().text_color(muted_fg)))
             .child(div().flex_1().min_w_0().truncate().child(c.name.clone()))
             .when(c.can_manage, |d| {
                 d.child(
@@ -277,7 +277,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                             Button::new(("create-in-category", cat_id.0))
                                 .ghost()
                                 .xsmall()
-                                .icon(IconName::Plus)
+                                .icon(AppIcon::Plus)
                                 .tooltip(l10n::tr("Create channel"))
                                 .accessibility_label(l10n::tr("Create channel"))
                                 .on_click(cx.listener(move |this, _, window, cx| {
@@ -294,7 +294,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                             Button::new(("edit-channel", cat_id.0))
                                 .ghost()
                                 .xsmall()
-                                .icon(IconName::Settings)
+                                .icon(AppIcon::Gear)
                                 .tooltip(l10n::tr("Category settings"))
                                 .accessibility_label(l10n::tr("Category settings"))
                                 .on_click(cx.listener(move |this, _, window, cx| {
@@ -353,11 +353,25 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 ))
                 .into_any_element()
         } else {
-            div().w(px(18.)).flex_none().text_color(muted_fg).child(c.icon.glyph()).into_any_element()
+            let icon = match c.icon {
+                ChannelIcon::Voice => AppIcon::SpeakerHigh,
+                ChannelIcon::Announcement => AppIcon::Megaphone,
+                ChannelIcon::Forum | ChannelIcon::Thread => AppIcon::ChatsCircle,
+                ChannelIcon::Link => AppIcon::LinkSimple,
+                _ => AppIcon::Hash,
+            };
+            div()
+                .w(px(18.))
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(Icon::new(icon).xsmall().text_color(muted_fg))
+                .into_any_element()
         })
         .child(div().flex_1().min_w_0().truncate().child(c.name.clone()));
     if c.muted {
-        row = row.child(Icon::new(IconName::BellOff).xsmall());
+        row = row.child(Icon::new(AppIcon::BellSlash).xsmall());
     }
     if c.unread.mention_count > 0 {
         row = row.child(badge(c.unread.mention_count, theme));
@@ -379,7 +393,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                     Button::new(("edit-channel", ch_id.0))
                         .ghost()
                         .xsmall()
-                        .icon(IconName::Settings)
+                        .icon(AppIcon::Gear)
                         .tooltip(l10n::tr("Channel settings"))
                         .accessibility_label(l10n::tr("Channel settings"))
                         .on_click(cx.listener(move |this, _, window, cx| {

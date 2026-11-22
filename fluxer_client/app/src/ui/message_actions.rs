@@ -7,7 +7,7 @@
 use std::rc::Rc;
 
 use fluxer_client_core::state::{ClientState, Message, MessageState, PartialEmoji, Snowflake, bits};
-use gpui_kit::assets::IconName;
+use crate::icons::AppIcon;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
 use gpui_kit::{AnyElement, App, ClipboardItem, ElementId, IntoElement, Pixels, Point, SharedString, Window, div, prelude::*, px};
@@ -176,17 +176,17 @@ fn tooltip(action: MessageAction, target: &ActionTarget) -> String {
 }
 
 /// The icon of each button (`icons::AppAssets` serves them).
-fn icon(action: MessageAction, target: &ActionTarget) -> IconName {
+fn icon(action: MessageAction, target: &ActionTarget) -> AppIcon {
     match action {
-        MessageAction::SuppressEmbeds if target.embeds_suppressed => IconName::Eye,
-        MessageAction::SuppressEmbeds => IconName::EyeOff,
-        MessageAction::React => IconName::FaceSlightlySmilingPlus,
-        MessageAction::Reply => IconName::Reply,
-        MessageAction::Edit => IconName::Pencil,
-        MessageAction::Retry => IconName::RotateCw,
-        MessageAction::CopyText => IconName::Copy,
-        MessageAction::CopyId => IconName::Hash,
-        MessageAction::Delete | MessageAction::DeleteNow => IconName::Trash,
+        MessageAction::SuppressEmbeds if target.embeds_suppressed => AppIcon::Eye,
+        MessageAction::SuppressEmbeds => AppIcon::EyeSlash,
+        MessageAction::React => AppIcon::Smiley,
+        MessageAction::Reply => AppIcon::ArrowBendUpLeft,
+        MessageAction::Edit => AppIcon::PencilSimple,
+        MessageAction::Retry => AppIcon::ArrowClockwise,
+        MessageAction::CopyText => AppIcon::Copy,
+        MessageAction::CopyId => AppIcon::Hash,
+        MessageAction::Delete | MessageAction::DeleteNow => AppIcon::Trash,
     }
 }
 

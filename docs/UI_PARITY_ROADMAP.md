@@ -49,7 +49,7 @@
   - **공식 참조:** `fluxer_app/src/features/ui/components/StatusAwareAvatar.tsx`, `BaseAvatar.tsx`
   - **작업:** `render_avatar(AvatarSpec { user_id, avatar_url, display_name, size, status, status_border_bg })` 단일 컴포넌트를 만들고 앱 전체의 개별 아바타/이니셜 원 코드를 모두 교체한다. 실제 `avatar_url` 로드 + 실패/없음 시 일관된 기본 Fluxer 아바타 폴백 + 선택적 상태 점 배치를 통일한다.
   - **수락 기준:** 위 9개 화면 모두 공용 `ui::avatar` 사용, DM 행·DM 배너·설정 프로필·검색 결과·멤버 목록에서 `avatar_url` 존재 시 이미지 렌더링 확인 테스트 통과.
-- [ ] **M1.3 공식 Phosphor Icons SVG 교체**
+- [x] **M1.3 공식 Phosphor Icons SVG 교체**
   - **대상 파일:** `fluxer_client/app/assets/icons/`(신규, MIT `@phosphor-icons/core` 원본 SVG + 라이선스 고지), `fluxer_client/app/src/icons.rs`, 각 UI 아이콘 참조부
   - **공식 참조:** `fluxer_app/package.json` (`@phosphor-icons/react`) 및 각 컴포넌트의 Phosphor 아이콘명
   - **작업:** 앱이 사용하는 모든 아이콘(길드·채널·음성·헤더·설정·입력창·메시지 액션·모달 닫기)을 공식 Phosphor SVG로 교체하고 `AppAssets`가 우선 서빙하게 연결한다.

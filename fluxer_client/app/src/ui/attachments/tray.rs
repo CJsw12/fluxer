@@ -2,7 +2,7 @@
 //! thumbnail, or a file glyph), the name and size, a spoiler toggle and a
 //! remove button per file (`ChannelAttachmentArea.tsx`, simplified).
 
-use gpui_kit::assets::IconName;
+use crate::icons::AppIcon;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::{AnyElement, Context, ObjectFit, StyledImage as _, div, img, prelude::*, px};
@@ -80,13 +80,13 @@ fn chip(file: &PendingAttachment, theme: &Theme, cx: &mut Context<ClientView>) -
     let spoiler = Button::new(("attachment-spoiler", id))
         .ghost()
         .xsmall()
-        .icon(if file.spoiler { IconName::EyeOff } else { IconName::Eye })
+        .icon(if file.spoiler { AppIcon::EyeSlash } else { AppIcon::Eye })
         .tooltip(if file.spoiler { l10n::tr("Remove spoiler") } else { l10n::tr("Mark as spoiler") })
         .on_click(cx.listener(move |view, _, _, cx| view.toggle_attachment_spoiler(id, cx)));
     let remove = Button::new(("attachment-remove", id))
         .ghost()
         .xsmall()
-        .icon(IconName::Close)
+        .icon(AppIcon::X)
         .tooltip(l10n::tr("Remove attachment"))
         .on_click(cx.listener(move |view, _, _, cx| view.remove_attachment(id, cx)));
     div()

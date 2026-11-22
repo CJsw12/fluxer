@@ -2,7 +2,7 @@
 
 use fluxer_client_core::rest::{RolePatch, validate_role_name};
 use fluxer_client_core::state::{ClientState, PermissionOverwrite, Role, Snowflake, bits};
-use gpui_kit::assets::IconName;
+use crate::icons::AppIcon;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
 use gpui_kit::component::{Disableable as _, Icon, Selectable as _, Sizable as _};
@@ -858,7 +858,7 @@ pub fn render(view: &ClientView, modal: &AccessModal, theme: &Theme, cx: &mut Co
                         .flex_row()
                         .items_center()
                         .gap_2()
-                        .child(Icon::new(IconName::Settings2).small())
+                        .child(Icon::new(AppIcon::SlidersHorizontal).small())
                         .child(div().text_sm().font_weight(FontWeight::BOLD).child(l10n::tr(scope_title))),
                 )
                 .when(allowed && matches!(modal.scope, Scope::Guild(_)), |d| {

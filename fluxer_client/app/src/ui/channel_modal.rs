@@ -7,7 +7,7 @@ use fluxer_client_core::rest::{
     validate_guild_channel_patch,
 };
 use fluxer_client_core::state::{ChannelKind, ClientState, Snowflake};
-use gpui_kit::assets::IconName;
+use crate::icons::AppIcon;
 use gpui_kit::component::{Disableable as _, Icon, Selectable as _, Sizable as _};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
@@ -1076,7 +1076,7 @@ pub fn render_edit(modal: &EditChannelModal, theme: &Theme, cx: &mut Context<Cli
                         .flex_row()
                         .items_center()
                         .gap_2()
-                        .child(Icon::new(if is_cat { IconName::Settings2 } else { IconName::Hash }).small())
+                        .child(Icon::new(if is_cat { AppIcon::SlidersHorizontal } else { AppIcon::Hash }).small())
                         .child(div().text_sm().truncate().child(l10n::tr("Overview"))),
                 ),
         )

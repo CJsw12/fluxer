@@ -2,12 +2,12 @@
 //! guild channels the member list toggle (people icon, like the web
 //! `ChannelHeader` "Show Member List" button).
 
-use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Icon, Selectable as _, Sizable as _};
 use gpui_kit::{Context, FontWeight, Role, div, prelude::*, px};
 
 use crate::client_view::ClientView;
+use crate::icons::AppIcon;
 use crate::theme::Theme;
 use crate::ui::l10n;
 use crate::view_model::Place;
@@ -56,7 +56,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     Button::new("edit-selected-channel-btn")
                         .ghost()
                         .small()
-                        .icon(IconName::Settings)
+                        .icon(AppIcon::Gear)
                         .tooltip(l10n::tr("Channel settings"))
                         .accessibility_label(l10n::tr("Channel settings"))
                         .on_click(cx.listener(move |this, _, window, cx| this.open_edit_channel(ch_id, window, cx))),
@@ -75,7 +75,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     Button::new("toggle-channel-mute")
                         .ghost()
                         .small()
-                        .icon(if channel_muted { IconName::BellOff } else { IconName::Bell })
+                        .icon(if channel_muted { AppIcon::BellSlash } else { AppIcon::Bell })
                         .selected(channel_muted)
                         .tooltip(label.clone())
                         .accessibility_label(label)
@@ -93,7 +93,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             Button::new("toggle-notifications")
                 .ghost()
                 .small()
-                .icon(if enabled { IconName::Volume2 } else { IconName::VolumeX })
+                .icon(if enabled { AppIcon::SpeakerHigh } else { AppIcon::SpeakerSlash })
                 .tooltip(notif_label.clone())
                 .accessibility_label(notif_label)
                 .on_click(cx.listener(|this, _, _, cx| this.toggle_notifications(cx)))
@@ -109,7 +109,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     Button::new("toggle-member-list")
                         .ghost()
                         .small()
-                        .icon(IconName::Users)
+                        .icon(AppIcon::Users)
                         .selected(open)
                         .tooltip(members_label.clone())
                         .accessibility_label(members_label)
@@ -138,7 +138,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .items_center()
                 .gap_2()
                 .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx)))
-                .child(Icon::new(IconName::Search).xsmall().text_color(theme.muted_foreground))
+                .child(Icon::new(AppIcon::MagnifyingGlass).xsmall().text_color(theme.muted_foreground))
                 .child(
                     div()
                         .flex_1()

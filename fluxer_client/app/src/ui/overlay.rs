@@ -2,11 +2,11 @@
 
 use std::rc::Rc;
 
-use gpui_kit::assets::IconName;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::{Anchor, AnyElement, App, FontWeight, MouseButton, Pixels, Point, SharedString, Window, anchored, div, prelude::*, px};
 
+use crate::icons::AppIcon;
 use crate::theme::Theme;
 use crate::ui::l10n;
 use crate::ui::account_switcher::AccountSwitcherModal;
@@ -106,7 +106,7 @@ pub fn settings_modal(
             Button::new("settings-close")
                 .ghost()
                 .small()
-                .icon(IconName::Close)
+                .icon(AppIcon::X)
                 .tooltip(l10n::tr("Close"))
                 .accessibility_label(l10n::tr("Close"))
                 .on_click(move |_, window, cx| on_dismiss_btn(window, cx)),

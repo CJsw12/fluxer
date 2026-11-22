@@ -10,7 +10,6 @@ pub(crate) const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub(crate) const DEFAULT_RELEASES_API_URL: &str = "https://api.github.com/repos/CJsw12/fluxer/releases/latest";
 
 const MAX_RESPONSE_BYTES: usize = 256 * 1024;
-const MAX_REDIRECTS: usize = 5;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -194,15 +193,7 @@ pub(crate) async fn check_for_updates(api_url: &str, current_version: &str) -> U
     let client = match reqwest::Client::builder()
         .timeout(REQUEST_TIMEOUT)
         .user_agent(format!("fluxer-client/{current_version}"))
-        .redirect(reqwest::redirect::Policy::custom(|attempt| {
-            if attempt.previous().len() >= MAX_REDIRECTS {
-                attempt.error("too many redirects")
-            } else if validate_api_url(attempt.url().as_str()).is_err() {
-                attempt.error("redirect to a disallowed URL")
-            } else {
-                attempt.follow()
-            }
-        }))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
     {
         Ok(client) => client,
@@ -371,6 +362,34 @@ mod tests {
 
         let status = check_for_updates(&url, "0.1.0").await;
         server.await.expect("server task");
+
+        assert!(matches!(status, UpdateStatus::Error(_)));
+    }
+
+    #[tokio::test]
+    async fn check_for_updates_rejects_cross_origin_redirect() {
+        let target_body =
+            r#"{"tag_name":"v0.2.0","html_url":"https://github.com/CJsw12/fluxer/releases/tag/v0.2.0"}"#;
+        let (target_url, target_server) = spawn_mock_http_server("200 OK", target_body).await;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind loopback");
+        let addr = listener.local_addr().expect("local addr");
+        let redirect_response = format!(
+            "HTTP/1.1 302 Found\r\nLocation: {target_url}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        );
+        let redirect_server = tokio::spawn(async move {
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = [0u8; 1024];
+                let _ = stream.read(&mut buf).await;
+                let _ = stream.write_all(redirect_response.as_bytes()).await;
+                let _ = stream.shutdown().await;
+            }
+        });
+        let redirect_url = format!("http://{addr}/releases/latest");
+
+        let status = check_for_updates(&redirect_url, "0.1.0").await;
+        redirect_server.await.expect("redirect server task");
+        target_server.abort();
 
         assert!(matches!(status, UpdateStatus::Error(_)));
     }

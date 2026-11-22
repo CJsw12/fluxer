@@ -329,6 +329,12 @@ impl ProcessVoiceTransport {
     }
 }
 
+fn should_strip_proxy_env(endpoint: &str) -> bool {
+    endpoint
+        .get(..5)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("ws://"))
+}
+
 impl VoiceTransport for ProcessVoiceTransport {
     fn connect(
         &self,
@@ -347,7 +353,7 @@ impl VoiceTransport for ProcessVoiceTransport {
                 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
                 cmd.creation_flags(CREATE_NO_WINDOW);
             }
-            if credentials.endpoint.starts_with("ws://") {
+            if should_strip_proxy_env(&credentials.endpoint) {
                 for var in [
                     "HTTP_PROXY",
                     "HTTPS_PROXY",
@@ -386,7 +392,15 @@ impl VoiceTransport for ProcessVoiceTransport {
                     tokio::spawn(async move {
                         tokio::select! {
                             _ = kill_rx => {
-                                let _ = child.kill().await;
+                                if tokio::time::timeout(
+                                    Duration::from_millis(250),
+                                    child.wait(),
+                                )
+                                .await
+                                .is_err()
+                                {
+                                    let _ = child.kill().await;
+                                }
                             }
                             _ = child.wait() => {}
                         }
@@ -1704,5 +1718,16 @@ mod tests {
             assert!(received.contains(&WorkerCommand::SetMicMuted { muted: true }));
             assert!(received.contains(&WorkerCommand::SetPlaybackMuted { muted: true }));
         });
+    }
+
+    #[test]
+    fn should_strip_proxy_env_is_case_insensitive_for_ws_scheme() {
+        assert!(should_strip_proxy_env("ws://127.0.0.1:7880"));
+        assert!(should_strip_proxy_env("WS://127.0.0.1:7880"));
+        assert!(should_strip_proxy_env("Ws://localhost:7880"));
+        assert!(!should_strip_proxy_env("wss://rtc.example.test"));
+        assert!(!should_strip_proxy_env("WSS://rtc.example.test"));
+        assert!(!should_strip_proxy_env("ws:/"));
+        assert!(!should_strip_proxy_env(""));
     }
 }

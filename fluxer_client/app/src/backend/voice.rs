@@ -1336,10 +1336,9 @@ fn recheck_active_voice_permissions(
         (st.guilds.contains_key(&guild_id) && st.channels.contains_key(&channel_id))
             .then(|| st.channel_permissions(channel_id))
     };
-    let Some(perms) = perms else {
-        return;
-    };
-    if (perms & (bits::VIEW_CHANNEL | bits::CONNECT)) != (bits::VIEW_CHANNEL | bits::CONNECT) {
+    let Some(perms) = perms.filter(|&p| {
+        (p & (bits::VIEW_CHANNEL | bits::CONNECT)) == (bits::VIEW_CHANNEL | bits::CONNECT)
+    }) else {
         let (payload, _handles) = lock(voice).begin_leave_if_attempt(expected_attempt_id);
         if let Some(payload) = payload {
             record_sent(&payload);
@@ -1347,7 +1346,7 @@ fn recheck_active_voice_permissions(
             let _ = events.send(UiEvent::VoiceChanged);
         }
         return;
-    }
+    };
 
     let stream_allowed = (perms & bits::STREAM) != 0;
     let speak_denied = (perms & bits::SPEAK) == 0;
@@ -3835,5 +3834,57 @@ mod tests {
             backend.voice_snapshot().state,
             VoiceConnectionState::Failed(VoiceFailure::UnsupportedP2pMesh)
         );
+    }
+
+    #[test]
+    fn guild_refresh_removing_active_voice_channel_leaves_voice() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, _rx) = test_backend(&rt);
+
+        let allow_all = (bits::VIEW_CHANNEL | bits::CONNECT | bits::SPEAK).to_string();
+        let ready = Dispatch {
+            t: "READY".into(),
+            s: 1,
+            d: json!({
+                "user": { "id": "10", "username": "me" },
+                "guilds": [{
+                    "id": "42",
+                    "name": "Guild",
+                    "owner_id": "1",
+                    "roles": [{ "id": "42", "name": "@everyone", "permissions": allow_all }],
+                    "channels": [
+                        { "id": "100", "guild_id": "42", "type": 2, "name": "Voice" },
+                        { "id": "101", "guild_id": "42", "type": 2, "name": "Other" }
+                    ],
+                    "members": [{ "user": { "id": "10", "username": "me" }, "roles": [] }]
+                }]
+            }),
+        };
+        backend.state().apply(&ready);
+
+        assert!(backend.join_voice(Some(Snowflake(42)), Snowflake(100)));
+        assert_eq!(backend.voice_snapshot().channel_id, Some(Snowflake(100)));
+
+        // Guild refresh (GUILD_CREATE) omits channel 100.
+        let guild_refresh = Dispatch {
+            t: "GUILD_CREATE".into(),
+            s: 2,
+            d: json!({
+                "id": "42",
+                "name": "Guild",
+                "owner_id": "1",
+                "roles": [{ "id": "42", "name": "@everyone", "permissions": allow_all }],
+                "channels": [
+                    { "id": "101", "guild_id": "42", "type": 2, "name": "Other" }
+                ],
+                "members": [{ "user": { "id": "10", "username": "me" }, "roles": [] }],
+                "voice_states": []
+            }),
+        };
+        backend.state().apply(&guild_refresh);
+        backend.feed_voice_dispatch_for_test(&guild_refresh);
+
+        assert_eq!(backend.voice_snapshot().state, VoiceConnectionState::Disconnected);
+        assert_eq!(backend.voice_snapshot().channel_id, None);
     }
 }

@@ -18,7 +18,7 @@ use url::Url;
 const MAX_VIDEO_WIDTH: u32 = 960;
 const MAX_VIDEO_HEIGHT: u32 = 540;
 const VIDEO_FRAME_MIN_INTERVAL: Duration = Duration::from_millis(66);
-const MAX_WORKER_COMMAND_LINE_BYTES: usize = 64 * 1024;
+const MAX_WORKER_COMMAND_LINE_BYTES: usize = 128 * 1024;
 
 fn default_true() -> bool {
     true
@@ -281,12 +281,12 @@ fn format_room_connect_error(err: &RoomError) -> &'static str {
 
 async fn read_line_limited<R>(
     reader: &mut BufReader<R>,
+    buf: &mut Vec<u8>,
     max_bytes: usize,
 ) -> std::io::Result<Option<String>>
 where
     R: AsyncRead + Unpin,
 {
-    let mut buf = Vec::new();
     loop {
         let available = reader.fill_buf().await?;
         if available.is_empty() {
@@ -299,6 +299,7 @@ where
             let needed = buf.len().saturating_add(newline_pos);
             if needed > max_bytes {
                 reader.consume(newline_pos + 1);
+                buf.clear();
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
                     "ipc line exceeds maximum length",
@@ -312,6 +313,7 @@ where
         if needed > max_bytes {
             let len = available.len();
             reader.consume(len);
+            buf.clear();
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "ipc line exceeds maximum length",
@@ -324,7 +326,8 @@ where
     if buf.last() == Some(&b'\r') {
         buf.pop();
     }
-    String::from_utf8(buf).map(Some).map_err(|_| {
+    let line_bytes = std::mem::take(buf);
+    String::from_utf8(line_bytes).map(Some).map_err(|_| {
         std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             "ipc line is not valid utf-8",
@@ -424,8 +427,12 @@ fn apply_audio_settings(platform_audio: Option<&PlatformAudio>, state: &WorkerAu
 async fn run_worker() -> i32 {
     let mut stdout = tokio::io::stdout();
     let mut reader = BufReader::new(tokio::io::stdin());
+    let mut stdin_line_buf = Vec::new();
 
-    let first_line = match read_line_limited(&mut reader, MAX_WORKER_COMMAND_LINE_BYTES).await {
+    let first_line =
+        match read_line_limited(&mut reader, &mut stdin_line_buf, MAX_WORKER_COMMAND_LINE_BYTES)
+            .await
+        {
         Ok(Some(line)) => line,
         Ok(None) => return 0,
         Err(_) => {
@@ -440,7 +447,7 @@ async fn run_worker() -> i32 {
         }
     };
 
-    let (endpoint, token, _connection_id, initial_mic_muted, initial_playback_muted) =
+    let (endpoint, token, _connection_id, _initial_mic_muted, initial_playback_muted) =
         match serde_json::from_str::<WorkerCommand>(&first_line) {
             Ok(WorkerCommand::Connect {
                 endpoint,
@@ -516,9 +523,8 @@ async fn run_worker() -> i32 {
     let mut mic_pub_sid: Option<TrackSid> = None;
     if let Some(audio) = &platform_audio {
         let track = LocalAudioTrack::create_audio_track("microphone", audio.rtc_source());
-        if initial_mic_muted {
-            track.mute();
-        }
+        // Fail closed: always publish muted and only unmute on explicit parent command.
+        track.mute();
         let publish_opts = TrackPublishOptions {
             source: TrackSource::Microphone,
             ..Default::default()
@@ -561,7 +567,7 @@ async fn run_worker() -> i32 {
 
     loop {
         tokio::select! {
-            line_res = read_line_limited(&mut reader, MAX_WORKER_COMMAND_LINE_BYTES) => {
+            line_res = read_line_limited(&mut reader, &mut stdin_line_buf, MAX_WORKER_COMMAND_LINE_BYTES) => {
                 match line_res {
                     Ok(Some(line)) => {
                         let Ok(cmd) = serde_json::from_str::<WorkerCommand>(&line) else {
@@ -995,14 +1001,54 @@ mod tests {
         rt.block_on(async {
             let data = b"hello\nworld_too_long\n";
             let mut reader = BufReader::new(&data[..]);
+            let mut buf = Vec::new();
             assert_eq!(
-                read_line_limited(&mut reader, 5).await.unwrap().as_deref(),
+                read_line_limited(&mut reader, &mut buf, 5)
+                    .await
+                    .unwrap()
+                    .as_deref(),
                 Some("hello")
             );
-            let err = read_line_limited(&mut reader, 5)
+            let err = read_line_limited(&mut reader, &mut buf, 5)
                 .await
                 .expect_err("oversized line must fail");
             assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+        });
+    }
+
+    #[test]
+    fn read_line_limited_resumes_partial_line_across_select_cancellation() {
+        use tokio::io::AsyncWriteExt;
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let (mut writer, reader_half) = tokio::io::duplex(64);
+            let mut reader = BufReader::new(reader_half);
+            let mut buf = Vec::new();
+            let (notify_tx, mut notify_rx) = mpsc::channel::<()>(1);
+
+            writer.write_all(b"{\"type\":\"set_mic").await.unwrap();
+            writer.flush().await.unwrap();
+            notify_tx.send(()).await.unwrap();
+
+            tokio::select! {
+                biased;
+                _ = read_line_limited(&mut reader, &mut buf, 128) => {
+                    panic!("incomplete line should not resolve before newline");
+                }
+                _ = notify_rx.recv() => {}
+            }
+            assert!(!buf.is_empty(), "partial bytes must remain in caller buffer");
+
+            writer.write_all(b"_muted\",\"muted\":false}\n").await.unwrap();
+            writer.flush().await.unwrap();
+
+            let line = read_line_limited(&mut reader, &mut buf, 128)
+                .await
+                .unwrap()
+                .expect("completed line");
+            assert_eq!(line, r#"{"type":"set_mic_muted","muted":false}"#);
+            assert!(buf.is_empty(), "caller buffer must be cleared after completing line");
         });
     }
 }

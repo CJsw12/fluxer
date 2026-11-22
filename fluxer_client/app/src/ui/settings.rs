@@ -1,28 +1,136 @@
-//! Minimal settings modal (`UserSettingsModal.tsx`): theme (Dark, Light,
-//! System, Dark Legacy, Coal), desktop notifications & sounds, 44 languages,
-//! and account logout with confirmation.
+//! 2-pane user settings modal (`SettingsModalLayout.tsx` + `DesktopSettingsView.tsx`):
+//! left navigation sidebar (search, profile summary, categorized tabs, sign-out footer)
+//! and right scrollable content pane.
 
 use fluxer_client_core::rest::UserSettingsPatch;
-use gpui_kit::component::{Disableable as _, Sizable as _};
+use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::input::Escape;
+use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
 use gpui_kit::component::switch::Switch;
-use gpui_kit::{AnyElement, Context, FontWeight, ScrollHandle, SharedString, Window, div, prelude::*, px};
+use gpui_kit::component::{Disableable as _, Icon, Sizable as _};
+use gpui_kit::{AnyElement, Context, Entity, FontWeight, ScrollHandle, SharedString, Subscription, Window, div, prelude::*, px};
 
 use crate::backend::voice::VoiceAudioSettings;
 use crate::client_view::ClientView;
 use crate::prefs::{DEFAULT_VOICE_VOLUME, MAX_VOICE_VOLUME, MIN_VOICE_VOLUME, ReducedMotionPref};
 use crate::settings_model::{FONT_SIZE_OPTIONS, LOCALES, SettingsEffect, THEME_OPTIONS, theme_patch_value};
 use crate::theme::{self, MAX_FONT_SIZE, MAX_UI_ZOOM, MIN_FONT_SIZE, MIN_UI_ZOOM, Theme, ThemeKind};
+use crate::ui::message_row;
 use crate::ui::overlay::Overlay;
 use crate::ui::{l10n, overlay};
 use crate::updater::{CURRENT_VERSION, UpdateStatus};
 
 pub const CONTEXT: &str = "SettingsModal";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SettingsTab {
+    Account,
+    #[default]
+    Appearance,
+    Notifications,
+    VoiceVideo,
+    Accessibility,
+    Language,
+    Advanced,
+}
+
+impl SettingsTab {
+    const ACCOUNT_TABS: &[SettingsTab] = &[SettingsTab::Account];
+    const APP_TABS: &[SettingsTab] = &[
+        SettingsTab::Appearance,
+        SettingsTab::Notifications,
+        SettingsTab::VoiceVideo,
+        SettingsTab::Accessibility,
+        SettingsTab::Language,
+        SettingsTab::Advanced,
+    ];
+    const ALL: &[SettingsTab] = &[
+        SettingsTab::Account,
+        SettingsTab::Appearance,
+        SettingsTab::Notifications,
+        SettingsTab::VoiceVideo,
+        SettingsTab::Accessibility,
+        SettingsTab::Language,
+        SettingsTab::Advanced,
+    ];
+
+    pub fn label(self) -> String {
+        match self {
+            Self::Account => l10n::tr("Account"),
+            Self::Appearance => l10n::tr("Appearance"),
+            Self::Notifications => l10n::tr("Notifications"),
+            Self::VoiceVideo => l10n::tr("Voice & video"),
+            Self::Accessibility => l10n::tr("Accessibility"),
+            Self::Language => l10n::tr("Language"),
+            Self::Advanced => l10n::tr("Advanced"),
+        }
+    }
+
+    pub const fn debug_selector(self) -> &'static str {
+        match self {
+            Self::Account => "settings-tab-account",
+            Self::Appearance => "settings-tab-appearance",
+            Self::Notifications => "settings-tab-notifications",
+            Self::VoiceVideo => "settings-tab-voice",
+            Self::Accessibility => "settings-tab-accessibility",
+            Self::Language => "settings-tab-language",
+            Self::Advanced => "settings-tab-advanced",
+        }
+    }
+
+    const fn icon(self) -> IconName {
+        match self {
+            Self::Account => IconName::Users,
+            Self::Appearance => IconName::Eye,
+            Self::Notifications => IconName::Bell,
+            Self::VoiceVideo => IconName::Volume2,
+            Self::Accessibility => IconName::Settings2,
+            Self::Language => IconName::Hash,
+            Self::Advanced => IconName::Settings,
+        }
+    }
+
+    fn matches_query(self, query_lower: &str) -> bool {
+        if query_lower.is_empty() {
+            return true;
+        }
+        if self.label().to_lowercase().contains(query_lower) {
+            return true;
+        }
+        let keywords: &[&str] = match self {
+            Self::Account => &["account", "switch", "trusted", "domain", "profile", "sign out", "log out"],
+            Self::Appearance => &[
+                "appearance",
+                "theme",
+                "dark",
+                "light",
+                "coal",
+                "system",
+                "display",
+                "font",
+                "zoom",
+                "compact",
+                "cozy",
+                "message",
+                "preview",
+            ],
+            Self::Notifications => &["notification", "sound", "desktop", "message sounds"],
+            Self::VoiceVideo => &["voice", "video", "audio", "mic", "input", "output", "volume", "device"],
+            Self::Accessibility => &["accessibility", "reduced", "motion", "animation"],
+            Self::Language => &["language", "locale", "translation"],
+            Self::Advanced => &["advanced", "startup", "autostart", "tray", "update", "version", "about"],
+        };
+        keywords.iter().any(|kw| kw.contains(query_lower))
+    }
+}
+
 pub struct SettingsModal {
+    pub active_tab: SettingsTab,
     pub confirm_logout: bool,
+    pub search: Entity<InputState>,
+    pub sidebar_scroll: ScrollHandle,
     pub locale_scroll: ScrollHandle,
+    pub _subscription: Subscription,
 }
 
 impl ClientView {
@@ -34,11 +142,28 @@ impl ClientView {
         }
         self.prepare_overlay_replace(cx);
         self.refresh_audio_devices(cx);
+        let search = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Search settings...")));
+        let subscription = cx.subscribe_in(&search, window, |_, _, ev: &InputEvent, _, cx| {
+            if let InputEvent::Change = ev {
+                cx.notify();
+            }
+        });
         self.overlay = Overlay::Settings(SettingsModal {
+            active_tab: SettingsTab::default(),
             confirm_logout: false,
+            search,
+            sidebar_scroll: ScrollHandle::new(),
             locale_scroll: ScrollHandle::new(),
+            _subscription: subscription,
         });
         cx.notify();
+    }
+
+    pub(crate) fn select_settings_tab(&mut self, tab: SettingsTab, cx: &mut Context<Self>) {
+        if let Overlay::Settings(modal) = &mut self.overlay {
+            modal.active_tab = tab;
+            cx.notify();
+        }
     }
 
     pub(crate) fn apply_settings_effect(&mut self, effect: SettingsEffect, window: &mut Window, cx: &mut Context<Self>) {
@@ -368,11 +493,195 @@ fn voice_volume_row(
         .into_any_element()
 }
 
-pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
-    let active_theme = theme::kind(cx);
-    let active_locale = l10n::current().locale();
-    let display = view.prefs.data.display();
+fn render_account_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
     let trusted_count = view.effective_trusted_domains().len();
+    let switch_label = if view.saved_accounts.len() > 1 {
+        format!("{} ({})", l10n::tr("Switch accounts"), view.saved_accounts.len())
+    } else {
+        l10n::tr("Switch accounts")
+    };
+
+    div()
+        .flex()
+        .flex_col()
+        .gap_5()
+        .when(view.accounts_enabled, |d| {
+            d.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(section_heading(l10n::tr("Accounts"), theme))
+                    .child(
+                        div()
+                            .p_4()
+                            .rounded(px(8.))
+                            .border_1()
+                            .border_color(theme.border)
+                            .bg(theme.background_secondary)
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_between()
+                            .gap_3()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_1()
+                                    .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("Switch accounts")))
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(theme.muted_foreground)
+                                            .child(l10n::tr("Add or switch between saved accounts.")),
+                                    ),
+                            )
+                            .child(
+                                div().debug_selector(|| "settings-account-switch-accounts".to_owned()).child(
+                                    Button::new("settings-account-switch-accounts")
+                                        .ghost()
+                                        .small()
+                                        .label(switch_label)
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.apply_settings_effect(SettingsEffect::OpenAccountSwitcher, window, cx);
+                                        })),
+                                ),
+                            ),
+                    ),
+            )
+        })
+        .child(
+            div()
+                .debug_selector(|| "settings-account-trusted".to_owned())
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Trusted domains"), theme))
+                .child(
+                    div()
+                        .p_4()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_3()
+                        .child(
+                            div()
+                                .text_sm()
+                                .child(format!("{} ({trusted_count})", l10n::tr("Trusted domains"))),
+                        )
+                        .when(trusted_count > 0, |d| {
+                            d.child(
+                                div().debug_selector(|| "settings-clear-trusted".to_owned()).child(
+                                    Button::new("settings-clear-trusted")
+                                        .ghost()
+                                        .small()
+                                        .label(l10n::tr("Clear"))
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.apply_settings_effect(SettingsEffect::ClearTrustedDomains, window, cx);
+                                        })),
+                                ),
+                            )
+                        }),
+                ),
+        )
+        .into_any_element()
+}
+
+fn render_appearance_preview(view: &ClientView, theme: &Theme) -> AnyElement {
+    let display = view.prefs.data.display();
+    let msg_size = px(f32::from(display.font_size));
+    let (avatar_el, user_name) = match &view.user {
+        Some(user) => (
+            message_row::avatar(
+                user.avatar_url.clone(),
+                user.default_avatar,
+                user.initials.clone(),
+                40.,
+                theme,
+            ),
+            user.name.clone(),
+        ),
+        None => (
+            div().size(px(40.)).rounded_full().bg(theme.muted).into_any_element(),
+            SharedString::new_static("Fluxer User"),
+        ),
+    };
+
+    let preview_body = if display.compact {
+        div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_baseline()
+                    .gap_2()
+                    .child(div().text_xs().text_color(theme.muted_foreground).child("12:00"))
+                    .child(div().text_size(msg_size).font_weight(FontWeight::SEMIBOLD).child(user_name.clone()))
+                    .child(div().text_size(msg_size).child(l10n::tr("This is how messages appear"))),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_baseline()
+                    .gap_2()
+                    .child(div().text_xs().text_color(theme.muted_foreground).child("12:00"))
+                    .child(div().text_size(msg_size).font_weight(FontWeight::SEMIBOLD).child(user_name))
+                    .child(div().text_size(msg_size).child(l10n::tr("With different display modes available"))),
+            )
+            .into_any_element()
+    } else {
+        div()
+            .flex()
+            .flex_row()
+            .items_start()
+            .gap_3()
+            .child(div().flex_none().child(avatar_el))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .flex()
+                    .flex_col()
+                    .gap_1()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_baseline()
+                            .gap_2()
+                            .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(user_name))
+                            .child(div().text_xs().text_color(theme.muted_foreground).child("Today at 12:00 PM")),
+                    )
+                    .child(div().text_size(msg_size).child(l10n::tr("This is how messages appear")))
+                    .child(div().text_size(msg_size).child(l10n::tr("With different display modes available"))),
+            )
+            .into_any_element()
+    };
+
+    div()
+        .debug_selector(|| "settings-appearance-preview".to_owned())
+        .p_4()
+        .rounded(px(8.))
+        .border_1()
+        .border_color(theme.border)
+        .bg(theme.background_secondary)
+        .child(preview_body)
+        .into_any_element()
+}
+
+fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+    let active_theme = theme::kind(cx);
+    let display = view.prefs.data.display();
 
     let theme_buttons = THEME_OPTIONS.iter().enumerate().map(|(ix, (kind, label))| {
         let kind = *kind;
@@ -456,6 +765,42 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
                 ),
         );
 
+    div()
+        .flex()
+        .flex_col()
+        .gap_5()
+        .child(render_appearance_preview(view, theme))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Theme"), theme))
+                .child(div().flex().flex_row().flex_wrap().gap_2().children(theme_buttons)),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .child(section_heading(l10n::tr("Display"), theme))
+                .child(div().flex().flex_row().flex_wrap().gap_2().children(density_buttons))
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(div().text_sm().child(l10n::tr("Font size")))
+                        .child(div().flex().flex_row().flex_wrap().gap_1().children(font_buttons)),
+                )
+                .child(zoom_controls),
+        )
+        .into_any_element()
+}
+
+fn render_notifications_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
     let notifications_row = div()
         .flex()
         .flex_row()
@@ -463,11 +808,13 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
         .justify_between()
         .child(div().text_sm().child(l10n::tr("Desktop notifications")))
         .child(
-            Switch::new("settings-notifications")
-                .checked(view.notifier.enabled)
-                .on_change(cx.listener(|this, checked: &bool, window, cx| {
-                    this.apply_settings_effect(SettingsEffect::NotificationsChanged(*checked), window, cx);
-                })),
+            div().debug_selector(|| "settings-notifications".to_owned()).child(
+                Switch::new("settings-notifications")
+                    .checked(view.notifier.enabled)
+                    .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                        this.apply_settings_effect(SettingsEffect::NotificationsChanged(*checked), window, cx);
+                    })),
+            ),
         );
 
     let sounds_row = div()
@@ -475,15 +822,183 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
         .flex_row()
         .items_center()
         .justify_between()
-        .child(div().text_sm().child(l10n::tr("Notification sounds")))
+        .child(div().text_sm().child(l10n::tr("Message sounds")))
         .child(
-            Switch::new("settings-sounds")
-                .checked(view.notifier.sounds_enabled)
-                .on_change(cx.listener(|this, checked: &bool, window, cx| {
-                    this.apply_settings_effect(SettingsEffect::SoundsChanged(*checked), window, cx);
-                })),
+            div().debug_selector(|| "settings-sounds".to_owned()).child(
+                Switch::new("settings-sounds")
+                    .checked(view.notifier.sounds_enabled)
+                    .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                        this.apply_settings_effect(SettingsEffect::SoundsChanged(*checked), window, cx);
+                    })),
+            ),
         );
 
+    div()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .child(section_heading(l10n::tr("Notifications"), theme))
+        .child(notifications_row)
+        .child(sounds_row)
+        .into_any_element()
+}
+
+fn render_voice_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+    div()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_between()
+                .child(section_heading(l10n::tr("Voice & Audio"), theme))
+                .child(
+                    div().debug_selector(|| "voice-refresh-devices".to_owned()).child(
+                        Button::new("voice-refresh-devices")
+                            .ghost()
+                            .small()
+                            .label(l10n::tr("Refresh devices"))
+                            .accessibility_label(l10n::tr("Refresh devices"))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.refresh_audio_devices(cx);
+                            })),
+                    ),
+                ),
+        )
+        .child(voice_device_row(
+            "Input device",
+            view.prefs.data.voice_input_device.as_deref(),
+            &view.audio_devices.input_devices,
+            "voice-input-device",
+            "voice-input-device-reset",
+            theme,
+            SettingsEffect::VoiceInputDeviceChanged,
+            cx,
+        ))
+        .child(voice_volume_row(
+            "Input volume",
+            view.prefs.data.voice_input_volume,
+            "voice-input-vol-dec",
+            "voice-input-vol-inc",
+            "voice-input-vol-reset",
+            SettingsEffect::VoiceInputVolumeChanged,
+            cx,
+        ))
+        .child(voice_device_row(
+            "Output device",
+            view.prefs.data.voice_output_device.as_deref(),
+            &view.audio_devices.output_devices,
+            "voice-output-device",
+            "voice-output-device-reset",
+            theme,
+            SettingsEffect::VoiceOutputDeviceChanged,
+            cx,
+        ))
+        .child(voice_volume_row(
+            "Output volume",
+            view.prefs.data.voice_output_volume,
+            "voice-output-vol-dec",
+            "voice-output-vol-inc",
+            "voice-output-vol-reset",
+            SettingsEffect::VoiceOutputVolumeChanged,
+            cx,
+        ))
+        .into_any_element()
+}
+
+fn render_accessibility_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+    div()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .child(section_heading(l10n::tr("Accessibility"), theme))
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_between()
+                .child(div().text_sm().child(l10n::tr("Reduced motion")))
+                .child(
+                    div().flex().flex_row().gap_1().children(
+                        [
+                            (ReducedMotionPref::System, "System", "reduced-motion-system"),
+                            (ReducedMotionPref::On, "On", "reduced-motion-on"),
+                            (ReducedMotionPref::Off, "Off", "reduced-motion-off"),
+                        ]
+                        .into_iter()
+                        .map(|(pref, label, sel_id)| {
+                            let selected = view.prefs.data.reduced_motion == pref;
+                            let mut btn = Button::new(sel_id).small().label(l10n::tr(label));
+                            btn = if selected { btn.primary() } else { btn.ghost() };
+                            div().debug_selector(move || sel_id.to_owned()).child(btn.on_click(
+                                cx.listener(move |this, _, window, cx| {
+                                    this.apply_settings_effect(
+                                        SettingsEffect::ReducedMotionChanged(pref),
+                                        window,
+                                        cx,
+                                    );
+                                }),
+                            ))
+                        }),
+                    ),
+                ),
+        )
+        .into_any_element()
+}
+
+fn render_language_tab(modal: &SettingsModal, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+    let active_locale = l10n::current().locale();
+    let locale_list = div()
+        .id("settings-locale-list")
+        .debug_selector(|| "settings-locale-list".to_owned())
+        .max_h(px(480.))
+        .overflow_y_scroll()
+        .track_scroll(&modal.locale_scroll)
+        .rounded(px(8.))
+        .border_1()
+        .border_color(theme.border)
+        .bg(theme.background_secondary)
+        .p_2()
+        .flex()
+        .flex_col()
+        .gap(px(2.))
+        .children(LOCALES.iter().enumerate().map(|(ix, opt)| {
+            let selected = active_locale == opt.code;
+            let code = opt.code;
+            div()
+                .id(("settings-locale", ix))
+                .debug_selector(|| format!("settings-locale-{code}"))
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_between()
+                .px_3()
+                .py(px(6.))
+                .rounded(px(6.))
+                .cursor_pointer()
+                .when(selected, |d| d.bg(theme.accent))
+                .hover(|s| s.bg(theme.muted))
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.apply_settings_effect(SettingsEffect::LocaleChanged(code.to_owned()), window, cx);
+                }))
+                .child(div().text_sm().child(opt.native_name))
+                .child(div().text_xs().text_color(theme.muted_foreground).child(opt.code))
+        }));
+
+    div()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .child(section_heading(l10n::tr("Language"), theme))
+        .child(locale_list)
+        .into_any_element()
+}
+
+fn render_advanced_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
     let autostart_row = div()
         .flex()
         .flex_row()
@@ -512,71 +1027,292 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
                 })),
         );
 
-    let locale_list = div()
-        .id("settings-locale-list")
-        .max_h(px(110.))
-        .overflow_y_scroll()
-        .track_scroll(&modal.locale_scroll)
-        .rounded(px(6.))
-        .border_1()
-        .border_color(theme.border)
-        .bg(theme.background)
-        .p_1()
+    let updates_section = div()
         .flex()
         .flex_col()
-        .gap(px(2.))
-        .children(LOCALES.iter().enumerate().map(|(ix, opt)| {
-            let selected = active_locale == opt.code;
-            let code = opt.code;
+        .gap_2()
+        .child(section_heading(l10n::tr("About & Updates"), theme))
+        .child(
             div()
-                .id(("settings-locale", ix))
-                .debug_selector(|| format!("settings-locale-{code}"))
                 .flex()
                 .flex_row()
                 .items_center()
                 .justify_between()
-                .px_2()
-                .py_1()
-                .rounded(px(4.))
-                .cursor_pointer()
-                .when(selected, |d| d.bg(theme.accent))
-                .hover(|s| s.bg(theme.muted))
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.apply_settings_effect(SettingsEffect::LocaleChanged(code.to_owned()), window, cx);
-                }))
-                .child(div().text_sm().child(opt.native_name))
-                .child(div().text_xs().text_color(theme.muted_foreground).child(opt.code))
-        }));
+                .gap_2()
+                .child(div().text_sm().child(format!("v{CURRENT_VERSION}")))
+                .child(
+                    div().debug_selector(|| "settings-check-updates".to_owned()).child(
+                        Button::new("settings-check-updates")
+                            .ghost()
+                            .small()
+                            .label(l10n::tr("Check for updates"))
+                            .accessibility_label(l10n::tr("Check for updates"))
+                            .disabled(matches!(
+                                view.update_status,
+                                UpdateStatus::Checking | UpdateStatus::Downloading { .. }
+                            ))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.check_for_updates(cx);
+                            })),
+                    ),
+                ),
+        )
+        .map(|d| match &view.update_status {
+            UpdateStatus::Idle => d,
+            UpdateStatus::Checking => d.child(
+                div()
+                    .debug_selector(|| "settings-update-checking".to_owned())
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(l10n::tr("Checking for updates…")),
+            ),
+            UpdateStatus::UpToDate { .. } => d.child(
+                div()
+                    .debug_selector(|| "settings-update-uptodate".to_owned())
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(l10n::tr("Up to date")),
+            ),
+            UpdateStatus::Available {
+                latest,
+                release_url,
+                asset_name,
+                asset_url,
+                ..
+            } => {
+                let release_url = release_url.clone();
+                let has_asset = asset_name.is_some() && asset_url.is_some();
+                d.child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_2()
+                        .child(
+                            div()
+                                .debug_selector(|| "settings-update-available".to_owned())
+                                .text_xs()
+                                .text_color(theme.foreground)
+                                .child(format!("{}: v{latest}", l10n::tr("Update available"))),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap_2()
+                                .when(has_asset, |row| {
+                                    row.child(
+                                        div()
+                                            .debug_selector(|| "settings-download-update".to_owned())
+                                            .child(
+                                                Button::new("settings-download-update")
+                                                    .primary()
+                                                    .small()
+                                                    .label(l10n::tr("Download update"))
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.download_available_update(cx);
+                                                    })),
+                                            ),
+                                    )
+                                })
+                                .child(
+                                    div().debug_selector(|| "settings-open-release".to_owned()).child(
+                                        Button::new("settings-open-release")
+                                            .ghost()
+                                            .small()
+                                            .label(l10n::tr("Open release page"))
+                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                #[cfg(test)]
+                                                this.launch_external_url(&release_url, cx);
+                                                #[cfg(not(test))]
+                                                {
+                                                    let _ = this;
+                                                    cx.open_url(&release_url);
+                                                }
+                                            })),
+                                    ),
+                                ),
+                        ),
+                )
+            }
+            UpdateStatus::Downloading { latest } => d.child(
+                div()
+                    .debug_selector(|| "settings-update-downloading".to_owned())
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(format!("{} v{latest}…", l10n::tr("Downloading"))),
+            ),
+            UpdateStatus::Downloaded {
+                latest,
+                path,
+                sha256,
+                verified,
+            } => {
+                let short_hash = &sha256[..sha256.len().min(16)];
+                let verify_label = if *verified {
+                    l10n::tr("SHA-256 verified")
+                } else {
+                    l10n::tr("Unverified")
+                };
+                d.child(
+                    div()
+                        .debug_selector(|| "settings-update-downloaded".to_owned())
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .text_xs()
+                        .text_color(theme.foreground)
+                        .child(format!(
+                            "{} v{latest} ({verify_label} · {short_hash})",
+                            l10n::tr("Downloaded")
+                        ))
+                        .child(div().text_color(theme.muted_foreground).child(path.clone())),
+                )
+            }
+            UpdateStatus::Error(err) => d.child(
+                div()
+                    .debug_selector(|| "settings-update-error".to_owned())
+                    .text_xs()
+                    .text_color(theme.danger)
+                    .child(err.clone()),
+            ),
+        });
 
-    let account_section = if modal.confirm_logout {
+    div()
+        .flex()
+        .flex_col()
+        .gap_5()
+        .when(cfg!(any(target_os = "windows", test)), |d| {
+            d.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(section_heading(l10n::tr("Desktop"), theme))
+                    .child(autostart_row)
+                    .child(close_to_tray_row),
+            )
+        })
+        .child(updates_section)
+        .into_any_element()
+}
+
+fn render_tab_body(
+    tab: SettingsTab,
+    view: &ClientView,
+    modal: &SettingsModal,
+    theme: &Theme,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
+    match tab {
+        SettingsTab::Account => render_account_tab(view, theme, cx),
+        SettingsTab::Appearance => render_appearance_tab(view, theme, cx),
+        SettingsTab::Notifications => render_notifications_tab(view, theme, cx),
+        SettingsTab::VoiceVideo => render_voice_tab(view, theme, cx),
+        SettingsTab::Accessibility => render_accessibility_tab(view, theme, cx),
+        SettingsTab::Language => render_language_tab(modal, theme, cx),
+        SettingsTab::Advanced => render_advanced_tab(view, theme, cx),
+    }
+}
+
+fn render_sidebar_tab(
+    tab: SettingsTab,
+    selected: bool,
+    theme: &Theme,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
+    let sel_id = tab.debug_selector();
+    div()
+        .id(sel_id)
+        .debug_selector(move || sel_id.to_owned())
+        .px_2()
+        .py(px(6.))
+        .rounded(px(6.))
+        .cursor_pointer()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap_2()
+        .text_color(if selected { theme.foreground } else { theme.muted_foreground })
+        .when(selected, |d| d.bg(theme.accent).font_weight(FontWeight::SEMIBOLD))
+        .when(!selected, |d| d.hover(|s| s.bg(theme.muted).text_color(theme.foreground)))
+        .on_click(cx.listener(move |this, _, _, cx| {
+            this.select_settings_tab(tab, cx);
+        }))
+        .child(Icon::new(tab.icon()).small())
+        .child(div().text_sm().truncate().child(tab.label()))
+        .into_any_element()
+}
+
+fn render_sidebar(
+    view: &ClientView,
+    modal: &SettingsModal,
+    query_lower: &str,
+    theme: &Theme,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
+    let (avatar_el, user_name) = match &view.user {
+        Some(user) => (
+            message_row::avatar(
+                user.avatar_url.clone(),
+                user.default_avatar,
+                user.initials.clone(),
+                36.,
+                theme,
+            ),
+            user.name.clone(),
+        ),
+        None => (
+            div().size(px(36.)).rounded_full().bg(theme.muted).into_any_element(),
+            SharedString::new_static("…"),
+        ),
+    };
+
+    let account_tabs: Vec<SettingsTab> = SettingsTab::ACCOUNT_TABS
+        .iter()
+        .copied()
+        .filter(|t| t.matches_query(query_lower))
+        .collect();
+    let app_tabs: Vec<SettingsTab> = SettingsTab::APP_TABS
+        .iter()
+        .copied()
+        .filter(|t| t.matches_query(query_lower))
+        .collect();
+
+    let footer = if modal.confirm_logout {
         div()
+            .flex_none()
+            .px_3()
+            .py_3()
+            .border_t_1()
+            .border_color(theme.border)
             .flex()
             .flex_col()
             .gap_2()
-            .p_3()
-            .rounded(px(6.))
-            .border_1()
-            .border_color(theme.border)
-            .bg(theme.background)
             .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("Sign out?")))
-            .child(div().text_xs().text_color(theme.muted_foreground).child(l10n::tr("You can sign back in at any time.")))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(l10n::tr("You can sign back in at any time.")),
+            )
             .child(
                 div()
                     .flex()
                     .flex_row()
                     .gap_2()
                     .child(
-                        div()
-                            .debug_selector(|| "settings-logout-confirm".to_owned())
-                            .child(
-                                Button::new("settings-logout-confirm")
-                                    .danger()
-                                    .small()
-                                    .label(l10n::tr("Sign out"))
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.apply_settings_effect(SettingsEffect::LogOutRequested, window, cx);
-                                    })),
-                            ),
+                        div().debug_selector(|| "settings-logout-confirm".to_owned()).child(
+                            Button::new("settings-logout-confirm")
+                                .danger()
+                                .small()
+                                .label(l10n::tr("Sign out"))
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.apply_settings_effect(SettingsEffect::LogOutRequested, window, cx);
+                                })),
+                        ),
                     )
                     .child(
                         Button::new("settings-logout-cancel")
@@ -586,423 +1322,233 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
                             .on_click(cx.listener(|this, _, _, cx| this.settings_prompt_logout(false, cx))),
                     ),
             )
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(format!("Fluxer Rust v{CURRENT_VERSION}")),
+            )
             .into_any_element()
     } else {
-        let switch_label = if view.saved_accounts.len() > 1 {
-            format!("{} ({})", l10n::tr("Switch accounts"), view.saved_accounts.len())
-        } else {
-            l10n::tr("Switch accounts")
-        };
         div()
+            .flex_none()
+            .px_3()
+            .py_3()
+            .border_t_1()
+            .border_color(theme.border)
             .flex()
-            .flex_row()
-            .items_center()
+            .flex_col()
             .gap_2()
             .child(
-                Button::new("settings-logout")
-                    .danger()
-                    .small()
-                    .label(l10n::tr("Log out"))
-                    .on_click(cx.listener(|this, _, _, cx| this.settings_prompt_logout(true, cx))),
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(
+                        div().debug_selector(|| "settings-logout".to_owned()).child(
+                            Button::new("settings-logout")
+                                .danger()
+                                .small()
+                                .icon(IconName::ExternalLink)
+                                .label(l10n::tr("Sign out"))
+                                .on_click(cx.listener(|this, _, _, cx| this.settings_prompt_logout(true, cx))),
+                        ),
+                    )
+                    .when(view.accounts_enabled, |d| {
+                        let switch_label = if view.saved_accounts.len() > 1 {
+                            format!("{} ({})", l10n::tr("Switch accounts"), view.saved_accounts.len())
+                        } else {
+                            l10n::tr("Switch accounts")
+                        };
+                        d.child(
+                            div().debug_selector(|| "settings-switch-accounts".to_owned()).child(
+                                Button::new("settings-switch-accounts")
+                                    .ghost()
+                                    .small()
+                                    .icon(IconName::Users)
+                                    .tooltip(switch_label.clone())
+                                    .accessibility_label(switch_label)
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.apply_settings_effect(SettingsEffect::OpenAccountSwitcher, window, cx);
+                                    })),
+                            ),
+                        )
+                    }),
             )
-            .when(view.accounts_enabled, |d| {
-                d.child(
-                    div().debug_selector(|| "settings-switch-accounts".to_owned()).child(
-                        Button::new("settings-switch-accounts")
-                            .ghost()
-                            .small()
-                            .label(switch_label)
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.apply_settings_effect(SettingsEffect::OpenAccountSwitcher, window, cx);
-                            })),
-                    ),
-                )
-            })
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(format!("Fluxer Rust v{CURRENT_VERSION}")),
+            )
             .into_any_element()
     };
 
-    let body = div()
-        .id("settings-body")
-        .max_h(px(380.))
-        .overflow_y_scroll()
+    div()
+        .flex_1()
+        .min_h_0()
         .flex()
         .flex_col()
-        .gap_3()
         .child(
             div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .child(section_heading(l10n::tr("Look and feel"), theme))
-                .child(div().flex().flex_row().flex_wrap().gap_2().children(theme_buttons)),
+                .flex_none()
+                .px_3()
+                .pt_3()
+                .pb_2()
+                .debug_selector(|| "settings-search".to_owned())
+                .child(Input::new(&modal.search).small()),
         )
         .child(
             div()
+                .flex_none()
+                .mx_3()
+                .mb_2()
+                .px_2()
+                .py_2()
+                .rounded(px(6.))
+                .bg(theme.background)
+                .border_1()
+                .border_color(theme.border)
                 .flex()
-                .flex_col()
+                .flex_row()
+                .items_center()
                 .gap_2()
-                .child(section_heading(l10n::tr("Display"), theme))
-                .child(div().flex().flex_row().flex_wrap().gap_2().children(density_buttons))
+                .child(div().flex_none().child(avatar_el))
                 .child(
                     div()
+                        .flex_1()
+                        .min_w_0()
                         .flex()
-                        .flex_row()
-                        .items_center()
-                        .justify_between()
-                        .gap_2()
-                        .child(div().text_sm().child(l10n::tr("Font size")))
-                        .child(div().flex().flex_row().flex_wrap().gap_1().children(font_buttons)),
-                )
-                .child(zoom_controls)
-                .when(trusted_count > 0, |d| {
-                    d.child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .justify_between()
-                            .child(div().text_sm().child(format!("{} ({trusted_count})", l10n::tr("Trusted domains"))))
-                            .child(
-                                div().debug_selector(|| "settings-clear-trusted".to_owned()).child(
-                                    Button::new("settings-clear-trusted")
-                                        .ghost()
-                                        .small()
-                                        .label(l10n::tr("Clear"))
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.apply_settings_effect(SettingsEffect::ClearTrustedDomains, window, cx);
-                                        })),
-                                ),
-                            ),
-                    )
-                }),
-        )
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .child(section_heading(l10n::tr("Notifications"), theme))
-                .child(notifications_row)
-                .child(sounds_row),
-        )
-        .when(cfg!(any(target_os = "windows", test)), |d| {
-            d.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(section_heading(l10n::tr("Startup"), theme))
-                    .child(autostart_row)
-                    .child(close_to_tray_row),
-            )
-        })
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .justify_between()
-                        .child(section_heading(l10n::tr("Voice & Audio"), theme))
+                        .flex_col()
+                        .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).truncate().child(user_name))
                         .child(
-                            div().debug_selector(|| "voice-refresh-devices".to_owned()).child(
-                                Button::new("voice-refresh-devices")
-                                    .ghost()
-                                    .small()
-                                    .label(l10n::tr("Refresh devices"))
-                                    .accessibility_label(l10n::tr("Refresh devices"))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.refresh_audio_devices(cx);
-                                    })),
-                            ),
-                        ),
-                )
-                .child(voice_device_row(
-                    "Input device",
-                    view.prefs.data.voice_input_device.as_deref(),
-                    &view.audio_devices.input_devices,
-                    "voice-input-device",
-                    "voice-input-device-reset",
-                    theme,
-                    SettingsEffect::VoiceInputDeviceChanged,
-                    cx,
-                ))
-                .child(voice_volume_row(
-                    "Input volume",
-                    view.prefs.data.voice_input_volume,
-                    "voice-input-vol-dec",
-                    "voice-input-vol-inc",
-                    "voice-input-vol-reset",
-                    SettingsEffect::VoiceInputVolumeChanged,
-                    cx,
-                ))
-                .child(voice_device_row(
-                    "Output device",
-                    view.prefs.data.voice_output_device.as_deref(),
-                    &view.audio_devices.output_devices,
-                    "voice-output-device",
-                    "voice-output-device-reset",
-                    theme,
-                    SettingsEffect::VoiceOutputDeviceChanged,
-                    cx,
-                ))
-                .child(voice_volume_row(
-                    "Output volume",
-                    view.prefs.data.voice_output_volume,
-                    "voice-output-vol-dec",
-                    "voice-output-vol-inc",
-                    "voice-output-vol-reset",
-                    SettingsEffect::VoiceOutputVolumeChanged,
-                    cx,
-                )),
-        )
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .child(section_heading(l10n::tr("Accessibility"), theme))
-                .child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .justify_between()
-                        .child(div().text_sm().child(l10n::tr("Reduced motion")))
-                        .child(
-                            div().flex().flex_row().gap_1().children(
-                                [
-                                    (ReducedMotionPref::System, "System", "reduced-motion-system"),
-                                    (ReducedMotionPref::On, "On", "reduced-motion-on"),
-                                    (ReducedMotionPref::Off, "Off", "reduced-motion-off"),
-                                ]
-                                .into_iter()
-                                .map(|(pref, label, sel_id)| {
-                                    let selected = view.prefs.data.reduced_motion == pref;
-                                    let mut btn = Button::new(sel_id).small().label(l10n::tr(label));
-                                    btn = if selected { btn.primary() } else { btn.ghost() };
-                                    div().debug_selector(move || sel_id.to_owned()).child(btn.on_click(
-                                        cx.listener(move |this, _, window, cx| {
-                                            this.apply_settings_effect(
-                                                SettingsEffect::ReducedMotionChanged(pref),
-                                                window,
-                                                cx,
-                                            );
-                                        }),
-                                    ))
-                                }),
-                            ),
+                            div()
+                                .text_xs()
+                                .text_color(theme.muted_foreground)
+                                .truncate()
+                                .child(l10n::tr("Edit your profile")),
                         ),
                 ),
         )
         .child(
             div()
+                .id("settings-sidebar-scroll")
+                .flex_1()
+                .min_h_0()
+                .overflow_y_scroll()
+                .track_scroll(&modal.sidebar_scroll)
+                .px_2()
+                .py_1()
                 .flex()
                 .flex_col()
-                .gap_2()
-                .child(section_heading(l10n::tr("Language"), theme))
-                .child(locale_list),
+                .gap_3()
+                .when(!account_tabs.is_empty(), |d| {
+                    d.child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(div().px_2().child(section_heading(l10n::tr("Your account"), theme)))
+                            .children(
+                                account_tabs
+                                    .iter()
+                                    .map(|&tab| render_sidebar_tab(tab, modal.active_tab == tab, theme, cx)),
+                            ),
+                    )
+                })
+                .when(!app_tabs.is_empty(), |d| {
+                    d.child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(div().px_2().child(section_heading(l10n::tr("App settings"), theme)))
+                            .children(
+                                app_tabs
+                                    .iter()
+                                    .map(|&tab| render_sidebar_tab(tab, modal.active_tab == tab, theme, cx)),
+                            ),
+                    )
+                })
+                .when(account_tabs.is_empty() && app_tabs.is_empty(), |d| {
+                    d.child(
+                        div()
+                            .px_2()
+                            .py_2()
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child(l10n::tr("No results")),
+                    )
+                }),
         )
-        .child(
+        .child(footer)
+        .into_any_element()
+}
+
+pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+    let query = modal.search.read(cx).value().trim().to_owned();
+    let query_lower = query.to_lowercase();
+
+    let sidebar = render_sidebar(view, modal, &query_lower, theme, cx);
+
+    let (title, body): (SharedString, AnyElement) = if query_lower.is_empty() {
+        (
+            SharedString::from(modal.active_tab.label()),
+            render_tab_body(modal.active_tab, view, modal, theme, cx),
+        )
+    } else {
+        let matching: Vec<SettingsTab> = SettingsTab::ALL
+            .iter()
+            .copied()
+            .filter(|t| t.matches_query(&query_lower))
+            .collect();
+        let search_body = if matching.is_empty() {
+            div()
+                .py_6()
+                .text_sm()
+                .text_color(theme.muted_foreground)
+                .child(l10n::tr("No results"))
+                .into_any_element()
+        } else {
             div()
                 .flex()
                 .flex_col()
-                .gap_2()
-                .child(section_heading(l10n::tr("About & Updates"), theme))
-                .child(
+                .gap_6()
+                .children(matching.into_iter().map(|tab| {
                     div()
                         .flex()
-                        .flex_row()
-                        .items_center()
-                        .justify_between()
-                        .gap_2()
-                        .child(div().text_sm().child(format!("v{CURRENT_VERSION}")))
-                        .child(
-                            div().debug_selector(|| "settings-check-updates".to_owned()).child(
-                                Button::new("settings-check-updates")
-                                    .ghost()
-                                    .small()
-                                    .label(l10n::tr("Check for updates"))
-                                    .accessibility_label(l10n::tr("Check for updates"))
-                                    .disabled(matches!(
-                                        view.update_status,
-                                        UpdateStatus::Checking | UpdateStatus::Downloading { .. }
-                                    ))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.check_for_updates(cx);
-                                    })),
-                            ),
-                        ),
-                )
-                .map(|d| match &view.update_status {
-                    UpdateStatus::Idle => d,
-                    UpdateStatus::Checking => d.child(
-                        div()
-                            .debug_selector(|| "settings-update-checking".to_owned())
-                            .text_xs()
-                            .text_color(theme.muted_foreground)
-                            .child(l10n::tr("Checking for updates…")),
-                    ),
-                    UpdateStatus::UpToDate { .. } => d.child(
-                        div()
-                            .debug_selector(|| "settings-update-uptodate".to_owned())
-                            .text_xs()
-                            .text_color(theme.muted_foreground)
-                            .child(l10n::tr("Up to date")),
-                    ),
-                    UpdateStatus::Available {
-                        latest,
-                        release_url,
-                        asset_name,
-                        asset_url,
-                        ..
-                    } => {
-                        let release_url = release_url.clone();
-                        let has_asset = asset_name.is_some() && asset_url.is_some();
-                        d.child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .justify_between()
-                                .gap_2()
-                                .child(
-                                    div()
-                                        .debug_selector(|| "settings-update-available".to_owned())
-                                        .text_xs()
-                                        .text_color(theme.foreground)
-                                        .child(format!("{}: v{latest}", l10n::tr("Update available"))),
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_row()
-                                        .items_center()
-                                        .gap_2()
-                                        .when(has_asset, |row| {
-                                            row.child(
-                                                div()
-                                                    .debug_selector(|| "settings-download-update".to_owned())
-                                                    .child(
-                                                        Button::new("settings-download-update")
-                                                            .primary()
-                                                            .small()
-                                                            .label(l10n::tr("Download update"))
-                                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                                this.download_available_update(cx);
-                                                            })),
-                                                    ),
-                                            )
-                                        })
-                                        .child(
-                                            div().debug_selector(|| "settings-open-release".to_owned()).child(
-                                                Button::new("settings-open-release")
-                                                    .ghost()
-                                                    .small()
-                                                    .label(l10n::tr("Open release page"))
-                                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                                        #[cfg(test)]
-                                                        this.launch_external_url(&release_url, cx);
-                                                        #[cfg(not(test))]
-                                                        {
-                                                            let _ = this;
-                                                            cx.open_url(&release_url);
-                                                        }
-                                                    })),
-                                            ),
-                                        ),
-                                ),
-                        )
-                    }
-                    UpdateStatus::Downloading { latest } => d.child(
-                        div()
-                            .debug_selector(|| "settings-update-downloading".to_owned())
-                            .text_xs()
-                            .text_color(theme.muted_foreground)
-                            .child(format!("{} v{latest}…", l10n::tr("Downloading"))),
-                    ),
-                    UpdateStatus::Downloaded {
-                        latest,
-                        path,
-                        sha256,
-                        verified,
-                    } => {
-                        let short_hash = &sha256[..sha256.len().min(16)];
-                        let verify_label = if *verified {
-                            l10n::tr("SHA-256 verified")
-                        } else {
-                            l10n::tr("Unverified")
-                        };
-                        d.child(
-                            div()
-                                .debug_selector(|| "settings-update-downloaded".to_owned())
-                                .flex()
-                                .flex_col()
-                                .gap_1()
-                                .text_xs()
-                                .text_color(theme.foreground)
-                                .child(format!(
-                                    "{} v{latest} ({verify_label} · {short_hash})",
-                                    l10n::tr("Downloaded")
-                                ))
-                                .child(div().text_color(theme.muted_foreground).child(path.clone())),
-                        )
-                    }
-                    UpdateStatus::Error(err) => d.child(
-                        div()
-                            .debug_selector(|| "settings-update-error".to_owned())
-                            .text_xs()
-                            .text_color(theme.danger)
-                            .child(err.clone()),
-                    ),
-                }),
-        );
+                        .flex_col()
+                        .gap_3()
+                        .child(div().text_base().font_weight(FontWeight::BOLD).child(tab.label()))
+                        .child(render_tab_body(tab, view, modal, theme, cx))
+                }))
+                .into_any_element()
+        };
+        (SharedString::from(l10n::tr("Search results")), search_body)
+    };
 
-    let content = div()
+    let view_weak = cx.weak_entity();
+    div()
         .id("settings-modal")
         .key_context(CONTEXT)
-        .p_4()
-        .flex()
-        .flex_col()
-        .gap_3()
+        .absolute()
+        .top_0()
+        .left_0()
+        .size_full()
         .capture_action(cx.listener(|this, _: &Escape, window, cx| {
             cx.stop_propagation();
             this.close_overlay(window, cx);
         }))
-        .child(
-            div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .justify_between()
-                .child(div().text_lg().font_weight(FontWeight::BOLD).child(l10n::tr("Settings")))
-                .child(
-                    Button::new("settings-close")
-                        .ghost()
-                        .small()
-                        .label("✕")
-                        .on_click(cx.listener(|this, _, window, cx| this.close_overlay(window, cx))),
-                ),
-        )
-        .child(body)
-        .child(
-            div()
-                .pt_3()
-                .border_t_1()
-                .border_color(theme.border)
-                .flex()
-                .flex_col()
-                .gap_2()
-                .child(section_heading(l10n::tr("Account"), theme))
-                .child(account_section),
-        );
-
-    let view = cx.weak_entity();
-    overlay::modal(content, theme, move |window, cx| {
-        let _ = view.update(cx, |v, cx| v.close_overlay(window, cx));
-    })
+        .child(overlay::settings_modal(
+            sidebar,
+            title,
+            body,
+            theme,
+            move |window, cx| {
+                let _ = view_weak.update(cx, |v, cx| v.close_overlay(window, cx));
+            },
+        ))
+        .into_any_element()
 }

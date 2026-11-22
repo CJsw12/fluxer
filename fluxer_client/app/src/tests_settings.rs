@@ -10,6 +10,7 @@ use crate::tests::{backend_with_fixture, draw, focus_composer, open_client, runt
 use crate::theme::{self, Theme, ThemeKind};
 use crate::ui::l10n;
 use crate::ui::overlay::Overlay;
+use crate::ui::settings::SettingsTab;
 use crate::backend::lock_sent;
 
 struct LocaleGuard;
@@ -142,6 +143,11 @@ fn settings_modal_updates_voice_devices_and_volumes(cx: &mut TestAppContext) {
     draw(cx);
     assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::Settings(_))));
 
+    let voice_tab = cx.debug_bounds("settings-tab-voice").expect("voice tab drawn");
+    cx.simulate_click(voice_tab.center(), gpui_kit::Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+
     // Default voice prefs
     view.read_with(cx, |v, _| {
         assert_eq!(v.prefs.data.voice_input_device, None);
@@ -249,6 +255,11 @@ fn settings_modal_updates_reduced_motion(cx: &mut TestAppContext) {
     draw(cx);
     assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::Settings(_))));
 
+    let a11y_tab = cx.debug_bounds("settings-tab-accessibility").expect("accessibility tab drawn");
+    cx.simulate_click(a11y_tab.center(), gpui_kit::Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+
     for selector in ["reduced-motion-system", "reduced-motion-on", "reduced-motion-off"] {
         assert!(cx.debug_bounds(selector).is_some(), "{selector} should be drawn");
     }
@@ -296,6 +307,7 @@ fn settings_modal_selects_enumerated_voice_devices(cx: &mut TestAppContext) {
     cx.simulate_keystrokes("ctrl-,");
     cx.run_until_parked();
     view.update(cx, |v, cx| {
+        v.select_settings_tab(SettingsTab::VoiceVideo, cx);
         v.audio_devices = crate::audio_devices::AudioDeviceLists {
             input_devices: vec!["Built-in Mic".to_owned(), "USB Mic".to_owned()],
             output_devices: vec!["Headphones".to_owned(), "Speakers".to_owned()],
@@ -377,6 +389,11 @@ fn settings_modal_renders_all_update_statuses(cx: &mut TestAppContext) {
     cx.run_until_parked();
     draw(cx);
     assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::Settings(_))));
+
+    let adv_tab = cx.debug_bounds("settings-tab-advanced").expect("advanced tab drawn");
+    cx.simulate_click(adv_tab.center(), gpui_kit::Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
     assert!(cx.debug_bounds("settings-check-updates").is_some());
 
     // Checking
@@ -490,6 +507,83 @@ fn settings_modal_renders_all_update_statuses(cx: &mut TestAppContext) {
     cx.run_until_parked();
     draw(cx);
     assert!(cx.debug_bounds("settings-update-error").is_some());
+
+    drop(rt);
+}
+
+#[gpui_kit::test]
+fn settings_modal_switches_tabs_filters_search_and_closes(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, cx) = open_client(cx, backend, events);
+
+    focus_composer(&view, cx);
+    cx.simulate_keystrokes("ctrl-,");
+    cx.run_until_parked();
+    draw(cx);
+
+    // Default tab is Appearance and renders the live preview card.
+    view.read_with(cx, |v, _| match &v.overlay {
+        Overlay::Settings(modal) => assert_eq!(modal.active_tab, SettingsTab::Appearance),
+        _ => panic!("expected settings overlay"),
+    });
+    assert!(cx.debug_bounds("settings-appearance-preview").is_some());
+    assert!(cx.debug_bounds("settings-density-compact").is_some());
+
+    // Switch through tabs via sidebar clicks.
+    for (selector, expected_tab, body_selector) in [
+        ("settings-tab-account", SettingsTab::Account, "settings-account-trusted"),
+        ("settings-tab-notifications", SettingsTab::Notifications, "settings-notifications"),
+        ("settings-tab-voice", SettingsTab::VoiceVideo, "voice-refresh-devices"),
+        ("settings-tab-accessibility", SettingsTab::Accessibility, "reduced-motion-system"),
+        ("settings-tab-language", SettingsTab::Language, "settings-locale-list"),
+        ("settings-tab-advanced", SettingsTab::Advanced, "settings-check-updates"),
+        ("settings-tab-appearance", SettingsTab::Appearance, "settings-appearance-preview"),
+    ] {
+        let bounds = cx.debug_bounds(selector).unwrap_or_else(|| panic!("{selector} drawn"));
+        cx.simulate_click(bounds.center(), gpui_kit::Modifiers::default());
+        cx.run_until_parked();
+        draw(cx);
+        view.read_with(cx, |v, _| match &v.overlay {
+            Overlay::Settings(modal) => assert_eq!(modal.active_tab, expected_tab),
+            _ => panic!("expected settings overlay"),
+        });
+        assert!(cx.debug_bounds(body_selector).is_some(), "{body_selector} should be drawn for {selector}");
+    }
+
+    // Search filters sidebar tabs and displays matching sections in the content pane.
+    view.update_in(cx, |v, window, cx| {
+        if let Overlay::Settings(modal) = &v.overlay {
+            modal.search.update(cx, |input, cx| input.set_value("voice", window, cx));
+        }
+        cx.notify();
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert!(cx.debug_bounds("settings-tab-voice").is_some());
+    assert!(cx.debug_bounds("settings-tab-appearance").is_none());
+    assert!(cx.debug_bounds("settings-tab-language").is_none());
+    assert!(cx.debug_bounds("voice-refresh-devices").is_some());
+
+    // Clearing search restores all tabs and the active tab view.
+    view.update_in(cx, |v, window, cx| {
+        if let Overlay::Settings(modal) = &v.overlay {
+            modal.search.update(cx, |input, cx| input.set_value("", window, cx));
+        }
+        cx.notify();
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert!(cx.debug_bounds("settings-tab-appearance").is_some());
+    assert!(cx.debug_bounds("settings-tab-language").is_some());
+    assert!(cx.debug_bounds("settings-appearance-preview").is_some());
+
+    // Close button dismisses the modal.
+    let close_bounds = cx.debug_bounds("settings-close").expect("settings close button drawn");
+    cx.simulate_click(close_bounds.center(), gpui_kit::Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::None)));
 
     drop(rt);
 }

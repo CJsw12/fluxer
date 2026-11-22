@@ -402,11 +402,34 @@ impl VoiceTransport for ProcessVoiceTransport {
     }
 }
 
+struct MuteSyncState {
+    mic_muted: AtomicBool,
+    mic_dirty: AtomicBool,
+    playback_muted: AtomicBool,
+    playback_dirty: AtomicBool,
+    close_requested: AtomicBool,
+    notify: tokio::sync::Notify,
+}
+
+impl MuteSyncState {
+    fn new() -> Self {
+        Self {
+            mic_muted: AtomicBool::new(false),
+            mic_dirty: AtomicBool::new(false),
+            playback_muted: AtomicBool::new(false),
+            playback_dirty: AtomicBool::new(false),
+            close_requested: AtomicBool::new(false),
+            notify: tokio::sync::Notify::new(),
+        }
+    }
+}
+
 /// Active voice room backed by a private stdio IPC channel to the worker process.
 pub(crate) struct ProcessVoiceRoom {
     tx: mpsc::Sender<WorkerCommand>,
     closed: Arc<AtomicBool>,
     kill_tx: Mutex<Option<oneshot::Sender<()>>>,
+    mute_state: Arc<MuteSyncState>,
     subscribed_tracks: Arc<Mutex<BTreeSet<TrackSubscriptionKey>>>,
     published_tracks: Arc<Mutex<BTreeSet<TrackSubscriptionKey>>>,
     pending_video_frame: Arc<Mutex<Option<(String, u32, u32, Vec<u8>)>>>,
@@ -436,11 +459,19 @@ impl ProcessVoiceRoom {
 
 impl VoiceRoom for ProcessVoiceRoom {
     fn set_microphone_muted(&self, muted: bool) {
-        self.send_command(WorkerCommand::SetMicMuted { muted });
+        if !self.closed.load(Ordering::SeqCst) {
+            self.mute_state.mic_muted.store(muted, Ordering::Release);
+            self.mute_state.mic_dirty.store(true, Ordering::Release);
+            self.mute_state.notify.notify_one();
+        }
     }
 
     fn set_playback_muted(&self, muted: bool) {
-        self.send_command(WorkerCommand::SetPlaybackMuted { muted });
+        if !self.closed.load(Ordering::SeqCst) {
+            self.mute_state.playback_muted.store(muted, Ordering::Release);
+            self.mute_state.playback_dirty.store(true, Ordering::Release);
+            self.mute_state.notify.notify_one();
+        }
     }
 
     fn set_screen_share(&self, active: bool, with_audio: bool) {
@@ -484,7 +515,10 @@ impl VoiceRoom for ProcessVoiceRoom {
         if self.closed.swap(true, Ordering::SeqCst) {
             return;
         }
-        let _ = self.tx.try_send(WorkerCommand::Close);
+        if self.tx.try_send(WorkerCommand::Close).is_err() {
+            self.mute_state.close_requested.store(true, Ordering::Release);
+            self.mute_state.notify.notify_one();
+        }
         if let Ok(mut guard) = self.kill_tx.lock()
             && let Some(kill_tx) = guard.take()
         {
@@ -517,17 +551,63 @@ where
     Ok(())
 }
 
-async fn run_writer<W>(mut writer: W, mut rx: mpsc::Receiver<WorkerCommand>)
+async fn flush_dirty_mutes<W>(writer: &mut W, mute_state: &MuteSyncState) -> Result<(), ()>
 where
+    W: AsyncWrite + Unpin,
+{
+    while mute_state.mic_dirty.swap(false, Ordering::AcqRel) {
+        let muted = mute_state.mic_muted.load(Ordering::Acquire);
+        if write_command_line(writer, &WorkerCommand::SetMicMuted { muted })
+            .await
+            .is_err()
+        {
+            return Err(());
+        }
+    }
+    while mute_state.playback_dirty.swap(false, Ordering::AcqRel) {
+        let muted = mute_state.playback_muted.load(Ordering::Acquire);
+        if write_command_line(writer, &WorkerCommand::SetPlaybackMuted { muted })
+            .await
+            .is_err()
+        {
+            return Err(());
+        }
+    }
+    Ok(())
+}
+
+async fn run_writer<W>(
+    mut writer: W,
+    mut rx: mpsc::Receiver<WorkerCommand>,
+    mute_state: Arc<MuteSyncState>,
+) where
     W: AsyncWrite + Unpin + Send + 'static,
 {
-    while let Some(cmd) = rx.recv().await {
-        let is_close = matches!(cmd, WorkerCommand::Close);
-        if write_command_line(&mut writer, &cmd).await.is_err() {
+    loop {
+        if flush_dirty_mutes(&mut writer, &mute_state).await.is_err() {
             break;
         }
-        if is_close {
+        if mute_state.close_requested.load(Ordering::Acquire) {
+            let _ = write_command_line(&mut writer, &WorkerCommand::Close).await;
             break;
+        }
+        tokio::select! {
+            biased;
+            _ = mute_state.notify.notified() => {}
+            maybe_cmd = rx.recv() => {
+                match maybe_cmd {
+                    Some(cmd) => {
+                        let is_close = matches!(cmd, WorkerCommand::Close);
+                        if write_command_line(&mut writer, &cmd).await.is_err() {
+                            break;
+                        }
+                        if is_close {
+                            break;
+                        }
+                    }
+                    None => break,
+                }
+            }
         }
     }
     let _ = writer.shutdown().await;
@@ -703,11 +783,12 @@ where
             let (tx, rx) = mpsc::channel(COMMAND_CHANNEL_CAPACITY);
             let (event_tx, event_rx) = mpsc::unbounded_channel();
             let closed = Arc::new(AtomicBool::new(false));
+            let mute_state = Arc::new(MuteSyncState::new());
             let subscribed_tracks = Arc::new(Mutex::new(BTreeSet::new()));
             let published_tracks = Arc::new(Mutex::new(BTreeSet::new()));
             let pending_video_frame = Arc::new(Mutex::new(None));
             let video_frame_notified = Arc::new(AtomicBool::new(false));
-            tokio::spawn(run_writer(writer, rx));
+            tokio::spawn(run_writer(writer, rx, mute_state.clone()));
             tokio::spawn(run_event_reader(
                 reader,
                 subscribed_tracks.clone(),
@@ -721,6 +802,7 @@ where
                 tx,
                 closed,
                 kill_tx: Mutex::new(kill_tx),
+                mute_state,
                 subscribed_tracks,
                 published_tracks,
                 pending_video_frame,
@@ -1559,6 +1641,68 @@ mod tests {
                 VoiceRoom::take_pending_video_frame(&room),
                 Some(("TR_cam_1".to_owned(), 1, 1, frame4))
             );
+        });
+    }
+
+    #[test]
+    fn mute_updates_are_delivered_even_when_command_queue_is_saturated() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            let (client_to_worker_w, client_to_worker_r) = tokio::io::duplex(64 * 1024);
+            let (worker_to_client_w, worker_to_client_r) = tokio::io::duplex(4096);
+
+            let worker_task = tokio::spawn(async move {
+                let mut reader = tokio::io::BufReader::new(client_to_worker_r).lines();
+                let _connect = reader.next_line().await.unwrap().unwrap();
+                let mut writer = worker_to_client_w;
+                let connected = format!("{}\n", serde_json::to_string(&WorkerEvent::Connected).unwrap());
+                writer.write_all(connected.as_bytes()).await.unwrap();
+                writer.flush().await.unwrap();
+
+                let mut received = Vec::new();
+                while let Some(line) = reader.next_line().await.unwrap() {
+                    let cmd: WorkerCommand = serde_json::from_str(&line).unwrap();
+                    let is_close = matches!(cmd, WorkerCommand::Close);
+                    received.push(cmd);
+                    if is_close {
+                        break;
+                    }
+                }
+                received
+            });
+
+            let room = connect_over_streams(
+                client_to_worker_w,
+                worker_to_client_r,
+                WorkerCommand::Connect {
+                    endpoint: "wss://rtc.example.test".to_owned(),
+                    token: "secret-jwt".to_owned(),
+                    connection_id: "conn-sat".to_owned(),
+                    initial_mic_muted: false,
+                    initial_playback_muted: false,
+                },
+                Duration::from_secs(2),
+                None,
+            )
+            .await
+            .expect("handshake must succeed");
+
+            // Saturate the bounded command channel completely.
+            for i in 0..(COMMAND_CHANNEL_CAPACITY + 8) {
+                room.set_watched_video_track(Some(format!("TR_{i}")));
+            }
+            // Mute updates must still be delivered with the latest state even though `tx` is full.
+            room.set_microphone_muted(false);
+            room.set_microphone_muted(true);
+            room.set_playback_muted(true);
+
+            // Allow the writer to drain queued commands so Close can be enqueued.
+            tokio::task::yield_now().await;
+            room.close();
+
+            let received = worker_task.await.unwrap();
+            assert!(received.contains(&WorkerCommand::SetMicMuted { muted: true }));
+            assert!(received.contains(&WorkerCommand::SetPlaybackMuted { muted: true }));
         });
     }
 }

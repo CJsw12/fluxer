@@ -404,14 +404,40 @@ impl Drop for OwnedVoiceMedia {
     }
 }
 
-struct ParsedVoiceServerUpdate {
-    guild_id: Option<Snowflake>,
-    channel_id: Option<Snowflake>,
-    endpoint: String,
-    token: SecretToken,
-    connection_id: String,
-    has_e2ee_key: bool,
-    has_ice_servers: bool,
+enum ParsedVoiceServerUpdate {
+    UnsupportedE2ee {
+        guild_id: Option<Snowflake>,
+        channel_id: Option<Snowflake>,
+    },
+    UnsupportedP2pMesh {
+        guild_id: Option<Snowflake>,
+        channel_id: Option<Snowflake>,
+    },
+    Sfu {
+        guild_id: Option<Snowflake>,
+        channel_id: Option<Snowflake>,
+        endpoint: String,
+        token: SecretToken,
+        connection_id: String,
+    },
+}
+
+impl ParsedVoiceServerUpdate {
+    fn guild_id(&self) -> Option<Snowflake> {
+        match self {
+            Self::UnsupportedE2ee { guild_id, .. }
+            | Self::UnsupportedP2pMesh { guild_id, .. }
+            | Self::Sfu { guild_id, .. } => *guild_id,
+        }
+    }
+
+    fn channel_id(&self) -> Option<Snowflake> {
+        match self {
+            Self::UnsupportedE2ee { channel_id, .. }
+            | Self::UnsupportedP2pMesh { channel_id, .. }
+            | Self::Sfu { channel_id, .. } => *channel_id,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -650,6 +676,16 @@ impl VoiceManager {
         (payload, handles)
     }
 
+    fn begin_leave_if_attempt(
+        &mut self,
+        expected_attempt_id: u64,
+    ) -> (Option<VoiceStateUpdate>, Vec<JoinHandle<()>>) {
+        if self.attempt_id != expected_attempt_id {
+            return (None, Vec::new());
+        }
+        self.begin_leave()
+    }
+
     fn set_self_mute(&mut self, muted: bool) -> Option<VoiceStateUpdate> {
         self.self_mute = muted;
         self.apply_audio_mute_flags();
@@ -877,57 +913,70 @@ impl VoiceManager {
         let Some(expected_channel_id) = self.channel_id else {
             return Ok(None);
         };
-        if self.guild_id != parsed.guild_id {
+        if self.guild_id != parsed.guild_id() {
             return Ok(None);
         }
 
-        let is_channel_move = parsed.channel_id.is_some_and(|ch| ch != expected_channel_id);
+        let parsed_channel_id = parsed.channel_id();
+        let is_channel_move = parsed_channel_id.is_some_and(|ch| ch != expected_channel_id);
         if is_channel_move && self.state != VoiceConnectionState::Connected {
             return Ok(None);
         }
 
-        if parsed.has_e2ee_key {
-            let _ = self.abort_active_media();
-            self.attempt_id = self.attempt_id.saturating_add(1);
-            self.guild_id = None;
-            self.channel_id = None;
-            self.connection_id = None;
-            self.endpoint = None;
-            self.self_stream = false;
-            self.screen_share_audio = false;
-            self.speak_denied = false;
-            self.screen_share_codec.reset();
-            self.state = VoiceConnectionState::Failed(VoiceFailure::UnsupportedE2ee);
-            return Err(VoiceFailure::UnsupportedE2ee);
-        }
-        if parsed.has_ice_servers {
-            let _ = self.abort_active_media();
-            self.attempt_id = self.attempt_id.saturating_add(1);
-            self.guild_id = None;
-            self.channel_id = None;
-            self.connection_id = None;
-            self.endpoint = None;
-            self.self_stream = false;
-            self.screen_share_audio = false;
-            self.speak_denied = false;
-            self.screen_share_codec.reset();
-            self.state = VoiceConnectionState::Failed(VoiceFailure::UnsupportedP2pMesh);
-            return Err(VoiceFailure::UnsupportedP2pMesh);
-        }
+        let (guild_id, endpoint, token, connection_id) = match parsed {
+            ParsedVoiceServerUpdate::UnsupportedE2ee { .. } => {
+                let _ = self.abort_active_media();
+                self.attempt_id = self.attempt_id.saturating_add(1);
+                self.guild_id = None;
+                self.channel_id = None;
+                self.connection_id = None;
+                self.endpoint = None;
+                self.self_stream = false;
+                self.screen_share_audio = false;
+                self.speak_denied = false;
+                self.screen_share_codec.reset();
+                self.state = VoiceConnectionState::Failed(VoiceFailure::UnsupportedE2ee);
+                return Err(VoiceFailure::UnsupportedE2ee);
+            }
+            ParsedVoiceServerUpdate::UnsupportedP2pMesh { .. } => {
+                let _ = self.abort_active_media();
+                self.attempt_id = self.attempt_id.saturating_add(1);
+                self.guild_id = None;
+                self.channel_id = None;
+                self.connection_id = None;
+                self.endpoint = None;
+                self.self_stream = false;
+                self.screen_share_audio = false;
+                self.speak_denied = false;
+                self.screen_share_codec.reset();
+                self.state = VoiceConnectionState::Failed(VoiceFailure::UnsupportedP2pMesh);
+                return Err(VoiceFailure::UnsupportedP2pMesh);
+            }
+            ParsedVoiceServerUpdate::Sfu {
+                guild_id,
+                channel_id: _,
+                endpoint,
+                token,
+                connection_id,
+            } => (guild_id, endpoint, token, connection_id),
+        };
 
-        let resolved_channel_id = parsed.channel_id.unwrap_or(expected_channel_id);
+        let resolved_channel_id = parsed_channel_id.unwrap_or(expected_channel_id);
         // Deduplicate repeated VOICE_SERVER_UPDATE frames for the exact same active connection.
         if !is_channel_move
             && matches!(self.state, VoiceConnectionState::Connecting | VoiceConnectionState::Connected)
-            && self.connection_id.as_deref() == Some(parsed.connection_id.as_str())
-            && self.endpoint.as_deref() == Some(parsed.endpoint.as_str())
+            && self.connection_id.as_deref() == Some(connection_id.as_str())
+            && self.endpoint.as_deref() == Some(endpoint.as_str())
         {
             return Ok(None);
         }
 
+        if self.connect_task.is_some() || self.media.is_some() || is_channel_move {
+            self.attempt_id = self.attempt_id.saturating_add(1);
+        }
         self.channel_id = Some(resolved_channel_id);
-        self.connection_id = Some(parsed.connection_id.clone());
-        self.endpoint = Some(parsed.endpoint.clone());
+        self.connection_id = Some(connection_id.clone());
+        self.endpoint = Some(endpoint.clone());
         self.state = VoiceConnectionState::Connecting;
 
         if let Some(task) = self.connect_task.take() {
@@ -946,11 +995,11 @@ impl VoiceManager {
 
         Ok(Some(VoiceCredentials {
             attempt_id: self.attempt_id,
-            guild_id: parsed.guild_id,
+            guild_id,
             channel_id: resolved_channel_id,
-            connection_id: parsed.connection_id,
-            endpoint: parsed.endpoint,
-            token: parsed.token,
+            connection_id,
+            endpoint,
+            token,
             initial_mic_muted: self.self_mute
                 || self.self_deaf
                 || self.server_mute
@@ -992,6 +1041,12 @@ impl VoiceManager {
             Err(err) => {
                 tracing::warn!(attempt_id, error = %err, "voice room connect failed");
                 self.stop_watching_video();
+                if let Some(mut previous) = self.media.take() {
+                    let _ = previous.shutdown();
+                }
+                self.self_stream = false;
+                self.screen_share_audio = false;
+                self.screen_share_codec.reset();
                 self.state = VoiceConnectionState::Failed(VoiceFailure::TransportFailed(err));
                 true
             }
@@ -1168,6 +1223,19 @@ const MAX_VOICE_TOKEN_BYTES: usize = 65_536;
 const MAX_CONNECTION_ID_BYTES: usize = 256;
 
 fn parse_voice_server_update(payload: &Value) -> Result<ParsedVoiceServerUpdate, &'static str> {
+    let guild_id = parse_optional_snowflake(payload.get("guild_id"))?;
+    let channel_id = parse_optional_snowflake(payload.get("channel_id"))?;
+    // Any non-null e2ee_key, `p2p: true`, or non-null ice_servers (including empty array `[]`,
+    // which is truthy in the web client) must be rejected before requiring SFU credentials.
+    if payload.get("e2ee_key").is_some_and(|v| !v.is_null()) {
+        return Ok(ParsedVoiceServerUpdate::UnsupportedE2ee { guild_id, channel_id });
+    }
+    let is_p2p = payload.get("p2p").and_then(Value::as_bool) == Some(true);
+    let has_ice_servers = payload.get("ice_servers").is_some_and(|v| !v.is_null());
+    if is_p2p || has_ice_servers {
+        return Ok(ParsedVoiceServerUpdate::UnsupportedP2pMesh { guild_id, channel_id });
+    }
+
     let token = payload
         .get("token")
         .and_then(Value::as_str)
@@ -1202,21 +1270,13 @@ fn parse_voice_server_update(payload: &Value) -> Result<ParsedVoiceServerUpdate,
         .and_then(Value::as_str)
         .filter(|s| !s.trim().is_empty() && s.len() <= MAX_CONNECTION_ID_BYTES)
         .ok_or("missing or oversized connection_id")?;
-    let guild_id = parse_optional_snowflake(payload.get("guild_id"))?;
-    let channel_id = parse_optional_snowflake(payload.get("channel_id"))?;
-    // Any non-null e2ee_key or ice_servers (including empty array `[]`, which is
-    // truthy in the web client) must be rejected before connecting.
-    let has_e2ee_key = payload.get("e2ee_key").is_some_and(|v| !v.is_null());
-    let has_ice_servers = payload.get("ice_servers").is_some_and(|v| !v.is_null());
 
-    Ok(ParsedVoiceServerUpdate {
+    Ok(ParsedVoiceServerUpdate::Sfu {
         guild_id,
         channel_id,
         endpoint: endpoint.to_owned(),
         token: SecretToken::new(token),
         connection_id: connection_id.to_owned(),
-        has_e2ee_key,
-        has_ice_servers,
     })
 }
 
@@ -1245,6 +1305,79 @@ fn parse_voice_state_update(payload: &Value) -> Option<ParsedVoiceStateUpdate> {
         deaf: flag("deaf"),
         suppress: flag("suppress"),
     })
+}
+
+fn recheck_active_voice_permissions(
+    state: &Mutex<ClientState>,
+    voice: &Arc<Mutex<VoiceManager>>,
+    gateway: Option<&GatewayHandle>,
+    events: &mpsc::UnboundedSender<UiEvent>,
+    #[cfg(test)] sent_voice_states: Option<&Arc<Mutex<Vec<VoiceStateUpdate>>>>,
+) {
+    let record_sent = |payload: &VoiceStateUpdate| {
+        #[cfg(test)]
+        if let Some(log) = sent_voice_states {
+            lock(log).push(payload.clone());
+        }
+        let _ = payload;
+    };
+    let active = {
+        let mgr = lock(voice);
+        match (mgr.guild_id, mgr.channel_id) {
+            (Some(g), Some(c)) => Some((mgr.attempt_id, g, c)),
+            _ => None,
+        }
+    };
+    let Some((expected_attempt_id, guild_id, channel_id)) = active else {
+        return;
+    };
+    let perms = {
+        let st = lock(state);
+        (st.guilds.contains_key(&guild_id) && st.channels.contains_key(&channel_id))
+            .then(|| st.channel_permissions(channel_id))
+    };
+    let Some(perms) = perms else {
+        return;
+    };
+    if (perms & (bits::VIEW_CHANNEL | bits::CONNECT)) != (bits::VIEW_CHANNEL | bits::CONNECT) {
+        let (payload, _handles) = lock(voice).begin_leave_if_attempt(expected_attempt_id);
+        if let Some(payload) = payload {
+            record_sent(&payload);
+            let _ = send_voice_gateway_update(gateway, &payload);
+            let _ = events.send(UiEvent::VoiceChanged);
+        }
+        return;
+    }
+
+    let stream_allowed = (perms & bits::STREAM) != 0;
+    let speak_denied = (perms & bits::SPEAK) == 0;
+    let mut changed = false;
+    let mut stream_stop_payload = None;
+    {
+        let mut mgr = lock(voice);
+        if mgr.attempt_id == expected_attempt_id
+            && mgr.guild_id == Some(guild_id)
+            && mgr.channel_id == Some(channel_id)
+        {
+            if !stream_allowed && (mgr.self_stream || mgr.screen_share_audio) {
+                let _handles = mgr.stop_screen_share_media();
+                stream_stop_payload = mgr.current_state_update_payload();
+                changed = true;
+            }
+            if mgr.speak_denied != speak_denied {
+                mgr.speak_denied = speak_denied;
+                mgr.apply_audio_mute_flags();
+                changed = true;
+            }
+        }
+    }
+    if let Some(payload) = stream_stop_payload {
+        record_sent(&payload);
+        let _ = send_voice_gateway_update(gateway, &payload);
+    }
+    if changed {
+        let _ = events.send(UiEvent::VoiceChanged);
+    }
 }
 
 pub(crate) fn on_gateway_dispatch(
@@ -1276,13 +1409,6 @@ fn on_gateway_dispatch_inner(
     events: &mpsc::UnboundedSender<UiEvent>,
     #[cfg(test)] sent_voice_states: Option<&Arc<Mutex<Vec<VoiceStateUpdate>>>>,
 ) {
-    let record_sent = |payload: &VoiceStateUpdate| {
-        #[cfg(test)]
-        if let Some(log) = sent_voice_states {
-            lock(log).push(payload.clone());
-        }
-        let _ = payload;
-    };
     match dispatch.t.as_str() {
         "READY" => {
             if let Some(guilds) = dispatch.d.get("guilds").and_then(Value::as_array) {
@@ -1304,6 +1430,14 @@ fn on_gateway_dispatch_inner(
                 lock(voice).replace_guild_voice_states(guild_id, voice_states);
                 let _ = events.send(UiEvent::VoiceChanged);
             }
+            recheck_active_voice_permissions(
+                state,
+                voice,
+                gateway,
+                events,
+                #[cfg(test)]
+                sent_voice_states,
+            );
         }
         "GUILD_DELETE" => {
             if let Some(guild_id) = dispatch.d.get("id").and_then(Value::as_str).and_then(Snowflake::parse) {
@@ -1333,60 +1467,25 @@ fn on_gateway_dispatch_inner(
                 }
             }
         }
-        "CHANNEL_UPDATE" | "GUILD_ROLE_UPDATE" | "GUILD_ROLE_DELETE" | "GUILD_MEMBER_UPDATE" => {
-            let active = {
-                let mgr = lock(voice);
-                match (mgr.guild_id, mgr.channel_id) {
-                    (Some(g), Some(c)) => Some((g, c)),
-                    _ => None,
-                }
-            };
-            if let Some((guild_id, channel_id)) = active {
-                let perms = {
-                    let st = lock(state);
-                    (st.guilds.contains_key(&guild_id) && st.channels.contains_key(&channel_id))
-                        .then(|| st.channel_permissions(channel_id))
-                };
-                if let Some(perms) = perms {
-                    if (perms & (bits::VIEW_CHANNEL | bits::CONNECT))
-                        != (bits::VIEW_CHANNEL | bits::CONNECT)
-                    {
-                        let (payload, _handles) = lock(voice).begin_leave();
-                        if let Some(payload) = payload {
-                            record_sent(&payload);
-                            let _ = send_voice_gateway_update(gateway, &payload);
-                        }
-                        let _ = events.send(UiEvent::VoiceChanged);
-                    } else {
-                        let stream_allowed = (perms & bits::STREAM) != 0;
-                        let speak_denied = (perms & bits::SPEAK) == 0;
-                        let mut changed = false;
-                        let mut stream_stop_payload = None;
-                        {
-                            let mut mgr = lock(voice);
-                            if mgr.guild_id == Some(guild_id) && mgr.channel_id == Some(channel_id) {
-                                if !stream_allowed && (mgr.self_stream || mgr.screen_share_audio) {
-                                    let _handles = mgr.stop_screen_share_media();
-                                    stream_stop_payload = mgr.current_state_update_payload();
-                                    changed = true;
-                                }
-                                if mgr.speak_denied != speak_denied {
-                                    mgr.speak_denied = speak_denied;
-                                    mgr.apply_audio_mute_flags();
-                                    changed = true;
-                                }
-                            }
-                        }
-                        if let Some(payload) = stream_stop_payload {
-                            record_sent(&payload);
-                            let _ = send_voice_gateway_update(gateway, &payload);
-                        }
-                        if changed {
-                            let _ = events.send(UiEvent::VoiceChanged);
-                        }
-                    }
-                }
-            }
+        "GUILD_UPDATE"
+        | "GUILD_ROLE_CREATE"
+        | "GUILD_ROLE_UPDATE"
+        | "GUILD_ROLE_UPDATE_BULK"
+        | "GUILD_ROLE_DELETE"
+        | "GUILD_MEMBER_ADD"
+        | "GUILD_MEMBER_UPDATE"
+        | "GUILD_MEMBER_REMOVE"
+        | "CHANNEL_CREATE"
+        | "CHANNEL_UPDATE"
+        | "CHANNEL_UPDATE_BULK" => {
+            recheck_active_voice_permissions(
+                state,
+                voice,
+                gateway,
+                events,
+                #[cfg(test)]
+                sent_voice_states,
+            );
         }
         "VOICE_STATE_UPDATE" => {
             let current_user_id = lock(state).current_user.as_ref().map(|u| u.id);
@@ -1980,7 +2079,7 @@ mod tests {
             "ice_servers": []
         }))
         .unwrap();
-        assert!(parsed.has_ice_servers);
+        assert!(matches!(parsed, ParsedVoiceServerUpdate::UnsupportedP2pMesh { .. }));
     }
 
     #[test]
@@ -3404,5 +3503,337 @@ mod tests {
             codec: None,
             data: vec![0; 16],
         }));
+    }
+
+    #[test]
+    fn endpoint_change_with_same_connection_id_bumps_attempt_id_and_rejects_stale_connect() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, _rx) = test_backend(&rt);
+        let (_transport, _room, _gate) = FakeTransport::gated();
+        backend.set_voice_transport_for_test(_transport);
+
+        backend.join_voice(Some(Snowflake(42)), Snowflake(100));
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            t: "VOICE_SERVER_UPDATE".into(),
+            s: 1,
+            d: json!({
+                "guild_id": "42",
+                "channel_id": "100",
+                "connection_id": "conn-same",
+                "endpoint": "wss://rtc-1.example.test",
+                "token": "jwt-1"
+            }),
+        });
+        let attempt_1 = backend.voice_snapshot().attempt_id;
+
+        // Replace endpoint while keeping the exact same connection_id.
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            t: "VOICE_SERVER_UPDATE".into(),
+            s: 2,
+            d: json!({
+                "guild_id": "42",
+                "channel_id": "100",
+                "connection_id": "conn-same",
+                "endpoint": "wss://rtc-2.example.test",
+                "token": "jwt-2"
+            }),
+        });
+        let attempt_2 = backend.voice_snapshot().attempt_id;
+        assert!(attempt_2 > attempt_1, "endpoint replacement must bump attempt_id");
+
+        let stale_room = Arc::new(FakeRoom::new());
+        let accepted = lock(&backend.voice).finish_connect(
+            attempt_1,
+            Some(Snowflake(42)),
+            Snowflake(100),
+            "conn-same",
+            Ok(stale_room.clone()),
+        );
+        assert!(!accepted);
+        assert!(stale_room.closed.load(Ordering::SeqCst));
+        assert_eq!(backend.voice_snapshot().attempt_id, attempt_2);
+    }
+
+    #[test]
+    fn failed_same_channel_reconnect_closes_previous_active_room() {
+        struct FailingTransport;
+        impl VoiceTransport for FailingTransport {
+            fn connect(
+                &self,
+                _credentials: VoiceCredentials,
+            ) -> Pin<Box<dyn Future<Output = Result<Arc<dyn VoiceRoom>, String>> + Send>> {
+                Box::pin(async { Err("reconnect failed".to_owned()) })
+            }
+        }
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, mut rx) = test_backend(&rt);
+        let (transport, old_room) = FakeTransport::immediate();
+        backend.set_voice_transport_for_test(transport);
+
+        backend.join_voice(Some(Snowflake(42)), Snowflake(100));
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            t: "VOICE_SERVER_UPDATE".into(),
+            s: 1,
+            d: json!({
+                "guild_id": "42",
+                "channel_id": "100",
+                "connection_id": "conn-1",
+                "endpoint": "wss://rtc-1.example.test",
+                "token": "jwt-1"
+            }),
+        });
+        rt.block_on(async {
+            for _ in 0..20 {
+                if backend.voice_snapshot().state == VoiceConnectionState::Connected {
+                    break;
+                }
+                let _ = tokio::time::timeout(std::time::Duration::from_millis(50), rx.recv()).await;
+            }
+        });
+        assert_eq!(backend.voice_snapshot().state, VoiceConnectionState::Connected);
+
+        let attempt_id = backend.voice_snapshot().attempt_id;
+        let mic_task = rt.spawn(async {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+        });
+        assert!(lock(&backend.voice).attach_mic_task(attempt_id, mic_task));
+        let watch_key = TrackSubscriptionKey {
+            participant_identity: "user-2".into(),
+            participant_sid: "PA_2".into(),
+            track_sid: "TR_cam_1".into(),
+            source: VoiceTrackSource::Camera,
+        };
+        let queue = backend.watch_video_track(watch_key).unwrap();
+
+        // Now switch to a failing transport and trigger a same-channel reconnect.
+        backend.set_voice_transport_for_test(Arc::new(FailingTransport));
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            t: "VOICE_SERVER_UPDATE".into(),
+            s: 2,
+            d: json!({
+                "guild_id": "42",
+                "channel_id": "100",
+                "connection_id": "conn-1",
+                "endpoint": "wss://rtc-2.example.test",
+                "token": "jwt-2"
+            }),
+        });
+        rt.block_on(async {
+            for _ in 0..20 {
+                if matches!(backend.voice_snapshot().state, VoiceConnectionState::Failed(_)) {
+                    break;
+                }
+                let _ = tokio::time::timeout(std::time::Duration::from_millis(50), rx.recv()).await;
+            }
+        });
+        assert_eq!(
+            backend.voice_snapshot().state,
+            VoiceConnectionState::Failed(VoiceFailure::TransportFailed("reconnect failed".into()))
+        );
+        assert!(old_room.closed.load(Ordering::SeqCst));
+        assert_eq!(backend.voice_snapshot().watched_video_track, None);
+        assert!(!queue.push(DecodedVideoFrame {
+            width: 2,
+            height: 2,
+            timestamp_us: 1,
+            codec: None,
+            data: vec![0; 16],
+        }));
+    }
+
+    #[test]
+    fn view_channel_revocation_does_not_disconnect_newer_attempt() {
+        let mut mgr = VoiceManager::new(Arc::new(UnconfiguredVoiceTransport));
+        let _ = mgr.begin_join(Some(Snowflake(42)), Snowflake(100));
+        let old_attempt = mgr.attempt_id;
+
+        // Move to a newer attempt on channel 200.
+        let _ = mgr.begin_join(Some(Snowflake(42)), Snowflake(200));
+        let new_attempt = mgr.attempt_id;
+        assert!(new_attempt > old_attempt);
+
+        let (payload, handles) = mgr.begin_leave_if_attempt(old_attempt);
+        assert!(payload.is_none());
+        assert!(handles.is_empty());
+        assert_eq!(mgr.channel_id, Some(Snowflake(200)));
+        assert_eq!(mgr.state, VoiceConnectionState::Connecting);
+    }
+
+    #[test]
+    fn guild_update_and_bulk_role_channel_updates_trigger_voice_permission_revocation() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, _rx) = test_backend(&rt);
+
+        let allow_all = (bits::VIEW_CHANNEL | bits::CONNECT | bits::SPEAK).to_string();
+        let seed = Dispatch {
+            t: "READY".into(),
+            s: 1,
+            d: json!({
+                "user": { "id": "10", "username": "tester" },
+                "guilds": [{
+                    "id": "42",
+                    "name": "Guild",
+                    "owner_id": "1",
+                    "channels": [{ "id": "100", "type": 2, "name": "Voice" }],
+                    "roles": [{ "id": "42", "name": "@everyone", "permissions": allow_all }],
+                    "members": [{ "user": { "id": "10", "username": "tester" }, "roles": [] }]
+                }]
+            }),
+        };
+        backend.state().apply(&seed);
+
+        // 1. GUILD_ROLE_UPDATE_BULK revoking CONNECT leaves voice.
+        assert!(backend.join_voice(Some(Snowflake(42)), Snowflake(100)));
+        let bulk_role = Dispatch {
+            t: "GUILD_ROLE_UPDATE_BULK".into(),
+            s: 2,
+            d: json!({
+                "guild_id": "42",
+                "roles": [{ "id": "42", "name": "@everyone", "permissions": bits::VIEW_CHANNEL.to_string() }]
+            }),
+        };
+        backend.state().apply(&bulk_role);
+        backend.feed_voice_dispatch_for_test(&bulk_role);
+        assert_eq!(backend.voice_snapshot().state, VoiceConnectionState::Disconnected);
+
+        // 2. Restore role, rejoin, then CHANNEL_UPDATE_BULK denying VIEW_CHANNEL leaves voice.
+        let restore_role = Dispatch {
+            t: "GUILD_ROLE_UPDATE".into(),
+            s: 3,
+            d: json!({
+                "guild_id": "42",
+                "role": { "id": "42", "name": "@everyone", "permissions": allow_all }
+            }),
+        };
+        backend.state().apply(&restore_role);
+        assert!(backend.join_voice(Some(Snowflake(42)), Snowflake(100)));
+        let bulk_channel = Dispatch {
+            t: "CHANNEL_UPDATE_BULK".into(),
+            s: 4,
+            d: json!({
+                "guild_id": "42",
+                "channels": [{
+                    "id": "100",
+                    "guild_id": "42",
+                    "type": 2,
+                    "name": "Voice",
+                    "permission_overwrites": [{
+                        "id": "42",
+                        "type": 0,
+                        "allow": "0",
+                        "deny": bits::VIEW_CHANNEL.to_string()
+                    }]
+                }]
+            }),
+        };
+        backend.state().apply(&bulk_channel);
+        backend.feed_voice_dispatch_for_test(&bulk_channel);
+        assert_eq!(backend.voice_snapshot().state, VoiceConnectionState::Disconnected);
+
+        // 3. Make user 10 owner with 0 role perms, rejoin, then GUILD_UPDATE transferring ownership leaves voice.
+        let reset_channel = Dispatch {
+            t: "CHANNEL_UPDATE".into(),
+            s: 5,
+            d: json!({
+                "id": "100",
+                "guild_id": "42",
+                "type": 2,
+                "name": "Voice",
+                "permission_overwrites": []
+            }),
+        };
+        let zero_role = Dispatch {
+            t: "GUILD_ROLE_UPDATE".into(),
+            s: 6,
+            d: json!({
+                "guild_id": "42",
+                "role": { "id": "42", "name": "@everyone", "permissions": "0" }
+            }),
+        };
+        let make_owner = Dispatch {
+            t: "GUILD_UPDATE".into(),
+            s: 7,
+            d: json!({
+                "id": "42",
+                "name": "Guild",
+                "owner_id": "10"
+            }),
+        };
+        backend.state().apply(&reset_channel);
+        backend.state().apply(&zero_role);
+        backend.state().apply(&make_owner);
+
+        assert!(backend.join_voice(Some(Snowflake(42)), Snowflake(100)));
+        let transfer_owner = Dispatch {
+            t: "GUILD_UPDATE".into(),
+            s: 8,
+            d: json!({
+                "id": "42",
+                "name": "Guild",
+                "owner_id": "99"
+            }),
+        };
+        backend.state().apply(&transfer_owner);
+        backend.feed_voice_dispatch_for_test(&transfer_owner);
+        assert_eq!(backend.voice_snapshot().state, VoiceConnectionState::Disconnected);
+    }
+
+    #[test]
+    fn p2p_update_without_sfu_credentials_fails_immediately_and_null_ice_servers_with_p2p_true_is_rejected() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let (backend, _rx) = test_backend(&rt);
+
+        // 1. p2p: true without endpoint/token/connection_id must fail immediately.
+        backend.join_voice(None, Snowflake(200));
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            t: "VOICE_SERVER_UPDATE".into(),
+            s: 1,
+            d: json!({
+                "guild_id": null,
+                "channel_id": "200",
+                "p2p": true
+            }),
+        });
+        assert_eq!(
+            backend.voice_snapshot().state,
+            VoiceConnectionState::Failed(VoiceFailure::UnsupportedP2pMesh)
+        );
+
+        // 2. Non-null ice_servers without endpoint/token/connection_id must fail immediately.
+        backend.join_voice(None, Snowflake(201));
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            t: "VOICE_SERVER_UPDATE".into(),
+            s: 2,
+            d: json!({
+                "guild_id": null,
+                "channel_id": "201",
+                "ice_servers": [{"urls": "stun:stun.example.test:3478"}]
+            }),
+        });
+        assert_eq!(
+            backend.voice_snapshot().state,
+            VoiceConnectionState::Failed(VoiceFailure::UnsupportedP2pMesh)
+        );
+
+        // 3. p2p: true + ice_servers: null + SFU credentials must still be rejected as UnsupportedP2pMesh.
+        backend.join_voice(None, Snowflake(202));
+        backend.feed_voice_dispatch_for_test(&Dispatch {
+            t: "VOICE_SERVER_UPDATE".into(),
+            s: 3,
+            d: json!({
+                "guild_id": null,
+                "channel_id": "202",
+                "p2p": true,
+                "ice_servers": null,
+                "connection_id": "conn-p2p",
+                "endpoint": "wss://rtc.example.test",
+                "token": "jwt-p2p"
+            }),
+        });
+        assert_eq!(
+            backend.voice_snapshot().state,
+            VoiceConnectionState::Failed(VoiceFailure::UnsupportedP2pMesh)
+        );
     }
 }

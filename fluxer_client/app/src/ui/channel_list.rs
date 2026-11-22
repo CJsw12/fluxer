@@ -265,7 +265,6 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
             .text_xs()
             .text_color(muted_fg)
             .font_weight(FontWeight::MEDIUM)
-            .child(div().flex_none().child(Icon::new(AppIcon::CaretDown).xsmall().text_color(muted_fg)))
             .child(div().flex_1().min_w_0().truncate().child(c.name.clone()))
             .when(c.can_manage, |d| {
                 d.child(
@@ -304,6 +303,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 )
             })
             .children(permissions)
+            .child(div().flex_none().child(Icon::new(AppIcon::CaretDown).xsmall().text_color(muted_fg)))
             .into_any_element();
     }
     let is_voice = c.icon == ChannelIcon::Voice;

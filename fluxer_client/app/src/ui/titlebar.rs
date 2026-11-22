@@ -25,15 +25,7 @@ pub fn render(title: SharedString, theme: &Theme) -> AnyElement {
                 .flex()
                 .flex_row()
                 .items_center()
-                .gap_2()
                 .min_w_0()
-                .child(
-                    div()
-                        .size(px(8.))
-                        .rounded_full()
-                        .bg(theme.brand)
-                        .flex_none(),
-                )
                 .child(
                     div()
                         .truncate()

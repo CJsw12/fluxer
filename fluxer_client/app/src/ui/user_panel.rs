@@ -114,6 +114,52 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             )
         })
         .child(
+            div().debug_selector(|| "user-panel-mute".to_owned()).child(
+                Button::new("user-panel-mute")
+                    .ghost()
+                    .small()
+                    .icon(if view.voice.self_mute {
+                        AppIcon::MicrophoneSlash
+                    } else {
+                        AppIcon::Microphone
+                    })
+                    .tooltip(if view.voice.self_mute {
+                        l10n::tr("Unmute")
+                    } else {
+                        l10n::tr("Mute")
+                    })
+                    .accessibility_label(if view.voice.self_mute {
+                        l10n::tr("Unmute")
+                    } else {
+                        l10n::tr("Mute")
+                    })
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle_voice_mute(cx))),
+            ),
+        )
+        .child(
+            div().debug_selector(|| "user-panel-deafen".to_owned()).child(
+                Button::new("user-panel-deafen")
+                    .ghost()
+                    .small()
+                    .icon(if view.voice.self_deaf {
+                        AppIcon::SpeakerSlash
+                    } else {
+                        AppIcon::SpeakerHigh
+                    })
+                    .tooltip(if view.voice.self_deaf {
+                        l10n::tr("Undeafen")
+                    } else {
+                        l10n::tr("Deafen")
+                    })
+                    .accessibility_label(if view.voice.self_deaf {
+                        l10n::tr("Undeafen")
+                    } else {
+                        l10n::tr("Deafen")
+                    })
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle_voice_deaf(cx))),
+            ),
+        )
+        .child(
             Button::new("open-settings")
                 .ghost()
                 .small()
@@ -121,14 +167,5 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .tooltip(l10n::tr("Settings"))
                 .accessibility_label(l10n::tr("Settings"))
                 .on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx))),
-        )
-        .child(
-            Button::new("log-out")
-                .ghost()
-                .small()
-                .icon(AppIcon::SignOut)
-                .tooltip(l10n::tr("Log out"))
-                .accessibility_label(l10n::tr("Log out"))
-                .on_click(cx.listener(|this, _, _, cx| this.log_out(cx))),
         )
 }

@@ -314,9 +314,8 @@ pub fn render_with_gallery(
     let image = variant_url(media, ecx.scale).map(|url| {
         let image = media_img("media", url, &cache);
         match media.kind {
-            // The gifv still shows while the animated variant loads.
-            MediaKind::Gifv => image.with_loading(still_img.clone()).with_fallback(still_img),
-            MediaKind::Animated => image.with_loading(blank).with_fallback(still_img),
+            // The gifv/animated still shows while the animated variant loads.
+            MediaKind::Gifv | MediaKind::Animated => image.with_loading(still_img.clone()).with_fallback(still_img),
             _ => image.with_loading(blank).with_fallback(blank),
         }
     });
@@ -333,7 +332,7 @@ pub fn render_with_gallery(
         .overflow_hidden()
         .bg(if media.kind == MediaKind::Video { gpui_kit::black() } else { placeholder })
         .children(image)
-        .when(media.kind == MediaKind::Gifv, |d| d.child(gif_badge()))
+        .when(matches!(media.kind, MediaKind::Gifv | MediaKind::Animated), |d| d.child(gif_badge()))
         .when(media.kind == MediaKind::Video, |d| d.child(play_button()));
 
     if let Some((items, index)) = viewer_pair {

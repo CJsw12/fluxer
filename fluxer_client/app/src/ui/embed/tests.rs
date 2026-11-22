@@ -111,7 +111,7 @@ fn classifies_like_the_web_client() {
     let EmbedBody::Media(gifv) = &embeds[0].body else { panic!("gifv is media only") };
     assert_eq!(gifv.kind, MediaKind::Gifv);
     assert_eq!((gifv.width, gifv.height), (400., 225.));
-    assert_eq!(gifv.source.as_deref(), Some("https://media.example/external/media.tenor.com/x.mp4"));
+    assert_eq!(gifv.source, None);
     assert_eq!(gifv.poster.as_deref(), Some("https://media.example/external/media.tenor.com/x.png"));
     assert_eq!(gifv.open_url.as_deref(), Some("https://tenor.com/view/x"));
 
@@ -506,5 +506,36 @@ fn gifv_image_source_and_video_proxy_url_detection() {
     assert_eq!(
         variant_url(&gif_source_gifv, 1.).as_deref(),
         Some("https://media.example/external/tenor.com/x.gif?width=400&height=225&animated=true")
+    );
+}
+
+#[test]
+fn gifv_opaque_video_proxy_with_video_content_type_uses_poster() {
+    let embeds = json!([{
+        "type": "gifv",
+        "url": "https://tenor.com/view/opaque",
+        "provider": { "name": "Tenor" },
+        "video": {
+            "url": "https://media.tenor.com/opaque-video",
+            "proxy_url": "https://media.example/external/sig123/v2/b3BhcXVl",
+            "width": 498,
+            "height": 280,
+            "content_type": "video/mp4"
+        },
+        "thumbnail": {
+            "url": "https://media.tenor.com/opaque-poster",
+            "proxy_url": "https://media.example/external/sig456/v2/cG9zdGVy",
+            "width": 498,
+            "height": 280
+        }
+    }]);
+    let mut state = state();
+    let rows = rows_of(&mut state, vec![message(1, "https://tenor.com/view/opaque", embeds, 0)]);
+    let EmbedBody::Media(gifv) = &rows[0].embeds[0].body else { panic!("gifv is media only") };
+    assert_eq!(gifv.kind, MediaKind::Gifv);
+    assert_eq!(gifv.source, None);
+    assert_eq!(
+        variant_url(gifv, 1.).as_deref(),
+        Some("https://media.example/external/sig456/v2/cG9zdGVy?width=400&height=225&animated=true")
     );
 }

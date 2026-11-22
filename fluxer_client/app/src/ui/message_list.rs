@@ -29,6 +29,21 @@ pub fn render(view: &ClientView, handle: WeakEntity<ClientView>, theme: &Theme) 
     if let Some(text) = placeholder {
         return div().flex_1().p_4().text_color(theme.muted_foreground).child(text).into_any_element();
     }
+    if view.rows.borrow().is_empty()
+        && view.place != crate::view_model::Place::Home
+        && !view.channel_title.is_empty()
+    {
+        let display: SharedString = format!("{}{}", view.channel_glyph, view.channel_title).into();
+        return div()
+            .id("message-pane")
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .justify_end()
+            .child(channel_start(&display, theme))
+            .into_any_element();
+    }
     let rows = view.rows.clone();
     let leave = handle.clone();
     let (picker, hovered) = (view.reaction_picker, view.hovered_message);

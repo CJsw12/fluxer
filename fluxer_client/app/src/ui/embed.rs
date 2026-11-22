@@ -291,9 +291,16 @@ fn media_only_view(embed: &Embed) -> Option<MediaView> {
             (valid_media(embed.video.as_ref()), thumbnail, non_empty(embed.url.as_deref()))
     {
         let (width, height) = embed_media_size(video.width, video.height, false);
+        let is_video = video
+            .media
+            .content_type
+            .as_deref()
+            .is_some_and(|ct| ct.as_bytes().get(..6).is_some_and(|p| p.eq_ignore_ascii_case(b"video/")))
+            || is_video_proxy_url(video.url)
+            || is_video_proxy_url(video.proxy_url);
         return Some(MediaView {
             kind: MediaKind::Gifv,
-            source: Some(shared(video.proxy_url)),
+            source: (!is_video).then(|| shared(video.proxy_url)),
             poster: Some(shared(thumbnail.proxy_url)),
             width: width as f32,
             height: height as f32,

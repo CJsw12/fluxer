@@ -191,7 +191,7 @@
         },
         {
           "name": "딥링크(fluxer://)",
-          "status": "implemented"
+          "status": "done"
         },
         {
           "name": "방문 기록·앞뒤 이동",
@@ -277,7 +277,7 @@
         },
         {
           "name": "사용자 패널",
-          "status": "implemented"
+          "status": "done"
         },
         {
           "name": "설정 화면",
@@ -393,7 +393,7 @@
         },
         {
           "name": "스크린리더 라벨",
-          "status": "implemented"
+          "status": "done"
         }
       ]
     },
@@ -403,7 +403,7 @@
       "items": [
         {
           "name": "단일 인스턴스",
-          "status": "implemented"
+          "status": "done"
         },
         {
           "name": "릴리스 exe·아이콘",

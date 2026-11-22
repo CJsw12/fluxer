@@ -2,13 +2,20 @@
 
 use std::fmt;
 use std::net::IpAddr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use base64::Engine as _;
 use futures_util::StreamExt as _;
 use livekit::options::TrackPublishOptions;
 use livekit::prelude::*;
-use livekit::webrtc::video_frame::VideoFormatType;
+use livekit::webrtc::desktop_capturer::{
+    CaptureError, DesktopCaptureSourceType, DesktopCapturer, DesktopCapturerOptions,
+};
+use livekit::webrtc::video_frame::{I420Buffer, VideoFormatType, VideoFrame, VideoRotation};
+use livekit::webrtc::video_source::native::NativeVideoSource;
+use livekit::webrtc::video_source::{RtcVideoSource, VideoResolution};
 use livekit::webrtc::video_stream::native::{NativeVideoStream, NativeVideoStreamOptions};
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader};
@@ -164,6 +171,122 @@ fn abort_video_task(active_video_task: &mut Option<(String, tokio::task::JoinHan
     if let Some((_, handle)) = active_video_task.take() {
         handle.abort();
     }
+}
+
+struct ActiveScreenShare {
+    pub_sid: TrackSid,
+    stop_flag: Arc<AtomicBool>,
+    capture_thread: Option<std::thread::JoinHandle<()>>,
+}
+
+async fn stop_screen_share(active_screen_share: &mut Option<ActiveScreenShare>, room: &Room) {
+    if let Some(mut share) = active_screen_share.take() {
+        share.stop_flag.store(true, Ordering::Release);
+        drop(share.capture_thread.take());
+        let _ = room.local_participant().unpublish_track(&share.pub_sid).await;
+    }
+}
+
+/// Converts a BGRA8888 buffer into planar I420 (YUV 4:2:0) using integer BT.601 math.
+///
+/// Returns `false` without panicking if dimensions are `< 2`, odd, or any buffer/stride
+/// is smaller than required.
+#[allow(clippy::too_many_arguments)]
+fn bgra_to_i420(
+    bgra: &[u8],
+    stride: usize,
+    width: u32,
+    height: u32,
+    y_plane: &mut [u8],
+    y_stride: usize,
+    u_plane: &mut [u8],
+    u_stride: usize,
+    v_plane: &mut [u8],
+    v_stride: usize,
+) -> bool {
+    if width < 2 || height < 2 || (width & 1) != 0 || (height & 1) != 0 {
+        return false;
+    }
+    let w = width as usize;
+    let h = height as usize;
+    let cw = w / 2;
+    let ch = h / 2;
+
+    let Some(min_bgra_row) = w.checked_mul(4) else {
+        return false;
+    };
+    if stride < min_bgra_row || y_stride < w || u_stride < cw || v_stride < cw {
+        return false;
+    }
+
+    let Some(req_bgra) = (h - 1).checked_mul(stride).and_then(|o| o.checked_add(min_bgra_row)) else {
+        return false;
+    };
+    let Some(req_y) = (h - 1).checked_mul(y_stride).and_then(|o| o.checked_add(w)) else {
+        return false;
+    };
+    let Some(req_u) = (ch - 1).checked_mul(u_stride).and_then(|o| o.checked_add(cw)) else {
+        return false;
+    };
+    let Some(req_v) = (ch - 1).checked_mul(v_stride).and_then(|o| o.checked_add(cw)) else {
+        return false;
+    };
+
+    if bgra.len() < req_bgra
+        || y_plane.len() < req_y
+        || u_plane.len() < req_u
+        || v_plane.len() < req_v
+    {
+        return false;
+    }
+
+    for row in 0..h {
+        let src_row = &bgra[row * stride..row * stride + min_bgra_row];
+        let dst_y = &mut y_plane[row * y_stride..row * y_stride + w];
+        for (px, y_out) in src_row.chunks_exact(4).zip(dst_y.iter_mut()) {
+            let b = i32::from(px[0]);
+            let g = i32::from(px[1]);
+            let r = i32::from(px[2]);
+            let y = ((66 * r + 129 * g + 25 * b + 128) >> 8) + 16;
+            *y_out = y.clamp(0, 255) as u8;
+        }
+    }
+
+    for cy in 0..ch {
+        let r0 = &bgra[(cy * 2) * stride..(cy * 2) * stride + min_bgra_row];
+        let r1 = &bgra[(cy * 2 + 1) * stride..(cy * 2 + 1) * stride + min_bgra_row];
+        let dst_u = &mut u_plane[cy * u_stride..cy * u_stride + cw];
+        let dst_v = &mut v_plane[cy * v_stride..cy * v_stride + cw];
+
+        for cx in 0..cw {
+            let x0 = cx * 8;
+            let b = (i32::from(r0[x0])
+                + i32::from(r0[x0 + 4])
+                + i32::from(r1[x0])
+                + i32::from(r1[x0 + 4])
+                + 2)
+                >> 2;
+            let g = (i32::from(r0[x0 + 1])
+                + i32::from(r0[x0 + 5])
+                + i32::from(r1[x0 + 1])
+                + i32::from(r1[x0 + 5])
+                + 2)
+                >> 2;
+            let r = (i32::from(r0[x0 + 2])
+                + i32::from(r0[x0 + 6])
+                + i32::from(r1[x0 + 2])
+                + i32::from(r1[x0 + 6])
+                + 2)
+                >> 2;
+
+            let u = ((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128;
+            let v = ((112 * r - 94 * g - 18 * b + 128) >> 8) + 128;
+            dst_u[cx] = u.clamp(0, 255) as u8;
+            dst_v[cx] = v.clamp(0, 255) as u8;
+        }
+    }
+
+    true
 }
 
 fn spawn_video_decode_task(
@@ -558,6 +681,7 @@ async fn run_worker() -> i32 {
     let mut watched_video_track_sid: Option<String> = None;
     let (video_frame_tx, mut video_frame_rx) = mpsc::channel::<WorkerEvent>(1);
     let mut active_video_task: Option<(String, tokio::task::JoinHandle<()>)> = None;
+    let mut active_screen_share: Option<ActiveScreenShare> = None;
     let mut audio_state = WorkerAudioState {
         input_device: None,
         output_device: None,
@@ -587,7 +711,133 @@ async fn run_worker() -> i32 {
                                 playback_muted = muted;
                                 apply_playback_mute(&room, playback_muted);
                             }
-                            WorkerCommand::SetScreenShare { .. } => {}
+                            WorkerCommand::SetScreenShare { active, .. } => {
+                                if !active {
+                                    stop_screen_share(&mut active_screen_share, &room).await;
+                                } else if active_screen_share.is_none() {
+                                    let mut opts = DesktopCapturerOptions::new(
+                                        DesktopCaptureSourceType::Screen,
+                                    );
+                                    opts.set_include_cursor(true);
+                                    let Some(mut capturer) = DesktopCapturer::new(opts) else {
+                                        emit_event(
+                                            &mut stdout,
+                                            &WorkerEvent::Error {
+                                                message: "screen capture unavailable".to_owned(),
+                                            },
+                                        )
+                                        .await;
+                                        continue;
+                                    };
+                                    let primary_source =
+                                        capturer.get_source_list().into_iter().next();
+                                    let source = NativeVideoSource::new(
+                                        VideoResolution {
+                                            width: 1280,
+                                            height: 720,
+                                        },
+                                        true,
+                                    );
+                                    let track = LocalVideoTrack::create_video_track(
+                                        "screen_share",
+                                        RtcVideoSource::Native(source.clone()),
+                                    );
+                                    let publish_opts = TrackPublishOptions {
+                                        source: TrackSource::Screenshare,
+                                        ..Default::default()
+                                    };
+                                    let pub_handle = match room
+                                        .local_participant()
+                                        .publish_track(LocalTrack::Video(track), publish_opts)
+                                        .await
+                                    {
+                                        Ok(handle) => handle,
+                                        Err(_) => {
+                                            emit_event(
+                                                &mut stdout,
+                                                &WorkerEvent::Error {
+                                                    message: "failed to publish screen share track"
+                                                        .to_owned(),
+                                                },
+                                            )
+                                            .await;
+                                            continue;
+                                        }
+                                    };
+                                    let pub_sid = pub_handle.sid();
+                                    let stop_flag = Arc::new(AtomicBool::new(false));
+                                    let thread_stop_flag = Arc::clone(&stop_flag);
+                                    let callback_stop_flag = Arc::clone(&stop_flag);
+                                    let start_instant = Instant::now();
+                                    capturer.start_capture(primary_source, move |result| {
+                                        match result {
+                                            Ok(frame) => {
+                                                if callback_stop_flag.load(Ordering::Acquire) {
+                                                    return;
+                                                }
+                                                let raw_w = frame.width();
+                                                let raw_h = frame.height();
+                                                if raw_w <= 0 || raw_h <= 0 {
+                                                    return;
+                                                }
+                                                let w = (raw_w as u32) & !1;
+                                                let h = (raw_h as u32) & !1;
+                                                if w < 2 || h < 2 {
+                                                    return;
+                                                }
+                                                let src_stride = frame.stride() as usize;
+                                                let src_data = frame.data();
+                                                let mut i420 = I420Buffer::new(w, h);
+                                                let (y_stride, u_stride, v_stride) = i420.strides();
+                                                let (y_plane, u_plane, v_plane) = i420.data_mut();
+                                                if !bgra_to_i420(
+                                                    src_data,
+                                                    src_stride,
+                                                    w,
+                                                    h,
+                                                    y_plane,
+                                                    y_stride as usize,
+                                                    u_plane,
+                                                    u_stride as usize,
+                                                    v_plane,
+                                                    v_stride as usize,
+                                                ) {
+                                                    return;
+                                                }
+                                                let timestamp_us = i64::try_from(
+                                                    start_instant.elapsed().as_micros(),
+                                                )
+                                                .unwrap_or(i64::MAX);
+                                                let video_frame = VideoFrame {
+                                                    rotation: VideoRotation::VideoRotation0,
+                                                    timestamp_us,
+                                                    frame_metadata: None,
+                                                    buffer: i420,
+                                                };
+                                                let _ = source.capture_frame(&video_frame);
+                                            }
+                                            Err(CaptureError::Temporary) => {}
+                                            Err(CaptureError::Permanent) => {
+                                                callback_stop_flag.store(true, Ordering::Release);
+                                            }
+                                        }
+                                    });
+                                    let capture_thread = std::thread::spawn(move || {
+                                        while !thread_stop_flag.load(Ordering::Acquire) {
+                                            capturer.capture_frame();
+                                            if thread_stop_flag.load(Ordering::Acquire) {
+                                                break;
+                                            }
+                                            std::thread::sleep(VIDEO_FRAME_MIN_INTERVAL);
+                                        }
+                                    });
+                                    active_screen_share = Some(ActiveScreenShare {
+                                        pub_sid,
+                                        stop_flag,
+                                        capture_thread: Some(capture_thread),
+                                    });
+                                }
+                            }
                             WorkerCommand::SetAudioSettings {
                                 input_device,
                                 output_device,
@@ -615,6 +865,7 @@ async fn run_worker() -> i32 {
                             }
                             WorkerCommand::Close => {
                                 abort_video_task(&mut active_video_task);
+                                stop_screen_share(&mut active_screen_share, &room).await;
                                 break;
                             }
                             WorkerCommand::Connect { .. } => {}
@@ -728,6 +979,7 @@ async fn run_worker() -> i32 {
                     }
                     Some(RoomEvent::Disconnected { reason }) => {
                         abort_video_task(&mut active_video_task);
+                        stop_screen_share(&mut active_screen_share, &room).await;
                         emit_event(
                             &mut stdout,
                             &WorkerEvent::Disconnected {
@@ -751,6 +1003,7 @@ async fn run_worker() -> i32 {
     }
 
     abort_video_task(&mut active_video_task);
+    stop_screen_share(&mut active_screen_share, &room).await;
 
     if let Some(sid) = mic_pub_sid {
         let _ = room.local_participant().unpublish_track(&sid).await;
@@ -1050,5 +1303,83 @@ mod tests {
             assert_eq!(line, r#"{"type":"set_mic_muted","muted":false}"#);
             assert!(buf.is_empty(), "caller buffer must be cleared after completing line");
         });
+    }
+
+    fn make_solid_bgra_4x4(bgra_pixel: [u8; 4], stride: usize) -> Vec<u8> {
+        let mut buf = vec![0xAAu8; stride * 4];
+        for row in 0..4 {
+            for col in 0..4 {
+                let off = row * stride + col * 4;
+                buf[off..off + 4].copy_from_slice(&bgra_pixel);
+            }
+        }
+        buf
+    }
+
+    #[test]
+    fn bgra_to_i420_converts_white_black_and_color_with_padded_stride() {
+        let stride = 20; // 4 * 4 + 4 padding bytes
+        let y_stride = 6; // 4 + 2 padding bytes
+        let u_stride = 3; // 2 + 1 padding byte
+        let v_stride = 3;
+
+        for (pixel, exp_y, exp_u, exp_v) in [
+            ([255, 255, 255, 255], 235u8, 128u8, 128u8), // pure white
+            ([0, 0, 0, 255], 16u8, 128u8, 128u8),        // pure black
+            ([0, 0, 255, 255], 82u8, 90u8, 240u8),       // pure red (BGRA)
+            ([255, 0, 0, 255], 41u8, 240u8, 110u8),      // pure blue (BGRA)
+        ] {
+            let bgra = make_solid_bgra_4x4(pixel, stride);
+            let mut y = vec![0x55u8; y_stride * 4];
+            let mut u = vec![0x55u8; u_stride * 2];
+            let mut v = vec![0x55u8; v_stride * 2];
+
+            assert!(bgra_to_i420(
+                &bgra, stride, 4, 4, &mut y, y_stride, &mut u, u_stride, &mut v, v_stride
+            ));
+
+            for row in 0..4 {
+                for col in 0..4 {
+                    assert_eq!(y[row * y_stride + col], exp_y);
+                }
+                assert_eq!(y[row * y_stride + 4], 0x55);
+                assert_eq!(y[row * y_stride + 5], 0x55);
+            }
+            for crow in 0..2 {
+                for ccol in 0..2 {
+                    assert_eq!(u[crow * u_stride + ccol], exp_u);
+                    assert_eq!(v[crow * v_stride + ccol], exp_v);
+                }
+                assert_eq!(u[crow * u_stride + 2], 0x55);
+                assert_eq!(v[crow * v_stride + 2], 0x55);
+            }
+        }
+    }
+
+    #[test]
+    fn bgra_to_i420_rejects_invalid_dimensions_and_short_buffers_without_panicking() {
+        let mut y = vec![0u8; 16];
+        let mut u = vec![0u8; 4];
+        let mut v = vec![0u8; 4];
+        let bgra = vec![0u8; 64];
+
+        // Invalid dimensions (< 2 or odd).
+        assert!(!bgra_to_i420(&bgra, 16, 0, 4, &mut y, 4, &mut u, 2, &mut v, 2));
+        assert!(!bgra_to_i420(&bgra, 16, 4, 0, &mut y, 4, &mut u, 2, &mut v, 2));
+        assert!(!bgra_to_i420(&bgra, 16, 1, 4, &mut y, 4, &mut u, 2, &mut v, 2));
+        assert!(!bgra_to_i420(&bgra, 16, 3, 4, &mut y, 4, &mut u, 2, &mut v, 2));
+        assert!(!bgra_to_i420(&bgra, 16, 4, 3, &mut y, 4, &mut u, 2, &mut v, 2));
+
+        // Invalid strides.
+        assert!(!bgra_to_i420(&bgra, 12, 4, 4, &mut y, 4, &mut u, 2, &mut v, 2));
+        assert!(!bgra_to_i420(&bgra, 16, 4, 4, &mut y, 3, &mut u, 2, &mut v, 2));
+        assert!(!bgra_to_i420(&bgra, 16, 4, 4, &mut y, 4, &mut u, 1, &mut v, 2));
+        assert!(!bgra_to_i420(&bgra, 16, 4, 4, &mut y, 4, &mut u, 2, &mut v, 1));
+
+        // Short buffers.
+        assert!(!bgra_to_i420(&bgra[..63], 16, 4, 4, &mut y, 4, &mut u, 2, &mut v, 2));
+        assert!(!bgra_to_i420(&bgra, 16, 4, 4, &mut y[..15], 4, &mut u, 2, &mut v, 2));
+        assert!(!bgra_to_i420(&bgra, 16, 4, 4, &mut y, 4, &mut u[..3], 2, &mut v, 2));
+        assert!(!bgra_to_i420(&bgra, 16, 4, 4, &mut y, 4, &mut u, 2, &mut v[..3], 2));
     }
 }

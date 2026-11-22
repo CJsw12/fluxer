@@ -2,10 +2,10 @@
 //! guild channels the member list toggle (people icon, like the web
 //! `ChannelHeader` "Show Member List" button).
 
-use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::assets::IconName;
-use gpui_kit::component::{Selectable as _, Sizable as _};
-use gpui_kit::{Context, FontWeight, div, prelude::*};
+use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::{Icon, Selectable as _, Sizable as _};
+use gpui_kit::{Context, FontWeight, Role, div, prelude::*, px};
 
 use crate::client_view::ClientView;
 use crate::theme::Theme;
@@ -75,23 +75,12 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     Button::new("toggle-channel-mute")
                         .ghost()
                         .small()
+                        .icon(if channel_muted { IconName::BellOff } else { IconName::Bell })
                         .selected(channel_muted)
-                        .label(label)
+                        .tooltip(label.clone())
+                        .accessibility_label(label)
                         .on_click(cx.listener(|this, _, _, cx| this.toggle_channel_mute(cx))),
                 ),
-            )
-        })
-        .child({
-            let search_open = view.search.is_some();
-            div().debug_selector(|| "toggle-search".to_owned()).child(
-                Button::new("toggle-search")
-                    .ghost()
-                    .small()
-                    .icon(IconName::Search)
-                    .selected(search_open)
-                    .tooltip(l10n::tr("Search"))
-                    .accessibility_label(l10n::tr("Search"))
-                    .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx))),
             )
         })
         .child({
@@ -127,5 +116,38 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .on_click(cx.listener(|this, _, _, cx| this.toggle_member_list(cx))),
                 ),
             )
+        })
+        .child({
+            let search_open = view.search.is_some();
+            div()
+                .id("toggle-search")
+                .role(Role::Button)
+                .aria_label(l10n::tr("Search"))
+                .debug_selector(|| "toggle-search".to_owned())
+                .w(px(180.))
+                .h(px(28.))
+                .px_2()
+                .rounded(px(6.))
+                .bg(theme.background_secondary)
+                .border_1()
+                .border_color(if search_open { theme.accent } else { theme.border })
+                .hover(|s| s.bg(theme.muted))
+                .cursor_pointer()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_2()
+                .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx)))
+                .child(Icon::new(IconName::Search).xsmall().text_color(theme.muted_foreground))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .text_xs()
+                        .font_weight(FontWeight::NORMAL)
+                        .text_color(theme.muted_foreground)
+                        .child(l10n::tr("Search messages")),
+                )
         })
 }

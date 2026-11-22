@@ -4,7 +4,7 @@
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Icon, Sizable as _};
-use gpui_kit::{AnyElement, Context, FontWeight, MouseButton, Role, div, prelude::*, px};
+use gpui_kit::{AnyElement, Context, FontWeight, MouseButton, Role, SharedString, div, prelude::*, px};
 
 use super::{access::Scope, badge, user_panel, voice_panel};
 use crate::client_view::ClientView;
@@ -22,6 +22,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             .gap_1()
             .px_3()
             .py_2()
+            .border_b_1()
+            .border_color(theme.border)
             .child(div().flex_1().min_w_0().truncate().font_weight(FontWeight::BOLD).child(l10n::tr("Direct messages")))
             .child(
                 div().debug_selector(|| "create-group-dm-btn".to_owned()).child(
@@ -52,6 +54,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .gap_1()
                 .px_3()
                 .py_2()
+                .border_b_1()
+                .border_color(theme.border)
                 .child(div().flex_1().min_w_0().truncate().font_weight(FontWeight::BOLD).child(name))
                 .when(view.can_manage_guild_channels, |d| {
                     d.child(
@@ -72,24 +76,35 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             Button::new("guild-bans-btn")
                                 .ghost()
                                 .xsmall()
-                                .label(l10n::tr("Bans"))
+                                .icon(IconName::CircleX)
+                                .tooltip(l10n::tr("Bans"))
+                                .accessibility_label(l10n::tr("Bans"))
                                 .on_click(cx.listener(|this, _, window, cx| this.open_guild_bans(window, cx))),
                         ),
                     )
                 })
                 .when(can_manage_roles, |d| {
-                    d.child(div().debug_selector(|| "guild-roles-btn".to_owned()).child(
-                        Button::new("guild-roles-btn").ghost().xsmall().label(l10n::tr("Roles"))
-                            .on_click(cx.listener(move |this, _, window, cx| this.open_access(Scope::Guild(id), window, cx))),
-                    ))
+                    d.child(
+                        div().debug_selector(|| "guild-roles-btn".to_owned()).child(
+                            Button::new("guild-roles-btn")
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::Settings2)
+                                .tooltip(l10n::tr("Roles"))
+                                .accessibility_label(l10n::tr("Roles"))
+                                .on_click(cx.listener(move |this, _, window, cx| this.open_access(Scope::Guild(id), window, cx))),
+                        ),
+                    )
                 })
                 .when(can_leave, |d| {
                     d.child(
                         div().debug_selector(|| "leave-guild-btn".to_owned()).child(
                             Button::new("leave-guild-btn")
                                 .ghost()
-                                .small()
-                                .label(l10n::tr("Leave community"))
+                                .xsmall()
+                                .icon(IconName::ExternalLink)
+                                .tooltip(l10n::tr("Leave community"))
+                                .accessibility_label(l10n::tr("Leave community"))
                                 .on_click(cx.listener(move |this, _, window, cx| this.open_leave_guild(id, window, cx))),
                         ),
                     )
@@ -157,11 +172,14 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
 
 fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
     let (muted_fg, fg) = (theme.muted_foreground, theme.foreground);
+    let row_group: SharedString = format!("channel-row-{}", c.id.0).into();
     let permissions = match view.place {
         Place::Guild(guild) if c.can_manage_permissions => {
             let channel = c.id;
             Some(div().id(("channel-permissions-wrap", channel.0))
                 .debug_selector(move || format!("channel-permissions-{}", channel.0))
+                .opacity(0.)
+                .group_hover(row_group.clone(), |s| s.opacity(1.))
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .on_click(|_, _, cx| cx.stop_propagation())
                 .child(Button::new(("channel-permissions", channel.0)).ghost().xsmall()
@@ -180,6 +198,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         let create_sel = format!("create-in-category-{}", cat_id.0);
         let edit_sel = format!("edit-channel-{}", cat_id.0);
         return div()
+            .group(row_group.clone())
             .flex()
             .flex_row()
             .items_center()
@@ -192,30 +211,38 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
             .child(div().flex_1().min_w_0().truncate().child(c.name.clone()))
             .when(c.can_manage, |d| {
                 d.child(
-                    div().debug_selector(move || create_sel.clone()).child(
-                        Button::new(("create-in-category", cat_id.0))
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::Plus)
-                            .tooltip(l10n::tr("Create channel"))
-                            .accessibility_label(l10n::tr("Create channel"))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.open_create_channel(Some(cat_id), window, cx);
-                            })),
-                    ),
+                    div()
+                        .debug_selector(move || create_sel.clone())
+                        .opacity(0.)
+                        .group_hover(row_group.clone(), |s| s.opacity(1.))
+                        .child(
+                            Button::new(("create-in-category", cat_id.0))
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::Plus)
+                                .tooltip(l10n::tr("Create channel"))
+                                .accessibility_label(l10n::tr("Create channel"))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.open_create_channel(Some(cat_id), window, cx);
+                                })),
+                        ),
                 )
                 .child(
-                    div().debug_selector(move || edit_sel.clone()).child(
-                        Button::new(("edit-channel", cat_id.0))
-                            .ghost()
-                            .xsmall()
-                            .icon(IconName::Settings)
-                            .tooltip(l10n::tr("Category settings"))
-                            .accessibility_label(l10n::tr("Category settings"))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.open_edit_channel(cat_id, window, cx);
-                            })),
-                    ),
+                    div()
+                        .debug_selector(move || edit_sel.clone())
+                        .opacity(0.)
+                        .group_hover(row_group.clone(), |s| s.opacity(1.))
+                        .child(
+                            Button::new(("edit-channel", cat_id.0))
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::Settings)
+                                .tooltip(l10n::tr("Category settings"))
+                                .accessibility_label(l10n::tr("Category settings"))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.open_edit_channel(cat_id, window, cx);
+                                })),
+                        ),
                 )
             })
             .children(permissions)
@@ -233,6 +260,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
     };
     let mut row = div()
         .id(("channel", c.id.0))
+        .group(row_group.clone())
         .role(Role::Button)
         .aria_label(channel_aria_label)
         .aria_selected(selected)
@@ -240,12 +268,15 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         .flex_row()
         .items_center()
         .gap_1()
-        .px_3()
+        .mx_2()
+        .px_2()
         .py_1()
+        .rounded(px(6.))
         .when(c.nested, |d| d.pl_5())
         .text_color(if (highlight_unread || selected) && (c.has_messages || is_voice) { fg } else { muted_fg })
         .when(highlight_unread || voice_active, |d| d.font_weight(FontWeight::BOLD))
         .when(selected, |d| d.bg(theme.accent))
+        .hover(|s| s.bg(theme.muted))
         .when(is_voice, |d| d.cursor_pointer())
         .child(div().w(px(18.)).flex_none().text_color(muted_fg).child(c.icon.glyph()))
         .child(div().flex_1().min_w_0().truncate().child(c.name.clone()));
@@ -264,6 +295,8 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
             div()
                 .id(("edit-channel-wrap", ch_id.0))
                 .debug_selector(move || edit_sel.clone())
+                .opacity(0.)
+                .group_hover(row_group, |s| s.opacity(1.))
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .on_click(|_, _, cx| cx.stop_propagation())
                 .child(

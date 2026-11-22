@@ -49,6 +49,7 @@ mod tests {
             IconName::Plus,
             IconName::CircleX,
             IconName::Copy,
+            IconName::ExternalLink,
             IconName::FaceSlightlySmilingPlus,
             IconName::Hash,
             IconName::Pencil,
@@ -56,6 +57,7 @@ mod tests {
             IconName::RotateCw,
             IconName::Search,
             IconName::Settings,
+            IconName::Settings2,
             IconName::Trash,
             IconName::Users,
         ];

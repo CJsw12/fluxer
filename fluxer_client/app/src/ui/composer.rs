@@ -30,9 +30,10 @@ pub fn render_with(
     cx: &mut Context<ClientView>,
 ) -> impl IntoElement {
     let paste_view = cx.weak_entity();
-    let field = Input::new(&view.composer).disabled(!view.can_send).on_paste(move |item, _, cx| {
-        paste_view.update(cx, |v, cx| v.paste(item, cx)).unwrap_or(false)
-    });
+    let field = Input::new(&view.composer)
+        .appearance(false)
+        .disabled(!view.can_send)
+        .on_paste(move |item, _, cx| paste_view.update(cx, |v, cx| v.paste(item, cx)).unwrap_or(false));
     let tray = view
         .selected_channel
         .and_then(|channel_id| crate::ui::attachments::tray::render(view.attachments.files(channel_id), theme, cx));
@@ -66,6 +67,12 @@ pub fn render_with(
                 .flex_row()
                 .items_center()
                 .gap_1()
+                .rounded(px(8.))
+                .bg(theme.background_secondary)
+                .border_1()
+                .border_color(theme.border)
+                .px_2()
+                .py_1()
                 .children(upload)
                 .child(div().flex_1().child(field))
                 .children(emoji),
@@ -74,9 +81,11 @@ pub fn render_with(
         .flex()
         .flex_col()
         .children(view.error.clone().map(|e| div().px_4().text_color(theme.danger).child(e)))
-        .child(div().px_3().pt_3().child(key_hooks(input, keys, cx)))
+        .child(div().px_3().pt_3().pb_3().child(key_hooks(input, keys, cx)))
         .child(typing_row)
-        .child(div().px_4().pb_1().text_xs().text_color(theme.muted_foreground).child(view.status.clone()))
+        .when(view.gateway_status != crate::backend::GatewayStatus::Ready, |d| {
+            d.child(div().px_4().pb_1().text_xs().text_color(theme.muted_foreground).child(view.status.clone()))
+        })
 }
 
 /// Placeholder for the current channel and send permission.

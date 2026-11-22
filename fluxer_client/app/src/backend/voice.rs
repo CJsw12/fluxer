@@ -1248,7 +1248,7 @@ fn parse_voice_server_update(payload: &Value) -> Result<ParsedVoiceServerUpdate,
         .and_then(Value::as_str)
         .filter(|s| !s.trim().is_empty())
         .ok_or("missing endpoint")?;
-    let parsed_url = Url::parse(endpoint).map_err(|_| "invalid endpoint url")?;
+    let mut parsed_url = Url::parse(endpoint).map_err(|_| "invalid endpoint url")?;
     let is_loopback = parsed_url.host_str().is_some_and(|host| {
         host == "localhost"
             || host
@@ -1256,8 +1256,16 @@ fn parse_voice_server_update(payload: &Value) -> Result<ParsedVoiceServerUpdate,
                 .parse::<std::net::IpAddr>()
                 .is_ok_and(|ip| ip.is_loopback())
     });
-    if !(parsed_url.scheme() == "wss" || (parsed_url.scheme() == "ws" && is_loopback)) {
-        return Err("voice endpoint requires wss (or loopback ws)");
+    match parsed_url.scheme() {
+        "wss" => {}
+        "https" => {
+            parsed_url.set_scheme("wss").map_err(|_| "invalid endpoint url")?;
+        }
+        "ws" if is_loopback => {}
+        "http" if is_loopback => {
+            parsed_url.set_scheme("ws").map_err(|_| "invalid endpoint url")?;
+        }
+        _ => return Err("voice endpoint requires wss/https (or loopback ws/http)"),
     }
     if parsed_url.host().is_none()
         || !parsed_url.username().is_empty()
@@ -1267,6 +1275,7 @@ fn parse_voice_server_update(payload: &Value) -> Result<ParsedVoiceServerUpdate,
     {
         return Err("voice endpoint contains unsupported URL fields");
     }
+    let normalized_endpoint = parsed_url.to_string();
     let connection_id = payload
         .get("connection_id")
         .and_then(Value::as_str)
@@ -1276,7 +1285,7 @@ fn parse_voice_server_update(payload: &Value) -> Result<ParsedVoiceServerUpdate,
     Ok(ParsedVoiceServerUpdate::Sfu {
         guild_id,
         channel_id,
-        endpoint: endpoint.to_owned(),
+        endpoint: normalized_endpoint,
         token: SecretToken::new(token),
         connection_id: connection_id.to_owned(),
     })
@@ -2042,7 +2051,7 @@ mod tests {
     fn endpoint_validation_rejects_unsafe_urls_and_empty_ice_servers() {
         for bad_endpoint in [
             "ws://rtc.example.test",
-            "https://rtc.example.test",
+            "http://rtc.example.test",
             "wss://user:secret@rtc.example.test",
             "wss://rtc.example.test?token=secret",
             "wss://rtc.example.test#frag",
@@ -2059,16 +2068,26 @@ mod tests {
             assert!(!err.contains("secret"));
         }
 
-        // Loopback ws:// and wss:// are accepted.
-        for ok_endpoint in ["wss://rtc.example.test/rtc", "ws://127.0.0.1:7880", "ws://[::1]:7880"] {
-            assert!(parse_voice_server_update(&json!({
+        // Loopback ws/http and wss/https are accepted and normalized to ws/wss.
+        for (input, expected) in [
+            ("wss://rtc.example.test/rtc", "wss://rtc.example.test/rtc"),
+            ("https://rtc.example.test/rtc", "wss://rtc.example.test/rtc"),
+            ("ws://127.0.0.1:7880", "ws://127.0.0.1:7880/"),
+            ("http://127.0.0.1:7880", "ws://127.0.0.1:7880/"),
+            ("ws://[::1]:7880", "ws://[::1]:7880/"),
+        ] {
+            let parsed = parse_voice_server_update(&json!({
                 "guild_id": "42",
                 "channel_id": "100",
                 "connection_id": "conn-1",
-                "endpoint": ok_endpoint,
+                "endpoint": input,
                 "token": "jwt-1"
             }))
-            .is_ok());
+            .expect("valid endpoint must be accepted");
+            let ParsedVoiceServerUpdate::Sfu { endpoint, .. } = parsed else {
+                panic!("expected SFU update");
+            };
+            assert_eq!(endpoint, expected);
         }
 
         // Empty ice_servers array `[]` is truthy in JS and must be flagged as P2P mesh.

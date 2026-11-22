@@ -728,3 +728,64 @@ pub fn render(view: &ClientView, modal: &AccessModal, theme: &Theme, cx: &mut Co
         let _ = view.update(cx, |this, cx| this.close_overlay(window, cx));
     })
 }
+
+#[cfg(test)]
+impl ClientView {
+    pub(crate) fn test_access_create_role(&mut self, name: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.change_access_draft(Draft::NewRole, window, cx);
+        if let Overlay::Access(modal) = &self.overlay {
+            modal.input.update(cx, |input, cx| input.set_value(name, window, cx));
+        }
+        self.submit_access(false, cx);
+    }
+
+    pub(crate) fn test_access_edit_role(
+        &mut self,
+        before: Role,
+        new_name: &str,
+        add_perm: u64,
+        hoist: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let permissions = before.permissions;
+        let mentionable = before.mentionable;
+        self.change_access_draft(
+            Draft::Role {
+                before,
+                permissions,
+                hoist,
+                mentionable,
+            },
+            window,
+            cx,
+        );
+        if let Overlay::Access(modal) = &self.overlay {
+            modal
+                .input
+                .update(cx, |input, cx| input.set_value(new_name, window, cx));
+        }
+        self.set_permission(add_perm, Some(true), cx);
+        self.submit_access(false, cx);
+    }
+
+    pub(crate) fn test_access_delete_role(&mut self, before: Role, window: &mut Window, cx: &mut Context<Self>) {
+        let permissions = before.permissions;
+        let hoist = before.hoist;
+        let mentionable = before.mentionable;
+        self.change_access_draft(
+            Draft::Role {
+                before,
+                permissions,
+                hoist,
+                mentionable,
+            },
+            window,
+            cx,
+        );
+        if let Overlay::Access(modal) = &mut self.overlay {
+            modal.confirming_delete = true;
+        }
+        self.submit_access(true, cx);
+    }
+}

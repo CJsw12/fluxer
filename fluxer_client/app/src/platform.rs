@@ -281,16 +281,22 @@ mod windows_shortcut {
         pid: 5,
     };
 
-    pub(super) fn create_if_missing() -> Result<()> {
-        let appdata = std::env::var_os("APPDATA").context("APPDATA is not set")?;
-        let programs = std::path::PathBuf::from(appdata)
+    pub(super) fn shortcut_path(appdata: &Path) -> std::path::PathBuf {
+        appdata
             .join("Microsoft")
             .join("Windows")
             .join("Start Menu")
-            .join("Programs");
-        std::fs::create_dir_all(&programs).context("could not create the Start menu Programs folder")?;
+            .join("Programs")
+            .join(super::SHORTCUT_FILE_NAME)
+    }
 
-        let shortcut = programs.join(super::SHORTCUT_FILE_NAME);
+    pub(super) fn create_if_missing() -> Result<()> {
+        let appdata = std::env::var_os("APPDATA").context("APPDATA is not set")?;
+        let shortcut = shortcut_path(Path::new(&appdata));
+        let programs = shortcut
+            .parent()
+            .context("Start menu shortcut path has no parent directory")?;
+        std::fs::create_dir_all(programs).context("could not create the Start menu Programs folder")?;
         // Always (re)write it: Save overwrites, which repairs a link that points
         // at an old exe path or lacks the AppUserModelID.
 
@@ -375,9 +381,18 @@ mod logging {
     use tracing::level_filters::LevelFilter;
 
     /// Appends one line per event to `%LOCALAPPDATA%\FluxerClient\logs\client.log`.
-    struct FileLogger {
+    pub(super) struct FileLogger {
         file: Mutex<File>,
         next_span: AtomicU64,
+    }
+
+    impl FileLogger {
+        pub(super) fn new(file: File) -> Self {
+            Self {
+                file: Mutex::new(file),
+                next_span: AtomicU64::new(1),
+            }
+        }
     }
 
     pub(super) fn init() {
@@ -399,7 +414,7 @@ mod logging {
                 return;
             }
         };
-        let subscriber = FileLogger { file: Mutex::new(file), next_span: AtomicU64::new(1) };
+        let subscriber = FileLogger::new(file);
         // Another subscriber would keep logging but must not crash startup.
         let _ = tracing::subscriber::set_global_default(subscriber);
     }
@@ -415,7 +430,7 @@ mod logging {
 
     /// Keeps at most one previous log and bounds the active file. This runs
     /// once at startup because no rotation crate is in the lockfile.
-    fn rotate(path: &Path) {
+    pub(super) fn rotate(path: &Path) {
         let too_large = std::fs::metadata(path).map(|meta| meta.len() > super::MAX_LOG_BYTES).unwrap_or(false);
         if !too_large {
             return;
@@ -524,10 +539,93 @@ mod tests {
         set_os_integration_enabled(false);
         assert!(!os_integration_enabled());
         assert!(set_autostart_enabled(true).is_ok());
+        assert!(set_autostart_enabled(false).is_ok());
         sync_autostart_on_startup(true);
         ensure_protocol_handler();
         ensure_start_menu_shortcut();
         set_os_integration_enabled(true);
         assert!(os_integration_enabled());
+    }
+
+    #[test]
+    fn aumid_and_display_name_constants_are_valid() {
+        assert!(!APP_USER_MODEL_ID.is_empty());
+        assert!(APP_USER_MODEL_ID.is_ascii());
+        assert!(!APP_USER_MODEL_ID.contains(' '));
+        assert!(!APP_DISPLAY_NAME.is_empty());
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn start_menu_shortcut_path_targets_programs_folder() {
+        let appdata = Path::new(r"C:\Users\Test\AppData\Roaming");
+        let path = windows_shortcut::shortcut_path(appdata);
+        assert_eq!(
+            path,
+            appdata
+                .join("Microsoft")
+                .join("Windows")
+                .join("Start Menu")
+                .join("Programs")
+                .join(SHORTCUT_FILE_NAME)
+        );
+        assert_eq!(path.file_name().and_then(|n| n.to_str()), Some("Fluxer Client.lnk"));
+    }
+
+    struct TempDirGuard(std::path::PathBuf);
+    impl Drop for TempDirGuard {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn file_logger_writes_formatted_lines_and_rotates_above_threshold() {
+        let unique = format!(
+            "fluxer-platform-test-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        );
+        let dir = std::env::temp_dir().join(unique);
+        std::fs::create_dir_all(&dir).expect("create temp log dir");
+        let _guard = TempDirGuard(dir.clone());
+
+        let log_path = dir.join(LOG_FILE_NAME);
+        let prev_path = dir.join(LOG_PREVIOUS_FILE_NAME);
+
+        // Below/at threshold: rotate leaves the active file untouched.
+        std::fs::write(&log_path, b"small log\n").expect("write small log");
+        logging::rotate(&log_path);
+        assert!(log_path.exists());
+        assert!(!prev_path.exists());
+
+        // Above MAX_LOG_BYTES (8 MiB): rotate moves active log to client.prev.log.
+        let oversized = vec![b'x'; (MAX_LOG_BYTES + 1) as usize];
+        std::fs::write(&log_path, &oversized).expect("write oversized log");
+        logging::rotate(&log_path);
+        assert!(!log_path.exists());
+        assert_eq!(
+            std::fs::metadata(&prev_path).expect("prev metadata").len(),
+            MAX_LOG_BYTES + 1
+        );
+
+        // FileLogger writes formatted tracing events to the new log file.
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+            .expect("open temp log file");
+        let logger = logging::FileLogger::new(file);
+        tracing::subscriber::with_default(logger, || {
+            tracing::info!(role = "tester", "file logger smoke line");
+        });
+
+        let contents = std::fs::read_to_string(&log_path).expect("read temp log");
+        assert!(contents.contains("INFO"), "expected INFO level in {contents:?}");
+        assert!(contents.contains("file logger smoke line"), "expected message in {contents:?}");
+        assert!(contents.contains("role=\"tester\""), "expected field in {contents:?}");
     }
 }

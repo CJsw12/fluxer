@@ -2,15 +2,19 @@
 //! two-step deletion, Escape behavior, category-scoped permissions, row
 //! edit propagation isolation, and modal shortcut isolation.
 
+use std::sync::{Arc, Mutex};
+
 use fluxer_client_core::Dispatch;
 use fluxer_client_core::rest::{
-    CreateGuildChannelRequest, GuildChannelPatch, VOICE_CHANNEL_BITRATE_DEFAULT,
-    VOICE_CHANNEL_CONNECTION_LIMIT_DEFAULT,
+    ClientIdentity, CreateGuildChannelRequest, Endpoints, GuildChannelPatch, RestClient, RestConfig, SecretToken,
+    TransportPolicy, VOICE_CHANNEL_BITRATE_DEFAULT, VOICE_CHANNEL_CONNECTION_LIMIT_DEFAULT,
 };
 use fluxer_client_core::state::{ChannelKind, Snowflake, bits};
 use gpui_kit::component::input::InputContent;
 use gpui_kit::{Focusable as _, Modifiers, TestAppContext};
-use serde_json::json;
+use serde_json::{Value, json};
+use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+use tokio::net::TcpListener;
 
 use crate::backend::{Backend, GuildChannelCall, UiEvent, lock_sent};
 use crate::client_view::ClientView;
@@ -677,4 +681,337 @@ fn channel_modals_isolate_global_shortcuts(cx: &mut TestAppContext) {
     assert!(view.read_with(cx, |v, _| {
         matches!(v.overlay, Overlay::EditChannel(_)) && v.selected_channel == Some(GENERAL)
     }));
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct RecordedRoleRequest {
+    method: String,
+    path: String,
+    body: Value,
+}
+
+fn spawn_role_mock_server(
+    rt: &tokio::runtime::Runtime,
+) -> (String, Arc<Mutex<Vec<RecordedRoleRequest>>>) {
+    let recorded: Arc<Mutex<Vec<RecordedRoleRequest>>> = Arc::default();
+    let recorded_srv = recorded.clone();
+    let listener = rt
+        .block_on(TcpListener::bind("127.0.0.1:0"))
+        .expect("bind mock role server");
+    let addr = listener.local_addr().expect("mock server addr");
+
+    rt.spawn(async move {
+        while let Ok((mut stream, _)) = listener.accept().await {
+            let mut buf = Vec::with_capacity(4096);
+            let mut chunk = [0u8; 1024];
+            let header_end = loop {
+                let n = match stream.read(&mut chunk).await {
+                    Ok(0) | Err(_) => break None,
+                    Ok(n) => n,
+                };
+                buf.extend_from_slice(&chunk[..n]);
+                if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+                    break Some(pos + 4);
+                }
+            };
+            let Some(header_end) = header_end else { continue };
+            let headers = String::from_utf8_lossy(&buf[..header_end]);
+            let mut lines = headers.lines();
+            let req_line = lines.next().unwrap_or("");
+            let mut parts = req_line.split_whitespace();
+            let method = parts.next().unwrap_or("").to_owned();
+            let path = parts.next().unwrap_or("").to_owned();
+            let content_len: usize = lines
+                .find_map(|l| {
+                    let (k, v) = l.split_once(':')?;
+                    k.eq_ignore_ascii_case("content-length")
+                        .then(|| v.trim().parse().ok())
+                        .flatten()
+                })
+                .unwrap_or(0);
+            while buf.len() < header_end + content_len {
+                let n = match stream.read(&mut chunk).await {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => n,
+                };
+                buf.extend_from_slice(&chunk[..n]);
+            }
+            let body_bytes = &buf[header_end..buf.len().min(header_end + content_len)];
+            let body: Value = if body_bytes.is_empty() {
+                Value::Null
+            } else {
+                serde_json::from_slice(body_bytes).unwrap_or(Value::Null)
+            };
+
+            let (status, resp_body) = match (method.as_str(), path.as_str()) {
+                ("POST", "/api/v1/guilds/1/roles") => {
+                    recorded_srv.lock().unwrap().push(RecordedRoleRequest {
+                        method,
+                        path,
+                        body: body.clone(),
+                    });
+                    (
+                        "200 OK",
+                        json!({
+                            "id": "500",
+                            "name": body["name"],
+                            "permissions": "0",
+                            "position": 1,
+                            "hoist": false,
+                            "mentionable": false
+                        })
+                        .to_string(),
+                    )
+                }
+                ("PATCH", "/api/v1/guilds/1/roles/500") => {
+                    recorded_srv.lock().unwrap().push(RecordedRoleRequest {
+                        method,
+                        path,
+                        body: body.clone(),
+                    });
+                    let name = body
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .unwrap_or("Helpers");
+                    let permissions = body
+                        .get("permissions")
+                        .and_then(Value::as_str)
+                        .unwrap_or("0");
+                    let hoist = body.get("hoist").and_then(Value::as_bool).unwrap_or(false);
+                    (
+                        "200 OK",
+                        json!({
+                            "id": "500",
+                            "name": name,
+                            "permissions": permissions,
+                            "position": 1,
+                            "hoist": hoist,
+                            "mentionable": false
+                        })
+                        .to_string(),
+                    )
+                }
+                ("DELETE", "/api/v1/guilds/1/roles/500") => {
+                    recorded_srv.lock().unwrap().push(RecordedRoleRequest {
+                        method,
+                        path,
+                        body,
+                    });
+                    ("204 No Content", String::new())
+                }
+                _ => ("404 Not Found", json!({"message": "not found"}).to_string()),
+            };
+
+            let resp = if resp_body.is_empty() {
+                format!("HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+            } else {
+                format!(
+                    "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{resp_body}",
+                    resp_body.len()
+                )
+            };
+            let _ = stream.write_all(resp.as_bytes()).await;
+            let _ = stream.shutdown().await;
+        }
+    });
+
+    (format!("http://{addr}/api"), recorded)
+}
+
+#[test]
+fn role_create_edit_and_delete_backend_rest_round_trip() {
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .expect("multi-thread test runtime");
+    let (api_base, recorded) = spawn_role_mock_server(&rt);
+    let endpoints = Endpoints {
+        api_code_version: 1,
+        api: api_base,
+        gateway: "ws://127.0.0.1:1/gateway".to_owned(),
+        media: None,
+        static_cdn: None,
+        upload_relay: None,
+        invite: None,
+        webapp: None,
+        discovery_url: String::new(),
+        document: Value::Null,
+    };
+    let mut config = RestConfig::new(&endpoints, ClientIdentity::default());
+    config.policy = TransportPolicy { allow_insecure_loopback: true };
+    let rest = Arc::new(RestClient::new(config).expect("loopback rest client"));
+    rt.block_on(rest.set_token(Some(SecretToken::new("test-token"))));
+
+    let (backend, mut events) = Backend::new(rt.handle().clone(), rest, None);
+    let mod_role = Snowflake(200);
+    let mod_perms = bits::VIEW_CHANNEL
+        | bits::SEND_MESSAGES
+        | bits::READ_MESSAGE_HISTORY
+        | bits::MANAGE_ROLES
+        | bits::MANAGE_MESSAGES;
+    backend.state().apply(&Dispatch {
+        t: "READY".to_owned(),
+        s: 1,
+        d: json!({
+            "session_id": "s",
+            "user": { "id": ME.to_string(), "username": "me" },
+            "guilds": [{
+                "id": GUILD.to_string(),
+                "properties": { "name": "Dev Guild", "owner_id": OWNER.to_string() },
+                "roles": [
+                    { "id": GUILD.to_string(), "name": "@everyone", "permissions": "0", "position": 0 },
+                    { "id": mod_role.to_string(), "name": "Moderator", "permissions": mod_perms.to_string(), "position": 5 }
+                ],
+                "channels": [
+                    { "id": GENERAL.to_string(), "type": 0, "name": "general", "position": 0 }
+                ],
+                "members": [{ "user": { "id": ME.to_string(), "username": "me" }, "roles": [mod_role.to_string()] }]
+            }],
+            "private_channels": []
+        }),
+    });
+
+    rt.block_on(async {
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(3);
+        async fn wait_seq(
+            events: &mut tokio::sync::mpsc::UnboundedReceiver<UiEvent>,
+            deadline: tokio::time::Instant,
+            target_seq: u64,
+        ) {
+            loop {
+                match tokio::time::timeout_at(deadline, events.recv()).await {
+                    Ok(Some(UiEvent::AccessChanged { seq, error })) if seq == target_seq => {
+                        assert_eq!(error, None, "access change seq {seq} failed");
+                        return;
+                    }
+                    Ok(Some(_)) => continue,
+                    other => panic!("unexpected event waiting for AccessChanged({target_seq}): {other:?}"),
+                }
+            }
+        }
+
+        // 1. Create role "Helpers"
+        backend.change_access(
+            1,
+            crate::backend::access::AccessChange::CreateRole {
+                guild: GUILD,
+                name: "Helpers".to_owned(),
+            },
+        );
+        wait_seq(&mut events, deadline, 1).await;
+        let created_role = Snowflake(500);
+        let helpers_role = backend
+            .state()
+            .guilds
+            .get(&GUILD)
+            .and_then(|g| g.roles.get(&created_role))
+            .cloned()
+            .expect("created Helpers role");
+        assert_eq!(helpers_role.name, "Helpers");
+
+        // 2. Edit role "Helpers" -> "Supporters"
+        backend.change_access(
+            2,
+            crate::backend::access::AccessChange::EditRole {
+                guild: GUILD,
+                before: helpers_role,
+                patch: fluxer_client_core::rest::RolePatch {
+                    name: Some("Supporters".to_owned()),
+                    permissions: Some(bits::SEND_MESSAGES),
+                    hoist: Some(true),
+                    mentionable: None,
+                },
+            },
+        );
+        wait_seq(&mut events, deadline, 2).await;
+        let supporters_role = backend
+            .state()
+            .guilds
+            .get(&GUILD)
+            .and_then(|g| g.roles.get(&created_role))
+            .cloned()
+            .expect("updated Supporters role");
+        assert_eq!(supporters_role.name, "Supporters");
+
+        // 3. Delete role "Supporters"
+        backend.change_access(
+            3,
+            crate::backend::access::AccessChange::DeleteRole {
+                guild: GUILD,
+                before: supporters_role,
+            },
+        );
+        wait_seq(&mut events, deadline, 3).await;
+        assert!(!backend.state().guilds[&GUILD].roles.contains_key(&created_role));
+    });
+
+    let reqs = recorded.lock().unwrap();
+    assert_eq!(reqs.len(), 3);
+    assert_eq!(reqs[0].method, "POST");
+    assert_eq!(reqs[0].path, "/api/v1/guilds/1/roles");
+    assert_eq!(reqs[0].body, json!({ "name": "Helpers" }));
+    assert_eq!(reqs[1].method, "PATCH");
+    assert_eq!(reqs[1].path, "/api/v1/guilds/1/roles/500");
+    assert_eq!(reqs[1].body["name"], json!("Supporters"));
+    assert_eq!(reqs[2].method, "DELETE");
+    assert_eq!(reqs[2].path, "/api/v1/guilds/1/roles/500");
+}
+
+#[gpui_kit::test]
+fn role_editor_ui_create_edit_and_delete_submissions(cx: &mut TestAppContext) {
+    let (_rt, backend, view, cx) = open_guild(cx, ME, bits::MANAGE_ROLES, 0);
+    let roles_btn = cx.debug_bounds("guild-roles-btn").unwrap().center();
+    cx.simulate_click(roles_btn, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::Access(_))));
+    assert!(cx.debug_bounds("access-modal").is_some());
+
+    // Create role draft submits pending access request and settles on AccessChanged.
+    view.update_in(cx, |v, window, cx| {
+        v.test_access_create_role("Helpers", window, cx);
+    });
+    assert!(view.read_with(cx, |v, _| v.access_pending.is_some()));
+    let seq1 = view.read_with(cx, |v, _| v.access_pending.unwrap());
+    backend.state().apply(&Dispatch {
+        t: "GUILD_ROLE_CREATE".to_owned(),
+        s: 2,
+        d: json!({
+            "guild_id": GUILD.to_string(),
+            "role": { "id": "500", "name": "Helpers", "permissions": "0", "position": 1, "hoist": false, "mentionable": false }
+        }),
+    });
+    view.update(cx, |v, cx| {
+        v.handle_events(vec![UiEvent::StateChanged, UiEvent::AccessChanged { seq: seq1, error: None }], cx);
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| v.access_pending.is_none()));
+
+    // Edit role draft submits pending request and settles.
+    let role = backend.state().guilds[&GUILD].roles[&Snowflake(500)].clone();
+    view.update_in(cx, |v, window, cx| {
+        v.test_access_edit_role(role, "Supporters", bits::SEND_MESSAGES, true, window, cx);
+    });
+    let seq2 = view.read_with(cx, |v, _| v.access_pending.expect("edit pending"));
+    view.update(cx, |v, cx| {
+        v.handle_events(vec![UiEvent::AccessChanged { seq: seq2, error: None }], cx);
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| v.access_pending.is_none()));
+
+    // Two-step delete role draft submits pending request and settles.
+    let role = backend.state().guilds[&GUILD].roles[&Snowflake(500)].clone();
+    view.update_in(cx, |v, window, cx| {
+        v.test_access_delete_role(role, window, cx);
+    });
+    let seq3 = view.read_with(cx, |v, _| v.access_pending.expect("delete pending"));
+    view.update(cx, |v, cx| {
+        v.handle_events(vec![UiEvent::AccessChanged { seq: seq3, error: None }], cx);
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| v.access_pending.is_none()));
 }

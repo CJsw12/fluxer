@@ -44,6 +44,32 @@ pub enum TrayAction {
     Quit,
 }
 
+/// Maps a clicked tray menu item ID to its corresponding [`TrayAction`].
+pub fn map_menu_action<Id: PartialEq>(
+    clicked_id: &Id,
+    open_id: &Id,
+    settings_id: &Id,
+    mute_id: &Id,
+    quit_id: &Id,
+) -> Option<TrayAction> {
+    if clicked_id == open_id {
+        Some(TrayAction::ShowWindow)
+    } else if clicked_id == settings_id {
+        Some(TrayAction::OpenSettings)
+    } else if clicked_id == mute_id {
+        Some(TrayAction::ToggleNotifications)
+    } else if clicked_id == quit_id {
+        Some(TrayAction::Quit)
+    } else {
+        None
+    }
+}
+
+/// Computes the next desktop notification enabled state when toggled from the tray.
+pub fn toggle_notifications_state(currently_enabled: bool) -> bool {
+    !currently_enabled
+}
+
 /// Generates a 32x32 RGBA fallback icon (`#4641D9` Fluxer brand circle) when
 /// no embedded Win32 icon resource is available (e.g., dev runs or non-res exe).
 pub fn fallback_rgba_icon() -> (Vec<u8>, u32, u32) {
@@ -171,18 +197,7 @@ mod imp {
         }));
 
         MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
-            let action = if event.id == open_id {
-                Some(TrayAction::ShowWindow)
-            } else if event.id == settings_id {
-                Some(TrayAction::OpenSettings)
-            } else if event.id == mute_id {
-                Some(TrayAction::ToggleNotifications)
-            } else if event.id == quit_id {
-                Some(TrayAction::Quit)
-            } else {
-                None
-            };
-            if let Some(action) = action {
+            if let Some(action) = super::map_menu_action(&event.id, &open_id, &settings_id, &mute_id, &quit_id) {
                 let _ = tx.send(action);
             }
         }));
@@ -224,7 +239,7 @@ mod imp {
                     let _ = root.update(cx, |app_root, cx| {
                         if let Screen::Client(client) = &app_root.screen {
                             client.update(cx, |view, cx| {
-                                let next = !view.notifier.enabled;
+                                let next = super::toggle_notifications_state(view.notifier.enabled);
                                 view.settings_set_notifications(next, cx);
                             });
                         }
@@ -284,5 +299,52 @@ mod tests {
         assert_eq!(&rgba[center..center + 4], &[0x46, 0x41, 0xd9, 0xff]);
         // Corner pixel (0, 0) is transparent.
         assert_eq!(&rgba[0..4], &[0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn menu_id_mapping_resolves_all_actions_and_ignores_unknown() {
+        let open = "open";
+        let settings = "settings";
+        let mute = "mute";
+        let quit = "quit";
+
+        assert_eq!(
+            map_menu_action(&"open", &open, &settings, &mute, &quit),
+            Some(TrayAction::ShowWindow)
+        );
+        assert_eq!(
+            map_menu_action(&"settings", &open, &settings, &mute, &quit),
+            Some(TrayAction::OpenSettings)
+        );
+        assert_eq!(
+            map_menu_action(&"mute", &open, &settings, &mute, &quit),
+            Some(TrayAction::ToggleNotifications)
+        );
+        assert_eq!(
+            map_menu_action(&"quit", &open, &settings, &mute, &quit),
+            Some(TrayAction::Quit)
+        );
+        assert_eq!(map_menu_action(&"other", &open, &settings, &mute, &quit), None);
+    }
+
+    #[test]
+    fn notification_toggle_flips_enabled_state() {
+        assert!(!toggle_notifications_state(true));
+        assert!(toggle_notifications_state(false));
+    }
+
+    #[test]
+    fn tray_action_variants_are_distinct() {
+        let actions = [
+            TrayAction::ShowWindow,
+            TrayAction::OpenSettings,
+            TrayAction::ToggleNotifications,
+            TrayAction::Quit,
+        ];
+        for (i, a) in actions.iter().enumerate() {
+            for (j, b) in actions.iter().enumerate() {
+                assert_eq!(i == j, a == b);
+            }
+        }
     }
 }

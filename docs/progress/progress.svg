@@ -1,163 +1,165 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="900" height="620" viewBox="0 0 900 620" role="img" aria-label="Fluxer Rust 클라이언트 진행 지도">
   <rect width="900" height="620" fill="#0d1117"/>
   <text x="24" y="38" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="18" font-weight="600">Fluxer Rust 클라이언트 진행 지도</text>
-  <text x="876" y="38" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">기준일 2026-11-22</text>
+  <text x="876" y="38" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">기준일 2026-11-22 · 실기 38 · 구현 7 · 부분 47 · 미착수 1</text>
   <line x1="24" y1="54" x2="876" y2="54" stroke="#21262d" stroke-width="1"/>
   <text x="24" y="92.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">코어(게이트웨이·상태·REST·세션)</text>
   <rect x="270" y="81.0" width="190" height="10" rx="5" fill="#21262d"/>
   <rect x="270" y="81.0" width="166.2" height="10" rx="5" fill="#58a6ff"/>
   <text x="474" y="91.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">88%</text>
-  <g><title>게이트웨이 연결·하트비트 : 완료</title><rect x="510" y="81.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>zstd 스트림 수신 : 완료</title><rect x="524" y="81.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>상태 디스패치·모델 확장 : 완료</title><rect x="538" y="81.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>REST 클라이언트·레이트리밋 : 완료</title><rect x="552" y="81.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>세션 저장(DPAPI·잠금) : 완료</title><rect x="566" y="81.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>op14 멤버 목록 : 완료</title><rect x="580" y="81.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>op3 프레즌스 갱신 : 부분</title><rect x="594" y="81.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>재연결·장시간 안정성 : 부분</title><rect x="608" y="81.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>게이트웨이 연결·하트비트 : 실기 완료</title><rect x="510" y="81.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>zstd 스트림 수신 : 실기 완료</title><rect x="524" y="81.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>상태 디스패치·모델 확장 : 실기 완료</title><rect x="538" y="81.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>REST 클라이언트·레이트리밋 : 실기 완료</title><rect x="552" y="81.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>세션 저장(DPAPI·잠금) : 실기 완료</title><rect x="566" y="81.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>op14 멤버 목록 : 실기 완료</title><rect x="580" y="81.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>op3 프레즌스 갱신 : 부분 구현</title><rect x="594" y="81.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>재연결·장시간 안정성 : 부분 구현</title><rect x="608" y="81.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="126.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">로그인·계정</text>
   <rect x="270" y="115.0" width="190" height="10" rx="5" fill="#21262d"/>
   <rect x="270" y="115.0" width="122.1" height="10" rx="5" fill="#58a6ff"/>
   <text x="474" y="125.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">64%</text>
-  <g><title>인스턴스 로그인 : 완료</title><rect x="510" y="115.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>캡차 자동 풀이 : 완료</title><rect x="524" y="115.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>TOTP 2단계 인증 : 부분</title><rect x="538" y="115.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>로그인 유지·자동 로그인 : 완료</title><rect x="552" y="115.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>로그아웃 : 부분</title><rect x="566" y="115.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>인스턴스 로그인 : 실기 완료</title><rect x="510" y="115.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>캡차 자동 풀이 : 실기 완료</title><rect x="524" y="115.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>TOTP 2단계 인증 : 부분 구현</title><rect x="538" y="115.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>로그인 유지·자동 로그인 : 실기 완료</title><rect x="552" y="115.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>로그아웃 : 부분 구현</title><rect x="566" y="115.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <g><title>패스키·보안 키 : 미착수</title><rect x="580" y="115.0" width="10" height="10" rx="2" fill="#484f58"/></g>
-  <g><title>다중 계정 전환 : 부분</title><rect x="594" y="115.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>다중 계정 전환 : 부분 구현</title><rect x="594" y="115.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="160.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">채널·메시지 표시</text>
   <rect x="270" y="149.0" width="190" height="10" rx="5" fill="#21262d"/>
   <rect x="270" y="149.0" width="180.5" height="10" rx="5" fill="#58a6ff"/>
   <text x="474" y="159.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">95%</text>
-  <g><title>길드·채널 트리 : 완료</title><rect x="510" y="149.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>안읽음 배지·pill : 완료</title><rect x="524" y="149.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>메시지 그룹핑·구분선 : 완료</title><rect x="538" y="149.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>마크다운 렌더 : 완료</title><rect x="552" y="149.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>코드 블록 강조 : 완료</title><rect x="566" y="149.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>멘션 pill·시스템 메시지 : 완료</title><rect x="580" y="149.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>멤버 목록 사이드바 : 완료</title><rect x="594" y="149.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>이전 메시지 페이지 : 완료</title><rect x="608" y="149.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>인라인 이미지 표시 : 완료</title><rect x="622" y="149.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>반응 pill 표시 : 부분</title><rect x="636" y="149.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>길드·채널 트리 : 실기 완료</title><rect x="510" y="149.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>안읽음 배지·pill : 실기 완료</title><rect x="524" y="149.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>메시지 그룹핑·구분선 : 실기 완료</title><rect x="538" y="149.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>마크다운 렌더 : 실기 완료</title><rect x="552" y="149.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>코드 블록 강조 : 실기 완료</title><rect x="566" y="149.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>멘션 pill·시스템 메시지 : 실기 완료</title><rect x="580" y="149.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>멤버 목록 사이드바 : 실기 완료</title><rect x="594" y="149.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>이전 메시지 페이지 : 실기 완료</title><rect x="608" y="149.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>인라인 이미지 표시 : 실기 완료</title><rect x="622" y="149.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>반응 pill 표시 : 부분 구현</title><rect x="636" y="149.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="194.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">메시지 작성·상호작용</text>
   <rect x="270" y="183.0" width="190" height="10" rx="5" fill="#21262d"/>
   <rect x="270" y="183.0" width="138.2" height="10" rx="5" fill="#58a6ff"/>
   <text x="474" y="193.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">73%</text>
-  <g><title>텍스트 전송·낙관적 표시 : 완료</title><rect x="510" y="183.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>메시지 수정·저장 : 완료</title><rect x="524" y="183.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>멘션 자동완성 : 완료</title><rect x="538" y="183.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>이모지 단축코드 : 완료</title><rect x="552" y="183.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>답장·미리보기 : 부분</title><rect x="566" y="183.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>삭제 확인 : 부분</title><rect x="580" y="183.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>반응 추가·토글 : 부분</title><rect x="594" y="183.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>입력 중 표시 : 부분</title><rect x="608" y="183.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>이모지 피커 : 부분</title><rect x="622" y="183.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>첨부 업로드 : 부분</title><rect x="636" y="183.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>드래프트 보존 : 완료</title><rect x="650" y="183.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>텍스트 전송·낙관적 표시 : 실기 완료</title><rect x="510" y="183.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>메시지 수정·저장 : 실기 완료</title><rect x="524" y="183.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>멘션 자동완성 : 실기 완료</title><rect x="538" y="183.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>이모지 단축코드 : 실기 완료</title><rect x="552" y="183.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>답장·미리보기 : 부분 구현</title><rect x="566" y="183.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>삭제 확인 : 부분 구현</title><rect x="580" y="183.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>반응 추가·토글 : 부분 구현</title><rect x="594" y="183.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>입력 중 표시 : 부분 구현</title><rect x="608" y="183.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>이모지 피커 : 부분 구현</title><rect x="622" y="183.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>첨부 업로드 : 부분 구현</title><rect x="636" y="183.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>드래프트 보존 : 실기 완료</title><rect x="650" y="183.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <text x="24" y="228.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">탐색·단축키</text>
   <rect x="270" y="217.0" width="190" height="10" rx="5" fill="#21262d"/>
   <rect x="270" y="217.0" width="158.3" height="10" rx="5" fill="#58a6ff"/>
   <text x="474" y="227.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">83%</text>
-  <g><title>Ctrl+K 빠른 전환 : 완료</title><rect x="510" y="217.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>단축키 등록·처리 : 완료</title><rect x="524" y="217.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>길드·채널 순회 : 완료</title><rect x="538" y="217.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>안읽음·멘션 점프 : 부분</title><rect x="552" y="217.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>딥링크(fluxer://) : 부분</title><rect x="566" y="217.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>방문 기록·앞뒤 이동 : 완료</title><rect x="580" y="217.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>Ctrl+K 빠른 전환 : 실기 완료</title><rect x="510" y="217.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>단축키 등록·처리 : 실기 완료</title><rect x="524" y="217.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>길드·채널 순회 : 실기 완료</title><rect x="538" y="217.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>안읽음·멘션 점프 : 부분 구현</title><rect x="552" y="217.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>딥링크(fluxer://) : 부분 구현</title><rect x="566" y="217.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>방문 기록·앞뒤 이동 : 실기 완료</title><rect x="580" y="217.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <text x="24" y="262.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">알림·첨부</text>
   <rect x="270" y="251.0" width="190" height="10" rx="5" fill="#21262d"/>
   <rect x="270" y="251.0" width="110.8" height="10" rx="5" fill="#58a6ff"/>
   <text x="474" y="261.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">58%</text>
-  <g><title>음소거·알림 레벨 로직 : 완료</title><rect x="510" y="251.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>데스크톱 토스트 : 부분</title><rect x="524" y="251.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>알림 소리 : 부분</title><rect x="538" y="251.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>첨부 업로드 UI : 부분</title><rect x="552" y="251.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>비이미지 첨부 표시 : 부분</title><rect x="566" y="251.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>클립보드·드래그 업로드 : 부분</title><rect x="580" y="251.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>음소거·알림 레벨 로직 : 실기 완료</title><rect x="510" y="251.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>데스크톱 토스트 : 부분 구현</title><rect x="524" y="251.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>알림 소리 : 부분 구현</title><rect x="538" y="251.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>첨부 업로드 UI : 부분 구현</title><rect x="552" y="251.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>비이미지 첨부 표시 : 부분 구현</title><rect x="566" y="251.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>클립보드·드래그 업로드 : 부분 구현</title><rect x="580" y="251.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="296.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">임베드·미디어</text>
   <rect x="270" y="285.0" width="190" height="10" rx="5" fill="#21262d"/>
   <rect x="270" y="285.0" width="126.7" height="10" rx="5" fill="#58a6ff"/>
   <text x="474" y="295.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">67%</text>
-  <g><title>임베드 모델(core) : 완료</title><rect x="510" y="285.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>임베드 카드 렌더 : 완료</title><rect x="524" y="285.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>GIF·동영상 미리보기 : 부분</title><rect x="538" y="285.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>미디어 뷰어 : 부분</title><rect x="552" y="285.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>스포일러·NSFW 가림 : 부분</title><rect x="566" y="285.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>신뢰 도메인 경고 : 부분</title><rect x="580" y="285.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>임베드 모델(core) : 실기 완료</title><rect x="510" y="285.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>임베드 카드 렌더 : 실기 완료</title><rect x="524" y="285.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>GIF·동영상 미리보기 : 부분 구현</title><rect x="538" y="285.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>미디어 뷰어 : 부분 구현</title><rect x="552" y="285.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>스포일러·NSFW 가림 : 부분 구현</title><rect x="566" y="285.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>신뢰 도메인 경고 : 부분 구현</title><rect x="580" y="285.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="330.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">설정·개인화</text>
   <rect x="270" y="319.0" width="190" height="10" rx="5" fill="#21262d"/>
   <rect x="270" y="319.0" width="142.5" height="10" rx="5" fill="#58a6ff"/>
   <text x="474" y="329.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">75%</text>
-  <g><title>다크 테마 : 완료</title><rect x="510" y="319.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>라이트 테마 : 완료</title><rect x="524" y="319.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>사용자 설정 모델·REST : 완료</title><rect x="538" y="319.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>사용자 패널 : 부분</title><rect x="552" y="319.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>설정 화면 : 부분</title><rect x="566" y="319.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>글꼴·밀도·확대 : 부분</title><rect x="580" y="319.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>다크 테마 : 실기 완료</title><rect x="510" y="319.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>라이트 테마 : 실기 완료</title><rect x="524" y="319.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>사용자 설정 모델·REST : 실기 완료</title><rect x="538" y="319.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>사용자 패널 : 부분 구현</title><rect x="552" y="319.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>설정 화면 : 부분 구현</title><rect x="566" y="319.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>글꼴·밀도·확대 : 부분 구현</title><rect x="580" y="319.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="364.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">소셜(친구·DM·프로필)</text>
   <rect x="270" y="353.0" width="190" height="10" rx="5" fill="#21262d"/>
   <rect x="270" y="353.0" width="95.0" height="10" rx="5" fill="#58a6ff"/>
   <text x="474" y="363.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">50%</text>
-  <g><title>DM 목록·대화 : 부분</title><rect x="510" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>DM 열기·생성 : 부분</title><rect x="524" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>친구 목록 : 부분</title><rect x="538" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>프로필 팝업 : 부분</title><rect x="552" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>차단·관계 관리 : 부분</title><rect x="566" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>그룹 DM : 부분</title><rect x="580" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>DM 목록·대화 : 부분 구현</title><rect x="510" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>DM 열기·생성 : 부분 구현</title><rect x="524" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>친구 목록 : 부분 구현</title><rect x="538" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>프로필 팝업 : 부분 구현</title><rect x="552" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>차단·관계 관리 : 부분 구현</title><rect x="566" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>그룹 DM : 부분 구현</title><rect x="580" y="353.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="398.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">서버 관리</text>
   <rect x="270" y="387.0" width="190" height="10" rx="5" fill="#21262d"/>
   <rect x="270" y="387.0" width="95.0" height="10" rx="5" fill="#58a6ff"/>
   <text x="474" y="397.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">50%</text>
-  <g><title>초대 참가 : 부분</title><rect x="510" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>길드 탈퇴 : 부분</title><rect x="524" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>채널 생성·편집 : 부분</title><rect x="538" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>역할·권한 편집 : 부분</title><rect x="552" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>멤버 관리(킥·밴) : 부분</title><rect x="566" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>채널 음소거 : 부분</title><rect x="580" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>초대 참가 : 부분 구현</title><rect x="510" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>길드 탈퇴 : 부분 구현</title><rect x="524" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>채널 생성·편집 : 부분 구현</title><rect x="538" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>역할·권한 편집 : 부분 구현</title><rect x="552" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>멤버 관리(킥·밴) : 부분 구현</title><rect x="566" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>채널 음소거 : 부분 구현</title><rect x="580" y="387.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="432.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">검색</text>
   <rect x="270" y="421.0" width="190" height="10" rx="5" fill="#21262d"/>
   <rect x="270" y="421.0" width="126.7" height="10" rx="5" fill="#58a6ff"/>
   <text x="474" y="431.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">67%</text>
-  <g><title>메시지 검색(REST) : 완료</title><rect x="510" y="421.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>검색 결과 화면 : 부분</title><rect x="524" y="421.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>메시지로 점프 : 부분</title><rect x="538" y="421.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>메시지 검색(REST) : 실기 완료</title><rect x="510" y="421.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>검색 결과 화면 : 부분 구현</title><rect x="524" y="421.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>메시지로 점프 : 부분 구현</title><rect x="538" y="421.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="466.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">다국어·접근성</text>
   <rect x="270" y="455.0" width="190" height="10" rx="5" fill="#21262d"/>
-  <rect x="270" y="455.0" width="126.7" height="10" rx="5" fill="#58a6ff"/>
-  <text x="474" y="465.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">67%</text>
-  <g><title>i18n 크레이트·카탈로그 : 완료</title><rect x="510" y="455.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>날짜·숫자 현지화 : 부분</title><rect x="524" y="455.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>앱 UI 번역 적용 : 부분</title><rect x="538" y="455.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>언어 전환 UI : 완료</title><rect x="552" y="455.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>접근성 설정 : 부분</title><rect x="566" y="455.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>스크린리더 라벨 : 부분</title><rect x="580" y="455.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <rect x="270" y="455.0" width="142.5" height="10" rx="5" fill="#58a6ff"/>
+  <text x="474" y="465.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">75%</text>
+  <g><title>i18n 크레이트·카탈로그 : 실기 완료</title><rect x="510" y="455.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>날짜·숫자 현지화 : 부분 구현</title><rect x="524" y="455.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>앱 UI 번역 적용 : 부분 구현</title><rect x="538" y="455.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>언어 전환 UI : 실기 완료</title><rect x="552" y="455.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>접근성 설정 : 구현 완료</title><rect x="566" y="455.0" width="10" height="10" rx="2" fill="#58a6ff"/></g>
+  <g><title>스크린리더 라벨 : 구현 완료</title><rect x="580" y="455.0" width="10" height="10" rx="2" fill="#58a6ff"/></g>
   <text x="24" y="500.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">데스크톱 통합·배포</text>
   <rect x="270" y="489.0" width="190" height="10" rx="5" fill="#21262d"/>
   <rect x="270" y="489.0" width="122.1" height="10" rx="5" fill="#58a6ff"/>
   <text x="474" y="499.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">64%</text>
-  <g><title>단일 인스턴스 : 부분</title><rect x="510" y="489.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>릴리스 exe·아이콘 : 완료</title><rect x="524" y="489.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>콘솔 창 제거 : 완료</title><rect x="538" y="489.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
-  <g><title>시작 메뉴·AUMID : 부분</title><rect x="552" y="489.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>트레이·자동 시작 : 부분</title><rect x="566" y="489.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>파일 로그 : 부분</title><rect x="580" y="489.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>자동 업데이트 : 부분</title><rect x="594" y="489.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>단일 인스턴스 : 부분 구현</title><rect x="510" y="489.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>릴리스 exe·아이콘 : 실기 완료</title><rect x="524" y="489.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>콘솔 창 제거 : 실기 완료</title><rect x="538" y="489.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>시작 메뉴·AUMID : 부분 구현</title><rect x="552" y="489.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>트레이·자동 시작 : 부분 구현</title><rect x="566" y="489.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>파일 로그 : 부분 구현</title><rect x="580" y="489.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <g><title>자동 업데이트 : 부분 구현</title><rect x="594" y="489.0" width="10" height="10" rx="2" fill="#d29922"/></g>
   <text x="24" y="534.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">음성·화면 공유</text>
   <rect x="270" y="523.0" width="190" height="10" rx="5" fill="#21262d"/>
-  <rect x="270" y="523.0" width="95.0" height="10" rx="5" fill="#58a6ff"/>
-  <text x="474" y="533.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">50%</text>
-  <g><title>음성 채널 참가 : 부분</title><rect x="510" y="523.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>화면 공유 송신 : 부분</title><rect x="524" y="523.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>화면 공유 수신 : 부분</title><rect x="538" y="523.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>오디오 장치·볼륨 : 부분</title><rect x="552" y="523.0" width="10" height="10" rx="2" fill="#d29922"/></g>
-  <g><title>음성 UI : 부분</title><rect x="566" y="523.0" width="10" height="10" rx="2" fill="#d29922"/></g>
+  <rect x="270" y="523.0" width="142.5" height="10" rx="5" fill="#58a6ff"/>
+  <text x="474" y="533.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">75%</text>
+  <g><title>음성 채널 참가 : 구현 완료</title><rect x="510" y="523.0" width="10" height="10" rx="2" fill="#58a6ff"/></g>
+  <g><title>화면 공유 송신 : 구현 완료</title><rect x="524" y="523.0" width="10" height="10" rx="2" fill="#58a6ff"/></g>
+  <g><title>화면 공유 수신 : 구현 완료</title><rect x="538" y="523.0" width="10" height="10" rx="2" fill="#58a6ff"/></g>
+  <g><title>오디오 장치·볼륨 : 구현 완료</title><rect x="552" y="523.0" width="10" height="10" rx="2" fill="#58a6ff"/></g>
+  <g><title>음성 UI : 구현 완료</title><rect x="566" y="523.0" width="10" height="10" rx="2" fill="#58a6ff"/></g>
   <text x="24" y="590.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12">범례</text>
   <rect x="72" y="581.0" width="10" height="10" rx="2" fill="#3fb950"/>
-  <text x="88" y="590.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12">완료</text>
-  <rect x="138" y="581.0" width="10" height="10" rx="2" fill="#d29922"/>
-  <text x="154" y="590.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12">부분</text>
-  <rect x="204" y="581.0" width="10" height="10" rx="2" fill="#484f58"/>
-  <text x="220" y="590.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12">미착수</text>
-  <text x="876" y="590.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="11" text-anchor="end">완료 1점 · 부분 0.5점</text>
+  <text x="88" y="590.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12">실기 완료</text>
+  <rect x="166" y="581.0" width="10" height="10" rx="2" fill="#58a6ff"/>
+  <text x="182" y="590.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12">구현 완료</text>
+  <rect x="260" y="581.0" width="10" height="10" rx="2" fill="#d29922"/>
+  <text x="276" y="590.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12">부분 구현</text>
+  <rect x="354" y="581.0" width="10" height="10" rx="2" fill="#484f58"/>
+  <text x="370" y="590.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12">미착수</text>
+  <text x="876" y="590.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="11" text-anchor="end">실기 1 · 구현 0.75 · 부분 0.5</text>
 </svg>

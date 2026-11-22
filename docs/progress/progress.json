@@ -389,11 +389,11 @@
         },
         {
           "name": "접근성 설정",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "스크린리더 라벨",
-          "status": "partial"
+          "status": "implemented"
         }
       ]
     },
@@ -437,23 +437,23 @@
       "items": [
         {
           "name": "음성 채널 참가",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "화면 공유 송신",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "화면 공유 수신",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "오디오 장치·볼륨",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "음성 UI",
-          "status": "partial"
+          "status": "implemented"
         }
       ]
     }

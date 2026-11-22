@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import math
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -22,6 +23,7 @@ FONT_STACK = (
 )
 
 COLOR_DONE = "#3fb950"
+COLOR_IMPLEMENTED = "#58a6ff"
 COLOR_PARTIAL = "#d29922"
 COLOR_TODO = "#484f58"
 COLOR_BG = "#0d1117"
@@ -29,17 +31,31 @@ COLOR_TEXT = "#e6edf3"
 COLOR_MUTED = "#8b949e"
 COLOR_TRACK = "#21262d"
 
+STATUS_ORDER = ("done", "implemented", "partial", "todo")
 STATUS_LABEL = {
-    "done": "완료",
-    "partial": "부분",
+    "done": "실기 완료",
+    "implemented": "구현 완료",
+    "partial": "부분 구현",
     "todo": "미착수",
+}
+STATUS_ICON = {
+    "done": "🟢",
+    "implemented": "🔵",
+    "partial": "🟡",
+    "todo": "⚪",
 }
 STATUS_COLOR = {
     "done": COLOR_DONE,
+    "implemented": COLOR_IMPLEMENTED,
     "partial": COLOR_PARTIAL,
     "todo": COLOR_TODO,
 }
-STATUS_WEIGHT = {"done": 1.0, "partial": 0.5, "todo": 0.0}
+STATUS_WEIGHT = {
+    "done": 1.0,
+    "implemented": 0.75,
+    "partial": 0.5,
+    "todo": 0.0,
+}
 
 # Areas left out of the "daily driver" badge.
 DAILY_DRIVER_EXCLUDED = {"voice", "guilds", "search", "i18n"}
@@ -57,12 +73,21 @@ def esc(text: str) -> str:
     )
 
 
+def count_statuses(items: list[dict]) -> dict[str, int]:
+    counts = {status: 0 for status in STATUS_ORDER}
+    for item in items:
+        status = item.get("status", "todo")
+        if status in counts:
+            counts[status] += 1
+    return counts
+
+
 def score(items: list[dict]) -> float:
     return sum(STATUS_WEIGHT.get(item["status"], 0.0) for item in items)
 
 
 def percent(items: list[dict]) -> float:
-    """Return the completion percentage, done=1 and partial=0.5."""
+    """Return the completion percentage (done=1, implemented=0.75, partial=0.5)."""
     if not items:
         return 0.0
     return 100.0 * score(items) / len(items)
@@ -185,6 +210,19 @@ def write_map(path: Path, data: dict) -> None:
         'font-weight="600">%s</text>\n'
         % (left_name, COLOR_TEXT, esc(FONT_STACK), esc("Fluxer Rust 클라이언트 진행 지도"))
     )
+    all_items = [item for area in areas for item in area["items"]]
+    counts = count_statuses(all_items)
+    header_summary = (
+        "기준일 %s · 실기 %d · 구현 %d · 부분 %d · 미착수 %d"
+        % (
+            data.get("updated", ""),
+            counts["done"],
+            counts["implemented"],
+            counts["partial"],
+            counts["todo"],
+        )
+    )
+
     out.append(
         '  <text x="%d" y="38" fill="%s" font-family="%s" font-size="12" '
         'text-anchor="end">%s</text>\n'
@@ -192,7 +230,7 @@ def write_map(path: Path, data: dict) -> None:
             width - left_name,
             COLOR_MUTED,
             esc(FONT_STACK),
-            esc("기준일 %s" % data.get("updated", "")),
+            esc(header_summary),
         )
     )
     out.append(
@@ -251,7 +289,7 @@ def write_map(path: Path, data: dict) -> None:
         % (left_name, legend_y + 10, COLOR_MUTED, esc(FONT_STACK), esc("범례"))
     )
     legend_x = left_name + 48
-    for status in ("done", "partial", "todo"):
+    for status in STATUS_ORDER:
         out.append(
             '  <rect x="%d" y="%.1f" width="10" height="10" rx="2" fill="%s"/>\n'
             % (legend_x, legend_y + 1, STATUS_COLOR[status])
@@ -276,19 +314,91 @@ def write_map(path: Path, data: dict) -> None:
             legend_y + 10,
             COLOR_MUTED,
             esc(FONT_STACK),
-            esc("완료 1점 · 부분 0.5점"),
+            esc("실기 1 · 구현 0.75 · 부분 0.5"),
         )
     )
     out.append("</svg>\n")
     path.write_text("".join(out), encoding="utf-8")
 
 
+def sync_readme(readme_path: Path, data: dict) -> bool:
+    """Update the block between <!-- progress:start --> and <!-- progress:end -->."""
+    if not readme_path.exists():
+        return False
+
+    content = readme_path.read_text(encoding="utf-8")
+    start_marker = "<!-- progress:start -->"
+    end_marker = "<!-- progress:end -->"
+    start_idx = content.find(start_marker)
+    end_idx = content.find(end_marker)
+    if start_idx == -1 or end_idx == -1 or end_idx < start_idx:
+        return False
+
+    areas = data["areas"]
+    all_items = [item for area in areas for item in area["items"]]
+    daily_areas = [area for area in areas if area["key"] not in DAILY_DRIVER_EXCLUDED]
+    daily_items = [item for area in daily_areas for item in area["items"]]
+
+    counts = count_statuses(all_items)
+    excluded_names = ", ".join(
+        area["name"] for area in areas if area["key"] in DAILY_DRIVER_EXCLUDED
+    )
+
+    lines = [
+        "**기준일 %s** · 전체 **%s** · 일상 사용(%s 제외) **%s** · 실기 완료 %d · 구현 완료 %d · 부분 구현 %d · 미착수 %d"
+        % (
+            data.get("updated", ""),
+            percent_label(all_items),
+            excluded_names,
+            percent_label(daily_items),
+            counts["done"],
+            counts["implemented"],
+            counts["partial"],
+            counts["todo"],
+        ),
+        "",
+        "<details>",
+        "<summary>영역별 상세 항목 보기 (%d개)</summary>" % len(all_items),
+        "",
+        "| 영역 | 진행률 | 항목 |",
+        "| --- | --- | --- |",
+    ]
+
+    for area in areas:
+        items = area["items"]
+        grouped = []
+        for status in STATUS_ORDER:
+            names = [item["name"] for item in items if item.get("status") == status]
+            if names:
+                grouped.append("%s %s" % (STATUS_ICON[status], ", ".join(names)))
+        area_name = area["name"].replace("|", "\\|")
+        items_cell = "<br>".join(grouped).replace("|", "\\|")
+        lines.append("| %s | %s | %s |" % (area_name, percent_label(items), items_cell))
+
+    lines.extend(["", "</details>"])
+    block = "\n".join(lines)
+
+    new_content = (
+        content[: start_idx + len(start_marker)]
+        + "\n"
+        + block
+        + "\n"
+        + content[end_idx:]
+    )
+    readme_path.write_text(new_content, encoding="utf-8")
+    return True
+
+
 def main() -> None:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+
     data = json.loads(INPUT.read_text(encoding="utf-8"))
     areas = data["areas"]
 
     all_items = [item for area in areas for item in area["items"]]
     overall = percent(all_items)
+    counts = count_statuses(all_items)
 
     daily_areas = [area for area in areas if area["key"] not in DAILY_DRIVER_EXCLUDED]
     daily_items = [item for area in daily_areas for item in area["items"]]
@@ -307,12 +417,24 @@ def main() -> None:
         daily,
     )
     write_map(PROGRESS_DIR / "progress.svg", data)
+    synced = sync_readme(ROOT / "README.md", data)
 
-    print("overall: %s (%d items)" % (percent_label(all_items), len(all_items)))
+    print(
+        "overall: %s (%d items: done=%d, implemented=%d, partial=%d, todo=%d)"
+        % (
+            percent_label(all_items),
+            len(all_items),
+            counts["done"],
+            counts["implemented"],
+            counts["partial"],
+            counts["todo"],
+        )
+    )
     print(
         "daily driver: %s (%d items, %d areas)"
         % (percent_label(daily_items), len(daily_items), len(daily_areas))
     )
+    print("readme synced: %s" % ("yes" if synced else "no"))
 
 
 if __name__ == "__main__":

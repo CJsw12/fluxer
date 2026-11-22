@@ -7,13 +7,14 @@ use fluxer_client_core::rest::{
     validate_guild_channel_patch,
 };
 use fluxer_client_core::state::{ChannelKind, ClientState, Snowflake};
-use gpui_kit::component::{Disableable as _, Selectable as _, Sizable as _};
+use gpui_kit::assets::IconName;
+use gpui_kit::component::{Disableable as _, Icon, Selectable as _, Sizable as _};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::{
     AnyElement, App, AppContext as _, Context, Entity, EntityInputHandler as _, FocusHandle, Focusable as _,
-    FontWeight, SharedString, Subscription, Window, div, prelude::*,
+    FontWeight, SharedString, Subscription, Window, div, prelude::*, px,
 };
 
 use crate::client_view::ClientView;
@@ -952,18 +953,27 @@ pub fn render_edit(modal: &EditChannelModal, theme: &Theme, cx: &mut Context<Cli
         l10n::tr("Delete channel")
     };
 
-    let footer = if modal.confirming_delete {
+    let sidebar_header_label = if is_cat {
+        modal.original_name.clone()
+    } else {
+        format!("# {}", modal.original_name)
+    };
+
+    let sidebar_footer = if modal.confirming_delete {
         div()
+            .flex_none()
+            .px_3()
+            .py_3()
+            .border_t_1()
+            .border_color(theme.border)
             .flex()
-            .flex_row()
-            .items_center()
-            .justify_between()
+            .flex_col()
             .gap_2()
-            .pt_1()
             .child(
                 div()
                     .text_xs()
                     .text_color(theme.danger)
+                    .truncate()
                     .child(format!("{delete_label}: {}", modal.original_name)),
             )
             .child(
@@ -972,20 +982,22 @@ pub fn render_edit(modal: &EditChannelModal, theme: &Theme, cx: &mut Context<Cli
                     .flex_row()
                     .gap_2()
                     .child(
-                        div().debug_selector(|| "edit-channel-delete-cancel".to_owned()).child(
+                        div().flex_1().debug_selector(|| "edit-channel-delete-cancel".to_owned()).child(
                             Button::new("edit-channel-delete-cancel")
                                 .ghost()
                                 .small()
+                                .w_full()
                                 .disabled(modal.submitting)
                                 .label(l10n::tr("Cancel"))
                                 .on_click(cx.listener(|this, _, window, cx| this.cancel_edit_channel_delete(window, cx))),
                         ),
                     )
                     .child(
-                        div().debug_selector(|| "edit-channel-delete-confirm".to_owned()).child(
+                        div().flex_1().debug_selector(|| "edit-channel-delete-confirm".to_owned()).child(
                             Button::new("edit-channel-delete-confirm")
                                 .danger()
                                 .small()
+                                .w_full()
                                 .disabled(modal.submitting)
                                 .label(if modal.submitting { l10n::tr("Loading…") } else { delete_label })
                                 .on_click(cx.listener(|this, _, _, cx| this.confirm_delete_channel(cx))),
@@ -994,63 +1006,91 @@ pub fn render_edit(modal: &EditChannelModal, theme: &Theme, cx: &mut Context<Cli
             )
     } else {
         div()
-            .flex()
-            .flex_row()
-            .items_center()
-            .justify_between()
-            .gap_2()
-            .pt_1()
+            .flex_none()
+            .px_3()
+            .py_3()
+            .border_t_1()
+            .border_color(theme.border)
             .child(
                 div().debug_selector(|| "edit-channel-delete".to_owned()).child(
                     Button::new("edit-channel-delete")
                         .danger()
                         .small()
+                        .w_full()
                         .disabled(modal.submitting)
                         .label(delete_label)
                         .on_click(cx.listener(|this, _, window, cx| this.request_edit_channel_delete(window, cx))),
                 ),
             )
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .gap_2()
-                    .child(
-                        div().debug_selector(|| "edit-channel-cancel".to_owned()).child(
-                            Button::new("edit-channel-cancel")
-                                .ghost()
-                                .small()
-                                .label(l10n::tr("Cancel"))
-                                .on_click(cx.listener(|this, _, window, cx| this.close_overlay(window, cx))),
-                        ),
-                    )
-                    .child(
-                        div().debug_selector(|| "edit-channel-save".to_owned()).child(
-                            Button::new("edit-channel-save")
-                                .primary()
-                                .small()
-                                .disabled(!dirty || modal.submitting)
-                                .label(if modal.submitting { l10n::tr("Loading…") } else { l10n::tr("Save changes") })
-                                .on_click(cx.listener(|this, _, _, cx| this.submit_edit_channel(cx))),
-                        ),
-                    ),
-            )
     };
 
-    let content = div()
-        .id("edit-channel-modal")
-        .debug_selector(|| "edit-channel-modal".to_owned())
-        .key_context(EDIT_CONTEXT)
-        .track_focus(&modal.focus)
+    let sidebar = div()
+        .flex_1()
+        .min_h_0()
+        .flex()
+        .flex_col()
+        .child(
+            div()
+                .flex_none()
+                .px_4()
+                .pt_4()
+                .pb_3()
+                .border_b_1()
+                .border_color(theme.border)
+                .flex()
+                .flex_col()
+                .gap_0p5()
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(theme.muted_foreground)
+                        .child(title.clone()),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .font_weight(FontWeight::BOLD)
+                        .truncate()
+                        .child(sidebar_header_label),
+                ),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_h_0()
+                .px_2()
+                .py_3()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(
+                    div()
+                        .px_2()
+                        .py(px(6.))
+                        .rounded(px(6.))
+                        .bg(theme.accent)
+                        .text_color(theme.foreground)
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_2()
+                        .child(Icon::new(if is_cat { IconName::Settings2 } else { IconName::Hash }).small())
+                        .child(div().text_sm().truncate().child(l10n::tr("Overview"))),
+                ),
+        )
+        .child(sidebar_footer);
+
+    let general_card = div()
         .p_4()
+        .rounded(px(8.))
+        .border_1()
+        .border_color(theme.border)
+        .bg(theme.background_secondary)
         .flex()
         .flex_col()
         .gap_3()
-        .capture_action(cx.listener(|this, _: &Escape, window, cx| {
-            cx.stop_propagation();
-            this.handle_edit_channel_escape(window, cx);
-        }))
-        .child(div().text_lg().font_weight(FontWeight::BOLD).child(title))
         .child(
             div()
                 .flex()
@@ -1062,18 +1102,105 @@ pub fn render_edit(modal: &EditChannelModal, theme: &Theme, cx: &mut Context<Cli
                 ))
                 .child(Input::new(&modal.name_input).small()),
         )
-        .children(topic_section)
-        .children(announcement_section)
-        .children(slowmode_section)
-        .children(parent_section)
-        .children(nsfw_section)
+        .when_some(topic_section, |d, sec| {
+            d.child(div().h(px(1.)).bg(theme.border)).child(sec)
+        })
+        .when_some(parent_section, |d, sec| {
+            d.child(div().h(px(1.)).bg(theme.border)).child(sec)
+        });
+
+    let has_options = announcement_section.is_some() || slowmode_section.is_some() || nsfw_section.is_some();
+    let options_card = has_options.then(|| {
+        let mut card = div()
+            .p_4()
+            .rounded(px(8.))
+            .border_1()
+            .border_color(theme.border)
+            .bg(theme.background_secondary)
+            .flex()
+            .flex_col()
+            .gap_3();
+        let mut first = true;
+        if let Some(sec) = announcement_section {
+            first = false;
+            card = card.child(sec);
+        }
+        if let Some(sec) = slowmode_section {
+            if !first {
+                card = card.child(div().h(px(1.)).bg(theme.border));
+            }
+            first = false;
+            card = card.child(sec);
+        }
+        if let Some(sec) = nsfw_section {
+            if !first {
+                card = card.child(div().h(px(1.)).bg(theme.border));
+            }
+            card = card.child(sec);
+        }
+        card
+    });
+
+    let action_bar = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_end()
+        .gap_2()
+        .pt_1()
+        .child(
+            div().debug_selector(|| "edit-channel-cancel".to_owned()).child(
+                Button::new("edit-channel-cancel")
+                    .ghost()
+                    .small()
+                    .label(l10n::tr("Cancel"))
+                    .on_click(cx.listener(|this, _, window, cx| this.close_overlay(window, cx))),
+            ),
+        )
+        .child(
+            div().debug_selector(|| "edit-channel-save".to_owned()).child(
+                Button::new("edit-channel-save")
+                    .primary()
+                    .small()
+                    .disabled(!dirty || modal.submitting)
+                    .label(if modal.submitting { l10n::tr("Loading…") } else { l10n::tr("Save changes") })
+                    .on_click(cx.listener(|this, _, _, cx| this.submit_edit_channel(cx))),
+            ),
+        );
+
+    let body = div()
+        .flex()
+        .flex_col()
+        .gap_4()
+        .child(general_card)
+        .children(options_card)
         .when_some(modal.error.clone(), |d, err| {
             d.child(div().text_xs().text_color(theme.danger).child(err))
         })
-        .child(footer);
+        .child(action_bar);
 
     let view = cx.weak_entity();
-    overlay::modal(content, theme, move |window, cx| {
-        let _ = view.update(cx, |v, cx| v.close_overlay(window, cx));
-    })
+    div()
+        .id("edit-channel-modal")
+        .debug_selector(|| "edit-channel-modal".to_owned())
+        .key_context(EDIT_CONTEXT)
+        .track_focus(&modal.focus)
+        .absolute()
+        .top_0()
+        .left_0()
+        .size_full()
+        .capture_action(cx.listener(|this, _: &Escape, window, cx| {
+            cx.stop_propagation();
+            this.handle_edit_channel_escape(window, cx);
+        }))
+        .child(overlay::settings_modal(
+            sidebar,
+            SharedString::from(l10n::tr("Overview")),
+            body,
+            theme,
+            move |window, cx| {
+                let _ = view.update(cx, |v, cx| v.close_overlay(window, cx));
+            },
+        ))
+        .into_any_element()
 }

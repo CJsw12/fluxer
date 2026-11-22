@@ -2,9 +2,10 @@
 
 use fluxer_client_core::rest::{RolePatch, validate_role_name};
 use fluxer_client_core::state::{ClientState, PermissionOverwrite, Role, Snowflake, bits};
+use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
-use gpui_kit::component::{Disableable as _, Selectable as _, Sizable as _};
+use gpui_kit::component::{Disableable as _, Icon, Selectable as _, Sizable as _};
 use gpui_kit::{
     AnyElement, AppContext as _, Context, Entity, EntityInputHandler as _, FocusHandle, Focusable as _, FontWeight,
     SharedString, Subscription, Window, div, prelude::*, px,
@@ -319,7 +320,7 @@ fn permission_rows(
 ) -> gpui_kit::Stateful<gpui_kit::Div> {
     let mut list = div()
         .id("access-permission-list")
-        .max_h(px(235.))
+        .max_h(px(400.))
         .overflow_y_scroll()
         .flex()
         .flex_col();
@@ -372,6 +373,7 @@ fn permission_rows(
 fn role_rows(
     state: &ClientState,
     guild: Snowflake,
+    selected_role: Option<Snowflake>,
     busy: bool,
     cx: &mut Context<ClientView>,
 ) -> gpui_kit::Stateful<gpui_kit::Div> {
@@ -379,37 +381,44 @@ fn role_rows(
     roles.sort_by_key(|role| (role.id == guild, std::cmp::Reverse(role.position), role.id));
     let mut list = div()
         .id("access-role-list")
-        .max_h(px(295.))
+        .flex_1()
+        .min_h_0()
         .overflow_y_scroll()
         .flex()
-        .flex_col();
+        .flex_col()
+        .gap_1();
     for (index, role) in roles.iter().enumerate() {
         let editable = state.can_manage_role(guild, role.id);
         let id = role.id.0;
+        let is_selected = selected_role == Some(role.id);
         let role = (*role).clone();
         let label = if role.id == guild {
             "@everyone".to_owned()
         } else {
             role.name.clone()
         };
-        let mut row = div().flex().items_center().gap_2().py_1().child(
-            Button::new(("access-role", id))
-                .small()
-                .ghost()
-                .label(label)
-                .disabled(busy || !editable)
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.change_access_draft(
-                        Draft::Role {
-                            permissions: role.permissions,
-                            hoist: role.hoist,
-                            mentionable: role.mentionable,
-                            before: role.clone(),
-                        },
-                        window,
-                        cx,
-                    );
-                })),
+        let mut row = div().flex().items_center().gap_1().child(
+            div().flex_1().min_w_0().child(
+                Button::new(("access-role", id))
+                    .small()
+                    .ghost()
+                    .w_full()
+                    .selected(is_selected)
+                    .label(label)
+                    .disabled(busy || !editable)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.change_access_draft(
+                            Draft::Role {
+                                permissions: role.permissions,
+                                hoist: role.hoist,
+                                mentionable: role.mentionable,
+                                before: role.clone(),
+                            },
+                            window,
+                            cx,
+                        );
+                    })),
+            ),
         );
         if editable && id != guild.0 {
             for (offset, title) in [(-1, "Move up"), (1, "Move down")] {
@@ -448,7 +457,9 @@ fn overwrite_rows(
     state: &ClientState,
     guild: Snowflake,
     channel: Snowflake,
+    selected_target: Option<Snowflake>,
     busy: bool,
+    theme: &Theme,
     cx: &mut Context<ClientView>,
 ) -> gpui_kit::Stateful<gpui_kit::Div> {
     let mut targets: Vec<_> = state.guilds[&guild]
@@ -488,10 +499,12 @@ fn overwrite_rows(
     targets.sort_unstable_by(|a, b| (a.0 != guild, a.1, &a.2, a.0).cmp(&(b.0 != guild, b.1, &b.2, b.0)));
     let mut list = div()
         .id("access-overwrite-list")
-        .max_h(px(320.))
+        .flex_1()
+        .min_h_0()
         .overflow_y_scroll()
         .flex()
-        .flex_col();
+        .flex_col()
+        .gap_1();
     for (id, kind, name) in targets {
         let before = find_overwrite(state, channel, id).cloned();
         let after = before.clone().unwrap_or(PermissionOverwrite {
@@ -500,20 +513,32 @@ fn overwrite_rows(
             allow: 0,
             deny: 0,
         });
+        let is_selected = selected_target == Some(id);
         let tag = if kind == 0 { "Role" } else { "Member" };
         list = list.child(
             div()
                 .flex()
                 .items_center()
                 .justify_between()
-                .gap_2()
+                .gap_1()
+                .px_2()
                 .py_1()
-                .child(div().flex_1().min_w_0().truncate().child(name.clone()))
-                .child(div().child(l10n::tr(tag)))
+                .rounded(px(6.))
+                .when(is_selected, |d| d.bg(theme.accent))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .child(div().text_sm().truncate().child(name.clone()))
+                        .child(div().text_xs().text_color(theme.muted_foreground).child(l10n::tr(tag))),
+                )
                 .child(
                     Button::new(("access-overwrite", id.0))
                         .small()
                         .ghost()
+                        .selected(is_selected)
                         .label(l10n::tr(if before.is_some() { "Edit" } else { "Add" }))
                         .disabled(busy)
                         .on_click(cx.listener(move |this, _, window, cx| {
@@ -537,40 +562,79 @@ pub fn render(view: &ClientView, modal: &AccessModal, theme: &Theme, cx: &mut Co
     let busy = view.access_pending.is_some();
     let state = view.backend.state();
     let guild = modal.scope.guild();
-    let title = match modal.scope {
+    let scope_title = match modal.scope {
         Scope::Guild(_) => "Roles",
         Scope::Channel { .. } => "Channel permissions",
     };
-    let mut body = div().flex().flex_col().gap_2();
+
+    let selected_role = match &modal.draft {
+        Draft::Role { before, .. } => Some(before.id),
+        _ => None,
+    };
+    let selected_target = match &modal.draft {
+        Draft::Overwrite { after, .. } => Some(after.id),
+        _ => None,
+    };
+
+    let allowed = modal.allowed(view.place, &state);
+    let sidebar_list: AnyElement = if allowed {
+        match modal.scope {
+            Scope::Guild(_) => role_rows(&state, guild, selected_role, busy, cx).into_any_element(),
+            Scope::Channel { channel, .. } => {
+                overwrite_rows(&state, guild, channel, selected_target, busy, theme, cx).into_any_element()
+            }
+        }
+    } else {
+        div().into_any_element()
+    };
+
+    let mut body = div().flex().flex_col().gap_4();
+    let mut header_title = l10n::tr(scope_title);
     let mut can_delete = false;
     let mut save = false;
     let mut can_save = true;
     let mut stale = false;
-    if modal.allowed(view.place, &state) {
+    if allowed {
         match &modal.draft {
-            Draft::List => match modal.scope {
-                Scope::Guild(_) => {
-                    body = body
-                        .child(
-                            Button::new("access-new-role")
-                                .small()
-                                .label(l10n::tr("Create role"))
-                                .disabled(busy)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.change_access_draft(Draft::NewRole, window, cx)
-                                })),
-                        )
-                        .child(role_rows(&state, guild, busy, cx));
-                }
-                Scope::Channel { channel, .. } => {
-                    body = body.child(overwrite_rows(&state, guild, channel, busy, cx))
-                }
-            },
+            Draft::List => {
+                let hint = match modal.scope {
+                    Scope::Guild(_) => l10n::tr("Select a role to edit its permissions, or create a new role."),
+                    Scope::Channel { .. } => l10n::tr("Select a role or member to edit channel permissions."),
+                };
+                body = body.child(
+                    div()
+                        .p_4()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .text_sm()
+                        .text_color(theme.muted_foreground)
+                        .child(hint),
+                );
+            }
             Draft::NewRole => {
                 save = true;
-                body = body
-                    .child(div().child(l10n::tr("Role name")))
-                    .child(Input::new(&modal.input).small());
+                header_title = l10n::tr("Create role");
+                body = body.child(
+                    div()
+                        .p_4()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(theme.muted_foreground)
+                                .child(l10n::tr("Role name")),
+                        )
+                        .child(Input::new(&modal.input).small()),
+                );
             }
             Draft::Role {
                 before,
@@ -578,6 +642,11 @@ pub fn render(view: &ClientView, modal: &AccessModal, theme: &Theme, cx: &mut Co
                 hoist,
                 mentionable,
             } => {
+                header_title = if before.id == guild {
+                    "@everyone".to_owned()
+                } else {
+                    before.name.clone()
+                };
                 let editable = state.can_manage_role(guild, before.id)
                     && state.guilds[&guild].roles.get(&before.id) == Some(before);
                 stale = !editable;
@@ -589,52 +658,96 @@ pub fn render(view: &ClientView, modal: &AccessModal, theme: &Theme, cx: &mut Co
                         || state.can_write_role_permissions(guild, *permissions));
                 body = body
                     .when(before.id != guild, |body| {
-                        body.child(div().child(l10n::tr("Role name")))
-                            .child(Input::new(&modal.input).small())
+                        body.child(
+                            div()
+                                .p_4()
+                                .rounded(px(8.))
+                                .border_1()
+                                .border_color(theme.border)
+                                .bg(theme.background_secondary)
+                                .flex()
+                                .flex_col()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .text_color(theme.muted_foreground)
+                                                .child(l10n::tr("Role name")),
+                                        )
+                                        .child(Input::new(&modal.input).small()),
+                                )
+                                .child(div().h(px(1.)).bg(theme.border))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_wrap()
+                                        .gap_2()
+                                        .child(
+                                            Button::new("access-role-hoist")
+                                                .small()
+                                                .ghost()
+                                                .selected(*hoist)
+                                                .label(l10n::tr("Display role members separately"))
+                                                .disabled(busy || !editable)
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    if let Overlay::Access(modal) = &mut this.overlay
+                                                        && let Draft::Role { hoist, .. } = &mut modal.draft
+                                                    {
+                                                        *hoist = !*hoist;
+                                                        cx.notify();
+                                                    }
+                                                })),
+                                        )
+                                        .child(
+                                            Button::new("access-role-mentionable")
+                                                .small()
+                                                .ghost()
+                                                .selected(*mentionable)
+                                                .label(l10n::tr("Allow mentions for this role"))
+                                                .disabled(busy || !editable)
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    if let Overlay::Access(modal) = &mut this.overlay
+                                                        && let Draft::Role { mentionable, .. } = &mut modal.draft
+                                                    {
+                                                        *mentionable = !*mentionable;
+                                                        cx.notify();
+                                                    }
+                                                })),
+                                        ),
+                                ),
+                        )
+                    })
+                    .child(
+                        div()
+                            .p_4()
+                            .rounded(px(8.))
+                            .border_1()
+                            .border_color(theme.border)
+                            .bg(theme.background_secondary)
+                            .flex()
+                            .flex_col()
+                            .gap_2()
                             .child(
                                 div()
-                                    .flex()
-                                    .gap_2()
-                                    .child(
-                                        Button::new("access-role-hoist")
-                                            .small()
-                                            .ghost()
-                                            .selected(*hoist)
-                                            .label(l10n::tr("Display role members separately"))
-                                            .disabled(busy || !editable)
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                if let Overlay::Access(modal) = &mut this.overlay
-                                                    && let Draft::Role { hoist, .. } = &mut modal.draft
-                                                {
-                                                    *hoist = !*hoist;
-                                                    cx.notify();
-                                                }
-                                            })),
-                                    )
-                                    .child(
-                                        Button::new("access-role-mentionable")
-                                            .small()
-                                            .ghost()
-                                            .selected(*mentionable)
-                                            .label(l10n::tr("Allow mentions for this role"))
-                                            .disabled(busy || !editable)
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                if let Overlay::Access(modal) = &mut this.overlay
-                                                    && let Draft::Role { mentionable, .. } = &mut modal.draft
-                                                {
-                                                    *mentionable = !*mentionable;
-                                                    cx.notify();
-                                                }
-                                            })),
-                                    ),
+                                    .text_xs()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(theme.muted_foreground)
+                                    .child(l10n::tr("Permissions")),
                             )
-                    })
-                    .child(permission_rows(*permissions, None, own, busy || !editable, cx));
+                            .child(permission_rows(*permissions, None, own, busy || !editable, cx)),
+                    );
             }
             Draft::Overwrite { label, before, after } => {
                 let Scope::Channel { channel, .. } = modal.scope else {
                     unreachable!()
                 };
+                header_title = label.clone();
                 let editable = find_overwrite(&state, channel, after.id) == before.as_ref();
                 stale = !editable;
                 save = true;
@@ -644,13 +757,31 @@ pub fn render(view: &ClientView, modal: &AccessModal, theme: &Theme, cx: &mut Co
                 let changed = before.as_ref() != Some(after) && (before.is_some() || after.allow | after.deny != 0);
                 can_save =
                     editable && changed && state.can_write_channel_overwrite(channel, before.as_ref(), Some(after));
-                body = body.child(div().child(label.clone())).child(permission_rows(
-                    after.allow,
-                    Some((after.deny, before.as_ref())),
-                    state.channel_permissions(channel),
-                    busy || !editable,
-                    cx,
-                ));
+                body = body.child(
+                    div()
+                        .p_4()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_col()
+                        .gap_2()
+                        .child(
+                            div()
+                                .text_xs()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(theme.muted_foreground)
+                                .child(l10n::tr("Permissions")),
+                        )
+                        .child(permission_rows(
+                            after.allow,
+                            Some((after.deny, before.as_ref())),
+                            state.channel_permissions(channel),
+                            busy || !editable,
+                            cx,
+                        )),
+                );
             }
         }
     }
@@ -704,29 +835,87 @@ pub fn render(view: &ClientView, modal: &AccessModal, theme: &Theme, cx: &mut Co
         .error
         .clone()
         .or_else(|| stale.then(|| l10n::tr("This item changed. Go back and reopen it.")));
-    let content = div()
+
+    let sidebar = div()
+        .flex_1()
+        .min_h_0()
+        .flex()
+        .flex_col()
+        .child(
+            div()
+                .flex_none()
+                .px_4()
+                .pt_4()
+                .pb_3()
+                .border_b_1()
+                .border_color(theme.border)
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_2()
+                        .child(Icon::new(IconName::Settings2).small())
+                        .child(div().text_sm().font_weight(FontWeight::BOLD).child(l10n::tr(scope_title))),
+                )
+                .when(allowed && matches!(modal.scope, Scope::Guild(_)), |d| {
+                    d.child(
+                        Button::new("access-new-role")
+                            .small()
+                            .primary()
+                            .w_full()
+                            .label(l10n::tr("Create role"))
+                            .disabled(busy)
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.change_access_draft(Draft::NewRole, window, cx)
+                            })),
+                    )
+                }),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_h_0()
+                .px_2()
+                .py_2()
+                .flex()
+                .flex_col()
+                .child(sidebar_list),
+        );
+
+    let full_body = body
+        .when_some(error.map(SharedString::from), |d, error| {
+            d.child(div().text_xs().text_color(theme.danger).child(error))
+        })
+        .child(footer);
+
+    let view = cx.weak_entity();
+    div()
         .id("access-modal")
         .debug_selector(|| "access-modal".to_owned())
         .key_context(CONTEXT)
         .track_focus(&modal.focus)
-        .p_4()
-        .flex()
-        .flex_col()
-        .gap_3()
+        .absolute()
+        .top_0()
+        .left_0()
+        .size_full()
         .capture_action(cx.listener(|this, _: &Escape, window, cx| {
             cx.stop_propagation();
             this.close_overlay(window, cx);
         }))
-        .child(div().text_lg().font_weight(FontWeight::BOLD).child(l10n::tr(title)))
-        .child(body)
-        .when_some(error.map(SharedString::from), |d, error| {
-            d.child(div().text_color(theme.danger).child(error))
-        })
-        .child(footer);
-    let view = cx.weak_entity();
-    overlay::modal(content, theme, move |window, cx| {
-        let _ = view.update(cx, |this, cx| this.close_overlay(window, cx));
-    })
+        .child(overlay::settings_modal(
+            sidebar,
+            SharedString::from(header_title),
+            full_body,
+            theme,
+            move |window, cx| {
+                let _ = view.update(cx, |this, cx| this.close_overlay(window, cx));
+            },
+        ))
+        .into_any_element()
 }
 
 #[cfg(test)]

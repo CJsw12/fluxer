@@ -8,9 +8,10 @@ use fluxer_client_core::rest::{
     MAX_TIMEOUT_DURATION_SECONDS, RestError, validate_audit_log_reason, validate_ban_request, validate_member_patch,
 };
 use fluxer_client_core::state::Snowflake;
+use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
-use gpui_kit::component::{Disableable as _, Selectable as _, Sizable as _};
+use gpui_kit::component::{Disableable as _, Icon, Selectable as _, Sizable as _};
 use gpui_kit::{
     AnyElement, AppContext as _, Context, Entity, EntityInputHandler as _, FocusHandle, Focusable as _, FontWeight,
     SharedString, Subscription, Window, div, prelude::*, px,
@@ -714,7 +715,7 @@ pub fn render_bans(modal: &GuildBansModal, theme: &Theme, cx: &mut Context<Clien
         })
         .collect();
 
-    let mut list = div().id("guild-bans-list").flex().flex_col().max_h(px(280.)).overflow_y_scroll().gap_1();
+    let mut list = div().id("guild-bans-list").flex().flex_col().max_h(px(520.)).overflow_y_scroll().gap_2();
     if modal.loading && modal.bans.is_empty() {
         list = list.child(div().py_3().text_xs().text_color(theme.muted_foreground).child(l10n::tr("Loading…")));
     } else if filtered.is_empty() {
@@ -739,8 +740,8 @@ pub fn render_bans(modal: &GuildBansModal, theme: &Theme, cx: &mut Context<Clien
                     .items_center()
                     .justify_between()
                     .gap_2()
-                    .px_2()
-                    .py_1()
+                    .px_3()
+                    .py_2()
                     .rounded(px(6.))
                     .border_1()
                     .border_color(theme.border)
@@ -798,56 +799,116 @@ pub fn render_bans(modal: &GuildBansModal, theme: &Theme, cx: &mut Context<Clien
         }
     }
 
-    let content = div()
+    let sidebar = div()
+        .flex_1()
+        .min_h_0()
+        .flex()
+        .flex_col()
+        .child(
+            div()
+                .flex_1()
+                .min_h_0()
+                .px_2()
+                .py_3()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(div().px_2().child(section_label(l10n::tr("Moderation"), theme)))
+                .child(
+                    div()
+                        .px_2()
+                        .py(px(6.))
+                        .rounded(px(6.))
+                        .bg(theme.accent)
+                        .text_color(theme.foreground)
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_2()
+                        .child(Icon::new(IconName::Users).small())
+                        .child(div().text_sm().truncate().child(l10n::tr("Bans"))),
+                ),
+        )
+        .child(
+            div()
+                .flex_none()
+                .px_3()
+                .py_3()
+                .border_t_1()
+                .border_color(theme.border)
+                .child(
+                    div().debug_selector(|| "guild-bans-close".to_owned()).child(
+                        Button::new("guild-bans-close")
+                            .ghost()
+                            .small()
+                            .w_full()
+                            .label(l10n::tr("Close"))
+                            .on_click(cx.listener(|this, _, window, cx| this.close_overlay(window, cx))),
+                    ),
+                ),
+        );
+
+    let body = div()
+        .flex()
+        .flex_col()
+        .gap_4()
+        .child(
+            div()
+                .p_4()
+                .rounded(px(8.))
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.background_secondary)
+                .flex()
+                .flex_col()
+                .gap_3()
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_2()
+                        .child(div().flex_1().min_w_0().child(Input::new(&modal.filter_input).small()))
+                        .child(
+                            div().debug_selector(|| "guild-bans-refresh".to_owned()).child(
+                                Button::new("guild-bans-refresh")
+                                    .ghost()
+                                    .small()
+                                    .disabled(modal.loading)
+                                    .label(if modal.loading { l10n::tr("Loading…") } else { l10n::tr("Refresh") })
+                                    .on_click(cx.listener(|this, _, _, cx| this.refresh_guild_bans(cx))),
+                            ),
+                        ),
+                )
+                .child(list),
+        )
+        .when_some(modal.error.clone(), |d, err| {
+            d.child(div().text_xs().text_color(theme.danger).child(err))
+        });
+
+    let view = cx.weak_entity();
+    div()
         .id("guild-bans-modal")
         .debug_selector(|| "guild-bans-modal".to_owned())
         .key_context(BANS_CONTEXT)
         .track_focus(&modal.focus)
-        .p_4()
-        .flex()
-        .flex_col()
-        .gap_3()
+        .absolute()
+        .top_0()
+        .left_0()
+        .size_full()
         .capture_action(cx.listener(|this, _: &Escape, window, cx| {
             cx.stop_propagation();
             this.close_overlay(window, cx);
         }))
-        .child(
-            div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .justify_between()
-                .child(div().text_lg().font_weight(FontWeight::BOLD).child(l10n::tr("Banned users")))
-                .child(
-                    div().debug_selector(|| "guild-bans-refresh".to_owned()).child(
-                        Button::new("guild-bans-refresh")
-                            .ghost()
-                            .small()
-                            .disabled(modal.loading)
-                            .label(if modal.loading { l10n::tr("Loading…") } else { l10n::tr("Refresh") })
-                            .on_click(cx.listener(|this, _, _, cx| this.refresh_guild_bans(cx))),
-                    ),
-                ),
-        )
-        .child(Input::new(&modal.filter_input).small())
-        .child(list)
-        .when_some(modal.error.clone(), |d, err| {
-            d.child(div().text_xs().text_color(theme.danger).child(err))
-        })
-        .child(
-            div().flex().flex_row().justify_end().child(
-                div().debug_selector(|| "guild-bans-close".to_owned()).child(
-                    Button::new("guild-bans-close")
-                        .ghost()
-                        .small()
-                        .label(l10n::tr("Close"))
-                        .on_click(cx.listener(|this, _, window, cx| this.close_overlay(window, cx))),
-                ),
-            ),
-        );
-
-    let view = cx.weak_entity();
-    overlay::modal(content, theme, move |window, cx| {
-        let _ = view.update(cx, |v, cx| v.close_overlay(window, cx));
-    })
+        .child(overlay::settings_modal(
+            sidebar,
+            SharedString::from(l10n::tr("Banned users")),
+            body,
+            theme,
+            move |window, cx| {
+                let _ = view.update(cx, |v, cx| v.close_overlay(window, cx));
+            },
+        ))
+        .into_any_element()
 }

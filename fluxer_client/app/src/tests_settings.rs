@@ -614,3 +614,49 @@ fn appearance_theme_swatches_sliders_and_custom_titlebar_render(cx: &mut TestApp
 
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn account_tab_renders_passkeys_and_handles_credential_events(cx: &mut TestAppContext) {
+    use fluxer_client_core::rest::WebAuthnCredential;
+
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, vcx) = open_client(cx, backend, events);
+
+    view.update_in(vcx, |v, window, cx| {
+        v.open_settings(window, cx);
+        v.select_settings_tab(crate::ui::settings::SettingsTab::Account, cx);
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+
+    assert!(vcx.debug_bounds("settings-account-passkeys").is_some());
+    assert!(vcx.debug_bounds("settings-passkey-add-btn").is_some());
+
+    view.update(vcx, |v, cx| {
+        v.handle_events(
+            vec![crate::backend::UiEvent::WebAuthnCredentialsLoaded {
+                result: Ok(vec![WebAuthnCredential {
+                    id: "cred-test-1".to_owned(),
+                    name: "YubiKey 5C".to_owned(),
+                    created_at: Some("2026-11-23".to_owned()),
+                    last_used_at: None,
+                }]),
+            }],
+            cx,
+        );
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+
+    view.read_with(vcx, |v, _| {
+        let Overlay::Settings(modal) = &v.overlay else {
+            panic!("expected settings overlay");
+        };
+        assert!(!modal.passkey_loading);
+        assert_eq!(modal.passkeys.len(), 1);
+        assert_eq!(modal.passkeys[0].name, "YubiKey 5C");
+    });
+
+    drop(rt);
+}

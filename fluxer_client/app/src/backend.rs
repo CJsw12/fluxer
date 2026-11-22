@@ -11,7 +11,8 @@ use anyhow::{Context as _, Result};
 use fluxer_client_core::gateway::{self, Compression, GatewayConfig, GatewayEvent, GatewayHandle, IdentifyProperties};
 use fluxer_client_core::rest::{
     AckRequest, ClientIdentity, DiscoveryOptions, Endpoints, GuildBanEntry, MessageQuery, MessageSearchOutcome,
-    RestClient, RestConfig, SecretToken, SendMessageRequest, TransportPolicy, UserProfileFull, discover_with,
+    RestClient, RestConfig, SecretToken, SendMessageRequest, TransportPolicy, UserProfileFull, WebAuthnCredential,
+    discover_with,
 };
 #[cfg(test)]
 use fluxer_client_core::rest::{GuildSettingsPatch, MessageSearchRequest, UserSettingsPatch};
@@ -86,6 +87,10 @@ pub enum UiEvent {
     MemberUnbanned { seq: u64, guild_id: Snowflake, user_id: Snowflake, error: Option<String> },
     /// Voice session or channel voice member state changed (contains no credentials).
     VoiceChanged,
+    /// `GET /users/@me/mfa/webauthn/credentials` finished.
+    WebAuthnCredentialsLoaded { result: Result<Vec<WebAuthnCredential>, String> },
+    /// Passkey registration or deletion finished (`error: None` means success).
+    WebAuthnMutationFinished { status: Option<String>, error: Option<String> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -179,6 +184,8 @@ pub struct Backend {
     last_nonce: Arc<AtomicU64>,
     /// Instance media endpoint (avatars), from discovery.
     media: Option<Arc<str>>,
+    /// WebAuthn relying-party origin derived from discovery endpoints.
+    webauthn_origin: Option<Arc<str>>,
     /// Hostnames belonging to the active Fluxer instance (trusted external links).
     instance_hosts: Arc<[String]>,
     /// Window focus and viewed channel for the notification decision.
@@ -268,6 +275,7 @@ impl Backend {
         };
         let (mut backend, rx) = Self::new(runtime, instance.rest, Some(gateway));
         backend.media = instance.endpoints.media.as_deref().map(Arc::from);
+        backend.webauthn_origin = crate::webauthn::derive_origin(&instance.endpoints).ok().map(Arc::from);
         let hosts = crate::trusted_domains::hosts_from_urls(
             [
                 Some(instance.endpoints.api.as_str()),
@@ -312,6 +320,7 @@ impl Backend {
             gateway,
             last_nonce: Arc::new(AtomicU64::new(0)),
             media: None,
+            webauthn_origin: None,
             instance_hosts: Arc::from(Vec::new()),
             focus: Arc::default(),
             note_seq: Arc::new(AtomicU64::new(0)),
@@ -364,6 +373,101 @@ impl Backend {
 
     pub(crate) fn set_media(&mut self, media: Option<String>) {
         self.media = media.map(Arc::from);
+    }
+
+    pub fn load_webauthn_credentials(&self) {
+        let rest = self.rest.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            let result = rest
+                .list_webauthn_credentials()
+                .await
+                .map_err(crate::login::describe_rest_error);
+            let _ = events.send(UiEvent::WebAuthnCredentialsLoaded { result });
+        });
+    }
+
+    pub fn register_webauthn_passkey(&self, name: String, sudo_password: Option<fluxer_client_core::rest::Secret>) {
+        let rest = self.rest.clone();
+        let events = self.events.clone();
+        let origin = self.webauthn_origin.clone();
+        self.runtime.spawn(async move {
+            let Some(origin) = origin else {
+                let _ = events.send(UiEvent::WebAuthnMutationFinished {
+                    status: None,
+                    error: Some("Instance origin is unavailable for WebAuthn registration.".to_owned()),
+                });
+                return;
+            };
+            let rp_id = crate::webauthn::rp_id_for_origin(&origin);
+            let options = match rest
+                .webauthn_registration_options(rp_id.as_deref(), sudo_password.as_ref())
+                .await
+            {
+                Ok(opts) => opts,
+                Err(err) => {
+                    let _ = events.send(UiEvent::WebAuthnMutationFinished {
+                        status: None,
+                        error: Some(crate::login::describe_rest_error(err)),
+                    });
+                    return;
+                }
+            };
+            let origin_owned = origin.to_string();
+            let ceremony = tokio::task::spawn_blocking(move || crate::webauthn::register(&options, &origin_owned))
+                .await
+                .map_err(|err| format!("Passkey registration task failed: {err}"))
+                .and_then(|res| res);
+            let (challenge, response) = match ceremony {
+                Ok(pair) => pair,
+                Err(err) => {
+                    let _ = events.send(UiEvent::WebAuthnMutationFinished { status: None, error: Some(err) });
+                    return;
+                }
+            };
+            match rest.register_webauthn_credential(&challenge, response, &name).await {
+                Ok(()) => {
+                    let _ = events.send(UiEvent::WebAuthnMutationFinished {
+                        status: Some(format!("Added passkey \"{name}\".")),
+                        error: None,
+                    });
+                }
+                Err(err) => {
+                    let _ = events.send(UiEvent::WebAuthnMutationFinished {
+                        status: None,
+                        error: Some(crate::login::describe_rest_error(err)),
+                    });
+                }
+            }
+        });
+    }
+
+    pub fn delete_webauthn_credential(
+        &self,
+        credential_id: String,
+        sudo_password: Option<fluxer_client_core::rest::Secret>,
+    ) {
+        let rest = self.rest.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            match rest
+                .delete_webauthn_credential(&credential_id, sudo_password.as_ref())
+                .await
+            {
+                Ok(()) => {
+                    let _ = events.send(UiEvent::WebAuthnMutationFinished {
+                        status: Some("Passkey removed.".to_owned()),
+                        error: None,
+                    });
+                }
+                Err(err) => {
+                    let _ = events.send(UiEvent::WebAuthnMutationFinished {
+                        status: None,
+                        error: Some(crate::login::describe_rest_error(err)),
+                    });
+                }
+            }
+        });
     }
 
     pub fn instance_hosts(&self) -> &[String] {

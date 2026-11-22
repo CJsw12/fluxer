@@ -2,7 +2,7 @@
 //! left navigation sidebar (search, profile summary, categorized tabs, sign-out footer)
 //! and right scrollable content pane.
 
-use fluxer_client_core::rest::UserSettingsPatch;
+use fluxer_client_core::rest::{UserSettingsPatch, WebAuthnCredential};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
 use gpui_kit::component::switch::Switch;
@@ -98,7 +98,19 @@ impl SettingsTab {
             return true;
         }
         let keywords: &[&str] = match self {
-            Self::Account => &["account", "switch", "trusted", "domain", "profile", "sign out", "log out"],
+            Self::Account => &[
+                "account",
+                "switch",
+                "trusted",
+                "domain",
+                "profile",
+                "sign out",
+                "log out",
+                "passkey",
+                "security key",
+                "webauthn",
+                "fido",
+            ],
             Self::Appearance => &[
                 "appearance",
                 "theme",
@@ -128,6 +140,13 @@ pub struct SettingsModal {
     pub active_tab: SettingsTab,
     pub confirm_logout: bool,
     pub search: Entity<InputState>,
+    pub passkey_name: Entity<InputState>,
+    pub passkey_password: Entity<InputState>,
+    pub passkeys: Vec<WebAuthnCredential>,
+    pub passkey_loading: bool,
+    pub passkey_busy: bool,
+    pub passkey_status: Option<SharedString>,
+    pub passkey_error: Option<SharedString>,
     pub sidebar_scroll: ScrollHandle,
     pub locale_scroll: ScrollHandle,
     pub _subscription: Subscription,
@@ -143,6 +162,9 @@ impl ClientView {
         self.prepare_overlay_replace(cx);
         self.refresh_audio_devices(cx);
         let search = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Search settings...")));
+        let passkey_name = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Passkey or security key name")));
+        let passkey_password =
+            cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Current password (sudo verification)")).masked(true));
         let subscription = cx.subscribe_in(&search, window, |_, _, ev: &InputEvent, _, cx| {
             if let InputEvent::Change = ev {
                 cx.notify();
@@ -152,6 +174,13 @@ impl ClientView {
             active_tab: SettingsTab::default(),
             confirm_logout: false,
             search,
+            passkey_name,
+            passkey_password,
+            passkeys: Vec::new(),
+            passkey_loading: false,
+            passkey_busy: false,
+            passkey_status: None,
+            passkey_error: None,
             sidebar_scroll: ScrollHandle::new(),
             locale_scroll: ScrollHandle::new(),
             _subscription: subscription,
@@ -162,8 +191,64 @@ impl ClientView {
     pub(crate) fn select_settings_tab(&mut self, tab: SettingsTab, cx: &mut Context<Self>) {
         if let Overlay::Settings(modal) = &mut self.overlay {
             modal.active_tab = tab;
+            if tab == SettingsTab::Account && modal.passkeys.is_empty() && !modal.passkey_loading {
+                modal.passkey_loading = true;
+                self.backend.load_webauthn_credentials();
+            }
             cx.notify();
         }
+    }
+
+    pub(crate) fn settings_register_passkey(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let (name, sudo_password) = {
+            let Overlay::Settings(modal) = &self.overlay else { return };
+            if modal.passkey_busy {
+                return;
+            }
+            let raw = modal.passkey_name.read(cx).value().trim().to_owned();
+            let name = if raw.is_empty() {
+                "Windows Passkey".to_owned()
+            } else {
+                raw
+            };
+            let pw = modal.passkey_password.read(cx).value().to_string();
+            let sudo_password = (!pw.is_empty()).then(|| fluxer_client_core::rest::Secret::new(pw));
+            (name, sudo_password)
+        };
+        if !crate::webauthn::is_supported() {
+            if let Overlay::Settings(modal) = &mut self.overlay {
+                modal.passkey_error =
+                    Some(l10n::tr("Passkeys and hardware security keys are not supported on this device.").into());
+                cx.notify();
+            }
+            return;
+        }
+        if let Overlay::Settings(modal) = &mut self.overlay {
+            modal.passkey_busy = true;
+            modal.passkey_error = None;
+            modal.passkey_status = None;
+            modal.passkey_name.update(cx, |s, cx| s.set_value("", window, cx));
+            modal.passkey_password.update(cx, |s, cx| s.set_value("", window, cx));
+        }
+        self.backend.register_webauthn_passkey(name, sudo_password);
+        cx.notify();
+    }
+
+    pub(crate) fn settings_delete_passkey(&mut self, credential_id: String, window: &mut Window, cx: &mut Context<Self>) {
+        let sudo_password = {
+            let Overlay::Settings(modal) = &mut self.overlay else { return };
+            if modal.passkey_busy {
+                return;
+            }
+            let pw = modal.passkey_password.read(cx).value().to_string();
+            modal.passkey_busy = true;
+            modal.passkey_error = None;
+            modal.passkey_status = None;
+            modal.passkey_password.update(cx, |s, cx| s.set_value("", window, cx));
+            (!pw.is_empty()).then(|| fluxer_client_core::rest::Secret::new(pw))
+        };
+        self.backend.delete_webauthn_credential(credential_id, sudo_password);
+        cx.notify();
     }
 
     pub(crate) fn apply_settings_effect(&mut self, effect: SettingsEffect, window: &mut Window, cx: &mut Context<Self>) {
@@ -493,18 +578,169 @@ fn voice_volume_row(
         .into_any_element()
 }
 
-fn render_account_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+fn render_account_tab(
+    view: &ClientView,
+    modal: &SettingsModal,
+    theme: &Theme,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
     let trusted_count = view.effective_trusted_domains().len();
     let switch_label = if view.saved_accounts.len() > 1 {
         format!("{} ({})", l10n::tr("Switch accounts"), view.saved_accounts.len())
     } else {
         l10n::tr("Switch accounts")
     };
+    let webauthn_supported = crate::webauthn::is_supported();
+    let platform_auth = crate::webauthn::is_platform_authenticator_available();
+    let support_note = if platform_auth {
+        l10n::tr("Windows Hello & FIDO2 security keys ready")
+    } else if webauthn_supported {
+        l10n::tr("Hardware security keys (USB/NFC) ready")
+    } else {
+        l10n::tr("Passkeys are not supported on this platform")
+    };
+
+    let mut passkey_list = div().flex().flex_col().gap_1();
+    if modal.passkey_loading {
+        passkey_list = passkey_list.child(
+            div()
+                .text_xs()
+                .text_color(theme.muted_foreground)
+                .child(l10n::tr("Loading passkeys…")),
+        );
+    } else if modal.passkeys.is_empty() {
+        passkey_list = passkey_list.child(
+            div()
+                .text_xs()
+                .text_color(theme.muted_foreground)
+                .child(l10n::tr("No passkeys or security keys registered yet.")),
+        );
+    } else {
+        for (ix, cred) in modal.passkeys.iter().enumerate() {
+            let cid = cred.id.clone();
+            let display_name = if cred.name.is_empty() {
+                cred.id.clone()
+            } else {
+                cred.name.clone()
+            };
+            passkey_list = passkey_list.child(
+                div()
+                    .px_3()
+                    .py_2()
+                    .rounded(px(6.))
+                    .bg(theme.background)
+                    .border_1()
+                    .border_color(theme.border)
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .min_w_0()
+                            .child(div().truncate().text_sm().font_weight(FontWeight::MEDIUM).child(display_name))
+                            .when_some(cred.created_at.clone(), |d, created| {
+                                d.child(div().text_xs().text_color(theme.muted_foreground).child(created))
+                            }),
+                    )
+                    .child(
+                        Button::new(("settings-passkey-remove", ix))
+                            .danger()
+                            .xsmall()
+                            .disabled(modal.passkey_busy)
+                            .label(l10n::tr("Remove"))
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.settings_delete_passkey(cid.clone(), window, cx);
+                            })),
+                    ),
+            );
+        }
+    }
 
     div()
         .flex()
         .flex_col()
         .gap_5()
+        .child(
+            div()
+                .debug_selector(|| "settings-account-passkeys".to_owned())
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Passkeys & security keys"), theme))
+                .child(
+                    div()
+                        .p_4()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_col()
+                        .gap_3()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(support_note),
+                                )
+                                .child(
+                                    Button::new("settings-passkey-refresh")
+                                        .ghost()
+                                        .xsmall()
+                                        .disabled(modal.passkey_loading || modal.passkey_busy)
+                                        .label(l10n::tr("Refresh"))
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            if let Overlay::Settings(m) = &mut this.overlay {
+                                                m.passkey_loading = true;
+                                                m.passkey_error = None;
+                                            }
+                                            this.backend.load_webauthn_credentials();
+                                            cx.notify();
+                                        })),
+                                ),
+                        )
+                        .child(passkey_list)
+                        .child(Input::new(&modal.passkey_password).mask_toggle().disabled(modal.passkey_busy))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap_2()
+                                .child(div().flex_1().min_w_0().child(Input::new(&modal.passkey_name).disabled(modal.passkey_busy)))
+                                .child(
+                                    div().debug_selector(|| "settings-passkey-add-btn".to_owned()).child(
+                                        Button::new("settings-passkey-add-btn")
+                                            .primary()
+                                            .small()
+                                            .loading(modal.passkey_busy)
+                                            .disabled(modal.passkey_busy || !webauthn_supported)
+                                            .label(l10n::tr("Add passkey"))
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.settings_register_passkey(window, cx);
+                                            })),
+                                    ),
+                                ),
+                        )
+                        .when_some(modal.passkey_status.clone(), |d, msg| {
+                            d.child(div().text_xs().text_color(theme.status_online).child(msg))
+                        })
+                        .when_some(modal.passkey_error.clone(), |d, err| {
+                            d.child(div().text_xs().text_color(theme.danger).child(err))
+                        }),
+                ),
+        )
         .when(view.accounts_enabled, |d| {
             d.child(
                 div()
@@ -1490,7 +1726,7 @@ fn render_tab_body(
     cx: &mut Context<ClientView>,
 ) -> AnyElement {
     match tab {
-        SettingsTab::Account => render_account_tab(view, theme, cx),
+        SettingsTab::Account => render_account_tab(view, modal, theme, cx),
         SettingsTab::Appearance => render_appearance_tab(view, theme, cx),
         SettingsTab::Notifications => render_notifications_tab(view, theme, cx),
         SettingsTab::VoiceVideo => render_voice_tab(view, theme, cx),

@@ -12,11 +12,25 @@
 use std::fmt;
 
 use reqwest::Method;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
+use super::api::encode_uri_component;
 use super::client::{Auth, RestClient};
 use super::error::RestError;
 use super::secret::{Secret, SecretToken, redact_json};
+
+/// Registered WebAuthn passkey or hardware security key (`GET /users/@me/mfa/webauthn/credentials`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WebAuthnCredential {
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub created_at: Option<String>,
+    #[serde(default)]
+    pub last_used_at: Option<String>,
+}
 
 /// A successful login. `user` is the server's `UserPartial`.
 #[derive(Clone)]
@@ -115,14 +129,148 @@ impl RestClient {
         interpret_login(result)
     }
 
-    /// WebAuthn (security key) MFA. Needs an OS authenticator bridge.
-    pub async fn login_mfa_webauthn(&self, _ticket: &Secret) -> Result<LoginOutcome, RestError> {
-        Err(RestError::Unsupported("WebAuthn MFA"))
+    /// `POST /auth/login/mfa/webauthn/authentication-options` with `{ticket}`.
+    pub async fn webauthn_mfa_options(&self, ticket: &Secret) -> Result<Value, RestError> {
+        if ticket.expose().is_empty() {
+            return Err(RestError::InvalidArgument("MFA ticket is required"));
+        }
+        let body = json!({ "ticket": ticket.expose() });
+        self.request(
+            Method::POST,
+            "/auth/login/mfa/webauthn/authentication-options",
+            &[],
+            Some(&body),
+            Auth::None,
+        )
+        .await
     }
 
-    /// Passwordless passkey login.
-    pub async fn login_passkey(&self) -> Result<LoginOutcome, RestError> {
-        Err(RestError::Unsupported("passkey login"))
+    /// `POST /auth/login/mfa/webauthn` with `{response, challenge, ticket}`.
+    pub async fn login_mfa_webauthn(
+        &self,
+        ticket: &Secret,
+        challenge: &str,
+        response: Value,
+    ) -> Result<LoginOutcome, RestError> {
+        if ticket.expose().is_empty() || challenge.trim().is_empty() {
+            return Err(RestError::InvalidArgument("MFA ticket and challenge are required"));
+        }
+        let body = json!({
+            "response": response,
+            "challenge": challenge,
+            "ticket": ticket.expose(),
+        });
+        let result = self.request(Method::POST, "/auth/login/mfa/webauthn", &[], Some(&body), Auth::None).await;
+        interpret_login(result)
+    }
+
+    /// `POST /auth/webauthn/authentication-options` (optional `?rp_id=...`).
+    pub async fn webauthn_auth_options(&self, rp_id: Option<&str>) -> Result<Value, RestError> {
+        let mut query = Vec::new();
+        if let Some(rp) = rp_id.map(str::trim).filter(|s| !s.is_empty()) {
+            query.push(("rp_id", rp.to_owned()));
+        }
+        self.request(Method::POST, "/auth/webauthn/authentication-options", &query, None, Auth::None)
+            .await
+    }
+
+    /// `POST /auth/webauthn/authenticate` with `{response, challenge}`.
+    pub async fn login_passkey(&self, challenge: &str, response: Value) -> Result<LoginOutcome, RestError> {
+        if challenge.trim().is_empty() {
+            return Err(RestError::InvalidArgument("passkey challenge is required"));
+        }
+        let body = json!({
+            "response": response,
+            "challenge": challenge,
+        });
+        let result = self.request(Method::POST, "/auth/webauthn/authenticate", &[], Some(&body), Auth::None).await;
+        interpret_login(result)
+    }
+
+    /// `GET /users/@me/mfa/webauthn/credentials`.
+    pub async fn list_webauthn_credentials(&self) -> Result<Vec<WebAuthnCredential>, RestError> {
+        let value = self
+            .request(Method::GET, "/users/@me/mfa/webauthn/credentials", &[], None, Auth::Required)
+            .await?;
+        if value.is_array() {
+            serde_json::from_value(value).map_err(|err| RestError::Decode(err.to_string()))
+        } else if let Some(list) = value.get("credentials").filter(|v| v.is_array()).cloned() {
+            serde_json::from_value(list).map_err(|err| RestError::Decode(err.to_string()))
+        } else {
+            Err(RestError::Decode("unexpected WebAuthn credential list response shape".to_owned()))
+        }
+    }
+
+    /// `POST /users/@me/mfa/webauthn/credentials/registration-options`.
+    /// Requires sudo verification (`password` when no sudo token is active).
+    pub async fn webauthn_registration_options(
+        &self,
+        rp_id: Option<&str>,
+        sudo_password: Option<&Secret>,
+    ) -> Result<Value, RestError> {
+        let mut query = Vec::new();
+        if let Some(rp) = rp_id.map(str::trim).filter(|s| !s.is_empty()) {
+            query.push(("rp_id", rp.to_owned()));
+        }
+        let body = match sudo_password.filter(|p| !p.expose().is_empty()) {
+            Some(password) => json!({ "password": password.expose() }),
+            None => json!({}),
+        };
+        self.request(
+            Method::POST,
+            "/users/@me/mfa/webauthn/credentials/registration-options",
+            &query,
+            Some(&body),
+            Auth::Required,
+        )
+        .await
+    }
+
+    /// `POST /users/@me/mfa/webauthn/credentials` with `{response, challenge, name}`.
+    pub async fn register_webauthn_credential(
+        &self,
+        challenge: &str,
+        response: Value,
+        name: &str,
+    ) -> Result<(), RestError> {
+        let name = name.trim();
+        if challenge.trim().is_empty() || name.is_empty() {
+            return Err(RestError::InvalidArgument("passkey challenge and name are required"));
+        }
+        let body = json!({
+            "response": response,
+            "challenge": challenge,
+            "name": name,
+        });
+        self.request(
+            Method::POST,
+            "/users/@me/mfa/webauthn/credentials",
+            &[],
+            Some(&body),
+            Auth::Required,
+        )
+        .await
+        .map(|_| ())
+    }
+
+    /// `DELETE /users/@me/mfa/webauthn/credentials/{credential_id}` with sudo body.
+    pub async fn delete_webauthn_credential(
+        &self,
+        credential_id: &str,
+        sudo_password: Option<&Secret>,
+    ) -> Result<(), RestError> {
+        let id = credential_id.trim();
+        if id.is_empty() {
+            return Err(RestError::InvalidArgument("credential id is required"));
+        }
+        let body = match sudo_password.filter(|p| !p.expose().is_empty()) {
+            Some(password) => json!({ "password": password.expose() }),
+            None => json!({}),
+        };
+        let path = format!("/users/@me/mfa/webauthn/credentials/{}", encode_uri_component(id));
+        self.request(Method::DELETE, &path, &[], Some(&body), Auth::Required)
+            .await
+            .map(|_| ())
     }
 
     /// `POST /auth/logout` (204) with a 5 s timeout and no 429 retries

@@ -699,6 +699,100 @@ async fn logout_clears_the_token() {
     assert_eq!(req.header("authorization"), Some(FAKE_TOKEN));
 }
 
+#[tokio::test]
+async fn webauthn_passkey_login_mfa_and_credential_management_routes() {
+    let fixture = Fixture::start(|req, _| match (req.method.as_str(), req.target.as_str()) {
+        ("POST", "/api/v1/auth/webauthn/authentication-options") => Resp::json(
+            200,
+            json!({ "challenge": "chal-passkey", "rpId": "fluxer.app", "allowCredentials": [] }),
+        ),
+        ("POST", "/api/v1/auth/webauthn/authenticate") => {
+            Resp::json(200, json!({ "token": FAKE_TOKEN, "user_id": "42", "user": {} }))
+        }
+        ("POST", "/api/v1/auth/login/mfa/webauthn/authentication-options") => Resp::json(
+            200,
+            json!({ "challenge": "chal-mfa", "rpId": "fluxer.app", "allowCredentials": [] }),
+        ),
+        ("POST", "/api/v1/auth/login/mfa/webauthn") => {
+            Resp::json(200, json!({ "token": FAKE_TOKEN, "user_id": "42", "user": {} }))
+        }
+        ("GET", "/api/v1/users/@me/mfa/webauthn/credentials") => Resp::json(
+            200,
+            json!([{ "id": "cred-1", "name": "YubiKey 5", "created_at": "2026-11-23T00:00:00Z" }]),
+        ),
+        ("POST", "/api/v1/users/@me/mfa/webauthn/credentials/registration-options?rp_id=fluxer.app") => Resp::json(
+            200,
+            json!({ "challenge": "chal-reg", "rp": { "id": "fluxer.app", "name": "Fluxer" }, "user": { "id": "NDI", "name": "alice", "displayName": "Alice" } }),
+        ),
+        ("POST", "/api/v1/users/@me/mfa/webauthn/credentials") => Resp::empty(201),
+        ("DELETE", "/api/v1/users/@me/mfa/webauthn/credentials/cred-1") => Resp::empty(204),
+        _ => Resp::empty(404),
+    })
+    .await;
+
+    let client = fixture.client();
+    let opts = client.webauthn_auth_options(None).await.unwrap();
+    assert_eq!(opts["challenge"], "chal-passkey");
+    let passkey_out = client.login_passkey("chal-passkey", json!({ "id": "cred-1" })).await.unwrap();
+    assert!(matches!(passkey_out, LoginOutcome::Token(_)));
+
+    let ticket = Secret::new(FAKE_TICKET);
+    let mfa_opts = client.webauthn_mfa_options(&ticket).await.unwrap();
+    assert_eq!(mfa_opts["challenge"], "chal-mfa");
+    let mfa_out = client
+        .login_mfa_webauthn(&ticket, "chal-mfa", json!({ "id": "cred-1" }))
+        .await
+        .unwrap();
+    assert!(matches!(mfa_out, LoginOutcome::Token(_)));
+
+    let authed_client = authed(&fixture).await;
+    let creds = authed_client.list_webauthn_credentials().await.unwrap();
+    assert_eq!(creds.len(), 1);
+    assert_eq!(creds[0].id, "cred-1");
+    assert_eq!(creds[0].name, "YubiKey 5");
+
+    let sudo_pw = Secret::new(FAKE_PASSWORD);
+    let reg_opts = authed_client
+        .webauthn_registration_options(Some("fluxer.app"), Some(&sudo_pw))
+        .await
+        .unwrap();
+    assert_eq!(reg_opts["challenge"], "chal-reg");
+    authed_client
+        .register_webauthn_credential("chal-reg", json!({ "id": "cred-2" }), "Windows Hello")
+        .await
+        .unwrap();
+    authed_client
+        .delete_webauthn_credential("cred-1", Some(&sudo_pw))
+        .await
+        .unwrap();
+
+    // Verify WebAuthn payload redaction in error/debug output.
+    let redacted = super::redact_json(&json!({
+        "signature": "sig-secret",
+        "clientDataJSON": "cd-secret",
+        "authenticatorData": "ad-secret",
+        "attestationObject": "ao-secret"
+    }));
+    assert_eq!(redacted["signature"], "***");
+    assert_eq!(redacted["clientDataJSON"], "***");
+    assert_eq!(redacted["authenticatorData"], "***");
+    assert_eq!(redacted["attestationObject"], "***");
+
+    // Validation guards reject empty inputs before touching the network.
+    assert!(matches!(
+        authed_client.login_passkey(" ", json!({})).await,
+        Err(RestError::InvalidArgument(_))
+    ));
+    assert!(matches!(
+        authed_client.register_webauthn_credential("chal", json!({}), "  ").await,
+        Err(RestError::InvalidArgument(_))
+    ));
+    assert!(matches!(
+        authed_client.delete_webauthn_credential("", None).await,
+        Err(RestError::InvalidArgument(_))
+    ));
+}
+
 // ---------------------------------------------------------------- messages
 
 #[tokio::test]
@@ -1231,6 +1325,26 @@ fn discovery_applies_transport_policy_to_invite_and_webapp() {
         assert!(error.contains("insecure"), "{key}: {error}");
         assert!(parse_document_for_test(served, doc(key, "https://chat.example"), &policy).is_ok(), "{key}");
     }
+}
+
+#[test]
+fn redact_json_scrubs_webauthn_payload_but_keeps_altcha_signature() {
+    let redacted = super::secret::redact_json(&json!({
+        "altcha_challenge": { "signature": "public-altcha-sig" },
+        "response": {
+            "clientDataJSON": "eyJ0eXBlIjoi...",
+            "authenticatorData": "SZYN5YgOjGh0NBcP...",
+            "signature": "MEUCIQ...",
+            "userHandle": "dXNlcg"
+        },
+        "webauthn_challenge": "opaque-challenge"
+    }));
+    assert_eq!(redacted["altcha_challenge"]["signature"], "public-altcha-sig");
+    assert_eq!(redacted["response"]["clientDataJSON"], "***");
+    assert_eq!(redacted["response"]["authenticatorData"], "***");
+    assert_eq!(redacted["response"]["signature"], "***");
+    assert_eq!(redacted["response"]["userHandle"], "***");
+    assert_eq!(redacted["webauthn_challenge"], "***");
 }
 
 /// Message actions, reactions, typing, attachments, users/DMs/members.

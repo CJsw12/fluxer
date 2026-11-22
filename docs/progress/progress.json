@@ -65,7 +65,7 @@
         },
         {
           "name": "패스키·보안 키",
-          "status": "todo"
+          "status": "implemented"
         },
         {
           "name": "다중 계정 전환",

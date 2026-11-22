@@ -41,6 +41,7 @@ mod ui;
 mod updater;
 mod view_model;
 mod visual_gallery;
+mod webauthn;
 
 #[cfg(test)]
 mod tests;

@@ -2,7 +2,7 @@
 //! Discovery and the REST calls run on the tokio runtime.
 
 use fluxer_client_core::rest::{
-    LoginOutcome, ReleaseChannel, RestError, Secret, SecretToken, resolve_instance_input,
+    LoginOutcome, MfaMethods, ReleaseChannel, RestError, Secret, SecretToken, resolve_instance_input,
 };
 use gpui_kit::Focusable as _;
 use gpui_kit::component::ActiveTheme as _;
@@ -91,12 +91,12 @@ pub fn validate_totp(code: &str) -> Result<Secret, String> {
 /// Result of one login request.
 pub(crate) enum Next {
     Done(Authenticated),
-    Totp { instance: Instance, ticket: Secret },
+    Mfa { instance: Instance, ticket: Secret, methods: MfaMethods },
 }
 
 pub(crate) enum Step {
     Credentials,
-    Totp { instance: Instance, ticket: Secret },
+    Mfa { instance: Instance, ticket: Secret, methods: MfaMethods },
 }
 
 pub struct LoginView {
@@ -208,11 +208,74 @@ impl LoginView {
                     Err(message) => return self.fail(message.into(), cx),
                 }
             }
-            Step::Totp { instance, ticket } => match validate_totp(&self.code_input.read(cx).value()) {
-                Ok(code) => self.runtime.spawn(login_with_totp(instance.clone(), ticket.clone(), code)),
-                Err(message) => return self.fail(message.into(), cx),
-            },
+            Step::Mfa { instance, ticket, methods } => {
+                if !methods.totp {
+                    return self.submit_mfa_webauthn(window, cx);
+                }
+                match validate_totp(&self.code_input.read(cx).value()) {
+                    Ok(code) => self.runtime.spawn(login_with_totp(instance.clone(), ticket.clone(), code)),
+                    Err(message) => return self.fail(message.into(), cx),
+                }
+            }
         };
+        self.start_login_job(job, window, cx);
+    }
+
+    pub(crate) fn submit_passkey(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.busy {
+            return;
+        }
+        let raw_instance = self.instance_input.read(cx).value();
+        let instance_addr = raw_instance.trim().to_owned();
+        if instance_addr.is_empty() {
+            return self.fail(l10n::tr_or_en("Enter an instance URL", "Enter the instance address.").into(), cx);
+        }
+        if resolve_instance_input(&instance_addr, ReleaseChannel::Stable).is_err() {
+            return self.fail(
+                l10n::tr_args(
+                    "That doesn't look like an instance address. Try a domain such as {exampleInstanceDomain}.",
+                    &[("exampleInstanceDomain", instance_addr.as_str())],
+                )
+                .into(),
+                cx,
+            );
+        }
+        if !crate::webauthn::is_supported() {
+            return self.fail(
+                l10n::tr("Passkeys and hardware security keys are not supported on this device.").into(),
+                cx,
+            );
+        }
+        let job = self.runtime.spawn(login_with_passkey(instance_addr, self.allow_insecure_loopback));
+        self.start_login_job(job, window, cx);
+    }
+
+    pub(crate) fn submit_mfa_webauthn(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.busy {
+            return;
+        }
+        let Step::Mfa { instance, ticket, methods } = &self.step else {
+            return;
+        };
+        if !methods.webauthn {
+            return self.fail(l10n::tr("Security key verification is not enabled for this account.").into(), cx);
+        }
+        if !crate::webauthn::is_supported() {
+            return self.fail(
+                l10n::tr("Passkeys and hardware security keys are not supported on this device.").into(),
+                cx,
+            );
+        }
+        let job = self.runtime.spawn(login_with_mfa_webauthn(instance.clone(), ticket.clone()));
+        self.start_login_job(job, window, cx);
+    }
+
+    fn start_login_job(
+        &mut self,
+        job: tokio::task::JoinHandle<Result<Next, String>>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.busy = true;
         self.error = None;
         cx.notify();
@@ -236,11 +299,14 @@ impl LoginView {
                 self.password_input.update(cx, |s, cx| s.set_value("", window, cx));
                 cx.emit(LoginEvent::Authenticated(auth));
             }
-            Ok(Next::Totp { instance, ticket }) => {
-                self.step = Step::Totp { instance, ticket };
+            Ok(Next::Mfa { instance, ticket, methods }) => {
+                let focus_totp = methods.totp;
+                self.step = Step::Mfa { instance, ticket, methods };
                 self.code_input.update(cx, |s, cx| s.set_value("", window, cx));
-                let focus = self.code_input.read(cx).focus_handle(cx);
-                window.focus(&focus, cx);
+                if focus_totp {
+                    let focus = self.code_input.read(cx).focus_handle(cx);
+                    window.focus(&focus, cx);
+                }
             }
             Err(message) => self.error = Some(message.into()),
         }
@@ -448,27 +514,67 @@ impl Render for LoginView {
                         .disabled(busy)
                         .on_click(cx.listener(|this, _, window, cx| this.submit(window, cx))),
                 )
+                .child(
+                    div().debug_selector(|| "login-passkey-btn".to_owned()).child(
+                        Button::new("login-passkey-btn")
+                            .ghost()
+                            .w_full()
+                            .label(l10n::tr("Sign in with a passkey"))
+                            .disabled(busy)
+                            .on_click(cx.listener(|this, _, window, cx| this.submit_passkey(window, cx))),
+                    ),
+                )
                 .when_some(saved_section, |f, section| f.child(section))
                 .when(self.can_cancel, |f| f.child(cancel_add_button(busy, cx))),
-            Step::Totp { .. } => form
-                .child(div().text_size(px(20.)).font_weight(FontWeight::BOLD).child(l10n::tr("Two-factor authentication")))
-                .child(div().text_color(muted_fg).child(l10n::tr("Enter the code from your authenticator app.")))
-                .child(Input::new(&self.code_input).disabled(busy))
-                .child(
-                    Button::new("mfa-submit")
-                        .primary()
-                        .label(l10n::tr("Verify"))
-                        .loading(busy)
-                        .disabled(busy)
-                        .on_click(cx.listener(|this, _, window, cx| this.submit(window, cx))),
+            Step::Mfa { methods, .. } => {
+                let show_totp = methods.totp;
+                let show_webauthn = methods.webauthn;
+                let subtitle = if show_totp && show_webauthn {
+                    l10n::tr("Enter a code from your authenticator app or verify with your security key.")
+                } else if show_webauthn {
+                    l10n::tr("Verify with your passkey or hardware security key.")
+                } else {
+                    l10n::tr("Enter the code from your authenticator app.")
+                };
+                form.child(
+                    div()
+                        .text_size(px(20.))
+                        .font_weight(FontWeight::BOLD)
+                        .child(l10n::tr("Two-factor authentication")),
                 )
+                .child(div().text_color(muted_fg).child(subtitle))
+                .when(show_totp, |f| {
+                    f.child(Input::new(&self.code_input).disabled(busy)).child(
+                        Button::new("mfa-submit")
+                            .primary()
+                            .label(l10n::tr("Verify"))
+                            .loading(busy)
+                            .disabled(busy)
+                            .on_click(cx.listener(|this, _, window, cx| this.submit(window, cx))),
+                    )
+                })
+                .when(show_webauthn, |f| {
+                    f.child(
+                        div().debug_selector(|| "login-mfa-webauthn-btn".to_owned()).child(
+                            Button::new("login-mfa-webauthn-btn")
+                                .w_full()
+                                .when(!show_totp, |b| b.primary())
+                                .when(show_totp, |b| b.ghost())
+                                .label(l10n::tr("Use security key / passkey"))
+                                .loading(busy && !show_totp)
+                                .disabled(busy)
+                                .on_click(cx.listener(|this, _, window, cx| this.submit_mfa_webauthn(window, cx))),
+                        ),
+                    )
+                })
                 .child(
                     Button::new("mfa-back")
                         .label(l10n::tr("Back"))
                         .disabled(busy)
                         .on_click(cx.listener(|this, _, _, cx| this.back(cx))),
                 )
-                .when(self.can_cancel, |f| f.child(cancel_add_button(busy, cx))),
+                .when(self.can_cancel, |f| f.child(cancel_add_button(busy, cx)))
+            }
         };
         if let Some(error) = &self.error {
             form = form.child(div().id("login-error").text_color(danger).child(error.clone()));
@@ -518,6 +624,47 @@ async fn login_with_totp(instance: Instance, ticket: Secret, code: Secret) -> Re
     }
 }
 
+async fn login_with_passkey(instance_addr: String, allow_insecure_loopback: bool) -> Result<Next, String> {
+    let domain = instance_addr.clone();
+    let instance = connect_instance(&instance_addr, allow_insecure_loopback).await.map_err(|err| {
+        tracing::warn!(%err, "instance discovery failed for passkey login");
+        l10n::tr_args("Couldn't connect to {domain}. Try again.", &[("domain", &domain)])
+    })?;
+    let origin = crate::webauthn::derive_origin(&instance.endpoints)?;
+    let rp_id = crate::webauthn::rp_id_for_origin(&origin);
+    let options = instance
+        .rest
+        .webauthn_auth_options(rp_id.as_deref())
+        .await
+        .map_err(describe_rest_error)?;
+    let (challenge, response) = tokio::task::spawn_blocking(move || crate::webauthn::authenticate(&options, &origin))
+        .await
+        .map_err(|err| format!("Passkey ceremony task failed: {err}"))??;
+    let outcome = instance
+        .rest
+        .login_passkey(&challenge, response)
+        .await
+        .map_err(describe_rest_error)?;
+    interpret(instance, outcome, None).await
+}
+
+async fn login_with_mfa_webauthn(instance: Instance, ticket: Secret) -> Result<Next, String> {
+    let origin = crate::webauthn::derive_origin(&instance.endpoints)?;
+    let options = instance.rest.webauthn_mfa_options(&ticket).await.map_err(describe_rest_error)?;
+    let (challenge, response) = tokio::task::spawn_blocking(move || crate::webauthn::authenticate(&options, &origin))
+        .await
+        .map_err(|err| format!("Security key ceremony task failed: {err}"))??;
+    let outcome = instance
+        .rest
+        .login_mfa_webauthn(&ticket, &challenge, response)
+        .await
+        .map_err(describe_rest_error)?;
+    match outcome {
+        LoginOutcome::Mfa { .. } => Err("The server asked for another second factor.".to_owned()),
+        other => interpret(instance, other, None).await,
+    }
+}
+
 async fn interpret(instance: Instance, outcome: LoginOutcome, email: Option<&str>) -> Result<Next, String> {
     match outcome {
         LoginOutcome::Token(success) => {
@@ -533,9 +680,11 @@ async fn interpret(instance: Instance, outcome: LoginOutcome, email: Option<&str
             };
             Ok(Next::Done(Authenticated { instance, token: success.token, user_id: success.user_id, user }))
         }
-        LoginOutcome::Mfa { ticket, methods } if methods.totp => Ok(Next::Totp { instance, ticket }),
+        LoginOutcome::Mfa { ticket, methods } if methods.totp || methods.webauthn => {
+            Ok(Next::Mfa { instance, ticket, methods })
+        }
         LoginOutcome::Mfa { .. } => Err(
-            "This account needs a security key or backup code, which this client does not support yet.".to_owned(),
+            "This account needs a backup code, which this client does not support yet.".to_owned(),
         ),
         LoginOutcome::CaptchaRequired { .. } => Err(
             "The server requires a captcha for this login. Captcha is not supported in this client yet; \

@@ -86,6 +86,12 @@ const REDACTED_KEYS: &[&str] = &[
     "email",
     "phone",
     "authorization",
+    "clientdatajson",
+    "authenticatordata",
+    "attestationobject",
+    "userhandle",
+    "webauthn_response",
+    "webauthn_challenge",
 ];
 
 /// Returns a copy of `value` with secret-bearing keys replaced by `"***"`
@@ -93,10 +99,18 @@ const REDACTED_KEYS: &[&str] = &[
 pub fn redact_json(value: &serde_json::Value) -> serde_json::Value {
     match value {
         serde_json::Value::Object(map) => {
+            let is_webauthn_payload = map.keys().any(|key| {
+                matches!(
+                    key.to_ascii_lowercase().as_str(),
+                    "clientdatajson" | "authenticatordata" | "attestationobject"
+                )
+            });
             let mut out = serde_json::Map::with_capacity(map.len());
             for (key, inner) in map {
                 let lowered = key.to_ascii_lowercase();
-                if REDACTED_KEYS.contains(&lowered.as_str()) {
+                if REDACTED_KEYS.contains(&lowered.as_str())
+                    || (is_webauthn_payload && lowered == "signature")
+                {
                     out.insert(key.clone(), serde_json::Value::String("***".to_owned()));
                 } else {
                     out.insert(key.clone(), redact_json(inner));

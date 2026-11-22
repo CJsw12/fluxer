@@ -863,6 +863,31 @@ impl ClientView {
                         }
                     }
                 }
+                UiEvent::WebAuthnCredentialsLoaded { result } => {
+                    if let Overlay::Settings(modal) = &mut self.overlay {
+                        modal.passkey_loading = false;
+                        match result {
+                            Ok(creds) => {
+                                modal.passkeys = creds;
+                                modal.passkey_error = None;
+                            }
+                            Err(err) => {
+                                modal.passkey_error = Some(err.into());
+                            }
+                        }
+                    }
+                }
+                UiEvent::WebAuthnMutationFinished { status, error } => {
+                    if let Overlay::Settings(modal) = &mut self.overlay {
+                        modal.passkey_busy = false;
+                        modal.passkey_status = status.map(Into::into);
+                        modal.passkey_error = error.clone().map(Into::into);
+                        if error.is_none() {
+                            modal.passkey_loading = true;
+                            self.backend.load_webauthn_credentials();
+                        }
+                    }
+                }
             }
         }
         if connected || guild_available {

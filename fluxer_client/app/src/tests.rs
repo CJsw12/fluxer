@@ -494,18 +494,35 @@ fn login_totp_challenge_submits_code_and_authenticates(cx: &mut TestAppContext) 
     let instance = auth.instance.clone();
     cx.update(|window, cx| {
         view.update(cx, |v, cx| {
-            v.finish(Ok(Next::Totp { instance, ticket: Secret::new("mfa-ticket-1") }), window, cx);
+            v.finish(
+                Ok(Next::Mfa {
+                    instance,
+                    ticket: Secret::new("mfa-ticket-1"),
+                    methods: fluxer_client_core::rest::MfaMethods {
+                        allowed: vec!["totp".to_owned(), "webauthn".to_owned()],
+                        totp: true,
+                        webauthn: true,
+                        backup_codes: false,
+                    },
+                }),
+                window,
+                cx,
+            );
         });
     });
     cx.run_until_parked();
     draw(cx);
 
+    assert!(cx.debug_bounds("login-mfa-webauthn-btn").is_some(), "WebAuthn MFA button should render");
     view.read_with(cx, |v, _| {
         assert!(!v.busy);
         assert!(v.error.is_none());
         match &v.step {
-            Step::Totp { ticket, .. } => assert_eq!(ticket.expose(), "mfa-ticket-1"),
-            Step::Credentials => panic!("expected Step::Totp"),
+            Step::Mfa { ticket, methods, .. } => {
+                assert_eq!(ticket.expose(), "mfa-ticket-1");
+                assert!(methods.totp && methods.webauthn);
+            }
+            Step::Credentials => panic!("expected Step::Mfa"),
         }
     });
 
@@ -516,7 +533,7 @@ fn login_totp_challenge_submits_code_and_authenticates(cx: &mut TestAppContext) 
     view.read_with(cx, |v, _| {
         assert!(!v.busy);
         assert!(v.error.is_some());
-        assert!(matches!(v.step, Step::Totp { .. }));
+        assert!(matches!(v.step, Step::Mfa { .. }));
     });
 
     // Enter a valid 6-digit TOTP code and submit.

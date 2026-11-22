@@ -41,7 +41,7 @@ pub use api::{
     validate_ban_request, validate_create_guild_channel, validate_guild_channel_patch, validate_member_patch,
     validate_search_request,
 };
-pub use auth::{LoginOutcome, LoginSuccess, MfaMethods};
+pub use auth::{LoginOutcome, LoginSuccess, MfaMethods, WebAuthnCredential};
 pub use client::{
     ClientIdentity, DEFAULT_REQUESTS_PER_SECOND, MAX_IN_FLIGHT_REQUESTS, MAX_REQUESTS_PER_SECOND, MAX_RESPONSE_BYTES,
     RestClient, RestConfig, SERVER_GLOBAL_LIMIT_PER_SECOND, new_installation_id,

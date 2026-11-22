@@ -1344,7 +1344,10 @@ impl ClientView {
     }
 
     pub(crate) fn check_for_updates(&mut self, cx: &mut Context<Self>) {
-        if matches!(self.update_status, crate::updater::UpdateStatus::Checking) {
+        if matches!(
+            self.update_status,
+            crate::updater::UpdateStatus::Checking | crate::updater::UpdateStatus::Downloading { .. }
+        ) {
             return;
         }
         self.update_status = crate::updater::UpdateStatus::Checking;
@@ -1359,6 +1362,58 @@ impl ClientView {
                     rt.block_on(crate::updater::check_for_updates(
                         crate::updater::DEFAULT_RELEASES_API_URL,
                         crate::updater::CURRENT_VERSION,
+                    ))
+                })
+                .await;
+            let _ = this.update(cx, |view, cx| {
+                view.update_status = status;
+                view._update_task = None;
+                cx.notify();
+            });
+        }));
+    }
+
+    pub(crate) fn download_available_update(&mut self, cx: &mut Context<Self>) {
+        let crate::updater::UpdateStatus::Available {
+            latest,
+            asset_name: Some(asset_name),
+            asset_url: Some(asset_url),
+            checksum_url,
+            ..
+        } = &self.update_status
+        else {
+            return;
+        };
+        let latest = latest.clone();
+        let asset_name = asset_name.clone();
+        let asset_url = asset_url.clone();
+        let checksum_url = checksum_url.clone();
+        let dest_dir = std::env::var_os("LOCALAPPDATA")
+            .filter(|v| !v.is_empty())
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir)
+            .join("FluxerClient")
+            .join("updates");
+
+        self.update_status = crate::updater::UpdateStatus::Downloading {
+            latest: latest.clone(),
+        };
+        cx.notify();
+        let bg = cx.background_executor().clone();
+        self._update_task = Some(cx.spawn(async move |this, cx| {
+            let status = bg
+                .spawn(async move {
+                    let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_all().build() else {
+                        return crate::updater::UpdateStatus::Error(
+                            "Could not start update download runtime".to_owned(),
+                        );
+                    };
+                    rt.block_on(crate::updater::download_update(
+                        &latest,
+                        &asset_name,
+                        &asset_url,
+                        checksum_url.as_deref(),
+                        &dest_dir,
                     ))
                 })
                 .await;

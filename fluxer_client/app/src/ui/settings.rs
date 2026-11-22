@@ -828,7 +828,10 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
                                     .small()
                                     .label(l10n::tr("Check for updates"))
                                     .accessibility_label(l10n::tr("Check for updates"))
-                                    .disabled(matches!(view.update_status, UpdateStatus::Checking))
+                                    .disabled(matches!(
+                                        view.update_status,
+                                        UpdateStatus::Checking | UpdateStatus::Downloading { .. }
+                                    ))
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.check_for_updates(cx);
                                     })),
@@ -851,8 +854,15 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
                             .text_color(theme.muted_foreground)
                             .child(l10n::tr("Up to date")),
                     ),
-                    UpdateStatus::Available { latest, release_url, .. } => {
+                    UpdateStatus::Available {
+                        latest,
+                        release_url,
+                        asset_name,
+                        asset_url,
+                        ..
+                    } => {
                         let release_url = release_url.clone();
+                        let has_asset = asset_name.is_some() && asset_url.is_some();
                         d.child(
                             div()
                                 .flex()
@@ -868,22 +878,78 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
                                         .child(format!("{}: v{latest}", l10n::tr("Update available"))),
                                 )
                                 .child(
-                                    div().debug_selector(|| "settings-open-release".to_owned()).child(
-                                        Button::new("settings-open-release")
-                                            .primary()
-                                            .small()
-                                            .label(l10n::tr("Open release page"))
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                #[cfg(test)]
-                                                this.launch_external_url(&release_url, cx);
-                                                #[cfg(not(test))]
-                                                {
-                                                    let _ = this;
-                                                    cx.open_url(&release_url);
-                                                }
-                                            })),
-                                    ),
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .gap_2()
+                                        .when(has_asset, |row| {
+                                            row.child(
+                                                div()
+                                                    .debug_selector(|| "settings-download-update".to_owned())
+                                                    .child(
+                                                        Button::new("settings-download-update")
+                                                            .primary()
+                                                            .small()
+                                                            .label(l10n::tr("Download update"))
+                                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                                this.download_available_update(cx);
+                                                            })),
+                                                    ),
+                                            )
+                                        })
+                                        .child(
+                                            div().debug_selector(|| "settings-open-release".to_owned()).child(
+                                                Button::new("settings-open-release")
+                                                    .ghost()
+                                                    .small()
+                                                    .label(l10n::tr("Open release page"))
+                                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                                        #[cfg(test)]
+                                                        this.launch_external_url(&release_url, cx);
+                                                        #[cfg(not(test))]
+                                                        {
+                                                            let _ = this;
+                                                            cx.open_url(&release_url);
+                                                        }
+                                                    })),
+                                            ),
+                                        ),
                                 ),
+                        )
+                    }
+                    UpdateStatus::Downloading { latest } => d.child(
+                        div()
+                            .debug_selector(|| "settings-update-downloading".to_owned())
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child(format!("{} v{latest}…", l10n::tr("Downloading"))),
+                    ),
+                    UpdateStatus::Downloaded {
+                        latest,
+                        path,
+                        sha256,
+                        verified,
+                    } => {
+                        let short_hash = &sha256[..sha256.len().min(16)];
+                        let verify_label = if *verified {
+                            l10n::tr("SHA-256 verified")
+                        } else {
+                            l10n::tr("Unverified")
+                        };
+                        d.child(
+                            div()
+                                .debug_selector(|| "settings-update-downloaded".to_owned())
+                                .flex()
+                                .flex_col()
+                                .gap_1()
+                                .text_xs()
+                                .text_color(theme.foreground)
+                                .child(format!(
+                                    "{} v{latest} ({verify_label} · {short_hash})",
+                                    l10n::tr("Downloaded")
+                                ))
+                                .child(div().text_color(theme.muted_foreground).child(path.clone())),
                         )
                     }
                     UpdateStatus::Error(err) => d.child(

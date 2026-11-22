@@ -31,6 +31,7 @@ chrono = { version = "0.4.45", default-features = false, features = ["clock", "s
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls"] }
 # In-memory attachment bodies (`UploadSource::Bytes`); same crate as core.
 bytes = "1"
+sha2 = "0.10"
 # Image frame construction for GPUI RenderImage (live video viewer).
 image = { version = "0.25", default-features = false }
 # Desktop toasts (Windows: WinRT toast via tauri-winrt-notification).

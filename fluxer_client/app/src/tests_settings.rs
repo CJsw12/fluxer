@@ -400,20 +400,87 @@ fn settings_modal_renders_all_update_statuses(cx: &mut TestAppContext) {
     draw(cx);
     assert!(cx.debug_bounds("settings-update-uptodate").is_some());
 
-    // Available + Open release page click
+    // Available without asset + Open release page only
     let release_url = "https://github.com/CJsw12/fluxer/releases/tag/v0.2.0".to_owned();
     view.update(cx, |v, cx| {
         v.update_status = UpdateStatus::Available {
             current: "0.1.0".to_owned(),
             latest: "0.2.0".to_owned(),
             release_url: release_url.clone(),
+            asset_name: None,
+            asset_url: None,
+            checksum_url: None,
         };
         cx.notify();
     });
     cx.run_until_parked();
     draw(cx);
     assert!(cx.debug_bounds("settings-update-available").is_some());
+    assert!(cx.debug_bounds("settings-download-update").is_none());
     assert!(cx.debug_bounds("settings-open-release").is_some());
+
+    // Available with Windows asset + Download update button
+    view.update(cx, |v, cx| {
+        v.update_status = UpdateStatus::Available {
+            current: "0.1.0".to_owned(),
+            latest: "0.2.0".to_owned(),
+            release_url,
+            asset_name: Some("fluxer_client-windows-x86_64.zip".to_owned()),
+            asset_url: Some(
+                "https://github.com/CJsw12/fluxer/releases/download/v0.2.0/fluxer_client-windows-x86_64.zip"
+                    .to_owned(),
+            ),
+            checksum_url: Some(
+                "https://github.com/CJsw12/fluxer/releases/download/v0.2.0/SHA256SUMS.txt".to_owned(),
+            ),
+        };
+        cx.notify();
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert!(cx.debug_bounds("settings-update-available").is_some());
+    assert!(cx.debug_bounds("settings-download-update").is_some());
+    assert!(cx.debug_bounds("settings-open-release").is_some());
+
+    // Downloading
+    view.update(cx, |v, cx| {
+        v.update_status = UpdateStatus::Downloading {
+            latest: "0.2.0".to_owned(),
+        };
+        cx.notify();
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert!(cx.debug_bounds("settings-update-downloading").is_some());
+
+    // Downloaded (verified & unverified)
+    view.update(cx, |v, cx| {
+        v.update_status = UpdateStatus::Downloaded {
+            latest: "0.2.0".to_owned(),
+            path: "C:\\Users\\test\\AppData\\Local\\FluxerClient\\updates\\fluxer_client-windows-x86_64.zip"
+                .to_owned(),
+            sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_owned(),
+            verified: true,
+        };
+        cx.notify();
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert!(cx.debug_bounds("settings-update-downloaded").is_some());
+
+    view.update(cx, |v, cx| {
+        v.update_status = UpdateStatus::Downloaded {
+            latest: "0.2.0".to_owned(),
+            path: "C:\\Users\\test\\AppData\\Local\\FluxerClient\\updates\\fluxer_client-windows-x86_64.zip"
+                .to_owned(),
+            sha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".to_owned(),
+            verified: false,
+        };
+        cx.notify();
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert!(cx.debug_bounds("settings-update-downloaded").is_some());
 
     // Error
     view.update(cx, |v, cx| {

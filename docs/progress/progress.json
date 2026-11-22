@@ -115,7 +115,7 @@
         },
         {
           "name": "반응 pill 표시",
-          "status": "implemented"
+          "status": "done"
         }
       ]
     },
@@ -141,7 +141,7 @@
         },
         {
           "name": "답장·미리보기",
-          "status": "implemented"
+          "status": "done"
         },
         {
           "name": "삭제 확인",
@@ -153,7 +153,7 @@
         },
         {
           "name": "입력 중 표시",
-          "status": "implemented"
+          "status": "done"
         },
         {
           "name": "이모지 피커",
@@ -251,7 +251,7 @@
         },
         {
           "name": "스포일러·NSFW 가림",
-          "status": "implemented"
+          "status": "done"
         },
         {
           "name": "신뢰 도메인 경고",
@@ -295,7 +295,7 @@
       "items": [
         {
           "name": "DM 목록·대화",
-          "status": "implemented"
+          "status": "done"
         },
         {
           "name": "DM 열기·생성",
@@ -377,11 +377,11 @@
         },
         {
           "name": "날짜·숫자 현지화",
-          "status": "implemented"
+          "status": "done"
         },
         {
           "name": "앱 UI 번역 적용",
-          "status": "implemented"
+          "status": "done"
         },
         {
           "name": "언어 전환 UI",
@@ -423,11 +423,11 @@
         },
         {
           "name": "파일 로그",
-          "status": "implemented"
+          "status": "done"
         },
         {
           "name": "자동 업데이트",
-          "status": "partial"
+          "status": "implemented"
         }
       ]
     },

@@ -118,7 +118,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             Button::new("log-out")
                 .ghost()
                 .small()
-                .label(l10n::tr("Log out"))
+                .icon(IconName::ExternalLink)
+                .tooltip(l10n::tr("Log out"))
+                .accessibility_label(l10n::tr("Log out"))
                 .on_click(cx.listener(|this, _, _, cx| this.log_out(cx))),
         )
 }

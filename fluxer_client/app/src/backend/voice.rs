@@ -185,6 +185,7 @@ pub(crate) enum VoiceRoomEvent {
     TracksChanged,
     Disconnected(String),
     VideoFrameReady,
+    #[cfg(test)]
     VideoFrame {
         track_sid: String,
         width: u32,
@@ -1115,6 +1116,7 @@ impl VoiceManager {
                 }
                 false
             }
+            #[cfg(test)]
             VoiceRoomEvent::VideoFrame {
                 track_sid,
                 width,
@@ -1557,6 +1559,7 @@ fn on_gateway_dispatch_inner(
                                                 let _ = events_for_watcher.send(UiEvent::VoiceChanged);
                                             }
                                         }
+                                        #[cfg(test)]
                                         ev @ VoiceRoomEvent::VideoFrame { .. } => {
                                             let mut mgr = lock(&voice_for_events);
                                             if mgr.attempt_id != attempt_id {

@@ -206,6 +206,7 @@ pub fn render(
                 .map(|image| media_viewer::from_attachment(image, scale))
                 .collect(),
         );
+        let mut images_grid = div().flex().flex_row().flex_wrap().gap_2().mt_1();
         for (ix, image) in row.images.iter().enumerate() {
             let cover = row.image_covers.get(ix).copied().unwrap_or_default();
             if (cover.spoiler || cover.nsfw) && !is_attachment_revealed(row.id, ix, cx) {
@@ -216,11 +217,10 @@ pub fn render(
                 };
                 let msg_id = row.id;
                 let view_reveal = view.clone();
-                content = content.child(
+                images_grid = images_grid.child(
                     div()
                         .id(SharedString::from(format!("attachment-cover-{}-{ix}", row.id.0)))
                         .debug_selector(move || format!("attachment-cover-{}-{ix}", row.id.0))
-                        .mt_1()
                         .w(px(image.width))
                         .h(px(image.height))
                         .flex_none()
@@ -253,11 +253,13 @@ pub fn render(
                 .object_fit(ObjectFit::Contain)
                 .with_loading(move || div().size_full().bg(placeholder).into_any_element())
                 .with_fallback(move || div().text_xs().text_color(muted_fg).child(url.clone()).into_any_element());
-            content = content.child(
+            let mut badge_bg: Hsla = rgb(0x000000).into();
+            badge_bg.a = 0.65;
+            images_grid = images_grid.child(
                 div()
                     .id(SharedString::from(format!("attachment-open-{}-{ix}", row.id.0)))
                     .debug_selector(move || format!("attachment-open-{}-{ix}", row.id.0))
-                    .mt_1()
+                    .relative()
                     .w(px(image.width))
                     .h(px(image.height))
                     .cursor_pointer()
@@ -265,9 +267,27 @@ pub fn render(
                         let items = (*items_for_click).clone();
                         let _ = view_img.update(cx, |v, cx| v.open_media_viewer(items, ix, window, cx));
                     })
-                    .child(thumb),
+                    .child(thumb)
+                    .when(image.animated, |d| {
+                        d.child(
+                            div()
+                                .debug_selector(move || format!("attachment-gif-badge-{}-{ix}", row.id.0))
+                                .absolute()
+                                .top_2()
+                                .left_2()
+                                .px_1p5()
+                                .py_0p5()
+                                .rounded(px(4.))
+                                .bg(badge_bg)
+                                .text_color(rgb(0xffffff))
+                                .text_xs()
+                                .font_weight(FontWeight::BOLD)
+                                .child("GIF"),
+                        )
+                    }),
             );
         }
+        content = content.child(images_grid);
     }
     if !row.file_attachments.is_empty() {
         let mut list = div().flex().flex_col().gap_1().mt_1();
@@ -713,5 +733,40 @@ mod tests {
         assert!(cx.debug_bounds("attachment-cover-4242-1").is_none());
         assert!(cx.debug_bounds("attachment-open-4242-0").is_some());
         assert!(cx.debug_bounds("attachment-open-4242-1").is_some());
+    }
+
+    #[gpui_kit::test]
+    fn multiple_images_lay_out_horizontally_and_animated_shows_gif_badge(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let mut row = fixture_row();
+        row.id = Snowflake(4243);
+        row.images = vec![
+            crate::view_model::ImagePreview {
+                url: "https://cdn/a.gif".into(),
+                proxy_url: None,
+                animated: true,
+                width: 120.,
+                height: 100.,
+            },
+            crate::view_model::ImagePreview {
+                url: "https://cdn/b.png".into(),
+                proxy_url: None,
+                animated: false,
+                width: 120.,
+                height: 100.,
+            },
+        ];
+        row.image_covers = vec![Default::default(), Default::default()];
+        let (_, cx) = cx.add_window_view(|window, cx| {
+            let host = cx.new(|_| Host { row });
+            gpui_kit::base::Root::new(host, window, cx)
+        });
+        draw(cx);
+        let first = cx.debug_bounds("attachment-open-4243-0").expect("first image");
+        let second = cx.debug_bounds("attachment-open-4243-1").expect("second image");
+        assert!(second.origin.x > first.origin.x, "images should lay out horizontally");
+        assert_eq!(second.origin.y, first.origin.y, "images in first row share y");
+        assert!(cx.debug_bounds("attachment-gif-badge-4243-0").is_some(), "animated image shows GIF badge");
+        assert!(cx.debug_bounds("attachment-gif-badge-4243-1").is_none(), "static image has no GIF badge");
     }
 }

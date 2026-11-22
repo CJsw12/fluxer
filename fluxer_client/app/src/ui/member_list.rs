@@ -146,6 +146,7 @@ pub struct MemberItem {
     pub initials: SharedString,
     pub avatar_url: Option<SharedString>,
     pub default_avatar: usize,
+    pub is_owner: bool,
 }
 
 /// Snapshot of the shown member list.
@@ -206,6 +207,7 @@ pub fn member_panel(state: &ClientState, guild_id: Snowflake, channel_id: Snowfl
                         Some(presence) => presence.status(),
                         None => state.presence_status(user.id),
                     };
+                    let is_owner = guild.is_some_and(|g| g.owner_id == Some(user.id));
                     MemberRowView::Member(MemberItem {
                         user_id: user.id,
                         name: name.to_owned().into(),
@@ -214,6 +216,7 @@ pub fn member_panel(state: &ClientState, guild_id: Snowflake, channel_id: Snowfl
                         initials: initials(name).into(),
                         avatar_url: media.and_then(|m| avatar_url(m, user)).map(Into::into),
                         default_avatar: default_avatar_index(user.id),
+                        is_owner,
                     })
                 }
             };
@@ -332,10 +335,28 @@ fn render_row(
                     div()
                         .flex_1()
                         .min_w_0()
-                        .truncate()
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(m.color.unwrap_or(theme.foreground))
-                        .child(m.name.clone()),
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_1()
+                        .child(
+                            div()
+                                .min_w_0()
+                                .truncate()
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(m.color.unwrap_or(theme.foreground))
+                                .child(m.name.clone()),
+                        )
+                        .when(m.is_owner, |d| {
+                            d.child(
+                                div()
+                                    .flex_none()
+                                    .text_xs()
+                                    .text_color(rgb(0xf0b232))
+                                    .debug_selector(move || format!("member-owner-crown-{}", user_id.0))
+                                    .child("👑"),
+                            )
+                        }),
                 )
         }
         None => base
@@ -719,6 +740,25 @@ mod headless_tests {
             draw(cx);
             view.read_with(cx, |v, _| assert_eq!(v.own_status, expected));
         }
+        drop(rt);
+    }
+
+    #[gpui_kit::test]
+    fn guild_owner_shows_crown_indicator(cx: &mut TestAppContext) {
+        let rt = runtime();
+        let (view, cx, _frames) = open(cx, &rt);
+        // Set guild owner to user 1000 (row 1 = user0) and verify crown appears only for user 1000.
+        view.update(cx, |v, cx| {
+            {
+                let mut st = v.backend.state();
+                st.guilds.get_mut(&GUILD).expect("guild").owner_id = Some(Snowflake(1000));
+            }
+            v.select_place(Place::Home, cx);
+            v.select_place(Place::Guild(GUILD), cx);
+        });
+        draw(cx);
+        assert!(cx.debug_bounds("member-owner-crown-1000").is_some(), "owner row shows crown");
+        assert!(cx.debug_bounds("member-owner-crown-1001").is_none(), "non-owner has no crown");
         drop(rt);
     }
 }

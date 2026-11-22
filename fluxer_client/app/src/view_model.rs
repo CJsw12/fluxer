@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Local, TimeZone};
 use fluxer_client_core::state::{
-    ATTACHMENT_FLAG_ANIMATED, ATTACHMENT_FLAG_EXPLICIT, ATTACHMENT_FLAG_SPOILER, Channel, ChannelKind, ClientState,
+    ATTACHMENT_FLAG_ANIMATED, ATTACHMENT_FLAG_EXPLICIT, Channel, ChannelKind, ClientState,
     Message, MessageState, Snowflake, Unread, User, animated_proxy_url, static_proxy_url,
 };
 use fluxer_client_markdown::{Document, LowerOptions, MarkdownContext, MentionResolver, ResolvedRole, TimeFormat, parse};
@@ -961,7 +961,7 @@ mod tests {
                     "url": "https://cdn/1.png",
                     "width": 400,
                     "height": 300,
-                    "flags": ATTACHMENT_FLAG_SPOILER
+                    "flags": fluxer_client_core::state::ATTACHMENT_FLAG_SPOILER
                 },
                 {
                     "id": "2",

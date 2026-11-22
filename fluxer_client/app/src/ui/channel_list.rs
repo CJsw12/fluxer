@@ -165,7 +165,9 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .on_click(|_, _, cx| cx.stop_propagation())
                 .child(Button::new(("channel-permissions", channel.0)).ghost().xsmall()
-                    .label(l10n::tr("Permissions"))
+                    .icon(IconName::Settings2)
+                    .tooltip(l10n::tr("Permissions"))
+                    .accessibility_label(l10n::tr("Permissions"))
                     .on_click(cx.listener(move |this, _, window, cx| {
                         cx.stop_propagation();
                         this.open_access(Scope::Channel { guild, channel }, window, cx);
@@ -246,7 +248,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         .when(selected, |d| d.bg(theme.accent))
         .when(is_voice, |d| d.cursor_pointer())
         .child(div().w(px(18.)).flex_none().text_color(muted_fg).child(c.icon.glyph()))
-        .child(div().flex_1().truncate().child(c.name.clone()));
+        .child(div().flex_1().min_w_0().truncate().child(c.name.clone()));
     if c.muted {
         row = row.child(Icon::new(IconName::BellOff).xsmall());
     }

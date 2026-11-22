@@ -93,7 +93,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             Button::new("toggle-notifications")
                 .ghost()
                 .small()
-                .icon(if enabled { IconName::Bell } else { IconName::BellOff })
+                .icon(if enabled { IconName::Volume2 } else { IconName::VolumeX })
                 .tooltip(notif_label.clone())
                 .accessibility_label(notif_label)
                 .on_click(cx.listener(|this, _, _, cx| this.toggle_notifications(cx)))

@@ -190,7 +190,7 @@ pub fn render(
         if document.spoiler_count > 0 {
             body = body.spoiler_state(spoiler_state(row.id, cx));
         }
-        content = content.child(body);
+        content = content.child(div().w_full().max_w(px(760.)).child(body));
     }
     if let (MessageState::Sending, Some(percent)) = (row.state, row.upload_percent) {
         content = content.child(upload_bar(percent, theme));

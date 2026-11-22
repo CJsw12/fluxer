@@ -10,7 +10,7 @@ use gpui_kit::assets::{Assets, icon_assets};
 use gpui_kit::{AssetSource, SharedString};
 
 // Icons outside gpui-kit's default component bundle.
-icon_assets!(ExtraIcons, [BellOff, FaceSlightlySmilingPlus, Hash, Pencil, Reply, RotateCw, Search, Trash, Users]);
+icon_assets!(ExtraIcons, [BellOff, FaceSlightlySmilingPlus, Hash, Pencil, Reply, RotateCw, Search, Trash, Users, Volume2, VolumeX]);
 
 /// Register with `Application::with_assets`.
 pub struct AppAssets;
@@ -60,6 +60,8 @@ mod tests {
             IconName::Settings2,
             IconName::Trash,
             IconName::Users,
+            IconName::Volume2,
+            IconName::VolumeX,
         ];
         for icon in used {
             let bytes = AppAssets.load(&icon.path()).ok().flatten();

@@ -376,7 +376,7 @@ pub fn render(
         .flex_row()
         .w_full()
         .px_4()
-        .pb(px(if compact { 1. } else { 2. }))
+        .py(px(sizes.message_padding_y))
         .when(row.state == MessageState::Sending, |d| d.opacity(0.6));
     if !compact {
         let gutter = if row.group_start {

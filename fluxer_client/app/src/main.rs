@@ -249,7 +249,7 @@ fn run() -> Result<()> {
         theme::set_kind(initial_theme, cx);
         // `img()` loads attachment previews and avatars through this client.
         cx.set_http_client(Arc::new(images));
-        let bounds = Bounds::centered(None, size(px(1200.), px(800.)), cx);
+        let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
             titlebar: Some(TitlebarOptions { title: Some("Fluxer".into()), ..Default::default() }),

@@ -56,7 +56,7 @@
   - **수락 기준:** `icons::tests::app_icons_load`가 모든 임베드 SVG의 유효성(`<svg`)을 검증하며 릴리스 빌드에 외부 파일 의존성 없이 내장됨.
 
 ### M2. 공식 치수 동기화 & 미구현 대형 화면 이식
-- [ ] **M2.1 공식 `fluxer_app` 레이아웃 치수·색상 토큰 동기화**
+- [x] **M2.1 공식 `fluxer_app` 레이아웃 치수·색상 토큰 동기화**
   - **대상 파일:** `fluxer_client/app/src/theme.rs`, 관련 `ui/*.rs`, (선택) `scripts/extract_layout_tokens.py`
   - **공식 참조:** `fluxer_app/src/features/theme/layout/MessageLayoutSpec.ts`, `ColorSystemPalette.ts`, `ChannelChatLayout.module.css`, `SettingsModalLayout.module.css`
   - **작업:** 길드 레일 폭, 채널 사이드바 폭, 헤더 높이, 메시지 그룹 상하 패딩·아바타 크기·들여쓰기, 입력창 높이/반경, 멤버 목록 폭, 설정 2단 폭/간격을 공식 CSS 실측치와 1:1 매핑해 `ThemeSizes`에 고정한다.

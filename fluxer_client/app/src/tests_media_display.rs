@@ -364,7 +364,7 @@ fn display_settings_zoom_font_and_compact_density(cx: &mut TestAppContext) {
     cx.run_until_parked();
     draw(cx);
     assert!(!cx.update(|_, cx| Theme::current(cx).sizes.compact));
-    assert_eq!(cx.update(|_, cx| Theme::current(cx).sizes.gutter), 56.);
+    assert_eq!(cx.update(|_, cx| Theme::current(cx).sizes.gutter), crate::theme::ThemeSizes::DEFAULT.gutter);
 
     // Server-side USER_SETTINGS_UPDATE syncs message_display_compact & rollback cleanly
     backend.state().apply(&Dispatch {

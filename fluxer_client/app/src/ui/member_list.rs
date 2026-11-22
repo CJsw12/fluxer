@@ -25,8 +25,8 @@ use crate::theme::Theme;
 use crate::ui::l10n;
 use crate::view_model::avatar_url;
 
-/// Panel width (`ChannelMembers.module.css`: 15rem).
-pub const PANEL_WIDTH: f32 = 240.;
+/// Panel width (`globals.css`: `--layout-member-list-width: 16.5rem` = 264px).
+pub const PANEL_WIDTH: f32 = 264.;
 /// Row height; the web uses 44 px members and 32 px headers, a uniform list
 /// needs one height so headers take a member row's height.
 pub const ROW_HEIGHT: f32 = 44.;
@@ -256,7 +256,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .flex()
         .flex_col()
         .flex_none()
-        .w(px(PANEL_WIDTH))
+        .w(px(theme.sizes.member_list_width))
         .h_full()
         .border_l_1()
         .border_color(theme.border)

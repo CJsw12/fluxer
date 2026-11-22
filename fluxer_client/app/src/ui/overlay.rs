@@ -113,7 +113,7 @@ pub fn settings_modal(
         );
 
     let header = div()
-        .h(px(52.))
+        .h(px(theme.sizes.settings_header_height))
         .flex_none()
         .px_6()
         .border_b_1()
@@ -132,10 +132,10 @@ pub fn settings_modal(
         .overflow_y_scroll()
         .px_8()
         .py_6()
-        .child(div().max_w(px(720.)).flex().flex_col().gap_5().child(body));
+        .child(div().max_w(px(theme.sizes.settings_content_max_width)).flex().flex_col().gap_5().child(body));
 
     let sidebar_pane = div()
-        .w(px(260.))
+        .w(px(theme.sizes.settings_sidebar_width))
         .flex_none()
         .h_full()
         .bg(theme.background_secondary)
@@ -157,7 +157,7 @@ pub fn settings_modal(
 
     let panel = div()
         .w_full()
-        .max_w(px(1200.))
+        .max_w(px(theme.sizes.settings_modal_max_width))
         .h_full()
         .max_h(px(860.))
         .rounded(px(12.))

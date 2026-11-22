@@ -205,36 +205,81 @@ pub struct Theme {
     pub sizes: Sizes,
 }
 
-/// Layout sizes in pixels.
+/// Layout sizes in pixels synced 1:1 with official `fluxer_app` CSS tokens
+/// (`globals.css`, `MessageLayoutSpec.ts`, `SidebarWidth.ts`, `SettingsModalLayout.module.css`
+/// at `1rem = 16px`, 100% zoom).
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Sizes {
+pub struct ThemeSizes {
     /// Base text size of the client layout.
     pub text: f32,
+    /// `--layout-guild-list-width: 4.5rem` (72px).
     pub rail_width: f32,
+    /// `--guild-icon-size: 2.75rem` (44px).
     pub rail_button: f32,
+    /// `SIDEBAR_WIDTH_DEFAULT` / `--layout-sidebar-width: 20rem` (320px).
     pub channel_list_width: f32,
-    /// Message avatar (`Message.module.css`: 2.5rem).
+    /// `--layout-header-height: 3.5rem` (56px).
+    pub header_height: f32,
+    /// `--message-search-bar-width: 15.25rem` (244px).
+    pub search_bar_width: f32,
+    /// `--message-search-bar-height: 2.25rem` (36px).
+    pub search_bar_height: f32,
+    /// `--layout-member-list-width: 16.5rem` (264px).
+    pub member_list_width: f32,
+    /// `MessageLayoutSpec.cozy.avatarSize: 2.5rem` (40px).
     pub avatar: f32,
-    /// Avatar column width in the message list (avatar + gap).
+    /// Message avatar column (`cozy.avatarSize` 2.5rem + `gutter` 0.75rem = 52px).
     pub gutter: f32,
-    /// Space above the first message of a group.
+    /// `MessageLayoutSpec.spacingY / containerPaddingY: 0.125rem` (2px).
+    pub message_padding_y: f32,
+    /// Space above the first message of a group (16px cozy, 4px compact).
     pub group_gap: f32,
+    /// `--footer-box-height: 3.625rem` (58px).
+    pub composer_height: f32,
+    /// `--footer-box-radius: var(--radius-lg)` (8px).
+    pub composer_radius: f32,
+    /// `SettingsModalLayout.desktopSidebar` min `15.75rem` (252px).
+    pub settings_sidebar_width: f32,
+    /// Settings modal fixed top header height (52px).
+    pub settings_header_height: f32,
+    /// Settings modal body max width (720px).
+    pub settings_content_max_width: f32,
+    /// Settings modal dialog max width (1200px).
+    pub settings_modal_max_width: f32,
+    /// `--native-titlebar-height: 32px`.
+    pub titlebar_height: f32,
     /// Icon of the "Welcome to #name" header.
     pub channel_start_icon: f32,
+    /// `--user-area-content-height: 2rem` (32px).
     pub user_panel_avatar: f32,
     pub status_dot: f32,
     pub compact: bool,
 }
 
-impl Sizes {
-    pub const DEFAULT: Sizes = Sizes {
+/// Compatibility alias for [`ThemeSizes`].
+pub type Sizes = ThemeSizes;
+
+impl ThemeSizes {
+    pub const DEFAULT: ThemeSizes = ThemeSizes {
         text: 14.,
-        rail_width: 64.,
+        rail_width: 72.,
         rail_button: 44.,
-        channel_list_width: 220.,
+        channel_list_width: 320.,
+        header_height: 56.,
+        search_bar_width: 244.,
+        search_bar_height: 36.,
+        member_list_width: 264.,
         avatar: 40.,
-        gutter: 56.,
+        gutter: 52.,
+        message_padding_y: 2.,
         group_gap: 16.,
+        composer_height: 58.,
+        composer_radius: 8.,
+        settings_sidebar_width: 252.,
+        settings_header_height: 52.,
+        settings_content_max_width: 720.,
+        settings_modal_max_width: 1200.,
+        titlebar_height: 32.,
         channel_start_icon: 68.,
         user_panel_avatar: 32.,
         status_dot: 10.,
@@ -246,22 +291,39 @@ impl Sizes {
         let display = display.clamped();
         let zoom = f32::from(display.ui_zoom) / 100.0;
         let scale = |v: f32| (v * zoom).round();
-        let (avatar, gutter, group_gap) = if display.compact {
-            (0., 0., scale(4.))
+        let (avatar, gutter, group_gap, message_padding_y) = if display.compact {
+            (0., 0., scale(4.), scale(1.))
         } else {
-            (scale(40.), scale(56.), scale(16.))
+            (
+                scale(Self::DEFAULT.avatar),
+                scale(Self::DEFAULT.gutter),
+                scale(Self::DEFAULT.group_gap),
+                scale(Self::DEFAULT.message_padding_y),
+            )
         };
         Self {
             text: scale(f32::from(display.font_size)),
-            rail_width: scale(64.),
-            rail_button: scale(44.),
-            channel_list_width: scale(220.),
+            rail_width: scale(Self::DEFAULT.rail_width),
+            rail_button: scale(Self::DEFAULT.rail_button),
+            channel_list_width: scale(Self::DEFAULT.channel_list_width),
+            header_height: scale(Self::DEFAULT.header_height),
+            search_bar_width: scale(Self::DEFAULT.search_bar_width),
+            search_bar_height: scale(Self::DEFAULT.search_bar_height),
+            member_list_width: scale(Self::DEFAULT.member_list_width),
             avatar,
             gutter,
+            message_padding_y,
             group_gap,
-            channel_start_icon: scale(68.),
-            user_panel_avatar: scale(32.),
-            status_dot: scale(10.),
+            composer_height: scale(Self::DEFAULT.composer_height),
+            composer_radius: scale(Self::DEFAULT.composer_radius),
+            settings_sidebar_width: scale(Self::DEFAULT.settings_sidebar_width),
+            settings_header_height: scale(Self::DEFAULT.settings_header_height),
+            settings_content_max_width: scale(Self::DEFAULT.settings_content_max_width),
+            settings_modal_max_width: scale(Self::DEFAULT.settings_modal_max_width),
+            titlebar_height: Self::DEFAULT.titlebar_height,
+            channel_start_icon: scale(Self::DEFAULT.channel_start_icon),
+            user_panel_avatar: scale(Self::DEFAULT.user_panel_avatar),
+            status_dot: scale(Self::DEFAULT.status_dot),
             compact: display.compact,
         }
     }
@@ -604,21 +666,24 @@ mod tests {
 
     #[test]
     fn sizes_scale_with_zoom_and_compact_density() {
-        assert_eq!(Sizes::for_display(DisplayPrefs::default()), Sizes::DEFAULT);
+        assert_eq!(ThemeSizes::for_display(DisplayPrefs::default()), ThemeSizes::DEFAULT);
 
-        let zoomed = Sizes::for_display(DisplayPrefs {
+        let zoomed = ThemeSizes::for_display(DisplayPrefs {
             font_size: 16,
             ui_zoom: 125,
             compact: false,
         });
         assert_eq!(zoomed.text, 20.);
-        assert_eq!(zoomed.rail_width, 80.);
+        assert_eq!(zoomed.rail_width, 90.);
+        assert_eq!(zoomed.channel_list_width, 400.);
+        assert_eq!(zoomed.header_height, 70.);
+        assert_eq!(zoomed.member_list_width, 330.);
         assert_eq!(zoomed.avatar, 50.);
-        assert_eq!(zoomed.gutter, 70.);
+        assert_eq!(zoomed.gutter, 65.);
         assert_eq!(zoomed.group_gap, 20.);
         assert!(!zoomed.compact);
 
-        let compact = Sizes::for_display(DisplayPrefs {
+        let compact = ThemeSizes::for_display(DisplayPrefs {
             font_size: 14,
             ui_zoom: 100,
             compact: true,
@@ -627,5 +692,36 @@ mod tests {
         assert_eq!(compact.avatar, 0.);
         assert_eq!(compact.gutter, 0.);
         assert_eq!(compact.group_gap, 4.);
+        assert_eq!(compact.message_padding_y, 1.);
+    }
+
+    #[test]
+    fn theme_sizes_match_official_fluxer_app_layout_spec() {
+        // Official rem values from fluxer_app/src/app/globals.css, MessageLayoutSpec.ts,
+        // SidebarWidth.ts, and SettingsModalLayout.module.css at 1rem = 16px.
+        const REM: f32 = 16.0;
+        let s = ThemeSizes::DEFAULT;
+        assert_eq!(s.rail_width, 4.5 * REM);
+        assert_eq!(s.rail_button, 2.75 * REM);
+        assert_eq!(s.channel_list_width, 20.0 * REM);
+        assert_eq!(s.header_height, 3.5 * REM);
+        assert_eq!(s.search_bar_width, 15.25 * REM);
+        assert_eq!(s.search_bar_height, 2.25 * REM);
+        assert_eq!(s.member_list_width, 16.5 * REM);
+        assert_eq!(s.avatar, 2.5 * REM);
+        assert_eq!(s.gutter, (2.5 + 0.75) * REM);
+        assert_eq!(s.message_padding_y, 0.125 * REM);
+        assert_eq!(s.composer_height, 3.625 * REM);
+        assert_eq!(s.composer_radius, 0.5 * REM);
+        assert_eq!(s.settings_sidebar_width, 15.75 * REM);
+        assert_eq!(s.titlebar_height, 32.0);
+        assert_eq!(s.user_panel_avatar, 2.0 * REM);
+
+        // Verify default (1280x800) and maximized (1920x1040) windows retain ample center pane width.
+        let chrome_with_members = s.rail_width + s.channel_list_width + s.member_list_width;
+        assert!(1280.0 - chrome_with_members >= 600.0, "1280x800 center width = {}", 1280.0 - chrome_with_members);
+        assert!(1920.0 - chrome_with_members >= 1200.0, "1920x1040 center width = {}", 1920.0 - chrome_with_members);
+        assert!(800.0 - s.header_height - s.composer_height >= 640.0);
+        assert!(1040.0 - s.header_height - s.composer_height >= 880.0);
     }
 }

@@ -206,7 +206,8 @@ fn client_layout_renders_fixture_state(cx: &mut TestAppContext) {
     // The message rows are actually laid out: drag over the newest one and
     // its markdown body is selected as text.
     // Rail 64 + channel list 220 + row padding 16 + avatar gutter 52.
-    let text_left = 64. + 220. + 16. + 52.;
+    let sizes = cx.update(|_, cx| crate::theme::Theme::current(cx).sizes);
+    let text_left = sizes.rail_width + sizes.channel_list_width + 16. + sizes.gutter;
     let x = px(text_left + 30.);
     let start = find_selectable_from_bottom(cx, x).expect("no selectable message text in the pane");
     cx.simulate_mouse_down(point(px(text_left + 1.), start.y), MouseButton::Left, Modifiers::default());

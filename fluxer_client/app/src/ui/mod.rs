@@ -29,6 +29,7 @@ pub mod reply;
 pub mod search_panel;
 pub mod message_actions;
 pub mod settings;
+pub mod titlebar;
 pub mod typing;
 pub mod member_list;
 pub mod attachments;

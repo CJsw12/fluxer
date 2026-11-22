@@ -79,7 +79,8 @@ use std::sync::Arc;
 use anyhow::{Context as _, Result, anyhow, bail};
 use fluxer_client_core::rest::SecretToken;
 use fluxer_client_core::session::SessionError;
-use gpui_kit::{App, AppContext as _, Bounds, TitlebarOptions, WindowBounds, WindowOptions, px, size};
+use gpui_kit::component::TitleBar;
+use gpui_kit::{App, AppContext as _, Bounds, WindowBounds, WindowOptions, px, size};
 
 use crate::root::AppRoot;
 
@@ -252,8 +253,7 @@ fn run() -> Result<()> {
         let bounds = Bounds::centered(None, size(px(1280.), px(800.)), cx);
         let options = WindowOptions {
             window_bounds: Some(WindowBounds::Windowed(bounds)),
-            titlebar: Some(TitlebarOptions { title: Some("Fluxer".into()), ..Default::default() }),
-            ..Default::default()
+            ..TitleBar::window_options()
         };
         let opened = gpui_kit::open_window(options, cx, |window, cx| {
             // Make the gpui-kit widgets (inputs, buttons, scrollbars) follow the app theme.

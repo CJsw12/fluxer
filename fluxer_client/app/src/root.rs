@@ -633,8 +633,20 @@ async fn resume_session(
 
 impl Render for AppRoot {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let app_theme = crate::theme::Theme::current(cx);
+        let title = match &self.screen {
+            Screen::Client(view) => {
+                let t = view.read(cx).window_title.clone();
+                if t.is_empty() {
+                    SharedString::new_static("Fluxer")
+                } else {
+                    t.into()
+                }
+            }
+            _ => SharedString::new_static("Fluxer"),
+        };
         let centered = || div().size_full().flex().items_center().justify_center().bg(cx.theme().background);
-        match &self.screen {
+        let body = match &self.screen {
             Screen::Login(view) => view.clone().into_any_element(),
             Screen::Client(view) => view.clone().into_any_element(),
             Screen::Checking(text) => {
@@ -668,7 +680,14 @@ impl Render for AppRoot {
                         ),
                 )
                 .into_any_element(),
-        }
+        };
+        div()
+            .size_full()
+            .flex()
+            .flex_col()
+            .bg(app_theme.background)
+            .child(crate::ui::titlebar::render(title, &app_theme))
+            .child(div().flex_1().min_h_0().w_full().child(body))
     }
 }
 

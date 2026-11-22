@@ -587,3 +587,30 @@ fn settings_modal_switches_tabs_filters_search_and_closes(cx: &mut TestAppContex
 
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn appearance_theme_swatches_sliders_and_custom_titlebar_render(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, vcx) = open_client(cx, backend, events);
+
+    view.update_in(vcx, |v, window, cx| v.open_settings(window, cx));
+    vcx.run_until_parked();
+    draw(vcx);
+
+    assert!(vcx.debug_bounds("settings-theme-swatch-dark").is_some());
+    assert!(vcx.debug_bounds("settings-theme-swatch-light").is_some());
+    assert!(vcx.debug_bounds("settings-theme-swatch-dark_legacy").is_some());
+    assert!(vcx.debug_bounds("settings-theme-swatch-coal").is_some());
+    assert!(vcx.debug_bounds("settings-theme-swatch-system").is_some());
+    assert!(vcx.debug_bounds("settings-font-slider").is_some());
+    assert!(vcx.debug_bounds("settings-zoom-slider").is_some());
+
+    let coal = vcx.debug_bounds("settings-theme-swatch-coal").expect("coal swatch").center();
+    vcx.simulate_click(coal, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    assert_eq!(vcx.update(|_, cx| crate::theme::kind(cx)), crate::theme::ThemeKind::Black);
+
+    drop(rt);
+}

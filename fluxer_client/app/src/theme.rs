@@ -520,6 +520,11 @@ impl Theme {
         Self::from_kind(ThemeKind::Black)
     }
 
+    /// Returns the static color preview for `kind` (for settings theme swatch cards).
+    pub fn preview(kind: ThemeKind) -> Self {
+        Self::from_kind(kind)
+    }
+
     /// Builds the palette of an already resolved kind (`System` acts as Dark).
     fn from_kind(kind: ThemeKind) -> Self {
         let p = Palette::for_kind(kind);

@@ -463,3 +463,164 @@ fn unread_jump_fetches_around_a_deleted_cursor_without_acknowledging_the_tail(cx
     assert_eq!(lock_sent(&backend.page_loads).last(), Some(&(GENERAL, LoadMode::Replace, None)));
     assert!(cx.debug_bounds("unread-bar").is_none());
 }
+
+#[gpui_kit::test]
+fn search_hits_render_embeds_images_gif_and_avatars(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, cx) = open_client(cx, backend.clone(), events);
+
+    view.update(cx, |v, cx| v.select_place(Place::Guild(GUILD), cx));
+    cx.run_until_parked();
+    draw(cx);
+    focus_composer(&view, cx);
+
+    cx.simulate_keystrokes("ctrl-f");
+    cx.run_until_parked();
+    draw(cx);
+
+    view.update_in(cx, |v, window, cx| {
+        if let Some(panel) = &v.search {
+            panel.input.update(cx, |s, cx| s.set_value("has:embed", window, cx));
+        }
+        v.search_submit(cx);
+    });
+    cx.run_until_parked();
+    let seq = view.read_with(cx, |v, _| v.search.as_ref().map(|s| s.request_seq)).unwrap();
+
+    // 1. YouTube video card embed + avatar hash
+    let yt_msg: Message = serde_json::from_value(json!({
+        "id": msg_id(501).to_string(),
+        "channel_id": GENERAL.to_string(),
+        "guild_id": GUILD.to_string(),
+        "author": {
+            "id": "201",
+            "username": "alice",
+            "global_name": "Alice",
+            "avatar": "a_alicehash"
+        },
+        "content": "Watch this https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "timestamp": "2026-11-18T10:20:30.000000+00:00",
+        "embeds": [{
+            "type": "video",
+            "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            "title": "Sample YouTube Video",
+            "provider": { "name": "YouTube", "url": "https://www.youtube.com" },
+            "thumbnail": {
+                "url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+                "proxy_url": "https://media.example/proxy/yt.jpg",
+                "width": 480,
+                "height": 360
+            },
+            "video": {
+                "url": "https://www.youtube.com/embed/dQw4w9WgXcQ",
+                "proxy_url": "https://media.example/proxy/yt.jpg",
+                "width": 1280,
+                "height": 720
+            }
+        }]
+    }))
+    .expect("yt fixture");
+
+    // 2. General rich card + GIF media embed + animated GIF image attachment
+    let rich_and_media_msg: Message = serde_json::from_value(json!({
+        "id": msg_id(502).to_string(),
+        "channel_id": GENERAL.to_string(),
+        "guild_id": GUILD.to_string(),
+        "author": {
+            "id": "202",
+            "username": "bob",
+            "global_name": "Bob",
+            "avatar": "bobhash"
+        },
+        "content": "Check **this** out",
+        "timestamp": "2026-11-18T10:21:30.000000+00:00",
+        "attachments": [{
+            "id": "9001",
+            "filename": "party.gif",
+            "size": 4096,
+            "content_type": "image/gif",
+            "url": "https://cdn.example/party.gif",
+            "proxy_url": "https://media.example/proxy/party.gif",
+            "width": 640,
+            "height": 480,
+            "flags": 8
+        }],
+        "embeds": [
+            {
+                "type": "rich",
+                "url": "https://example.com/article",
+                "title": "Article Card",
+                "description": "Rich description body",
+                "color": 5793266
+            },
+            {
+                "type": "gifv",
+                "url": "https://tenor.com/view/test-123",
+                "thumbnail": {
+                    "url": "https://media.tenor.com/thumb.png",
+                    "proxy_url": "https://media.example/proxy/tenor.png",
+                    "width": 320,
+                    "height": 240
+                },
+                "video": {
+                    "url": "https://media.tenor.com/anim.mp4",
+                    "proxy_url": "https://media.example/proxy/anim.mp4",
+                    "content_type": "video/mp4",
+                    "width": 320,
+                    "height": 240
+                }
+            }
+        ]
+    }))
+    .expect("rich fixture");
+
+    view.update(cx, |v, cx| {
+        v.handle_events(
+            vec![UiEvent::SearchLoaded {
+                seq,
+                result: Ok(MessageSearchOutcome::Results(MessageSearchPage {
+                    messages: vec![yt_msg, rich_and_media_msg],
+                    channels: Vec::new(),
+                    threads: Vec::new(),
+                    total: 2,
+                    hits_per_page: 25,
+                    page: 1,
+                    cursor: None,
+                })),
+            }],
+            cx,
+        );
+    });
+    cx.run_until_parked();
+    draw(cx);
+
+    view.read_with(cx, |v, _| {
+        let panel = v.search.as_ref().expect("search panel open");
+        assert_eq!(panel.hits.len(), 2);
+
+        let yt_hit = &panel.hits[0];
+        assert_eq!(yt_hit.user_id, Snowflake(201));
+        assert!(yt_hit.document.is_some());
+        assert_eq!(yt_hit.embeds.len(), 1);
+        assert!(yt_hit.images.is_empty());
+
+        let rich_hit = &panel.hits[1];
+        assert_eq!(rich_hit.user_id, Snowflake(202));
+        assert!(rich_hit.document.is_some());
+        assert_eq!(rich_hit.embeds.len(), 2);
+        assert_eq!(rich_hit.images.len(), 1);
+        assert!(rich_hit.images[0].animated);
+        assert!(rich_hit.images[0].width <= 256., "search image width should fit panel");
+    });
+
+    assert!(cx.debug_bounds("search-hit-avatar").is_some(), "search hit avatar rendered");
+    assert!(cx.debug_bounds("search-hit-markdown").is_some(), "search hit markdown rendered");
+    assert!(cx.debug_bounds("search-hit-embeds").is_some(), "search hit embeds container rendered");
+    assert!(cx.debug_bounds("embed-card").is_some(), "reused ui::embed card rendered inside search hit");
+    assert!(cx.debug_bounds("embed-media").is_some(), "reused ui::embed media rendered inside search hit");
+    assert!(cx.debug_bounds("search-hit-image").is_some(), "search hit image attachment rendered");
+    assert!(cx.debug_bounds("search-hit-gif-badge").is_some(), "animated attachment GIF badge rendered");
+
+    drop(rt);
+}

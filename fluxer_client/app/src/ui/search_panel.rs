@@ -3,34 +3,47 @@
 //! paginates results and jumps into historical message windows.
 
 use std::collections::BTreeSet;
+use std::sync::Arc;
 
 use chrono::Local;
 use fluxer_client_core::rest::{
     MessageContentType, MessageSearchOutcome, MessageSearchPage, MessageSearchRequest, MessageSearchScope,
     MessageSearchSortBy, MessageSearchSortOrder,
 };
-use fluxer_client_core::state::{Channel, ChannelKind, ClientState, Snowflake};
+use fluxer_client_core::state::{
+    ATTACHMENT_FLAG_ANIMATED, Channel, ChannelKind, ClientState, Message, Snowflake,
+};
+use fluxer_client_markdown::{Document, LowerOptions, MarkdownContext, MessageMarkdown, TimeFormat, parse};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
 use gpui_kit::component::{Selectable as _, Sizable as _};
 use gpui_kit::{
-    AnyElement, AppContext as _, Context, Entity, EntityInputHandler as _, Focusable as _, FontWeight, ScrollHandle,
-    SharedString, Subscription, Window, div, prelude::*, px,
+    AnyElement, AppContext as _, Context, Entity, EntityInputHandler as _, Focusable as _, FontWeight, Hsla,
+    ObjectFit, ScrollHandle, SharedString, StyledImage as _, Subscription, Window, div, img, prelude::*, px, rgb,
 };
 
 use crate::client_view::ClientView;
-use crate::format::{format_message_time, message_time};
+use crate::format::{default_avatar_index, fit_image, format_message_time, initials, message_time};
 use crate::theme::Theme;
+use crate::ui::embed::{self, CardMedia, EmbedBody, EmbedView, MediaView};
 use crate::ui::l10n;
+use crate::ui::media_viewer::{self, MediaViewerItem};
+use crate::ui::message_row::{avatar as render_row_avatar, markdown_style, spoiler_state};
 use crate::ui::reply::{excerpt, member_name};
-use crate::view_model::{channel_name, opens_message_pane};
+use crate::view_model::{ImagePreview, StateMentions, avatar_url, channel_name, opens_message_pane, render_embeds};
 
 pub const CONTEXT: &str = "SearchPanel";
 pub const PANEL_WIDTH: f32 = 340.;
 const MAX_HAS_TOKENS: usize = 20;
 const MAX_SEARCH_PAGE: u32 = 400;
 const EXCERPT_LIMIT: usize = 140;
+const SEARCH_AVATAR_SIZE: f32 = 28.;
+const SEARCH_CARD_MAX_WIDTH: f32 = 288.;
+const SEARCH_EMBED_MEDIA_MAX_WIDTH: f32 = 256.;
+const SEARCH_EMBED_MEDIA_MAX_HEIGHT: f32 = 180.;
+const SEARCH_IMAGE_MAX_WIDTH: f32 = 256.;
+const SEARCH_IMAGE_MAX_HEIGHT: f32 = 180.;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SearchScopeChoice {
@@ -96,10 +109,17 @@ pub struct SearchHit {
     pub message_id: Snowflake,
     pub channel_id: Snowflake,
     pub guild_id: Option<Snowflake>,
+    pub user_id: Snowflake,
     pub channel_label: SharedString,
     pub author: SharedString,
+    pub initials: SharedString,
+    pub avatar_url: Option<SharedString>,
+    pub default_avatar: usize,
     pub time: SharedString,
     pub excerpt: SharedString,
+    pub document: Option<Arc<Document>>,
+    pub images: Vec<ImagePreview>,
+    pub embeds: Vec<EmbedView>,
     pub has_attachments: bool,
     pub jumpable: bool,
 }
@@ -149,15 +169,132 @@ fn channel_label_and_guild(
     }
 }
 
-fn build_hits(state: &ClientState, page: &MessageSearchPage) -> Vec<SearchHit> {
+fn clamp_media_size(width: f32, height: f32, max_w: f32, max_h: f32) -> (f32, f32) {
+    if !width.is_finite() || !height.is_finite() || width <= 0. || height <= 0. {
+        return (max_w, max_h);
+    }
+    let scale = (max_w / width).min(max_h / height).min(1.);
+    ((width * scale).round().max(1.), (height * scale).round().max(1.))
+}
+
+fn clamp_media_view(media: &mut MediaView, max_w: f32, max_h: f32) {
+    if media.kind == embed::MediaKind::Audio {
+        media.width = media.width.min(max_w);
+        return;
+    }
+    let (w, h) = clamp_media_size(media.width, media.height, max_w, max_h);
+    media.width = w;
+    media.height = h;
+}
+
+fn clamp_embed_for_search(embed: &mut EmbedView) {
+    match &mut embed.body {
+        EmbedBody::Media(media) => {
+            clamp_media_view(media, SEARCH_EMBED_MEDIA_MAX_WIDTH, SEARCH_EMBED_MEDIA_MAX_HEIGHT);
+        }
+        EmbedBody::Card(card) => {
+            card.max_width = card.max_width.min(SEARCH_CARD_MAX_WIDTH);
+            let inner_max_w = (SEARCH_CARD_MAX_WIDTH - 32.).max(160.);
+            match &mut card.media {
+                CardMedia::None => {}
+                CardMedia::Single(media) => {
+                    clamp_media_view(media, inner_max_w, SEARCH_EMBED_MEDIA_MAX_HEIGHT);
+                }
+                CardMedia::Gallery(items) => {
+                    let tile_max = (inner_max_w / 2. - 4.).max(80.);
+                    for item in items {
+                        clamp_media_view(item, tile_max, tile_max);
+                    }
+                }
+            }
+            if let Some(thumb) = &mut card.thumbnail {
+                clamp_media_view(thumb, 64., 64.);
+            }
+        }
+    }
+}
+
+fn build_search_images(msg: &Message) -> Vec<ImagePreview> {
+    let mut images = Vec::new();
+    for a in &msg.attachments {
+        let is_image = a.content_type.as_deref().is_some_and(|t| t.starts_with("image/"));
+        if is_image && let Some(url) = &a.url {
+            let (fit_w, fit_h) = fit_image(a.width, a.height);
+            let (width, height) = clamp_media_size(fit_w, fit_h, SEARCH_IMAGE_MAX_WIDTH, SEARCH_IMAGE_MAX_HEIGHT);
+            let animated =
+                a.content_type.as_deref() == Some("image/gif") || a.flags & ATTACHMENT_FLAG_ANIMATED != 0;
+            images.push(ImagePreview {
+                url: url.clone().into(),
+                proxy_url: a.proxy_url.clone().map(Into::into),
+                animated,
+                width,
+                height,
+            });
+        }
+    }
+    images
+}
+
+fn build_hits(state: &ClientState, media: Option<&str>, page: &MessageSearchPage) -> Vec<SearchHit> {
     let now = Local::now();
+    let time_fmt = TimeFormat { now_ms: now.timestamp_millis(), ..TimeFormat::local(false) };
+    let show_embeds_setting = render_embeds(state);
     page.messages
         .iter()
         .map(|msg| {
             let (channel_label, guild_id, jumpable) =
                 channel_label_and_guild(state, &page.channels, &page.threads, msg.channel_id, msg.guild_id);
-            let author = member_name(state, guild_id, &msg.author).into();
+            let author_str = member_name(state, guild_id, &msg.author);
+            let author_initials = initials(&author_str);
+            let user_id = msg.author.id;
+            let avatar = media.and_then(|m| avatar_url(m, &msg.author)).map(Into::into);
+            let default_avatar = default_avatar_index(user_id);
             let time = message_time(msg, &Local).map(|at| format_message_time(&at, &now)).unwrap_or_default().into();
+            let images = build_search_images(msg);
+            let resolver = StateMentions { state, guild_id, message: msg };
+            let mut document = (!msg.content.trim().is_empty()).then(|| {
+                Arc::new(parse(
+                    &msg.content,
+                    &LowerOptions {
+                        context: MarkdownContext::StandardWithoutJumbo,
+                        resolver: &resolver,
+                        media_endpoint: media,
+                        time: &time_fmt,
+                        disable_animated_emoji: false,
+                    },
+                ))
+            });
+            let show_embeds = show_embeds_setting && !msg.suppresses_embeds();
+            let mut embeds = if show_embeds {
+                let footer_time = |iso: &str| {
+                    let at = chrono::DateTime::parse_from_rfc3339(iso).ok()?.with_timezone(&Local);
+                    Some(format_message_time(&at, &now))
+                };
+                embed::embed_views(
+                    msg,
+                    &mut |text, kind| {
+                        Arc::new(parse(
+                            text,
+                            &LowerOptions {
+                                context: kind.context(),
+                                resolver: &resolver,
+                                media_endpoint: media,
+                                time: &time_fmt,
+                                disable_animated_emoji: false,
+                            },
+                        ))
+                    },
+                    &footer_time,
+                )
+            } else {
+                Vec::new()
+            };
+            for ev in &mut embeds {
+                clamp_embed_for_search(ev);
+            }
+            if show_embeds && !embeds.is_empty() && document.as_deref().is_some_and(|d| embed::hides_bare_url(msg, d)) {
+                document = None;
+            }
             let has_attachments = !msg.attachments.is_empty() || !msg.embeds.is_empty();
             let body_excerpt = if msg.content.trim().is_empty() && has_attachments {
                 l10n::tr("Attachment")
@@ -168,10 +305,17 @@ fn build_hits(state: &ClientState, page: &MessageSearchPage) -> Vec<SearchHit> {
                 message_id: msg.id,
                 channel_id: msg.channel_id,
                 guild_id,
+                user_id,
                 channel_label,
-                author,
+                author: author_str.into(),
+                initials: author_initials.into(),
+                avatar_url: avatar,
+                default_avatar,
                 time,
                 excerpt: body_excerpt.into(),
+                document,
+                images,
+                embeds,
                 has_attachments,
                 jumpable,
             }
@@ -400,7 +544,7 @@ impl ClientView {
         let next_hits = match &result {
             Ok(MessageSearchOutcome::Results(page)) => {
                 let state = self.backend.state();
-                Some(build_hits(&state, page))
+                Some(build_hits(&state, self.backend.media(), page))
             }
             _ => None,
         };
@@ -450,13 +594,15 @@ impl ClientView {
     }
 }
 
-pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+pub fn render(view: &ClientView, theme: &Theme, window: &Window, cx: &mut Context<ClientView>) -> AnyElement {
     let Some(panel) = &view.search else {
         return div().into_any_element();
     };
     let in_guild = view.current_guild_id().is_some();
     let has_channel = view.selected_channel.is_some();
     let can_load_more = !panel.loading && !panel.indexing && panel.has_more;
+    let scale = window.scale_factor();
+    let weak_view = cx.weak_entity();
 
     let mut scope_row = div().flex().flex_row().flex_wrap().gap_1().when(has_channel, |d| {
         d.child(
@@ -603,10 +749,22 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     )
                 });
 
-            let mut card_body = div()
-                .id(("search-hit-body", message_id.0))
+            let avatar_el = div()
+                .debug_selector(|| "search-hit-avatar".to_owned())
+                .flex_none()
+                .child(render_row_avatar(
+                    hit.avatar_url.clone(),
+                    hit.default_avatar,
+                    hit.initials.clone(),
+                    SEARCH_AVATAR_SIZE,
+                    theme,
+                ));
+
+            let mut text_col = div()
                 .flex()
                 .flex_col()
+                .flex_1()
+                .min_w_0()
                 .gap_1()
                 .child(
                     div()
@@ -616,8 +774,38 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .gap_2()
                         .child(div().text_xs().font_weight(FontWeight::SEMIBOLD).child(hit.author.clone()))
                         .child(div().text_xs().text_color(theme.muted_foreground).child(hit.time.clone())),
-                )
-                .child(div().text_xs().text_color(theme.foreground).child(hit.excerpt.clone()));
+                );
+
+            if let Some(doc) = &hit.document {
+                let view_link = weak_view.clone();
+                let mut md = MessageMarkdown::new(("search-msg", message_id.0), doc.clone())
+                    .style(markdown_style(theme))
+                    .on_link_click(move |url, window, cx| {
+                        let _ = view_link.update(cx, |v, cx| v.open_external_url(url, window, cx));
+                    });
+                if doc.spoiler_count > 0 {
+                    md = md.spoiler_state(spoiler_state(message_id, cx));
+                }
+                text_col = text_col.child(
+                    div()
+                        .debug_selector(|| "search-hit-markdown".to_owned())
+                        .w_full()
+                        .min_w_0()
+                        .text_xs()
+                        .child(md),
+                );
+            } else if hit.images.is_empty() && hit.embeds.is_empty() && !hit.excerpt.is_empty() {
+                text_col = text_col.child(div().text_xs().text_color(theme.foreground).child(hit.excerpt.clone()));
+            }
+
+            let mut card_body = div()
+                .id(("search-hit-body", message_id.0))
+                .flex()
+                .flex_row()
+                .items_start()
+                .gap_2()
+                .child(avatar_el)
+                .child(text_col);
 
             if jumpable {
                 card_body = card_body.cursor_pointer().on_click(cx.listener(move |v, _, _, cx| {
@@ -625,21 +813,92 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 }));
             }
 
-            body = body.child(
-                div()
-                    .id(("search-hit", message_id.0))
-                    .debug_selector(|| "search-hit".to_owned())
-                    .p_2()
-                    .rounded(px(6.))
-                    .border_1()
-                    .border_color(theme.border)
-                    .bg(theme.background)
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(header_row)
-                    .child(card_body),
-            );
+            let mut card = div()
+                .id(("search-hit", message_id.0))
+                .debug_selector(|| "search-hit".to_owned())
+                .p_2()
+                .rounded(px(6.))
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.background)
+                .flex()
+                .flex_col()
+                .gap_1()
+                .child(header_row)
+                .child(card_body);
+
+            if !hit.images.is_empty() {
+                let cache = embed::image_cache(cx);
+                let placeholder = theme.image_placeholder;
+                let muted_fg = theme.muted_foreground;
+                let viewer_items: Arc<Vec<MediaViewerItem>> = Arc::new(
+                    hit.images.iter().map(|image| media_viewer::from_attachment(image, scale)).collect(),
+                );
+                let mut images_grid = div().flex().flex_row().flex_wrap().gap_1().mt_1();
+                for (ix, image) in hit.images.iter().enumerate() {
+                    let url = image.url.clone();
+                    let view_img = weak_view.clone();
+                    let items_for_click = viewer_items.clone();
+                    let thumb = img(image.source(scale))
+                        .image_cache(&cache)
+                        .id(SharedString::from(format!("search-attachment-{}-{ix}", message_id.0)))
+                        .w(px(image.width))
+                        .h(px(image.height))
+                        .rounded(px(4.))
+                        .object_fit(ObjectFit::Contain)
+                        .with_loading(move || div().size_full().bg(placeholder).into_any_element())
+                        .with_fallback(move || {
+                            div().text_xs().text_color(muted_fg).child(url.clone()).into_any_element()
+                        });
+                    let mut badge_bg: Hsla = rgb(0x000000).into();
+                    badge_bg.a = 0.65;
+                    images_grid = images_grid.child(
+                        div()
+                            .id(SharedString::from(format!("search-attachment-open-{}-{ix}", message_id.0)))
+                            .debug_selector(|| "search-hit-image".to_owned())
+                            .relative()
+                            .w(px(image.width))
+                            .h(px(image.height))
+                            .cursor_pointer()
+                            .on_click(move |_, window, cx| {
+                                let items = (*items_for_click).clone();
+                                let _ = view_img.update(cx, |v, cx| v.open_media_viewer(items, ix, window, cx));
+                            })
+                            .child(thumb)
+                            .when(image.animated, |d| {
+                                d.child(
+                                    div()
+                                        .debug_selector(|| "search-hit-gif-badge".to_owned())
+                                        .absolute()
+                                        .top_1()
+                                        .left_1()
+                                        .px_1()
+                                        .py_0p5()
+                                        .rounded(px(4.))
+                                        .bg(badge_bg)
+                                        .text_color(rgb(0xffffff))
+                                        .text_xs()
+                                        .font_weight(FontWeight::BOLD)
+                                        .child("GIF"),
+                                )
+                            }),
+                    );
+                }
+                card = card.child(images_grid);
+            }
+
+            if !hit.embeds.is_empty() {
+                card = card.child(
+                    div()
+                        .id(("search-hit-embeds", message_id.0))
+                        .debug_selector(|| "search-hit-embeds".to_owned())
+                        .min_w_0()
+                        .overflow_hidden()
+                        .child(embed::render(message_id, &hit.embeds, theme, scale, &weak_view, cx)),
+                );
+            }
+
+            body = body.child(card);
         }
         if can_load_more {
             body = body.child(
@@ -749,5 +1008,58 @@ mod tests {
 
         let empty = parse_search_query("   \t  ");
         assert_eq!(empty, ParsedQuery::default());
+    }
+
+    #[test]
+    fn build_hits_preserves_avatar_url_embeds_images_and_hides_bare_media_url() {
+        let state = ClientState::new();
+        let msg: Message = serde_json::from_value(serde_json::json!({
+            "id": "5001",
+            "channel_id": "11",
+            "guild_id": "1",
+            "author": { "id": "201", "username": "alice", "avatar": "a_hash123" },
+            "content": "https://cdn.example/cat.gif",
+            "timestamp": "2026-11-18T10:20:30.000000+00:00",
+            "attachments": [{
+                "id": "7001",
+                "filename": "photo.png",
+                "size": 1024,
+                "content_type": "image/png",
+                "url": "https://cdn.example/photo.png",
+                "proxy_url": "https://media.example/proxy/photo.png",
+                "width": 1200,
+                "height": 800
+            }],
+            "embeds": [{
+                "type": "image",
+                "url": "https://cdn.example/cat.gif",
+                "thumbnail": {
+                    "url": "https://cdn.example/cat.gif",
+                    "proxy_url": "https://media.example/proxy/cat.gif",
+                    "width": 400,
+                    "height": 300,
+                    "flags": 1
+                }
+            }]
+        }))
+        .expect("message fixture");
+        let page = MessageSearchPage {
+            messages: vec![msg],
+            channels: Vec::new(),
+            threads: Vec::new(),
+            total: 1,
+            hits_per_page: 25,
+            page: 1,
+            cursor: None,
+        };
+        let hits = build_hits(&state, Some("https://media.example"), &page);
+        assert_eq!(hits.len(), 1);
+        let hit = &hits[0];
+        assert_eq!(hit.user_id, Snowflake(201));
+        assert_eq!(hit.avatar_url.as_deref(), Some("https://media.example/avatars/201/hash123.webp?size=80"));
+        assert_eq!(hit.images.len(), 1);
+        assert!(hit.images[0].width <= SEARCH_IMAGE_MAX_WIDTH);
+        assert_eq!(hit.embeds.len(), 1);
+        assert!(hit.document.is_none(), "bare URL with media-only embed hides redundant link text");
     }
 }

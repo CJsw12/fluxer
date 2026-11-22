@@ -376,7 +376,7 @@ thread_local! {
 }
 
 /// `UserSettings.renderEmbeds` (on until the settings say otherwise).
-fn render_embeds(state: &ClientState) -> bool {
+pub(crate) fn render_embeds(state: &ClientState) -> bool {
     state.user_settings.raw.get("render_embeds").and_then(serde_json::Value::as_bool).unwrap_or(true)
 }
 

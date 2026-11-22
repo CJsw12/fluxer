@@ -2365,7 +2365,7 @@ impl Render for ClientView {
         ui::composer::sync_placeholder(self, window, cx);
         let theme = Theme::current(cx);
         let right_panel = if self.search.is_some() {
-            Some(ui::search_panel::render(self, &theme, cx))
+            Some(ui::search_panel::render(self, &theme, window, cx))
         } else if self.shows_member_list() {
             Some(ui::member_list::render(self, &theme, cx))
         } else if self.group_dm_panel_open && self.group_dm.is_some() {

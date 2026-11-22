@@ -30,7 +30,7 @@ impl Global for SpoilerStates {}
 /// again) so hours of browsing do not keep one entity per message.
 const MAX_SPOILER_STATES: usize = 512;
 
-fn spoiler_state(id: Snowflake, cx: &mut App) -> Entity<SpoilerReveals> {
+pub(crate) fn spoiler_state(id: Snowflake, cx: &mut App) -> Entity<SpoilerReveals> {
     if let Some(state) = cx.default_global::<SpoilerStates>().0.get(&id) {
         return state.clone();
     }

@@ -39,7 +39,7 @@
 ## 마일스톤 체크리스트
 
 ### M1. 공용 렌더러 강제 재사용 & 에셋 통일
-- [ ] **M1.1 검색 결과 임베드·이미지·아바타 복구**
+- [x] **M1.1 검색 결과 임베드·이미지·아바타 복구**
   - **대상 파일:** `fluxer_client/app/src/ui/search_panel.rs`, `fluxer_client/app/src/tests_search.rs`
   - **공식 참조:** `fluxer_app/src/features/search/`
   - **작업:** `SearchHit`에 `embeds: Vec<EmbedView>`, `images: Vec<ImagePreview>`, `avatar_url: Option<SharedString>`, `user_id: Snowflake`, `document: Option<Arc<Document>>`를 보존하고, 검색 결과 카드 렌더링에서 `ui::embed`·`ui::avatar`(M1.2)·이미지 미리보기를 직접 재사용한다.

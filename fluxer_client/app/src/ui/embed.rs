@@ -14,7 +14,7 @@ mod card;
 mod gallery;
 mod media;
 
-pub(crate) use media::image_cache;
+pub(crate) use media::{image_cache, is_video_proxy_url};
 
 use std::collections::HashSet;
 use std::sync::Arc;

@@ -161,13 +161,29 @@ fn device(css: f32, scale: f32) -> u32 {
     (css * scale).round().max(1.) as u32
 }
 
+/// Returns `true` when `url` points to a video container (such as `.mp4` or
+/// `.webm`) that GPUI's `img()` decoder cannot render as an image.
+pub(crate) fn is_video_proxy_url(url: &str) -> bool {
+    let path = url.split(['?', '#']).next().unwrap_or("");
+    path.rsplit_once('.').is_some_and(|(_, ext)| {
+        ext.eq_ignore_ascii_case("mp4")
+            || ext.eq_ignore_ascii_case("webm")
+            || ext.eq_ignore_ascii_case("mov")
+            || ext.eq_ignore_ascii_case("m4v")
+    })
+}
+
 /// The proxy URL drawn for `media` at `scale`: animated variant for
 /// animated kinds, else the still webp.
 pub fn variant_url(media: &MediaView, scale: f32) -> Option<String> {
     let (w, h) = (device(media.width, scale), device(media.height, scale));
     match media.kind {
         MediaKind::Image => media.source.as_deref().map(|s| static_proxy_url(s, w, h)),
-        MediaKind::Animated | MediaKind::Gifv => media.source.as_deref().map(|s| animated_proxy_url(s, w, h)),
+        MediaKind::Animated => media.source.as_deref().map(|s| animated_proxy_url(s, w, h)),
+        MediaKind::Gifv => match media.source.as_deref() {
+            Some(src) if !is_video_proxy_url(src) => Some(animated_proxy_url(src, w, h)),
+            _ => media.poster.as_deref().map(|p| animated_proxy_url(p, w, h)),
+        },
         MediaKind::Video => media.poster.as_deref().map(|s| static_proxy_url(s, w, h)),
         MediaKind::Audio => None,
     }

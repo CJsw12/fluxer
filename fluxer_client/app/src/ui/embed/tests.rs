@@ -176,7 +176,7 @@ fn proxy_variants_use_device_pixels() {
     let gifv = media_of(0);
     assert_eq!(
         variant_url(&gifv, 1.).as_deref(),
-        Some("https://media.example/external/media.tenor.com/x.mp4?width=400&height=225&animated=true")
+        Some("https://media.example/external/media.tenor.com/x.png?width=400&height=225&animated=true")
     );
     assert_eq!(
         still_url(&gifv, 1.).as_deref(),
@@ -482,4 +482,29 @@ fn video_embed_renders_poster_and_play_overlay(cx: &mut TestAppContext) {
     let media_bounds = cx.debug_bounds("embed-media").expect("video poster + play overlay drawn");
     assert_eq!((media_bounds.size.width, media_bounds.size.height), (px(400.), px(225.)));
     assert!(card_bounds.contains(&media_bounds.origin), "video preview inside card");
+}
+
+#[test]
+fn gifv_image_source_and_video_proxy_url_detection() {
+    assert!(media::is_video_proxy_url("https://media.example/x.mp4"));
+    assert!(media::is_video_proxy_url("https://media.example/x.WEBM?foo=1"));
+    assert!(media::is_video_proxy_url("https://media.example/x.mov#frag"));
+    assert!(media::is_video_proxy_url("https://media.example/x.M4V?a=1#b"));
+    assert!(!media::is_video_proxy_url("https://media.example/x.gif"));
+    assert!(!media::is_video_proxy_url("https://media.example/x.webp?animated=true"));
+
+    let gif_source_gifv = MediaView {
+        kind: MediaKind::Gifv,
+        source: Some("https://media.example/external/tenor.com/x.gif".into()),
+        poster: Some("https://media.example/external/tenor.com/x.png".into()),
+        open_url: Some("https://tenor.com/view/x".into()),
+        width: 400.,
+        height: 225.,
+        label: None,
+        explicit: false,
+    };
+    assert_eq!(
+        variant_url(&gif_source_gifv, 1.).as_deref(),
+        Some("https://media.example/external/tenor.com/x.gif?width=400&height=225&animated=true")
+    );
 }

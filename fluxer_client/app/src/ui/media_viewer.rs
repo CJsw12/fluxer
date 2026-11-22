@@ -125,10 +125,15 @@ pub fn from_embed_media(media: &MediaView, scale: f32) -> Option<MediaViewerItem
         .or_else(|| media.poster.clone())?;
     let animated = matches!(media.kind, MediaKind::Animated | MediaKind::Gifv);
     let (css_w, css_h, dev_w, dev_h) = fit_viewer_sizes(media.width, media.height, scale, animated);
-    let preview_url: SharedString = match &media.source {
-        Some(src) if animated => animated_proxy_url(src, dev_w, dev_h).into(),
-        Some(src) => static_proxy_url(src, dev_w, dev_h).into(),
-        None => media.poster.clone().unwrap_or_else(|| url.clone()),
+    let preview_url: SharedString = match (media.kind, media.source.as_deref()) {
+        (MediaKind::Gifv, Some(src)) if crate::ui::embed::is_video_proxy_url(src) => media
+            .poster
+            .as_deref()
+            .map(|poster| SharedString::from(animated_proxy_url(poster, dev_w, dev_h)))
+            .unwrap_or_else(|| url.clone()),
+        (_, Some(src)) if animated => animated_proxy_url(src, dev_w, dev_h).into(),
+        (_, Some(src)) => static_proxy_url(src, dev_w, dev_h).into(),
+        (_, None) => media.poster.clone().unwrap_or_else(|| url.clone()),
     };
     let fallback_url = media.poster.clone().or_else(|| media.open_url.clone());
     Some(MediaViewerItem {
@@ -450,5 +455,30 @@ mod tests {
         assert_eq!(at(500, true), 1);
         assert_eq!(at(699, true), 1);
         assert_eq!(at(700, true), 0);
+    }
+
+    #[test]
+    fn from_embed_media_mp4_gifv_uses_poster_for_preview_url() {
+        let media = MediaView {
+            kind: MediaKind::Gifv,
+            source: Some("https://media.example/external/media.tenor.com/x.mp4".into()),
+            poster: Some("https://media.example/external/media.tenor.com/x.png".into()),
+            open_url: Some("https://tenor.com/view/x".into()),
+            width: 400.,
+            height: 225.,
+            label: None,
+            explicit: false,
+        };
+        let item = from_embed_media(&media, 1.).expect("gifv viewer item");
+        assert!(item.animated);
+        assert_eq!(item.url.as_ref(), "https://tenor.com/view/x");
+        assert_eq!(
+            item.preview_url.as_ref(),
+            "https://media.example/external/media.tenor.com/x.png?width=800&height=450&animated=true"
+        );
+        assert_eq!(
+            item.fallback_url.as_deref(),
+            Some("https://media.example/external/media.tenor.com/x.png")
+        );
     }
 }

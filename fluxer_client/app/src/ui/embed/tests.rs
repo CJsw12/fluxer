@@ -445,3 +445,41 @@ fn nsfw_cover_reveals_on_click(cx: &mut TestAppContext) {
     assert!(cx.debug_bounds("embed-cover").is_none(), "NSFW cover revealed");
     assert!(cx.debug_bounds("embed-media").is_some());
 }
+
+/// A video embed with a poster thumbnail and video URL classifies as
+/// `MediaKind::Video` and renders its poster and play overlay without panic.
+#[gpui_kit::test]
+fn video_embed_renders_poster_and_play_overlay(cx: &mut TestAppContext) {
+    cx.update(gpui_kit::init);
+    let video_embed = json!({
+        "type": "article",
+        "url": "https://www.youtube.com/watch?v=vid123",
+        "title": "Demo Video",
+        "provider": { "name": "YouTube", "url": "https://www.youtube.com" },
+        "video": media("https://www.youtube.com/embed/vid123", 1280, 720),
+        "thumbnail": media("https://i.ytimg.com/vid123.jpg", 1280, 720)
+    });
+    let mut state = state();
+    let rows = rows_of(&mut state, vec![message(99, "", json!([video_embed]), 0)]);
+    assert_eq!(rows[0].embeds.len(), 1);
+    let EmbedBody::Card(card) = &rows[0].embeds[0].body else { panic!("video card") };
+    let CardMedia::Single(video) = &card.media else { panic!("single video media") };
+    assert_eq!(video.kind, MediaKind::Video);
+    assert_eq!(video.poster.as_deref(), Some("https://media.example/external/i.ytimg.com/vid123.jpg"));
+    assert_eq!(video.open_url.as_deref(), Some("https://www.youtube.com/watch?v=vid123"));
+    assert_eq!(
+        variant_url(video, 1.).as_deref(),
+        Some("https://media.example/external/i.ytimg.com/vid123.jpg?format=webp&width=400&height=225")
+    );
+
+    let (_, cx) = cx.add_window_view(|window, cx| {
+        let host = cx.new(|_| Host { rows });
+        gpui_kit::base::Root::new(host, window, cx)
+    });
+    draw(cx);
+
+    let card_bounds = cx.debug_bounds("embed-card").expect("video card drawn");
+    let media_bounds = cx.debug_bounds("embed-media").expect("video poster + play overlay drawn");
+    assert_eq!((media_bounds.size.width, media_bounds.size.height), (px(400.), px(225.)));
+    assert!(card_bounds.contains(&media_bounds.origin), "video preview inside card");
+}

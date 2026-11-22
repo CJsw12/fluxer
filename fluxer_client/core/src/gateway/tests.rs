@@ -849,3 +849,98 @@ fn backoff_grows_when_connects_fail_immediately() {
     backoff.reset();
     assert_eq!(backoff.next_bounds(now + Duration::from_secs(5)), (500, 1_000), "READY resets");
 }
+
+#[tokio::test(start_paused = true)]
+async fn multi_cycle_reconnect_heartbeat_and_resume_soak() {
+    let wall_start = std::time::Instant::now();
+    let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
+    let port = listener.local_addr().expect("addr").port();
+    let mut cfg = config(Compression::None);
+    cfg.url = Url::parse(&format!("ws://127.0.0.1:{port}/")).expect("url");
+    let (handle, mut events) = spawn(cfg).expect("spawn");
+
+    let (stream, _) = listener.accept().await.expect("accept initial");
+    let ws = tokio_tungstenite::accept_async(stream).await.expect("handshake");
+    let mut server = ServerConn { ws, zstd: None };
+
+    server.hello(10_000).await;
+    server.recv_op(2).await;
+    server
+        .dispatch("READY", 1, json!({ "session_id": "sess-soak" }))
+        .await;
+    assert!(matches!(next(&mut events).await, GatewayEvent::Dispatch(d) if d.t == "READY" && d.s == 1));
+    assert_eq!(
+        next(&mut events).await,
+        GatewayEvent::Ready {
+            session_id: "sess-soak".into()
+        }
+    );
+    let hb = server.recv_op(1).await;
+    assert_eq!(hb["d"], json!(1));
+    server.send(json!({ "op": 11 })).await;
+
+    let mut last_s: u64 = 1;
+    for cycle in 1..=5_u64 {
+        server.close(4000).await;
+        assert_eq!(
+            next(&mut events).await,
+            GatewayEvent::Reconnecting {
+                code: Some(4000),
+                attempt: 1
+            }
+        );
+
+        let (stream, _) = listener.accept().await.expect("accept reconnect");
+        let ws = tokio_tungstenite::accept_async(stream).await.expect("handshake");
+        server = ServerConn { ws, zstd: None };
+
+        server.hello(10_000).await;
+        let resume = server.recv_op(6).await;
+        assert_eq!(
+            resume["d"],
+            json!({
+                "token": TOKEN,
+                "session_id": "sess-soak",
+                "seq": last_s
+            }),
+            "cycle {cycle} RESUME"
+        );
+
+        let next_s = last_s + 1;
+        server
+            .dispatch("RESUMED", last_s, json!(null))
+            .await;
+        server
+            .dispatch("MESSAGE_CREATE", next_s, json!({ "cycle": cycle }))
+            .await;
+
+        assert!(matches!(
+            next(&mut events).await,
+            GatewayEvent::Dispatch(d) if d.t == "RESUMED"
+        ));
+        assert_eq!(next(&mut events).await, GatewayEvent::Resumed);
+        let presence = server.recv_op(3).await;
+        assert_eq!(presence["d"]["status"], json!("online"));
+
+        assert!(matches!(
+            next(&mut events).await,
+            GatewayEvent::Dispatch(d) if d.t == "MESSAGE_CREATE" && d.s == next_s
+        ));
+
+        let hb = server.recv_op(1).await;
+        assert_eq!(hb["d"], json!(next_s), "cycle {cycle} heartbeat seq");
+        server.send(json!({ "op": 11 })).await;
+
+        last_s = next_s;
+    }
+
+    tokio::time::sleep(Duration::from_millis(1)).await;
+    handle.close();
+    assert_eq!(server.recv().await, Got::Close(Some(1000)));
+    assert!(timeout(WAIT, events.recv()).await.expect("end").is_none());
+    assert!(
+        wall_start.elapsed() < Duration::from_secs(3),
+        "soak took {:?}",
+        wall_start.elapsed()
+    );
+}

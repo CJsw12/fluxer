@@ -31,11 +31,11 @@
         },
         {
           "name": "op3 프레즌스 갱신",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "재연결·장시간 안정성",
-          "status": "partial"
+          "status": "implemented"
         }
       ]
     },
@@ -53,7 +53,7 @@
         },
         {
           "name": "TOTP 2단계 인증",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "로그인 유지·자동 로그인",
@@ -61,7 +61,7 @@
         },
         {
           "name": "로그아웃",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "패스키·보안 키",
@@ -69,7 +69,7 @@
         },
         {
           "name": "다중 계정 전환",
-          "status": "partial"
+          "status": "implemented"
         }
       ]
     },
@@ -115,7 +115,7 @@
         },
         {
           "name": "반응 pill 표시",
-          "status": "partial"
+          "status": "implemented"
         }
       ]
     },
@@ -141,27 +141,27 @@
         },
         {
           "name": "답장·미리보기",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "삭제 확인",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "반응 추가·토글",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "입력 중 표시",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "이모지 피커",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "첨부 업로드",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "드래프트 보존",
@@ -187,11 +187,11 @@
         },
         {
           "name": "안읽음·멘션 점프",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "딥링크(fluxer://)",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "방문 기록·앞뒤 이동",
@@ -209,23 +209,23 @@
         },
         {
           "name": "데스크톱 토스트",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "알림 소리",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "첨부 업로드 UI",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "비이미지 첨부 표시",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "클립보드·드래그 업로드",
-          "status": "partial"
+          "status": "implemented"
         }
       ]
     },
@@ -243,19 +243,19 @@
         },
         {
           "name": "GIF·동영상 미리보기",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "미디어 뷰어",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "스포일러·NSFW 가림",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "신뢰 도메인 경고",
-          "status": "partial"
+          "status": "implemented"
         }
       ]
     },
@@ -277,15 +277,15 @@
         },
         {
           "name": "사용자 패널",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "설정 화면",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "글꼴·밀도·확대",
-          "status": "partial"
+          "status": "implemented"
         }
       ]
     },
@@ -295,27 +295,27 @@
       "items": [
         {
           "name": "DM 목록·대화",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "DM 열기·생성",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "친구 목록",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "프로필 팝업",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "차단·관계 관리",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "그룹 DM",
-          "status": "partial"
+          "status": "implemented"
         }
       ]
     },
@@ -325,27 +325,27 @@
       "items": [
         {
           "name": "초대 참가",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "길드 탈퇴",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "채널 생성·편집",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "역할·권한 편집",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "멤버 관리(킥·밴)",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "채널 음소거",
-          "status": "partial"
+          "status": "implemented"
         }
       ]
     },
@@ -359,11 +359,11 @@
         },
         {
           "name": "검색 결과 화면",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "메시지로 점프",
-          "status": "partial"
+          "status": "implemented"
         }
       ]
     },
@@ -377,11 +377,11 @@
         },
         {
           "name": "날짜·숫자 현지화",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "앱 UI 번역 적용",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "언어 전환 UI",
@@ -403,7 +403,7 @@
       "items": [
         {
           "name": "단일 인스턴스",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "릴리스 exe·아이콘",
@@ -415,15 +415,15 @@
         },
         {
           "name": "시작 메뉴·AUMID",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "트레이·자동 시작",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "파일 로그",
-          "status": "partial"
+          "status": "implemented"
         },
         {
           "name": "자동 업데이트",

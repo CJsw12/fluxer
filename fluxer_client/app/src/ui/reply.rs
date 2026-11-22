@@ -13,7 +13,7 @@ use gpui_kit::{
 use crate::format::{default_avatar_index, initials};
 use crate::theme::Theme;
 use crate::ui::l10n;
-use crate::ui::message_row::avatar;
+use crate::ui::avatar::{AvatarSpec, render_avatar};
 use crate::view_model::avatar_url;
 
 /// Longest reply excerpt, in characters, before "…".
@@ -36,6 +36,7 @@ pub enum ReplyLine {
 pub struct ReplyAuthorLine {
     pub channel_id: Snowflake,
     pub message_id: Snowflake,
+    pub author_id: Snowflake,
     pub author: SharedString,
     pub initials: SharedString,
     pub avatar_url: Option<SharedString>,
@@ -60,6 +61,7 @@ pub fn reply_line(state: &ClientState, message: &Message, media: Option<&str>) -
             Some(ReplyLine::Loaded(ReplyAuthorLine {
                 channel_id: target.channel_id,
                 message_id: target.id,
+                author_id: target.author.id,
                 initials: initials(&author).into(),
                 author: author.into(),
                 avatar_url: media.and_then(|media| avatar_url(media, &target.author)).map(Into::into),
@@ -132,11 +134,15 @@ pub fn reply_preview_line(
     let target = match line {
         ReplyLine::Loaded(target) => {
             row = row
-                .child(avatar(
-                    target.avatar_url.clone(),
-                    target.default_avatar,
-                    target.initials.clone(),
-                    REPLY_AVATAR,
+                .child(render_avatar(
+                    AvatarSpec {
+                        user_id: target.author_id,
+                        avatar_url: target.avatar_url.clone(),
+                        display_name: target.author.clone(),
+                        size: REPLY_AVATAR,
+                        status: None,
+                        status_border_bg: None,
+                    },
                     theme,
                 ))
                 .child(

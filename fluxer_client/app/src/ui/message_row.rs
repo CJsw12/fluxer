@@ -2,19 +2,19 @@
 //! images, reactions, hover actions) and the shared avatar element.
 
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, OnceLock};
+use std::sync::Arc;
 
 use fluxer_client_core::state::{MessageState, Snowflake};
 use fluxer_client_markdown::{MarkdownStyle, MessageMarkdown, SpoilerReveals};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::{
-    AnyElement, App, Entity, FontWeight, Global, Hsla, Image, ImageFormat, ObjectFit, SharedString,
+    AnyElement, App, Entity, FontWeight, Global, Hsla, ObjectFit, SharedString,
     StyledImage as _, WeakEntity, div, img, prelude::*, px, rgb,
 };
 
 use crate::client_view::ClientView;
-use crate::format::DEFAULT_AVATAR_COLORS;
 use crate::theme::Theme;
+use crate::ui::avatar::{AvatarSpec, render_avatar};
 use crate::ui::media_viewer::{self, MediaViewerItem};
 use crate::ui::{embed, l10n, message_actions, reactions, reply};
 use crate::view_model::MessageRow;
@@ -392,7 +392,17 @@ pub fn render(
                         });
                     }
                 })
-                .child(avatar(row.avatar_url.clone(), row.default_avatar, row.initials.clone(), sizes.avatar, theme))
+                .child(render_avatar(
+                    AvatarSpec {
+                        user_id: row.author_id,
+                        avatar_url: row.avatar_url.clone(),
+                        display_name: row.author.clone(),
+                        size: sizes.avatar,
+                        status: None,
+                        status_border_bg: None,
+                    },
+                    theme,
+                ))
                 .into_any_element()
         } else {
             div().into_any_element()
@@ -457,72 +467,6 @@ pub enum RowBar {
     Actions,
     /// The quick reactions opened by the action bar's React.
     QuickReactions,
-}
-
-/// Avatar image, else the default avatar for the user id
-/// (`AvatarUtils.getDefaultAvatarURL`), else a colored circle.
-pub fn avatar(
-    url: Option<SharedString>,
-    default_index: usize,
-    initials: SharedString,
-    size: f32,
-    theme: &Theme,
-) -> AnyElement {
-    let color = default_avatar_color(default_index);
-    let text_color = theme.on_fill;
-    let circle = move || {
-        div()
-            .size(px(size))
-            .rounded_full()
-            .flex()
-            .items_center()
-            .justify_center()
-            .bg(color)
-            .text_color(text_color)
-            .text_sm()
-            .font_weight(FontWeight::SEMIBOLD)
-            .child(initials.clone())
-            .into_any_element()
-    };
-    let default_image = default_avatar(default_index);
-    let fallback = {
-        let circle = circle.clone();
-        move || match default_image.clone() {
-            Some(image) => img(image).size(px(size)).rounded_full().into_any_element(),
-            None => circle(),
-        }
-    };
-    match url {
-        Some(url) => img(url)
-            .size(px(size))
-            .rounded_full()
-            .with_loading(circle)
-            .with_fallback(fallback)
-            .into_any_element(),
-        None => fallback(),
-    }
-}
-
-fn default_avatar_color(index: usize) -> Hsla {
-    rgb(DEFAULT_AVATAR_COLORS.get(index).copied().unwrap_or(DEFAULT_AVATAR_COLORS[0])).into()
-}
-
-/// The web client's default avatars (`fluxer_app/src/media/images/avatars`),
-/// decoded once.
-fn default_avatar(index: usize) -> Option<Arc<Image>> {
-    static IMAGES: OnceLock<Vec<Arc<Image>>> = OnceLock::new();
-    const PNGS: [&[u8]; 6] = [
-        include_bytes!("../../assets/avatars/0.png"),
-        include_bytes!("../../assets/avatars/1.png"),
-        include_bytes!("../../assets/avatars/2.png"),
-        include_bytes!("../../assets/avatars/3.png"),
-        include_bytes!("../../assets/avatars/4.png"),
-        include_bytes!("../../assets/avatars/5.png"),
-    ];
-    IMAGES
-        .get_or_init(|| PNGS.iter().map(|png| Arc::new(Image::from_bytes(ImageFormat::Png, png.to_vec()))).collect())
-        .get(index)
-        .cloned()
 }
 
 #[cfg(test)]

@@ -785,7 +785,7 @@ impl ClientView {
                             if self.selected_channel == Some(channel_id) {
                                 let next = {
                                     let state = self.backend.state();
-                                    channel_items(&state, self.place)
+                                    channel_items(&state, self.place, self.backend.media())
                                         .into_iter()
                                         .find(|c| c.has_messages && c.id != channel_id)
                                         .map(|c| c.id)
@@ -998,7 +998,7 @@ impl ClientView {
                 self.last_channel.retain(|_, v| *v != removed_id);
                 self.selected_channel = None;
                 if matches!(self.place, Place::Guild(_)) {
-                    let next = channel_items(&state, self.place)
+                    let next = channel_items(&state, self.place, self.backend.media())
                         .into_iter()
                         .find(|c| c.has_messages)
                         .map(|c| c.id);
@@ -1008,7 +1008,10 @@ impl ClientView {
                 && matches!(self.place, Place::Guild(_))
                 && !self.guild_unavailable
             {
-                let next = channel_items(&state, self.place).into_iter().find(|c| c.has_messages).map(|c| c.id);
+                let next = channel_items(&state, self.place, self.backend.media())
+                    .into_iter()
+                    .find(|c| c.has_messages)
+                    .map(|c| c.id);
                 fallback_guild_channel = Some(next);
             }
             if state.current_user_id().is_some() {
@@ -1087,7 +1090,7 @@ impl ClientView {
             } else {
                 Vec::new()
             };
-            self.channels = channel_items(&state, self.place);
+            self.channels = channel_items(&state, self.place, self.backend.media());
             let target = match (self.place, self.selected_channel) {
                 (Place::Guild(guild_id), Some(channel_id))
                     if state.channels.get(&channel_id).is_some_and(|c| c.guild_id == Some(guild_id)) =>
@@ -1631,6 +1634,20 @@ impl ClientView {
             return user.display_name().to_owned().into();
         }
         user_id.to_string().into()
+    }
+
+    pub(crate) fn voice_member_avatar_url(
+        &self,
+        guild_id: Option<Snowflake>,
+        user_id: Snowflake,
+    ) -> Option<SharedString> {
+        let media = self.backend.media()?;
+        let state = self.backend.state();
+        let user = guild_id
+            .and_then(|gid| state.members.get(&gid)?.get(&user_id).map(|m| &m.user))
+            .or_else(|| state.users.get(&user_id))
+            .or_else(|| state.current_user.as_ref().filter(|u| u.id == user_id))?;
+        crate::view_model::avatar_url(media, user).map(Into::into)
     }
 
     pub(crate) fn select_channel_inner(

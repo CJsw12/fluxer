@@ -18,7 +18,7 @@ use gpui_kit::{
     rgb, uniform_list,
 };
 
-use super::message_row::avatar;
+use super::avatar::{AvatarSpec, render_avatar};
 use crate::client_view::ClientView;
 use crate::format::{default_avatar_index, initials};
 use crate::theme::Theme;
@@ -308,16 +308,17 @@ fn render_row(
             .child(div().truncate().child(label.clone())),
         Some(MemberRowView::Member(m)) => {
             let offline = m.status.is_offline();
-            let picture = avatar(m.avatar_url.clone(), m.default_avatar, m.initials.clone(), AVATAR, theme);
-            let dot = div()
-                .absolute()
-                .right(px(-2.))
-                .bottom(px(-2.))
-                .size(px(theme.sizes.status_dot + 2.))
-                .rounded_full()
-                .border_2()
-                .border_color(theme.background)
-                .bg(status_color(m.status, theme));
+            let picture = render_avatar(
+                AvatarSpec {
+                    user_id: m.user_id,
+                    avatar_url: m.avatar_url.clone(),
+                    display_name: m.name.clone(),
+                    size: AVATAR,
+                    status: Some(m.status),
+                    status_border_bg: Some(theme.background),
+                },
+                theme,
+            );
             let user_id = m.user_id;
             let view = view.clone();
             base.items_center()
@@ -330,7 +331,7 @@ fn render_row(
                         let _ = view.update(cx, |v, cx| v.open_profile(user_id, guild_id, pos, window, cx));
                     }
                 })
-                .child(div().relative().flex_none().child(picture).child(dot))
+                .child(picture)
                 .child(
                     div()
                         .flex_1()

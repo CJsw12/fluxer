@@ -6,6 +6,7 @@ use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::{Context, FontWeight, Role, SharedString, div, prelude::*};
 
+use super::avatar::{AvatarSpec, render_avatar};
 use super::l10n;
 use crate::backend::voice::{VoiceConnectionState, VoiceTrackSource};
 use crate::client_view::ClientView;
@@ -67,7 +68,20 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     .flex_row()
                     .items_center()
                     .justify_between()
-                    .gap_1()
+                    .gap_1p5()
+                    .when_some(view.user.as_ref(), |d, user| {
+                        d.child(render_avatar(
+                            AvatarSpec {
+                                user_id: user.id,
+                                avatar_url: user.avatar_url.clone(),
+                                display_name: user.name.clone(),
+                                size: 24.,
+                                status: None,
+                                status_border_bg: None,
+                            },
+                            theme,
+                        ))
+                    })
                     .child(
                         div()
                             .flex()

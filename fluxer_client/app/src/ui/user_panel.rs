@@ -7,9 +7,9 @@ use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::{Context, FontWeight, MouseButton, Role, SharedString, div, prelude::*, px};
 
+use super::avatar::{AvatarSpec, render_avatar};
 use super::l10n;
 use super::member_list::{status_color, status_label};
-use super::message_row::avatar;
 use crate::client_view::{ClientView, Connection};
 use crate::theme::Theme;
 
@@ -22,11 +22,15 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     };
     let (picture, name) = match &view.user {
         Some(user) => (
-            avatar(
-                user.avatar_url.clone(),
-                user.default_avatar,
-                user.initials.clone(),
-                sizes.user_panel_avatar,
+            render_avatar(
+                AvatarSpec {
+                    user_id: user.id,
+                    avatar_url: user.avatar_url.clone(),
+                    display_name: user.name.clone(),
+                    size: sizes.user_panel_avatar,
+                    status: None,
+                    status_border_bg: None,
+                },
                 theme,
             ),
             user.name.clone(),

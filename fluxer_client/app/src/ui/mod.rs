@@ -3,6 +3,7 @@
 
 pub mod access;
 pub mod account_switcher;
+pub mod avatar;
 pub mod channel_list;
 pub mod channel_modal;
 pub mod composer;

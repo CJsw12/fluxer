@@ -6,6 +6,7 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{AnyElement, Context, FontWeight, MouseButton, Role, SharedString, div, prelude::*, px};
 
+use super::avatar::{AvatarSpec, render_avatar};
 use super::{access::Scope, badge, user_panel, voice_panel};
 use crate::client_view::ClientView;
 use crate::theme::Theme;
@@ -336,24 +337,20 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         .hover(|s| s.bg(theme.muted))
         .when(is_voice, |d| d.cursor_pointer())
         .child(if c.icon == ChannelIcon::Dm {
-            let initial: String = c
-                .name
-                .chars()
-                .next()
-                .map(|ch| ch.to_uppercase().to_string())
-                .unwrap_or_else(|| "@".to_owned());
             div()
-                .size(px(22.))
-                .rounded_full()
+                .debug_selector(|| "dm-row-avatar".to_owned())
                 .flex_none()
-                .flex()
-                .items_center()
-                .justify_center()
-                .bg(theme.background_tertiary)
-                .text_color(fg)
-                .text_size(px(11.))
-                .font_weight(FontWeight::SEMIBOLD)
-                .child(initial)
+                .child(render_avatar(
+                    AvatarSpec {
+                        user_id: c.dm_user_id.unwrap_or(c.id),
+                        avatar_url: c.dm_avatar_url.clone(),
+                        display_name: c.name.clone(),
+                        size: 28.,
+                        status: c.dm_status,
+                        status_border_bg: Some(if selected { theme.accent } else { theme.background }),
+                    },
+                    theme,
+                ))
                 .into_any_element()
         } else {
             div().w(px(18.)).flex_none().text_color(muted_fg).child(c.icon.glyph()).into_any_element()
@@ -410,6 +407,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
     let mut group = div().flex().flex_col().child(row);
     for member in members {
         let display = view.voice_member_name(member.guild_id, member.user_id);
+        let member_avatar = view.voice_member_avatar_url(member.guild_id, member.user_id);
         let suffix = match (member.self_deaf || member.deaf, member.self_mute || member.mute) {
             (true, _) => " (deafened)",
             (false, true) => " (muted)",
@@ -418,13 +416,33 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         group = group.child(
             div()
                 .id(("voice-member", member.user_id.0))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_1p5()
                 .pl_8()
                 .pr_3()
                 .py_0p5()
-                .text_xs()
-                .text_color(muted_fg)
-                .truncate()
-                .child(format!("{display}{suffix}")),
+                .child(render_avatar(
+                    AvatarSpec {
+                        user_id: member.user_id,
+                        avatar_url: member_avatar,
+                        display_name: display.clone(),
+                        size: 20.,
+                        status: None,
+                        status_border_bg: None,
+                    },
+                    theme,
+                ))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .text_xs()
+                        .text_color(muted_fg)
+                        .truncate()
+                        .child(format!("{display}{suffix}")),
+                ),
         );
     }
     group.into_any_element()

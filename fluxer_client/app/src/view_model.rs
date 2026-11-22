@@ -8,7 +8,7 @@ use std::sync::Arc;
 use chrono::{DateTime, Local, TimeZone};
 use fluxer_client_core::state::{
     ATTACHMENT_FLAG_ANIMATED, ATTACHMENT_FLAG_EXPLICIT, Channel, ChannelKind, ClientState,
-    Message, MessageState, Snowflake, Unread, User, animated_proxy_url, static_proxy_url,
+    Message, MessageState, Snowflake, Status, Unread, User, animated_proxy_url, static_proxy_url,
 };
 use fluxer_client_markdown::{Document, LowerOptions, MarkdownContext, MentionResolver, ResolvedRole, TimeFormat, parse};
 use gpui_kit::SharedString;
@@ -98,6 +98,12 @@ pub struct ChannelItem {
     pub nested: bool,
     pub unread: Unread,
     pub muted: bool,
+    /// Primary DM recipient user id (1:1 or group DM fallback) for avatar rendering.
+    pub dm_user_id: Option<Snowflake>,
+    /// Primary DM recipient avatar URL when `media` endpoint and avatar hash exist.
+    pub dm_avatar_url: Option<SharedString>,
+    /// Primary DM recipient presence status (1:1 DM only).
+    pub dm_status: Option<Status>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -239,20 +245,20 @@ pub fn dm_unread(state: &ClientState) -> Unread {
     total
 }
 
-pub fn channel_items(state: &ClientState, place: Place) -> Vec<ChannelItem> {
+pub fn channel_items(state: &ClientState, place: Place, media: Option<&str>) -> Vec<ChannelItem> {
     let now_ms = i64::try_from(crate::accounts::now_ms()).unwrap_or(i64::MAX);
     match place {
         Place::Home => state
             .dm_channels()
             .into_iter()
-            .map(|c| channel_item(state, c, false, now_ms))
+            .map(|c| channel_item(state, c, false, now_ms, media))
             .collect(),
         Place::Guild(guild_id) => {
             let mut items = Vec::new();
             for node in state.channel_tree(guild_id) {
-                items.push(channel_item(state, &node.channel, false, now_ms));
+                items.push(channel_item(state, &node.channel, false, now_ms, media));
                 for child in &node.children {
-                    items.push(channel_item(state, child, true, now_ms));
+                    items.push(channel_item(state, child, true, now_ms, media));
                 }
             }
             items
@@ -260,7 +266,28 @@ pub fn channel_items(state: &ClientState, place: Place) -> Vec<ChannelItem> {
     }
 }
 
-fn channel_item(state: &ClientState, channel: &Channel, nested: bool, now_ms: i64) -> ChannelItem {
+fn channel_item(
+    state: &ClientState,
+    channel: &Channel,
+    nested: bool,
+    now_ms: i64,
+    media: Option<&str>,
+) -> ChannelItem {
+    let dm_recipient = match channel.kind {
+        ChannelKind::Dm | ChannelKind::DmPersonalNotes => {
+            channel.recipients.first().or(state.current_user.as_ref())
+        }
+        ChannelKind::GroupDm => channel.recipients.first(),
+        _ => None,
+    };
+    let dm_user_id = dm_recipient.map(|u| u.id);
+    let dm_avatar_url = dm_recipient
+        .and_then(|u| media.and_then(|m| avatar_url(m, u)))
+        .map(Into::into);
+    let dm_status = match channel.kind {
+        ChannelKind::Dm => dm_recipient.map(|u| state.presence_status(u.id)),
+        _ => None,
+    };
     ChannelItem {
         id: channel.id,
         name: channel_name(channel).into(),
@@ -272,6 +299,9 @@ fn channel_item(state: &ClientState, channel: &Channel, nested: bool, now_ms: i6
         nested,
         unread: state.channel_unread(channel.id),
         muted: state.is_channel_muted(channel.guild_id, channel.id, now_ms),
+        dm_user_id,
+        dm_avatar_url,
+        dm_status,
     }
 }
 

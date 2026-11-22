@@ -371,6 +371,11 @@ impl Backend {
         self.instance_hosts = Arc::from(hosts);
     }
 
+    #[cfg(test)]
+    pub(crate) fn set_media_for_test(&mut self, media: Option<String>) {
+        self.media = media.map(Arc::from);
+    }
+
     /// Shared with the gateway task; the UI keeps it current.
     pub fn notify_focus(&self) -> &NotifyFocus {
         &self.focus

@@ -7,6 +7,7 @@ use gpui_kit::{
     WeakEntity, div, prelude::*, px,
 };
 
+use super::avatar::{AvatarSpec, render_avatar};
 use super::message_row::{self, RowBar};
 use crate::client_view::ClientView;
 use crate::format::SystemIcon;
@@ -34,7 +35,15 @@ pub fn render(view: &ClientView, handle: WeakEntity<ClientView>, theme: &Theme) 
         && !view.channel_title.is_empty()
     {
         let banner = if view.place == crate::view_model::Place::Home {
-            dm_start(&view.channel_title, theme)
+            let dm_item = view
+                .selected_channel
+                .and_then(|id| view.channels.iter().find(|c| c.id == id));
+            let dm_user_id = dm_item
+                .and_then(|c| c.dm_user_id.or(Some(c.id)))
+                .or(view.selected_channel)
+                .unwrap_or(fluxer_client_core::state::Snowflake(0));
+            let dm_avatar_url = dm_item.and_then(|c| c.dm_avatar_url.clone());
+            dm_start(&view.channel_title, dm_user_id, dm_avatar_url, theme)
         } else {
             let display: SharedString = format!("{}{}", view.channel_glyph, view.channel_title).into();
             channel_start(&display, theme)
@@ -234,12 +243,12 @@ fn channel_start(name: &SharedString, theme: &Theme) -> AnyElement {
 
 /// DM empty-state welcome banner: circular avatar + bold title +
 /// `Say hi to {channel_title}. Your DM starts here.`
-fn dm_start(name: &SharedString, theme: &Theme) -> AnyElement {
-    let initial: String = name
-        .chars()
-        .next()
-        .map(|ch| ch.to_uppercase().to_string())
-        .unwrap_or_else(|| "@".to_owned());
+fn dm_start(
+    name: &SharedString,
+    user_id: fluxer_client_core::state::Snowflake,
+    avatar_url: Option<SharedString>,
+    theme: &Theme,
+) -> AnyElement {
     div()
         .flex()
         .flex_col()
@@ -249,16 +258,18 @@ fn dm_start(name: &SharedString, theme: &Theme) -> AnyElement {
         .pb_4()
         .child(
             div()
-                .size(px(theme.sizes.channel_start_icon))
-                .rounded_full()
-                .flex()
-                .items_center()
-                .justify_center()
-                .bg(theme.border)
-                .text_color(theme.foreground)
-                .text_size(px(28.))
-                .font_weight(FontWeight::BOLD)
-                .child(initial),
+                .debug_selector(|| "dm-banner-avatar".to_owned())
+                .child(render_avatar(
+                    AvatarSpec {
+                        user_id,
+                        avatar_url,
+                        display_name: name.clone(),
+                        size: theme.sizes.channel_start_icon,
+                        status: None,
+                        status_border_bg: None,
+                    },
+                    theme,
+                )),
         )
         .child(
             div()

@@ -15,7 +15,7 @@ use crate::client_view::ClientView;
 use crate::prefs::{DEFAULT_VOICE_VOLUME, MAX_VOICE_VOLUME, MIN_VOICE_VOLUME, ReducedMotionPref};
 use crate::settings_model::{FONT_SIZE_OPTIONS, LOCALES, SettingsEffect, THEME_OPTIONS, theme_patch_value};
 use crate::theme::{self, MAX_FONT_SIZE, MAX_UI_ZOOM, MIN_FONT_SIZE, MIN_UI_ZOOM, Theme, ThemeKind};
-use crate::ui::message_row;
+use crate::ui::avatar::{AvatarSpec, render_avatar};
 use crate::ui::overlay::Overlay;
 use crate::ui::{l10n, overlay};
 use crate::updater::{CURRENT_VERSION, UpdateStatus};
@@ -598,11 +598,15 @@ fn render_appearance_preview(view: &ClientView, theme: &Theme) -> AnyElement {
     let msg_size = px(f32::from(display.font_size));
     let (avatar_el, user_name) = match &view.user {
         Some(user) => (
-            message_row::avatar(
-                user.avatar_url.clone(),
-                user.default_avatar,
-                user.initials.clone(),
-                40.,
+            render_avatar(
+                AvatarSpec {
+                    user_id: user.id,
+                    avatar_url: user.avatar_url.clone(),
+                    display_name: user.name.clone(),
+                    size: 40.,
+                    status: None,
+                    status_border_bg: None,
+                },
                 theme,
             ),
             user.name.clone(),
@@ -1255,13 +1259,20 @@ fn render_sidebar(
 ) -> AnyElement {
     let (avatar_el, user_name) = match &view.user {
         Some(user) => (
-            message_row::avatar(
-                user.avatar_url.clone(),
-                user.default_avatar,
-                user.initials.clone(),
-                36.,
-                theme,
-            ),
+            div()
+                .debug_selector(|| "settings-profile-avatar".to_owned())
+                .child(render_avatar(
+                    AvatarSpec {
+                        user_id: user.id,
+                        avatar_url: user.avatar_url.clone(),
+                        display_name: user.name.clone(),
+                        size: 36.,
+                        status: None,
+                        status_border_bg: None,
+                    },
+                    theme,
+                ))
+                .into_any_element(),
             user.name.clone(),
         ),
         None => (

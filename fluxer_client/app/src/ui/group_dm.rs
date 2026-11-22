@@ -14,8 +14,7 @@ use gpui_kit::{
 };
 
 use super::friends::{FriendRow, FriendsTab, build_friend_rows};
-use super::member_list::status_color;
-use super::message_row::avatar;
+use super::avatar::{AvatarSpec, render_avatar};
 use super::overlay;
 use crate::client_view::ClientView;
 use crate::format::{default_avatar_index, initials};
@@ -377,7 +376,17 @@ pub fn render_create_modal(
                     .when(picked, |d| d.bg(theme.accent))
                     .hover(|s| s.bg(theme.muted))
                     .on_click(cx.listener(move |this, _, _, cx| this.toggle_group_dm_pick(uid, cx)))
-                    .child(avatar(f.avatar_url.clone(), f.default_avatar, f.initials.clone(), AVATAR_SIZE, theme))
+                    .child(render_avatar(
+                        AvatarSpec {
+                            user_id: f.user_id,
+                            avatar_url: f.avatar_url.clone(),
+                            display_name: f.display_name.clone(),
+                            size: AVATAR_SIZE,
+                            status: None,
+                            status_border_bg: None,
+                        },
+                        theme,
+                    ))
                     .child(
                         div()
                             .flex_1()
@@ -509,16 +518,17 @@ pub fn render_panel(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVie
         let uid = m.user_id;
         let can_remove = snap.is_owner && !m.is_self;
         let remove_sel = format!("gdm-remove-{}", uid.0);
-        let picture = avatar(m.avatar_url.clone(), m.default_avatar, m.initials.clone(), AVATAR_SIZE, theme);
-        let dot = div()
-            .absolute()
-            .right(px(-2.))
-            .bottom(px(-2.))
-            .size(px(theme.sizes.status_dot + 2.))
-            .rounded_full()
-            .border_2()
-            .border_color(theme.background_secondary)
-            .bg(status_color(m.status, theme));
+        let picture = render_avatar(
+            AvatarSpec {
+                user_id: m.user_id,
+                avatar_url: m.avatar_url.clone(),
+                display_name: m.name.clone(),
+                size: AVATAR_SIZE,
+                status: Some(m.status),
+                status_border_bg: Some(theme.background_secondary),
+            },
+            theme,
+        );
 
         member_list = member_list.child(
             div()
@@ -528,7 +538,7 @@ pub fn render_panel(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVie
                 .items_center()
                 .gap_2()
                 .py_1()
-                .child(div().relative().flex_none().child(picture).child(dot))
+                .child(picture)
                 .child(
                     div()
                         .flex_1()

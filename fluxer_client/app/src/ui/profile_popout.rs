@@ -14,7 +14,7 @@ use gpui_kit::{
 use crate::client_view::ClientView;
 use crate::profile::{ProfileCard, build_profile_card};
 use crate::theme::Theme;
-use crate::ui::message_row::avatar;
+use crate::ui::avatar::{AvatarSpec, render_avatar};
 use crate::ui::moderation_modal::ModerationKind;
 use crate::ui::overlay::Overlay;
 use crate::ui::{l10n, overlay};
@@ -274,11 +274,15 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
         .p(px(4.))
         .rounded_full()
         .bg(theme.background_secondary)
-        .child(avatar(
-            card.avatar_url.clone().map(SharedString::from),
-            card.default_avatar,
-            SharedString::from(card.initials.clone()),
-            AVATAR_SIZE,
+        .child(render_avatar(
+            AvatarSpec {
+                user_id: card.user_id,
+                avatar_url: card.avatar_url.clone().map(SharedString::from),
+                display_name: card.display_name.clone().into(),
+                size: AVATAR_SIZE,
+                status: None,
+                status_border_bg: Some(theme.background_secondary),
+            },
             theme,
         ));
 

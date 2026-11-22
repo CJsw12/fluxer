@@ -20,7 +20,8 @@ use crate::accounts::SavedAccountItem;
 use crate::backend::{Instance, connect_instance};
 use crate::theme::Theme;
 use crate::ui::l10n;
-use crate::ui::message_row::avatar;
+use fluxer_client_core::state::Snowflake;
+use crate::ui::avatar::{AvatarSpec, render_avatar};
 
 pub const DEFAULT_INSTANCE: &str = "fluxer.app";
 
@@ -377,11 +378,15 @@ impl Render for LoginView {
                                     cx.emit(LoginEvent::SelectSaved(select_key.clone()));
                                 }
                             }))
-                            .child(avatar(
-                                item.avatar_url.clone(),
-                                item.default_avatar,
-                                item.initials.clone(),
-                                28.,
+                            .child(render_avatar(
+                                AvatarSpec {
+                                    user_id: item.user_id.parse::<u64>().map(Snowflake).unwrap_or(Snowflake(0)),
+                                    avatar_url: item.avatar_url.clone(),
+                                    display_name: item.display_name.clone(),
+                                    size: 28.,
+                                    status: None,
+                                    status_border_bg: None,
+                                },
                                 &app_theme,
                             ))
                             .child(

@@ -6,7 +6,8 @@ use gpui_kit::component::input::Escape;
 use gpui_kit::{AnyElement, Context, FocusHandle, FontWeight, Window, div, prelude::*, px};
 
 use super::l10n;
-use super::message_row::avatar;
+use fluxer_client_core::state::Snowflake;
+use super::avatar::{AvatarSpec, render_avatar};
 use super::overlay;
 use crate::client_view::{ClientEvent, ClientView};
 use crate::theme::Theme;
@@ -106,11 +107,15 @@ pub fn render(
             .flex_row()
             .items_center()
             .gap_2()
-            .child(avatar(
-                item.avatar_url.clone(),
-                item.default_avatar,
-                item.initials.clone(),
-                32.,
+            .child(render_avatar(
+                AvatarSpec {
+                    user_id: item.user_id.parse::<u64>().map(Snowflake).unwrap_or(Snowflake(0)),
+                    avatar_url: item.avatar_url.clone(),
+                    display_name: item.display_name.clone(),
+                    size: 32.,
+                    status: None,
+                    status_border_bg: None,
+                },
                 theme,
             ))
             .child(

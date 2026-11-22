@@ -26,10 +26,11 @@ use gpui_kit::{
 use crate::client_view::ClientView;
 use crate::format::{default_avatar_index, fit_image, format_message_time, initials, message_time};
 use crate::theme::Theme;
+use crate::ui::avatar::{AvatarSpec, render_avatar};
 use crate::ui::embed::{self, CardMedia, EmbedBody, EmbedView, MediaView};
 use crate::ui::l10n;
 use crate::ui::media_viewer::{self, MediaViewerItem};
-use crate::ui::message_row::{avatar as render_row_avatar, markdown_style, spoiler_state};
+use crate::ui::message_row::{markdown_style, spoiler_state};
 use crate::ui::reply::{excerpt, member_name};
 use crate::view_model::{ImagePreview, StateMentions, avatar_url, channel_name, opens_message_pane, render_embeds};
 
@@ -752,11 +753,15 @@ pub fn render(view: &ClientView, theme: &Theme, window: &Window, cx: &mut Contex
             let avatar_el = div()
                 .debug_selector(|| "search-hit-avatar".to_owned())
                 .flex_none()
-                .child(render_row_avatar(
-                    hit.avatar_url.clone(),
-                    hit.default_avatar,
-                    hit.initials.clone(),
-                    SEARCH_AVATAR_SIZE,
+                .child(render_avatar(
+                    AvatarSpec {
+                        user_id: hit.user_id,
+                        avatar_url: hit.avatar_url.clone(),
+                        display_name: hit.author.clone(),
+                        size: SEARCH_AVATAR_SIZE,
+                        status: None,
+                        status_border_bg: None,
+                    },
                     theme,
                 ));
 

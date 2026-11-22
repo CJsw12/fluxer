@@ -8,8 +8,8 @@ use gpui_kit::component::input::Input;
 use gpui_kit::{AnyElement, ClickEvent, Context, FontWeight, SharedString, div, prelude::*, px};
 
 use super::badge;
-use super::member_list::{status_color, status_label};
-use super::message_row::avatar;
+use super::member_list::status_label;
+use super::avatar::{AvatarSpec, render_avatar};
 use super::profile_popout::find_1on1_dm;
 use crate::client_view::ClientView;
 use crate::format::{default_avatar_index, initials};
@@ -179,7 +179,6 @@ fn tab_button(
 
 fn render_row(row: &FriendRow, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
     let uid = row.user_id;
-    let status_dot = status_color(row.status, theme);
     let subtitle: SharedString = match row.kind {
         RelationshipKind::IncomingRequest => l10n::tr("Incoming friend request").into(),
         RelationshipKind::OutgoingRequest => l10n::tr("Outgoing friend request").into(),
@@ -285,29 +284,17 @@ fn render_row(row: &FriendRow, theme: &Theme, cx: &mut Context<ClientView>) -> A
                         this.open_profile(uid, None, ev.position(), window, cx);
                     }
                 }))
-                .child(
-                    div()
-                        .relative()
-                        .flex_none()
-                        .child(avatar(
-                            row.avatar_url.clone(),
-                            row.default_avatar,
-                            row.initials.clone(),
-                            32.,
-                            theme,
-                        ))
-                        .child(
-                            div()
-                                .absolute()
-                                .right(px(-1.))
-                                .bottom(px(-1.))
-                                .size(px(10.))
-                                .rounded_full()
-                                .border_2()
-                                .border_color(theme.background)
-                                .bg(status_dot),
-                        ),
-                )
+                .child(render_avatar(
+                    AvatarSpec {
+                        user_id: uid,
+                        avatar_url: row.avatar_url.clone(),
+                        display_name: row.display_name.clone(),
+                        size: 32.,
+                        status: Some(row.status),
+                        status_border_bg: Some(theme.background),
+                    },
+                    theme,
+                ))
                 .child(
                     div()
                         .flex()

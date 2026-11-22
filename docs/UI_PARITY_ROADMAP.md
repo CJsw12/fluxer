@@ -44,7 +44,7 @@
   - **공식 참조:** `fluxer_app/src/features/search/`
   - **작업:** `SearchHit`에 `embeds: Vec<EmbedView>`, `images: Vec<ImagePreview>`, `avatar_url: Option<SharedString>`, `user_id: Snowflake`, `document: Option<Arc<Document>>`를 보존하고, 검색 결과 카드 렌더링에서 `ui::embed`·`ui::avatar`(M1.2)·이미지 미리보기를 직접 재사용한다.
   - **수락 기준:** 링크 임베드(YouTube/일반 카드/GIF)·이미지 첨부·아바타가 포함된 검색 결과 렌더링 GPUI 테스트 통과, 기존 점프/필터/페이지네이션 테스트 무회귀.
-- [ ] **M1.2 공용 `ui::avatar` 컴포넌트 도입 및 전체 화면 일괄 교체**
+- [x] **M1.2 공용 `ui::avatar` 컴포넌트 도입 및 전체 화면 일괄 교체**
   - **대상 파일:** `fluxer_client/app/src/ui/avatar.rs`(신규), `ui/mod.rs`, `ui/message_row.rs`, `ui/member_list.rs`, `ui/channel_list.rs`, `ui/message_list.rs`, `ui/user_panel.rs`, `ui/settings.rs`, `ui/profile_popout.rs`, `ui/search_panel.rs`, `ui/voice_panel.rs`
   - **공식 참조:** `fluxer_app/src/features/ui/components/StatusAwareAvatar.tsx`, `BaseAvatar.tsx`
   - **작업:** `render_avatar(AvatarSpec { user_id, avatar_url, display_name, size, status, status_border_bg })` 단일 컴포넌트를 만들고 앱 전체의 개별 아바타/이니셜 원 코드를 모두 교체한다. 실제 `avatar_url` 로드 + 실패/없음 시 일관된 기본 Fluxer 아바타 폴백 + 선택적 상태 점 배치를 통일한다.

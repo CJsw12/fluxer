@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Local, TimeZone};
 use fluxer_client_core::state::{
-    ATTACHMENT_FLAG_ANIMATED, Channel, ChannelKind, ClientState, Message, MessageState, Snowflake, Unread, User,
-    animated_proxy_url, static_proxy_url,
+    ATTACHMENT_FLAG_ANIMATED, ATTACHMENT_FLAG_EXPLICIT, ATTACHMENT_FLAG_SPOILER, Channel, ChannelKind, ClientState,
+    Message, MessageState, Snowflake, Unread, User, animated_proxy_url, static_proxy_url,
 };
 use fluxer_client_markdown::{Document, LowerOptions, MarkdownContext, MentionResolver, ResolvedRole, TimeFormat, parse};
 use gpui_kit::SharedString;
@@ -126,6 +126,26 @@ impl ImagePreview {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ImageCover {
+    pub spoiler: bool,
+    pub nsfw: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FileAttachmentRow {
+    pub id: String,
+    pub filename: String,
+    pub size_label: String,
+    pub url: String,
+    pub spoiler: bool,
+}
+
+/// Human-readable file size (`"512 B"`, `"12.4 KB"`, `"2.1 MB"`).
+pub(crate) fn format_file_size(bytes: u64) -> String {
+    crate::ui::attachments::format_size(bytes)
+}
+
 /// A system message (join, pin...): icon and text, no avatar.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SystemRow {
@@ -165,6 +185,10 @@ pub struct MessageRow {
     /// empty or the row is a system message.
     pub document: Option<Arc<Document>>,
     pub images: Vec<ImagePreview>,
+    /// Spoiler / NSFW cover flags parallel to `images`.
+    pub image_covers: Vec<ImageCover>,
+    /// Non-image file attachments for file cards.
+    pub(crate) file_attachments: Vec<FileAttachmentRow>,
     /// Embeds to draw (empty when embeds are off or suppressed).
     pub embeds: Vec<EmbedView>,
     pub state: MessageState,
@@ -386,7 +410,11 @@ impl RowContext<'_> {
     {
         let mut body = m.content.clone();
         let mut images = Vec::new();
+        let mut image_covers = Vec::new();
+        let mut file_attachments = Vec::new();
         for a in &m.attachments {
+            let spoiler = a.is_spoiler() || a.filename.starts_with("SPOILER_");
+            let nsfw = a.flags & ATTACHMENT_FLAG_EXPLICIT != 0;
             let is_image = a.content_type.as_deref().is_some_and(|t| t.starts_with("image/"));
             if is_image && let Some(url) = &a.url {
                 let (width, height) = fit_image(a.width, a.height);
@@ -399,8 +427,16 @@ impl RowContext<'_> {
                     width,
                     height,
                 });
+                image_covers.push(ImageCover { spoiler, nsfw });
                 continue;
             }
+            file_attachments.push(FileAttachmentRow {
+                id: a.id.to_string(),
+                filename: a.filename.clone(),
+                size_label: format_file_size(a.size),
+                url: a.url.clone().unwrap_or_default(),
+                spoiler,
+            });
             if !body.is_empty() {
                 body.push_str("\n\n");
             }
@@ -449,6 +485,8 @@ impl RowContext<'_> {
             body,
             document,
             images,
+            image_covers,
+            file_attachments,
             embeds,
             state: m.state,
             upload_percent: None,
@@ -897,5 +935,86 @@ mod tests {
         assert!(!Arc::ptr_eq(&first[1], &after[1]));
         assert_eq!(after[1].plain_text(), "b edited");
         assert_eq!(first[1].plain_text(), "b @Mods");
+    }
+
+    #[test]
+    fn format_file_size_formats_bytes_kb_mb() {
+        assert_eq!(format_file_size(512), "512 B");
+        assert_eq!(format_file_size(12_698), "12.4 KB");
+        assert_eq!(format_file_size(2_202_010), "2.1 MB");
+    }
+
+    #[test]
+    fn attachment_spoiler_explicit_and_file_rows_propagate() {
+        let mut state = resolver_state();
+        let m: Message = serde_json::from_value(json!({
+            "id": "2001",
+            "channel_id": "11",
+            "content": "",
+            "timestamp": "2026-11-18T10:00:00+00:00",
+            "author": { "id": "200", "username": "alice" },
+            "attachments": [
+                {
+                    "id": "1",
+                    "filename": "flag_spoiler.png",
+                    "content_type": "image/png",
+                    "url": "https://cdn/1.png",
+                    "width": 400,
+                    "height": 300,
+                    "flags": ATTACHMENT_FLAG_SPOILER
+                },
+                {
+                    "id": "2",
+                    "filename": "SPOILER_prefix.png",
+                    "content_type": "image/png",
+                    "url": "https://cdn/2.png",
+                    "width": 400,
+                    "height": 300,
+                    "flags": 0
+                },
+                {
+                    "id": "3",
+                    "filename": "explicit.png",
+                    "content_type": "image/png",
+                    "url": "https://cdn/3.png",
+                    "width": 400,
+                    "height": 300,
+                    "flags": ATTACHMENT_FLAG_EXPLICIT
+                },
+                {
+                    "id": "4",
+                    "filename": "SPOILER_report.pdf",
+                    "content_type": "application/pdf",
+                    "size": 12_698,
+                    "url": "https://cdn/report.pdf",
+                    "flags": 0
+                }
+            ]
+        }))
+        .expect("message");
+        state.messages.load(Snowflake(11), vec![m], LoadMode::Replace);
+        let utc = FixedOffset::east_opt(0).expect("offset");
+        let now = DateTime::parse_from_rfc3339("2026-11-18T12:00:00+00:00").expect("now").with_timezone(&utc);
+        let pane = message_pane_at(&state, Snowflake(11), None, None, &now);
+        assert_eq!(pane.rows.len(), 1);
+        let row = &pane.rows[0];
+        assert_eq!(
+            row.image_covers,
+            [
+                ImageCover { spoiler: true, nsfw: false },
+                ImageCover { spoiler: true, nsfw: false },
+                ImageCover { spoiler: false, nsfw: true },
+            ]
+        );
+        assert_eq!(
+            row.file_attachments,
+            [FileAttachmentRow {
+                id: "4".to_owned(),
+                filename: "SPOILER_report.pdf".to_owned(),
+                size_label: "12.4 KB".to_owned(),
+                url: "https://cdn/report.pdf".to_owned(),
+                spoiler: true,
+            }]
+        );
     }
 }

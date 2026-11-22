@@ -341,3 +341,69 @@ fn attach_files_permission_gates_the_tray(cx: &mut TestAppContext) {
     });
     drop(rt);
 }
+
+/// Renders the full `ClientView` with `ui/attachments/tray.rs` visible
+/// (spoiler toggle, remove, and `on_drop` / `add_paths` with temp files).
+#[gpui_kit::test]
+fn tray_ui_renders_and_drop_paths_respect_limits(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, cx) = open_general(cx, backend, events);
+
+    // 1. Attach files (including SPOILER_ prefix), render full ClientView with tray visible.
+    view.update(cx, |v, cx| {
+        v.add_files(vec![bytes_file("preview.png", 512), bytes_file("SPOILER_secret.txt", 12_698)], cx);
+    });
+    draw(cx);
+    let ids: Vec<u64> = view.read_with(cx, |v, _| {
+        let files = v.attachments.files(GENERAL);
+        assert_eq!(files.len(), 2);
+        assert!(!files[0].spoiler && files[1].spoiler);
+        files.iter().map(|f| f.id).collect()
+    });
+
+    // Toggle spoiler on first chip and remove second chip, then re-render.
+    view.update(cx, |v, cx| v.toggle_attachment_spoiler(ids[0], cx));
+    draw(cx);
+    view.update(cx, |v, cx| v.remove_attachment(ids[1], cx));
+    draw(cx);
+    view.read_with(cx, |v, _| {
+        let files = v.attachments.files(GENERAL);
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].file.name, "preview.png");
+        assert!(files[0].spoiler);
+    });
+
+    // 2. Exercise the `on_drop` handler path (`add_paths` at client_view.rs:2383) with real temp files.
+    let temp_dir = std::env::temp_dir().join(format!("fluxer_drop_test_{}", std::process::id()));
+    std::fs::create_dir_all(&temp_dir).expect("create temp dir");
+    let drop_file = temp_dir.join("dropped.txt");
+    std::fs::write(&drop_file, b"hello drop").expect("write temp file");
+
+    view.update(cx, |v, cx| v.add_paths(std::slice::from_ref(&drop_file), cx));
+    draw(cx);
+    view.read_with(cx, |v, _| {
+        let files = v.attachments.files(GENERAL);
+        assert_eq!(files.len(), 2);
+        assert_eq!(files[1].file.name, "dropped.txt");
+        assert_eq!(files[1].file.size, 10);
+        assert!(v.error.is_none());
+    });
+
+    // Dropping past the 10-file limit is rejected without mutating the tray.
+    let mut extra_paths = Vec::new();
+    for i in 0..9 {
+        let p = temp_dir.join(format!("extra_{i}.txt"));
+        std::fs::write(&p, b"x").expect("write extra temp file");
+        extra_paths.push(p);
+    }
+    view.update(cx, |v, cx| v.add_paths(&extra_paths, cx));
+    draw(cx);
+    view.read_with(cx, |v, _| {
+        assert_eq!(v.attachments.files(GENERAL).len(), 2, "limit enforced on dropped batch");
+        assert!(v.error.as_ref().is_some_and(|e| e.contains("up to 10 files")));
+    });
+
+    let _ = std::fs::remove_dir_all(&temp_dir);
+    drop(rt);
+}

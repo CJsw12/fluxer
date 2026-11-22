@@ -409,3 +409,39 @@ fn spoiler_cover_reveals_on_click(cx: &mut TestAppContext) {
     assert!(cx.debug_bounds("embed-cover").is_none(), "revealed");
     assert!(cx.debug_bounds("embed-media").is_some());
 }
+
+/// Mature (NSFW) media shows an NSFW cover (`media.rs:283-286`) until clicked.
+#[gpui_kit::test]
+fn nsfw_cover_reveals_on_click(cx: &mut TestAppContext) {
+    cx.update(gpui_kit::init);
+    let image = json!({
+        "type": "image",
+        "url": "https://img.example/nsfw.png",
+        "thumbnail": {
+            "url": "https://img.example/nsfw.png",
+            "proxy_url": "https://media.example/external/img.example/nsfw.png",
+            "width": 320,
+            "height": 200,
+            "nsfw": true
+        }
+    });
+    let mut state = state();
+    let rows = rows_of(&mut state, vec![message(88, "", json!([image]), 0)]);
+    assert!(!rows[0].embeds[0].spoiler, "not a spoiler, only explicit/NSFW");
+    let EmbedBody::Media(media) = &rows[0].embeds[0].body else { panic!("media embed") };
+    assert!(media.explicit);
+    let (_, cx) = cx.add_window_view(|window, cx| {
+        let host = cx.new(|_| Host { rows });
+        gpui_kit::base::Root::new(host, window, cx)
+    });
+    draw(cx);
+    let cover = cx.debug_bounds("embed-cover").expect("NSFW cover drawn");
+    assert_eq!((cover.size.width, cover.size.height), (px(320.), px(200.)));
+    assert!(cx.debug_bounds("embed-media").is_none(), "nothing loads behind the NSFW cover");
+    cx.simulate_click(cover.center(), Modifiers::default());
+    cx.update(|window, _| window.refresh());
+    draw(cx);
+    assert!(cx.update(|_, cx| is_revealed(Snowflake(88), 0, cx)));
+    assert!(cx.debug_bounds("embed-cover").is_none(), "NSFW cover revealed");
+    assert!(cx.debug_bounds("embed-media").is_some());
+}

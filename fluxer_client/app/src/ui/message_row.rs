@@ -1,11 +1,12 @@
 //! One user message (reply line, avatar, author, time, markdown body,
 //! images, reactions, hover actions) and the shared avatar element.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, OnceLock};
 
 use fluxer_client_core::state::{MessageState, Snowflake};
 use fluxer_client_markdown::{MarkdownStyle, MessageMarkdown, SpoilerReveals};
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::{
     AnyElement, App, Entity, FontWeight, Global, Hsla, Image, ImageFormat, ObjectFit, SharedString,
     StyledImage as _, WeakEntity, div, img, prelude::*, px, rgb,
@@ -40,6 +41,32 @@ fn spoiler_state(id: Snowflake, cx: &mut App) -> Entity<SpoilerReveals> {
     }
     states.insert(id, state.clone());
     state
+}
+
+/// Revealed image-attachment spoiler/NSFW covers per `(message_id, index)`.
+#[derive(Default)]
+struct AttachmentReveals(HashSet<(Snowflake, usize)>);
+
+impl Global for AttachmentReveals {}
+
+fn is_attachment_revealed(message_id: Snowflake, index: usize, cx: &App) -> bool {
+    cx.try_global::<AttachmentReveals>().is_some_and(|r| r.0.contains(&(message_id, index)))
+}
+
+fn reveal_attachment(message_id: Snowflake, index: usize, cx: &mut App) {
+    let reveals = &mut cx.default_global::<AttachmentReveals>().0;
+    if reveals.len() >= MAX_SPOILER_STATES {
+        reveals.clear();
+    }
+    reveals.insert((message_id, index));
+}
+
+fn file_extension_badge(filename: &str) -> String {
+    filename
+        .rsplit_once('.')
+        .map(|(_, ext)| ext.to_ascii_uppercase())
+        .filter(|ext| !ext.is_empty() && ext.len() <= 5)
+        .unwrap_or_else(|| l10n::tr("File"))
 }
 
 /// Mention pills in the theme's colors; the rest of the crate's dark style.
@@ -180,6 +207,40 @@ pub fn render(
                 .collect(),
         );
         for (ix, image) in row.images.iter().enumerate() {
+            let cover = row.image_covers.get(ix).copied().unwrap_or_default();
+            if (cover.spoiler || cover.nsfw) && !is_attachment_revealed(row.id, ix, cx) {
+                let label = if cover.nsfw {
+                    format!("NSFW · {}", l10n::tr("Click to reveal"))
+                } else {
+                    l10n::tr("Spoiler")
+                };
+                let msg_id = row.id;
+                let view_reveal = view.clone();
+                content = content.child(
+                    div()
+                        .id(SharedString::from(format!("attachment-cover-{}-{ix}", row.id.0)))
+                        .debug_selector(move || format!("attachment-cover-{}-{ix}", row.id.0))
+                        .mt_1()
+                        .w(px(image.width))
+                        .h(px(image.height))
+                        .flex_none()
+                        .rounded(px(4.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .bg(theme.background_tertiary)
+                        .text_color(theme.muted_foreground)
+                        .text_xs()
+                        .font_weight(FontWeight::BOLD)
+                        .cursor_pointer()
+                        .on_click(move |_, _, cx| {
+                            reveal_attachment(msg_id, ix, cx);
+                            let _ = view_reveal.update(cx, |v, cx| v.redraw_messages(cx));
+                        })
+                        .child(label),
+                );
+                continue;
+            }
             let url = image.url.clone();
             let view_img = view.clone();
             let items_for_click = viewer_items.clone();
@@ -207,6 +268,77 @@ pub fn render(
                     .child(thumb),
             );
         }
+    }
+    if !row.file_attachments.is_empty() {
+        let mut list = div().flex().flex_col().gap_1().mt_1();
+        for (ix, file) in row.file_attachments.iter().enumerate() {
+            let ext = file_extension_badge(&file.filename);
+            let a11y = format!("{} ({})", file.filename, file.size_label);
+            let card_id = SharedString::from(format!("file-attachment-{}-{ix}", row.id.0));
+            let debug_id = card_id.clone();
+            let url = file.url.clone();
+            let view_file = view.clone();
+            let mut card = Button::new(card_id)
+                .ghost()
+                .accessibility_label(a11y)
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_2()
+                        .w(px(320.))
+                        .px_3()
+                        .py_2()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .child(
+                            div()
+                                .px_1p5()
+                                .py_0p5()
+                                .rounded(px(4.))
+                                .bg(theme.background_tertiary)
+                                .text_xs()
+                                .font_weight(FontWeight::BOLD)
+                                .text_color(muted_fg)
+                                .child(ext),
+                        )
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .flex_col()
+                                .child(
+                                    div()
+                                        .truncate()
+                                        .text_sm()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(if url.is_empty() { fg } else { theme.text_link })
+                                        .child(file.filename.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .gap_2()
+                                        .text_xs()
+                                        .text_color(muted_fg)
+                                        .child(file.size_label.clone())
+                                        .when(file.spoiler, |d| d.child(l10n::tr("Spoiler"))),
+                                ),
+                        ),
+                );
+            if !url.is_empty() {
+                card = card.on_click(move |_, window, cx| {
+                    let _ = view_file.update(cx, |v, cx| v.open_external_url(&url, window, cx));
+                });
+            }
+            list = list.child(div().debug_selector(move || debug_id.to_string()).child(card));
+        }
+        content = content.child(list);
     }
     if !row.embeds.is_empty() {
         content = content.child(embed::render(row.id, &row.embeds, theme, scale, view, cx));
@@ -528,5 +660,58 @@ mod tests {
         let again = cx.update(|_, cx| spoiler_state(Snowflake(1001), cx));
         assert_eq!(again, state, "one state entity per message");
         assert!(again.read_with(cx, |s, _| s.is_revealed(0)));
+    }
+
+    #[gpui_kit::test]
+    fn image_attachment_covers_and_file_cards_render_and_reveal(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let mut row = fixture_row();
+        row.id = Snowflake(4242);
+        row.images = vec![
+            crate::view_model::ImagePreview {
+                url: "https://cdn/s.png".into(),
+                proxy_url: None,
+                animated: false,
+                width: 240.,
+                height: 160.,
+            },
+            crate::view_model::ImagePreview {
+                url: "https://cdn/n.png".into(),
+                proxy_url: None,
+                animated: false,
+                width: 240.,
+                height: 160.,
+            },
+        ];
+        row.image_covers = vec![
+            crate::view_model::ImageCover { spoiler: true, nsfw: false },
+            crate::view_model::ImageCover { spoiler: false, nsfw: true },
+        ];
+        row.file_attachments = vec![crate::view_model::FileAttachmentRow {
+            id: "99".to_owned(),
+            filename: "archive.zip".to_owned(),
+            size_label: "12.4 KB".to_owned(),
+            url: "https://cdn/archive.zip".to_owned(),
+            spoiler: false,
+        }];
+        let (_, cx) = cx.add_window_view(|window, cx| {
+            let host = cx.new(|_| Host { row });
+            gpui_kit::base::Root::new(host, window, cx)
+        });
+        draw(cx);
+        let spoiler_cover = cx.debug_bounds("attachment-cover-4242-0").expect("spoiler cover");
+        let nsfw_cover = cx.debug_bounds("attachment-cover-4242-1").expect("nsfw cover");
+        assert!(cx.debug_bounds("attachment-open-4242-0").is_none());
+        assert!(cx.debug_bounds("attachment-open-4242-1").is_none());
+        assert!(cx.debug_bounds("file-attachment-4242-0").is_some());
+
+        cx.simulate_click(spoiler_cover.center(), Modifiers::default());
+        cx.simulate_click(nsfw_cover.center(), Modifiers::default());
+        cx.update(|window, _| window.refresh());
+        draw(cx);
+        assert!(cx.debug_bounds("attachment-cover-4242-0").is_none());
+        assert!(cx.debug_bounds("attachment-cover-4242-1").is_none());
+        assert!(cx.debug_bounds("attachment-open-4242-0").is_some());
+        assert!(cx.debug_bounds("attachment-open-4242-1").is_some());
     }
 }

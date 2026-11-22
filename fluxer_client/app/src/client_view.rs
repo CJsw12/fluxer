@@ -231,6 +231,8 @@ pub struct ClientView {
     pub(crate) saved_accounts: Vec<crate::accounts::SavedAccountItem>,
     /// UI-safe snapshot of the active voice session and channel voice members.
     pub(crate) voice: crate::backend::voice::VoiceSnapshot,
+    /// When true and voice is active, the central pane renders `ui::voice_stage`.
+    pub(crate) voice_stage_open: bool,
     /// Enumerated OS audio input/output devices for the settings modal.
     pub(crate) audio_devices: crate::audio_devices::AudioDeviceLists,
     /// Track SID currently synced into `watched_video_frame`.
@@ -416,6 +418,7 @@ impl ClientView {
             accounts_enabled: false,
             saved_accounts: Vec::new(),
             voice: crate::backend::voice::VoiceSnapshot::default(),
+            voice_stage_open: false,
             audio_devices: crate::audio_devices::AudioDeviceLists::default(),
             watched_video_track_sid: None,
             watched_video_frame_seq: 0,
@@ -1480,6 +1483,7 @@ impl ClientView {
     }
 
     pub(crate) fn select_place(&mut self, place: Place, cx: &mut Context<Self>) {
+        self.voice_stage_open = false;
         self.place = place;
         if let Place::Guild(id) = place {
             self.last_guild = Some(id);
@@ -1496,10 +1500,39 @@ impl ClientView {
     }
 
     pub(crate) fn select_channel(&mut self, channel_id: Snowflake, cx: &mut Context<Self>) {
+        self.voice_stage_open = false;
         self.select_channel_inner(channel_id, true, cx);
     }
 
+    pub(crate) fn open_voice_stage(&mut self, cx: &mut Context<Self>) {
+        if self.voice.channel_id.is_some()
+            && self.voice.state != crate::backend::voice::VoiceConnectionState::Disconnected
+        {
+            self.voice_stage_open = true;
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn close_voice_stage(&mut self, cx: &mut Context<Self>) {
+        if self.voice_stage_open {
+            self.voice_stage_open = false;
+            cx.notify();
+        }
+    }
+
     pub(crate) fn join_voice_channel(&mut self, channel_id: Snowflake, cx: &mut Context<Self>) {
+        if self.voice.channel_id == Some(channel_id)
+            && matches!(
+                self.voice.state,
+                crate::backend::voice::VoiceConnectionState::Connected
+                    | crate::backend::voice::VoiceConnectionState::Connecting
+                    | crate::backend::voice::VoiceConnectionState::Reconnecting
+            )
+        {
+            self.voice_stage_open = true;
+            cx.notify();
+            return;
+        }
         let target = {
             let state = self.backend.state();
             let Some(ch) = state.channels.get(&channel_id) else { return };
@@ -1521,12 +1554,14 @@ impl ClientView {
         self.error = None;
         self.backend.join_voice(target, channel_id);
         self.voice = self.backend.voice_snapshot();
+        self.voice_stage_open = self.voice.channel_id.is_some();
         cx.notify();
     }
 
     pub(crate) fn leave_voice_channel(&mut self, cx: &mut Context<Self>) {
         self.backend.leave_voice();
         self.voice = self.backend.voice_snapshot();
+        self.voice_stage_open = false;
         self.sync_watched_video_frame();
         cx.notify();
     }
@@ -2392,7 +2427,10 @@ impl Render for ClientView {
         };
         let handle = cx.weak_entity();
         let composer = self.render_composer(&theme, cx);
-        let show_friends = self.place == Place::Home && self.selected_channel.is_none();
+        let show_voice_stage = self.voice_stage_open
+            && self.voice.channel_id.is_some()
+            && self.voice.state != crate::backend::voice::VoiceConnectionState::Disconnected;
+        let show_friends = !show_voice_stage && self.place == Place::Home && self.selected_channel.is_none();
         let overlay = match &self.overlay {
             Overlay::QuickSwitcher(sw) => Some(ui::quick_switcher::render(sw, &theme, cx)),
             Overlay::EmojiPicker(picker) => {
@@ -2433,7 +2471,17 @@ impl Render for ClientView {
             .text_size(px(theme.sizes.text))
             .child(ui::guild_rail::render(self, &theme, cx))
             .child(ui::channel_list::render(self, &theme, cx))
-            .child(if show_friends {
+            .child(if show_voice_stage {
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_w_0()
+                    .h_full()
+                    .child(ui::voice_stage::render(self, &theme, cx))
+                    // Keep composer mounted in a 0px hidden slot so shortcut contexts stay live.
+                    .child(div().h(px(0.)).overflow_hidden().child(composer))
+            } else if show_friends {
                 div()
                     .flex()
                     .flex_col()

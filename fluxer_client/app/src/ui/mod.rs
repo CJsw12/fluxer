@@ -23,6 +23,7 @@ pub mod profile_popout;
 pub mod user_panel;
 pub(crate) mod video_viewer;
 pub mod voice_panel;
+pub mod voice_stage;
 pub mod reactions;
 pub mod reply;
 pub mod search_panel;

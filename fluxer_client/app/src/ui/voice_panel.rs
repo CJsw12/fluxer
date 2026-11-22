@@ -84,6 +84,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     })
                     .child(
                         div()
+                            .id("voice-panel-open-stage")
+                            .cursor_pointer()
+                            .on_click(cx.listener(|this, _, _, cx| this.open_voice_stage(cx)))
                             .flex()
                             .flex_col()
                             .flex_1()

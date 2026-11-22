@@ -568,3 +568,121 @@ fn voice_published_unsubscribed_screen_share_renders_watch_button_and_triggers_w
         vec![Some("TR_screen_unsub".to_owned())]
     );
 }
+
+#[gpui_kit::test]
+fn voice_stage_lifecycle_tiles_screen_share_controls_and_back_to_chat(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, rx) = Backend::new(rt.handle().clone(), offline_rest(), None);
+    let perms = (bits::VIEW_CHANNEL | bits::CONNECT | bits::SPEAK | bits::STREAM).to_string();
+    backend.state().apply(&Dispatch {
+        t: "READY".to_owned(),
+        s: 1,
+        d: json!({
+            "session_id": "sess-voice-stage",
+            "user": { "id": ME.to_string(), "username": "me", "global_name": "Me" },
+            "users": [
+                { "id": PEER.to_string(), "username": "peer", "global_name": "Peer User" }
+            ],
+            "guilds": [{
+                "id": GUILD.to_string(),
+                "properties": { "name": "Stage Guild", "owner_id": OWNER.to_string() },
+                "roles": [{ "id": GUILD.to_string(), "name": "@everyone", "permissions": perms, "position": 0 }],
+                "members": [{ "user": { "id": ME.to_string(), "username": "me" }, "roles": [] }],
+                "channels": [
+                    { "id": "11", "guild_id": GUILD.to_string(), "type": 0, "name": "general", "position": 0 },
+                    { "id": VOICE_OPEN.to_string(), "guild_id": GUILD.to_string(), "type": 2, "name": "Lounge", "position": 1 }
+                ]
+            }]
+        }),
+    });
+    let (view, vcx) = open_client(cx, backend.clone(), rx);
+
+    // Before joining voice, central stage is not shown.
+    view.update(vcx, |v, cx| v.select_place(Place::Guild(GUILD), cx));
+    draw(vcx);
+    assert!(vcx.debug_bounds("voice-stage").is_none());
+
+    // Joining voice channel connects and transitions center pane to VoiceCallView stage.
+    let room = connect_voice_in_view(&rt, &backend, &view, vcx);
+    assert!(vcx.debug_bounds("voice-stage").is_some(), "voice stage rendered on connect");
+    assert!(vcx.debug_bounds("voice-stage-grid").is_some());
+    assert!(vcx.debug_bounds("voice-stage-controls").is_some());
+    assert!(vcx.debug_bounds("voice-stage-tile-100").is_some(), "self participant tile rendered");
+
+    // Remote muted peer joins and publishes a screen share track.
+    backend.feed_voice_dispatch_for_test(&Dispatch {
+        t: "VOICE_STATE_UPDATE".into(),
+        s: 3,
+        d: json!({
+            "guild_id": GUILD.to_string(),
+            "channel_id": VOICE_OPEN.to_string(),
+            "user_id": PEER.to_string(),
+            "session_id": "peer-sess",
+            "self_mute": true,
+            "self_stream": true
+        }),
+    });
+    let remote_screen = TrackSubscriptionKey {
+        participant_identity: format!("{}:conn-peer", PEER.0),
+        participant_sid: "PA_peer".into(),
+        track_sid: "TR_stage_screen".into(),
+        source: VoiceTrackSource::ScreenShare,
+    };
+    room.published_tracks.lock().unwrap().push(remote_screen.clone());
+    view.update(vcx, |v, cx| v.refresh(cx));
+    draw(vcx);
+
+    assert!(vcx.debug_bounds("voice-stage-tile-200").is_some(), "remote participant tile rendered");
+    assert!(vcx.debug_bounds("voice-tile-muted-200").is_some(), "muted badge rendered on peer tile");
+    assert!(vcx.debug_bounds("voice-stage-live-200").is_some(), "LIVE badge rendered on streaming peer");
+    let watch_btn = vcx
+        .debug_bounds("voice-stage-watch-TR_stage_screen")
+        .expect("stage Watch Stream button")
+        .center();
+    vcx.simulate_click(watch_btn, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("video-viewer").is_some(), "video viewer expanded inside stage");
+
+    // Bottom circular controls toggle mute, deafen, and screen share.
+    let mute_pos = vcx.debug_bounds("voice-stage-mute-btn").unwrap().center();
+    vcx.simulate_click(mute_pos, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    let deaf_pos = vcx.debug_bounds("voice-stage-deaf-btn").unwrap().center();
+    vcx.simulate_click(deaf_pos, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    let share_pos = vcx.debug_bounds("voice-stage-share-btn").unwrap().center();
+    vcx.simulate_click(share_pos, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert!(v.voice.self_mute);
+        assert!(v.voice.self_deaf);
+        assert!(v.voice.self_stream);
+    });
+
+    // Back to Chat hides the stage while keeping voice connected; clicking active voice channel reopens stage without extra opcode 4.
+    let sent_before_reopen = lock(&backend.sent_voice_states).len();
+    let back_pos = vcx.debug_bounds("voice-stage-back-btn").unwrap().center();
+    vcx.simulate_click(back_pos, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("voice-stage").is_none(), "Back to Chat returns to text channel");
+    assert!(vcx.debug_bounds("voice-panel").is_some(), "voice remains connected in sidebar bar");
+
+    view.update(vcx, |v, cx| v.join_voice_channel(VOICE_OPEN, cx));
+    draw(vcx);
+    assert!(vcx.debug_bounds("voice-stage").is_some(), "clicking active voice channel reopens stage");
+    assert_eq!(lock(&backend.sent_voice_states).len(), sent_before_reopen, "reopening active stage does not resend opcode 4");
+
+    // Disconnect button leaves voice and closes the stage cleanly.
+    let disc_pos = vcx.debug_bounds("voice-stage-disconnect-btn").unwrap().center();
+    vcx.simulate_click(disc_pos, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("voice-stage").is_none(), "disconnect closes voice stage");
+    view.read_with(vcx, |v, _| {
+        assert_eq!(v.voice.state, VoiceConnectionState::Disconnected);
+        assert_eq!(v.voice.channel_id, None);
+    });
+}

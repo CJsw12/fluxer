@@ -47,6 +47,26 @@ pub(crate) fn render(
     theme: &Theme,
     cx: &mut Context<ClientView>,
 ) -> impl IntoElement {
+    render_inner(track, frame_image, false, theme, cx)
+}
+
+/// Expanded video viewer embedded inside `ui::voice_stage`.
+pub(crate) fn render_stage(
+    track: &TrackSubscriptionKey,
+    frame_image: Option<(u32, u32, Arc<RenderImage>)>,
+    theme: &Theme,
+    cx: &mut Context<ClientView>,
+) -> impl IntoElement {
+    render_inner(track, frame_image, true, theme, cx)
+}
+
+fn render_inner(
+    track: &TrackSubscriptionKey,
+    frame_image: Option<(u32, u32, Arc<RenderImage>)>,
+    expanded: bool,
+    theme: &Theme,
+    cx: &mut Context<ClientView>,
+) -> impl IntoElement {
     let source_label: SharedString = match track.source {
         VoiceTrackSource::ScreenShare => l10n::tr("Screen Share").into(),
         VoiceTrackSource::Camera => l10n::tr("Camera").into(),
@@ -67,7 +87,8 @@ pub(crate) fn render(
         .debug_selector(|| "video-viewer".to_owned())
         .flex()
         .flex_col()
-        .flex_none()
+        .when(expanded, |d| d.flex_1().min_h(px(320.)))
+        .when(!expanded, |d| d.flex_none())
         .gap_2()
         .px_3()
         .py_2()
@@ -131,7 +152,8 @@ pub(crate) fn render(
         )
         .child(
             div()
-                .h(px(260.0))
+                .when(expanded, |d| d.flex_1().min_h(px(260.0)))
+                .when(!expanded, |d| d.h(px(260.0)))
                 .w_full()
                 .rounded(px(6.))
                 .overflow_hidden()

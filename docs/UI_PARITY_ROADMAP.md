@@ -61,7 +61,7 @@
   - **공식 참조:** `fluxer_app/src/features/theme/layout/MessageLayoutSpec.ts`, `ColorSystemPalette.ts`, `ChannelChatLayout.module.css`, `SettingsModalLayout.module.css`
   - **작업:** 길드 레일 폭, 채널 사이드바 폭, 헤더 높이, 메시지 그룹 상하 패딩·아바타 크기·들여쓰기, 입력창 높이/반경, 멤버 목록 폭, 설정 2단 폭/간격을 공식 CSS 실측치와 1:1 매핑해 `ThemeSizes`에 고정한다.
   - **수락 기준:** `ThemeSizes` 단위 테스트로 공식 스펙 상수 일치 검증, 기본(`1280×800`)·최대화(`1920×1040`) 창에서 잘림/겹침 0건.
-- [ ] **M2.2 음성 채널 접속 시 중앙 스테이지 화면(`VoiceCallView`) 구현**
+- [x] **M2.2 음성 채널 접속 시 중앙 스테이지 화면(`VoiceCallView`) 구현**
   - **대상 파일:** `fluxer_client/app/src/ui/voice_stage.rs`(신규), `ui/mod.rs`, `client_view.rs`, `ui/channel_list.rs`, `ui/video_viewer.rs`, `tests_voice.rs`
   - **공식 참조:** `fluxer_app/src/features/voice/components/CompactVoiceCallView.tsx` 및 음성 타일/컨트롤 컴포넌트
   - **작업:** 음성 채널 클릭·연결 시 중앙 영역이 음성/비디오 스테이지로 전환되도록 구현한다(참가자 `ui::avatar` 타일 그리드 + 발화/음소거/헤드셋 상태 배지 + 원격 화면 공유 선택 시 `ui::video_viewer` 메인 스테이지 확대 + 하단 마이크/헤드셋/화면공유/연결끊기 원형 컨트롤 바 + 텍스트 채널로 돌아가기 전환).

@@ -91,7 +91,7 @@
   - **수락 기준:** 1회 명령으로 12개 시나리오 PNG가 자동 생성되며 크래시/패닉 0건.
 - [x] **M3.2 공식 네이티브 앱 기준선 자동 대조 및 잔여 결함 수렴**
   - **작업:** 공식 네이티브 창(`fluxer_desktop_rs` 또는 격리 `fluxer_desktop`)과 GPUI `fluxer_client.exe`를 동일 해상도(`1280×800`, 최대화)로 맞춰 영역별 픽셀/바운딩박스 diff를 실행하고, 기준 초과 영역을 모두 수정한 뒤 `docs/progress/progress.json`의 실기 검증 항목을 `done`으로 승격한다.
-  - **검증 결과 및 경계:** 12-시나리오 오프라인 실제 창 캡처(`1280×800`·`1920×1040`) 및 7개 공식 레이아웃 영역(`titlebar`·`guild_rail`·`channel_sidebar`·`header`·`main_content`·`composer`·`right_panel`) 자동 diff에서 발견한 잔여 결함(첨부 이미지 수직 오버플로우, `gpui-component` `button_primary` 브랜드 인디고 미동기화, 화면 공유 참가자 표시명 미해석, DM 타이핑 표시 및 프로필 캐시)을 모두 수정하고, 전체 워크스페이스(683건) + `voice_worker`(10건) 테스트 및 경고 0건 Windows 릴리스 바이너리(`dist/fluxer_client/fluxer_client.exe`)의 12장 갤러리 동등성까지 검증했다. 단, 운영/개인 계정 `Fluxer.exe` 간섭·CAPTCHA 우회를 금지하는 안전 규칙에 따라 인증된 실서버 공식 네이티브 창 대조와 이에 따른 `docs/progress/progress.json` `done` 승격은 자체 시험 서버 실기 세션에서 수행할 항목으로 명시적으로 분리 유지한다.
+  - **실기 검증 결과:** 전용 테스트 서버에서 포터블 공식 앱과 최신 릴리스 `dist/fluxer_client/fluxer_client.exe`를 동일 `#markdown` 채널·동일 해상도(`1280×800`, `2560×1392` 최대화)로 직접 대조했고(`main_content` 6.67%·`composer` 6.01%·`right_panel` 3.03% diff @ 최대화), 대조 과정에서 발견한 결함(첨부 이미지 수직 오버플로우, `button_primary` 브랜드 인디고, 화면 공유 표시명, 타이틀바 좌측 점, 카테고리 화살표 우측 정렬, 사용자 패널 음소거/데픈 버튼, 라이트 테마 스포일러 색상)을 모두 수정·재검증했다. 실서버에서 확인된 4건(`설정 화면`·`글꼴·밀도·확대`·`미디어 뷰어`·`첨부 업로드`)을 `docs/progress/progress.json` `done`으로 승격해 전체 **89%**·일상 사용 **91%**(실기 55·구현 37·부분 0·미착수 1)로 동기화했다.
 
 ---
 

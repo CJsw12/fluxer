@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-22",
+  "updated": "2026-11-23",
   "areas": [
     {
       "key": "core",
@@ -161,7 +161,7 @@
         },
         {
           "name": "첨부 업로드",
-          "status": "implemented"
+          "status": "done"
         },
         {
           "name": "드래프트 보존",
@@ -247,7 +247,7 @@
         },
         {
           "name": "미디어 뷰어",
-          "status": "implemented"
+          "status": "done"
         },
         {
           "name": "스포일러·NSFW 가림",
@@ -281,11 +281,11 @@
         },
         {
           "name": "설정 화면",
-          "status": "implemented"
+          "status": "done"
         },
         {
           "name": "글꼴·밀도·확대",
-          "status": "implemented"
+          "status": "done"
         }
       ]
     },

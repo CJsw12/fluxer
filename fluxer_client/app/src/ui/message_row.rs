@@ -69,12 +69,19 @@ fn file_extension_badge(filename: &str) -> String {
         .unwrap_or_else(|| l10n::tr("File"))
 }
 
-/// Mention pills in the theme's colors; the rest of the crate's dark style.
+/// Mention pills and hidden spoilers in the active theme's colors.
 pub(crate) fn markdown_style(theme: &Theme) -> MarkdownStyle {
+    let default_style = MarkdownStyle::default();
+    let spoiler_hidden = if theme.background.l > 0.5 {
+        gpui_kit::hsla(220. / 360., 0.08, 0.80, 1.)
+    } else {
+        default_style.spoiler_hidden
+    };
     MarkdownStyle {
         mention_background: theme.mention_bg,
         mention_foreground: theme.mention_fg,
-        ..MarkdownStyle::default()
+        spoiler_hidden,
+        ..default_style
     }
 }
 

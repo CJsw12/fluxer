@@ -15,26 +15,47 @@ use crate::view_model::{ChannelIcon, ChannelItem, Place};
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> impl IntoElement {
     let header_bar = match view.place {
         Place::Home => div()
+            .id("dm-quick-switcher-btn")
+            .role(Role::Button)
+            .aria_label(l10n::tr("Quick switcher"))
+            .debug_selector(|| "dm-quick-switcher-btn".to_owned())
             .flex()
             .flex_row()
             .items_center()
             .justify_between()
-            .gap_1()
-            .px_3()
-            .py_2()
-            .border_b_1()
+            .gap_2()
+            .mx_2()
+            .mt_2()
+            .mb_1()
+            .px_2()
+            .py_1p5()
+            .rounded(px(6.))
+            .bg(theme.background_secondary)
+            .border_1()
             .border_color(theme.border)
-            .child(div().flex_1().min_w_0().truncate().font_weight(FontWeight::BOLD).child(l10n::tr("Direct messages")))
+            .cursor_pointer()
+            .hover(|s| s.bg(theme.muted))
+            .on_click(cx.listener(|this, _, window, cx| this.open_quick_switcher(window, cx)))
             .child(
-                div().debug_selector(|| "create-group-dm-btn".to_owned()).child(
-                    Button::new("create-group-dm-btn")
-                        .ghost()
-                        .small()
-                        .icon(IconName::Plus)
-                        .tooltip(l10n::tr("Create group DM"))
-                        .accessibility_label(l10n::tr("Create group DM"))
-                        .on_click(cx.listener(|this, _, window, cx| this.open_create_group_dm(window, cx))),
-                ),
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(l10n::tr("Quick switcher")),
+            )
+            .child(
+                div()
+                    .flex_none()
+                    .px_1p5()
+                    .py_0p5()
+                    .rounded(px(4.))
+                    .bg(theme.muted)
+                    .text_size(px(10.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(theme.muted_foreground)
+                    .child("CTRL K"),
             )
             .into_any_element(),
         Place::Guild(id) => {
@@ -124,35 +145,70 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .child(header_bar);
     if view.place == Place::Home {
         let active = view.selected_channel.is_none();
-        list = list.child(
-            div()
-                .id("home-friends")
-                .role(Role::Button)
-                .aria_label(l10n::tr("Friends"))
-                .aria_selected(active)
-                .debug_selector(|| "home-friends".to_owned())
-                .flex()
-                .flex_row()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .px_3()
-                .py_2()
-                .cursor_pointer()
-                .when(active, |d| d.bg(theme.accent))
-                .hover(|s| s.bg(theme.muted))
-                .on_click(cx.listener(|this, _, _, cx| this.open_friends(cx)))
-                .child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap_2()
-                        .child(Icon::new(IconName::Users).xsmall())
-                        .child(div().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("Friends"))),
-                )
-                .when(view.pending_incoming > 0, |d| d.child(badge(view.pending_incoming, theme))),
-        );
+        list = list
+            .child(
+                div()
+                    .id("home-friends")
+                    .role(Role::Button)
+                    .aria_label(l10n::tr("Friends"))
+                    .aria_selected(active)
+                    .debug_selector(|| "home-friends".to_owned())
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .mx_2()
+                    .px_2()
+                    .py_1p5()
+                    .rounded(px(6.))
+                    .cursor_pointer()
+                    .when(active, |d| d.bg(theme.accent))
+                    .hover(|s| s.bg(theme.muted))
+                    .on_click(cx.listener(|this, _, _, cx| this.open_friends(cx)))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap_2()
+                            .child(Icon::new(IconName::Users).xsmall())
+                            .child(div().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("Friends"))),
+                    )
+                    .when(view.pending_incoming > 0, |d| d.child(badge(view.pending_incoming, theme))),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .gap_1()
+                    .px_3()
+                    .pt_3()
+                    .pb_1()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_xs()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.muted_foreground)
+                            .child(l10n::tr("Direct messages")),
+                    )
+                    .child(
+                        div().debug_selector(|| "create-group-dm-btn".to_owned()).child(
+                            Button::new("create-group-dm-btn")
+                                .ghost()
+                                .xsmall()
+                                .icon(IconName::Plus)
+                                .tooltip(l10n::tr("Create group DM"))
+                                .accessibility_label(l10n::tr("Create group DM"))
+                                .on_click(cx.listener(|this, _, window, cx| this.open_create_group_dm(window, cx))),
+                        ),
+                    ),
+            );
     }
     for c in &view.channels {
         list = list.child(render_channel(view, c, theme, cx));
@@ -208,6 +264,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
             .text_xs()
             .text_color(muted_fg)
             .font_weight(FontWeight::MEDIUM)
+            .child(div().flex_none().text_size(px(10.)).child("▾"))
             .child(div().flex_1().min_w_0().truncate().child(c.name.clone()))
             .when(c.can_manage, |d| {
                 d.child(
@@ -278,7 +335,29 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         .when(selected, |d| d.bg(theme.accent))
         .hover(|s| s.bg(theme.muted))
         .when(is_voice, |d| d.cursor_pointer())
-        .child(div().w(px(18.)).flex_none().text_color(muted_fg).child(c.icon.glyph()))
+        .child(if c.icon == ChannelIcon::Dm {
+            let initial: String = c
+                .name
+                .chars()
+                .next()
+                .map(|ch| ch.to_uppercase().to_string())
+                .unwrap_or_else(|| "@".to_owned());
+            div()
+                .size(px(22.))
+                .rounded_full()
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(theme.background_tertiary)
+                .text_color(fg)
+                .text_size(px(11.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .child(initial)
+                .into_any_element()
+        } else {
+            div().w(px(18.)).flex_none().text_color(muted_fg).child(c.icon.glyph()).into_any_element()
+        })
         .child(div().flex_1().min_w_0().truncate().child(c.name.clone()));
     if c.muted {
         row = row.child(Icon::new(IconName::BellOff).xsmall());

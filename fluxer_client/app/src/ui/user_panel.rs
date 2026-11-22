@@ -48,9 +48,13 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .flex_none()
         .items_center()
         .gap_2()
+        .mx_2()
+        .mb_2()
         .px_2()
-        .py_2()
-        .border_t_1()
+        .py_1p5()
+        .rounded(px(8.))
+        .bg(theme.background_secondary)
+        .border_1()
         .border_color(theme.border)
         .child(
             div().relative().flex_none().child(picture).child(
@@ -70,7 +74,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     .size(px(dot_size))
                     .rounded_full()
                     .border_2()
-                    .border_color(theme.background)
+                    .border_color(theme.background_secondary)
                     .bg(dot),
             ),
         )

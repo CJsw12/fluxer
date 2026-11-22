@@ -30,10 +30,15 @@ pub fn render(view: &ClientView, handle: WeakEntity<ClientView>, theme: &Theme) 
         return div().flex_1().p_4().text_color(theme.muted_foreground).child(text).into_any_element();
     }
     if view.rows.borrow().is_empty()
-        && view.place != crate::view_model::Place::Home
+        && view.selected_channel.is_some()
         && !view.channel_title.is_empty()
     {
-        let display: SharedString = format!("{}{}", view.channel_glyph, view.channel_title).into();
+        let banner = if view.place == crate::view_model::Place::Home {
+            dm_start(&view.channel_title, theme)
+        } else {
+            let display: SharedString = format!("{}{}", view.channel_glyph, view.channel_title).into();
+            channel_start(&display, theme)
+        };
         return div()
             .id("message-pane")
             .flex_1()
@@ -41,7 +46,7 @@ pub fn render(view: &ClientView, handle: WeakEntity<ClientView>, theme: &Theme) 
             .flex()
             .flex_col()
             .justify_end()
-            .child(channel_start(&display, theme))
+            .child(banner)
             .into_any_element();
     }
     let rows = view.rows.clone();
@@ -224,6 +229,49 @@ fn channel_start(name: &SharedString, theme: &Theme) -> AnyElement {
             "This is the start of {channelDisplayName}.",
             &[("channelDisplayName", name.as_ref())],
         )))
+        .into_any_element()
+}
+
+/// DM empty-state welcome banner: circular avatar + bold title +
+/// `Say hi to {channel_title}. Your DM starts here.`
+fn dm_start(name: &SharedString, theme: &Theme) -> AnyElement {
+    let initial: String = name
+        .chars()
+        .next()
+        .map(|ch| ch.to_uppercase().to_string())
+        .unwrap_or_else(|| "@".to_owned());
+    div()
+        .flex()
+        .flex_col()
+        .gap_2()
+        .px_4()
+        .pt_4()
+        .pb_4()
+        .child(
+            div()
+                .size(px(theme.sizes.channel_start_icon))
+                .rounded_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(theme.border)
+                .text_color(theme.foreground)
+                .text_size(px(28.))
+                .font_weight(FontWeight::BOLD)
+                .child(initial),
+        )
+        .child(
+            div()
+                .text_color(theme.foreground)
+                .text_size(px(28.))
+                .font_weight(FontWeight::BOLD)
+                .child(name.clone()),
+        )
+        .child(
+            div()
+                .text_color(theme.muted_foreground)
+                .child(format!("Say hi to {name}. Your DM starts here.")),
+        )
         .into_any_element()
 }
 

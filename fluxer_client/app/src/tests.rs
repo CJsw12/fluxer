@@ -797,6 +797,7 @@ fn args_parse() {
             autostart: true,
             no_os_integration: false,
             deep_link: None,
+            visual_gallery: None,
         }
     );
     assert!(parse_args(["--token-env".to_owned()]).is_err());

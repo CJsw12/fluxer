@@ -362,6 +362,10 @@ impl Backend {
         self.media.as_deref()
     }
 
+    pub(crate) fn set_media(&mut self, media: Option<String>) {
+        self.media = media.map(Arc::from);
+    }
+
     pub fn instance_hosts(&self) -> &[String] {
         &self.instance_hosts
     }

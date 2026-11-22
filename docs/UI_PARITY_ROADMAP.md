@@ -72,7 +72,7 @@
   - **수락 기준:** 기존 설정·키보드·접근성 테스트 전부 통과 및 경고 0건.
 
 ### M3. 오프라인 12-시나리오 시각 갤러리 & 네이티브 창 자동 대조
-- [ ] **M3.1 오프라인 시각 갤러리 하네스 구축**
+- [x] **M3.1 오프라인 시각 갤러리 하네스 구축**
   - **대상 파일:** `fluxer_client/app/examples/visual_gallery.rs`(또는 `--visual-gallery` 모드), `scripts/visual_parity_diff.py`
   - **참고 패턴:** `Wally869/gpui-preview`, `Ziinc/gpui-visual-test`
   - **작업:** 로그인·네트워크·CAPTCHA 없이 결정적 픽스처 `ClientState`로 아래 **12개 시나리오**를 기본(`1280×800`)·최대화(`1920×1040`)로 렌더링해 `Logs/visual-gallery/`(Git 밖)에 PNG를 일괄 출력한다.

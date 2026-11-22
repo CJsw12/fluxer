@@ -40,6 +40,7 @@ mod trusted_domains;
 mod ui;
 mod updater;
 mod view_model;
+mod visual_gallery;
 
 #[cfg(test)]
 mod tests;
@@ -92,6 +93,7 @@ struct Args {
     autostart: bool,
     no_os_integration: bool,
     deep_link: Option<String>,
+    visual_gallery: Option<String>,
 }
 
 fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args> {
@@ -129,6 +131,9 @@ fn parse_args(args: impl IntoIterator<Item = String>) -> Result<Args> {
             "--allow-insecure-loopback" => out.allow_insecure_loopback = true,
             "--autostart" => out.autostart = true,
             "--no-os-integration" => out.no_os_integration = true,
+            "--visual-gallery" => {
+                out.visual_gallery = Some(args.next().context("--visual-gallery needs an output directory")?);
+            }
             "--" => flags_ended = true,
             _ if deep_links::is_app_protocol_url(&arg) => {
                 if out.deep_link.is_some() {
@@ -149,7 +154,7 @@ fn main() {
     if std::env::args_os()
         .skip(1)
         .take_while(|arg| arg != "--")
-        .any(|arg| arg == "--no-os-integration")
+        .any(|arg| arg == "--no-os-integration" || arg == "--visual-gallery")
     {
         platform::set_os_integration_enabled(false);
     }
@@ -165,6 +170,9 @@ fn main() {
 
 fn run() -> Result<()> {
     let args = parse_args(std::env::args().skip(1))?;
+    if let Some(dir) = &args.visual_gallery {
+        return visual_gallery::run_visual_gallery(std::path::Path::new(dir));
+    }
     let token = match &args.token_env {
         Some(var) => {
             let value = std::env::var(var).map_err(|_| anyhow!("environment variable {var} is not set"))?;

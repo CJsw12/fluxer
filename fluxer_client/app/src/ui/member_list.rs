@@ -26,6 +26,7 @@ use crate::ui::l10n;
 use crate::view_model::avatar_url;
 
 /// Panel width (`globals.css`: `--layout-member-list-width: 16.5rem` = 264px).
+#[cfg(test)]
 pub const PANEL_WIDTH: f32 = 264.;
 /// Row height; the web uses 44 px members and 32 px headers, a uniform list
 /// needs one height so headers take a member row's height.

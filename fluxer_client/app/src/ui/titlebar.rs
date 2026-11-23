@@ -62,9 +62,7 @@ pub fn render(_title: SharedString, theme: &Theme) -> AnyElement {
         .flex_row()
         .items_center()
         .justify_between()
-        .bg(theme.background_tertiary)
-        .border_b_1()
-        .border_color(theme.border)
+        .bg(theme.background_secondary)
         .flx("app.native-titlebar.titlebar")
         .child(
             div()
@@ -83,7 +81,7 @@ pub fn render(_title: SharedString, theme: &Theme) -> AnyElement {
                         .text_size(px(11.))
                         .line_height(px(13.))
                         .font_weight(FontWeight::EXTRA_BOLD)
-                        .text_color(theme.foreground)
+                        .text_color(theme.muted_foreground.opacity(0.8))
                         .flx_text("app.native-titlebar.wordmark", display_title.to_string())
                         .child(display_title),
                 ),

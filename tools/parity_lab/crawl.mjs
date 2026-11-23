@@ -33,6 +33,8 @@ const DENY = new RegExp(
 		'kick', '\\bban\\b', 'block', 'report', 'revoke', 'deauthori', 'disable-account', 'send-message',
 		'start-call', 'join-call', 'voice-call', 'video-call', 'disconnect', 'hang-?up', 'mark-as-read',
 		'channel-item', 'guild-list-item', 'dm-list-item', 'private-channel', 'nagbar', 'download',
+		// Native OS dialogs / device capture would block an unattended crawl.
+		'upload', 'attach', 'voice-message', 'record', 'camera', 'screen-share', 'go-live', 'stream', 'open-file', 'import',
 	].join('|'),
 	'i',
 );

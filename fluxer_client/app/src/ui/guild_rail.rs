@@ -36,7 +36,7 @@ pub(crate) fn resolve_rail_indicator_height(selected: bool, hovered: bool, unrea
     }
 }
 
-const RAIL_ICON: f32 = 24.;
+const RAIL_ICON: f32 = 28.;
 /// 30% of the 44px guild icon.
 const GUILD_RADIUS: f32 = 13.2;
 
@@ -84,7 +84,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(Icon::new(AppIcon::ChatsCircle).with_size(px(RAIL_ICON)).text_color(home_fg))
+                .child(Icon::new(AppIcon::ChatCircleFill).with_size(px(RAIL_ICON)).text_color(home_fg))
                 .into_any_element(),
             l10n::tr("Direct messages"),
             home_selected,

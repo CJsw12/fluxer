@@ -290,6 +290,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .items_center()
                 .pl(px(14.))
                 .pr(px(8.))
+                .gap(px(12.))
                 .child(
                     div()
                         .id("user-panel-profile")

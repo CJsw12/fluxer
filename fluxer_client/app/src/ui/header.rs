@@ -164,7 +164,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 .ghost()
                                 .with_size(px(32.))
                                 .rounded(px(16.))
-                                .icon(hdr_icon(AppIcon::Star, theme.muted_foreground))
+                                .icon(hdr_icon(AppIcon::StarOutline, theme.muted_foreground))
                                 .tooltip(l10n::tr("Add to Favorites"))
                                 .accessibility_label(l10n::tr("Add to Favorites")),
                         ),

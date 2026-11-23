@@ -4,7 +4,7 @@
 
 ## 새 세션 시작 순서
 
-1. `CLAUDE.md`(Claude 전용) → `AGENTS.md`(공통 규칙) → 이 문서를 읽는다. 명령어 모음은 `README.md`.
+1. `CLAUDE.md`(Claude 전용) → `AGENTS.md`(공통 규칙) → 이 문서 → 로컬 운영 메모 `Logs/handoff/OPERATIONS.md`(Git 제외, 시험 환경·상시 실행·진행 중 작업)를 읽는다. 명령어 모음은 `README.md`.
 2. UI 작업이면 `docs/UI_PARITY_ROADMAP.md`의 미완료(`[ ]`) 첫 항목과 `docs/PARITY_LAB.md` 10장(운영 가이드)을 읽는다.
 3. 상시 실행 구성(시험 서버 터널, 측정 기능을 켠 Rust 클라이언트, 비교용 공식 앱)을 `docs/PARITY_LAB.md` 10.1대로 띄우고, Rust 클라이언트가 `Status: Online`인지 확인한다. 터널은 에이전트 도구의 백그라운드 시간 제한(2시간)에 걸리므로, 오래 유지하려면 별도 터미널에서 실행한다.
 4. 아래 Next Steps 1번부터 진행한다.
@@ -25,6 +25,8 @@
   - 사람·하드웨어가 필요한 항목: 한글 IME 조합, OS 알림·소리, Windows Hello·FIDO2 실기, 장시간 부하.
 
 ## Next Steps
+
+> 진행 중(2026-11-24, 미커밋일 수 있음): M9.4 프로필 카드 재구성(`ui/user_panel.rs`), M9.2 레일 호버·툴팁·음성 배지(`ui/guild_rail.rs`). 이어받으면 테스트 → 패키징 → 실측 비교 → 커밋.
 
 1. **M9 검증 사각지대 보완(`docs/UI_PARITY_ROADMAP.md` M9).** 사용자가 지적한 7건은 지금까지의 방법으로 잡지 못했다.
    - 대상: 앱 내부 크기 조절, 화면 공유 송수신, 레일 호버, 프로필 카드, 서버 이니셜 글자, 테두리·모서리·사용자 영역 카드, 아이콘 원본.

@@ -1,0 +1,2 @@
+# Local progress archives may contain private environment details.
+*.local.md

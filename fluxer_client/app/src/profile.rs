@@ -1,7 +1,7 @@
 //! Pure profile-card data for the avatar/name popout (`UserProfileModal`,
 //! `ProfileDisplayUtils.ts`). No GPUI types: the UI renders this snapshot.
 //!
-//! Scope rules (`NEXT_BRIEFS.md` (b)): in a guild the guild-member profile
+//! Scope rules (official `ProfileDisplayUtils.ts`): in a guild the guild-member profile
 //! overrides the global one field by field, but `AVATAR_UNSET`/`BANNER_UNSET`
 //! never fall back upward. URLs are the still media-proxy forms used by
 //! `getProfileAvatarUrls`/`getProfileBannerUrls` with `animated = false`:

@@ -799,6 +799,7 @@ pub fn render_bans(modal: &GuildBansModal, theme: &Theme, cx: &mut Context<Clien
         }
     }
 
+    let guild_id = modal.guild_id;
     let sidebar = div()
         .flex_1()
         .min_h_0()
@@ -813,9 +814,32 @@ pub fn render_bans(modal: &GuildBansModal, theme: &Theme, cx: &mut Context<Clien
                 .flex()
                 .flex_col()
                 .gap_1()
-                .child(div().px_2().child(section_label(l10n::tr("Moderation"), theme)))
+                .child(div().px_2().child(section_label(l10n::tr("Community Settings"), theme)))
                 .child(
                     div()
+                        .id("guild-settings-tab-roles")
+                        .debug_selector(|| "guild-settings-tab-roles".to_owned())
+                        .px_2()
+                        .py(px(6.))
+                        .rounded(px(6.))
+                        .cursor_pointer()
+                        .text_color(theme.muted_foreground)
+                        .hover(|s| s.bg(theme.muted).text_color(theme.foreground))
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_2()
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.open_access(crate::ui::access::Scope::Guild(guild_id), window, cx);
+                        }))
+                        .child(Icon::new(AppIcon::SlidersHorizontal).small())
+                        .child(div().text_sm().truncate().child(l10n::tr("Roles"))),
+                )
+                .child(div().px_2().pt_2().child(section_label(l10n::tr("Moderation"), theme)))
+                .child(
+                    div()
+                        .id("guild-settings-tab-bans")
+                        .debug_selector(|| "guild-settings-tab-bans".to_owned())
                         .px_2()
                         .py(px(6.))
                         .rounded(px(6.))

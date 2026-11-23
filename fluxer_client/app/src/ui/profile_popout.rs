@@ -270,8 +270,8 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
     let avatar_el = div()
         .absolute()
         .left(px(12.))
-        .top(px(BANNER_HEIGHT - AVATAR_SIZE * 0.55))
-        .p(px(4.))
+        .top(px(BANNER_HEIGHT - AVATAR_SIZE * 0.55 - 2.))
+        .p(px(6.))
         .rounded_full()
         .bg(theme.background_secondary)
         .child(render_avatar(
@@ -532,7 +532,26 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
                     ),
                 );
             }
-            body = body.child(mod_row);
+            body = body.child(
+                div()
+                    .debug_selector(|| "profile-moderation-card".to_owned())
+                    .p_2()
+                    .rounded(px(6.))
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.background)
+                    .flex()
+                    .flex_col()
+                    .gap_1p5()
+                    .child(
+                        div()
+                            .text_xs()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.muted_foreground)
+                            .child(l10n::tr("Moderation")),
+                    )
+                    .child(mod_row),
+            );
         }
     }
 

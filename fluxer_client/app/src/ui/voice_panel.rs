@@ -4,14 +4,16 @@
 //! bottom-left `UserArea` card whenever a voice session is active or failed.
 
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::{Icon, Sizable as _};
+use gpui_kit::component::switch::Switch;
+use gpui_kit::component::{Icon, Selectable as _, Sizable as _};
 use gpui_kit::{AnyElement, Context, FontWeight, Hsla, Role, SharedString, div, prelude::*, px};
 
 use super::avatar::{AvatarSpec, render_avatar};
 use super::l10n;
 use crate::backend::voice::{VoiceConnectionState, VoiceTrackSource};
-use crate::client_view::ClientView;
+use crate::client_view::{ClientView, VoicePopoutKind};
 use crate::icons::AppIcon;
+use crate::settings_model::SettingsEffect;
 use crate::theme::Theme;
 
 /// Renders the 3-bar signal strength indicator (`SignalStrengthIcon.tsx`).
@@ -147,11 +149,12 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                             Button::new("voice-noise-suppression-btn")
                                                 .ghost()
                                                 .small()
+                                                .selected(view.voice_popout == Some(VoicePopoutKind::Details))
                                                 .icon(AppIcon::SlidersHorizontal)
                                                 .tooltip(l10n::tr("Voice & audio settings"))
                                                 .accessibility_label(l10n::tr("Voice & audio settings"))
-                                                .on_click(cx.listener(|this, _, window, cx| {
-                                                    this.open_voice_settings(window, cx);
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.toggle_voice_popout(VoicePopoutKind::Details, cx);
                                                 })),
                                         ),
                                 )
@@ -382,6 +385,88 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             }),
                     )
                 },
-            ),
+            )
+            // Inline `VoiceDetailsPopout` (`VoiceDetailsPopout.tsx` / `NoiseSuppressionPopout.tsx`)
+            .when(!is_failed && view.voice_popout == Some(VoicePopoutKind::Details), |d| {
+                let ns_checked = view.prefs.data.voice_noise_suppression;
+                let in_vol = view.prefs.data.voice_input_volume;
+                let out_vol = view.prefs.data.voice_output_volume;
+                d.child(
+                    div()
+                        .id("voice-details-popout")
+                        .debug_selector(|| "voice-details-popout".to_owned())
+                        .p_2()
+                        .rounded(px(6.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background)
+                        .flex()
+                        .flex_col()
+                        .gap_1p5()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(status_color)
+                                        .child(l10n::tr("RTC Connected · Opus")),
+                                )
+                                .child(
+                                    div()
+                                        .text_size(px(10.))
+                                        .text_color(theme.muted_foreground)
+                                        .child(format!("In {in_vol}% · Out {out_vol}%")),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(l10n::tr("Noise Suppression")),
+                                )
+                                .child(
+                                    div()
+                                        .debug_selector(|| "voice-popout-noise-suppression".to_owned())
+                                        .child(
+                                            Switch::new("voice-popout-noise-suppression")
+                                                .checked(ns_checked)
+                                                .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                                                    this.apply_settings_effect(
+                                                        SettingsEffect::VoiceNoiseSuppressionChanged(*checked),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                })),
+                                        ),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .debug_selector(|| "voice-details-open-settings".to_owned())
+                                .child(
+                                    Button::new("voice-details-open-settings")
+                                        .ghost()
+                                        .xsmall()
+                                        .w_full()
+                                        .label(l10n::tr("Voice & video settings"))
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.open_voice_settings(window, cx);
+                                        })),
+                                ),
+                        ),
+                )
+            }),
     )
 }

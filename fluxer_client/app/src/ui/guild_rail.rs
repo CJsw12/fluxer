@@ -1,9 +1,11 @@
-//! Guild rail: the DM button, then one button per guild.
+//! Guild rail: the DM button (`HomeGuildButton`), then one button per guild (`GuildIcon`).
 
 use fluxer_client_core::state::Unread;
-use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::{Context, Div, ElementId, FontWeight, Role, SharedString, Stateful, div, prelude::*, px};
+use gpui_kit::component::{Icon, Sizable as _};
+use gpui_kit::{
+    AnyElement, Context, Div, ElementId, FontWeight, ObjectFit, Role, SharedString, Stateful, div, img, prelude::*, px,
+};
 
 use super::{badge, l10n};
 use crate::client_view::ClientView;
@@ -28,15 +30,27 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .border_r_1()
         .border_color(theme.border);
     let home_selected = view.place == Place::Home;
+    let home_fg = if home_selected {
+        theme.on_fill
+    } else {
+        theme.foreground
+    };
     rail = rail.child(rail_item(
         home_selected,
         view.home_unread,
         theme,
-        rail_button(
+        rail_button_content(
             "home",
-            l10n::tr("DM").into(),
+            div()
+                .debug_selector(|| "rail-home-icon".to_owned())
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(Icon::new(AppIcon::ChatsCircle).text_color(home_fg))
+                .into_any_element(),
             l10n::tr("Direct messages"),
             home_selected,
+            true,
             view.home_unread,
             theme,
         )
@@ -45,12 +59,30 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     for g in &view.guilds {
         let id = g.id;
         let selected = view.place == Place::Guild(id);
+        let content: AnyElement = match &g.icon_url {
+            Some(url) => img(url.clone())
+                .id(("guild-icon", id.0))
+                .debug_selector(move || format!("guild-rail-icon-{}", id.0))
+                .size_full()
+                .rounded(px(if selected { 12. } else { theme.sizes.rail_button / 2. }))
+                .object_fit(ObjectFit::Cover)
+                .into_any_element(),
+            None => div().child(g.initials.clone()).into_any_element(),
+        };
         rail = rail.child(rail_item(
             selected,
             g.unread,
             theme,
-            rail_button(("guild", id.0), g.initials.clone(), g.name.clone(), selected, g.unread, theme)
-                .on_click(cx.listener(move |this, _, _, cx| this.select_place(Place::Guild(id), cx))),
+            rail_button_content(
+                ("guild", id.0),
+                content,
+                g.name.clone(),
+                selected,
+                false,
+                g.unread,
+                theme,
+            )
+            .on_click(cx.listener(move |this, _, _, cx| this.select_place(Place::Guild(id), cx))),
         ));
     }
     rail.child(
@@ -83,15 +115,25 @@ fn rail_item(selected: bool, unread: Unread, theme: &Theme, button: impl IntoEle
     }))
 }
 
-fn rail_button(
+fn rail_button_content(
     id: impl Into<ElementId>,
-    label: SharedString,
+    content: AnyElement,
     aria_label: impl Into<SharedString>,
     selected: bool,
+    brand_when_selected: bool,
     unread: Unread,
     theme: &Theme,
 ) -> Stateful<Div> {
     let size = theme.sizes.rail_button;
+    let bg = if selected {
+        if brand_when_selected {
+            theme.brand
+        } else {
+            theme.accent
+        }
+    } else {
+        theme.muted
+    };
     div()
         .id(id)
         .role(Role::Button)
@@ -103,10 +145,10 @@ fn rail_button(
         .justify_center()
         .size(px(size))
         .rounded(px(if selected { 12. } else { size / 2. }))
-        .bg(if selected { theme.accent } else { theme.muted })
+        .bg(bg)
         .text_color(theme.foreground)
         .when(unread.unread, |d| d.font_weight(FontWeight::BOLD))
-        .child(label)
+        .child(content)
         .when(unread.mention_count > 0, |d| {
             d.child(div().absolute().right(px(-4.)).bottom(px(-4.)).child(badge(unread.mention_count, theme)))
         })

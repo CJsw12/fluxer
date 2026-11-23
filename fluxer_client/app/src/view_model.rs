@@ -34,6 +34,7 @@ pub struct GuildItem {
     pub id: Snowflake,
     pub name: SharedString,
     pub initials: SharedString,
+    pub icon_url: Option<SharedString>,
     pub unread: Unread,
 }
 
@@ -221,7 +222,23 @@ pub struct MessagePane {
     pub ready: bool,
 }
 
+/// `getGuildIconURL` (static webp, size 96); `None` when the guild has no custom icon.
+pub fn guild_icon_url(media: &str, guild_id: Snowflake, icon: Option<&str>) -> Option<String> {
+    let hash = icon.filter(|h| !h.is_empty())?;
+    let hash = hash.strip_prefix("a_").unwrap_or(hash);
+    Some(format!(
+        "{}/icons/{}/{hash}.webp?size=96",
+        media.trim_end_matches('/'),
+        guild_id
+    ))
+}
+
+#[allow(dead_code)]
 pub fn guild_items(state: &ClientState) -> Vec<GuildItem> {
+    guild_items_with_media(state, None)
+}
+
+pub fn guild_items_with_media(state: &ClientState, media: Option<&str>) -> Vec<GuildItem> {
     state
         .sorted_guilds()
         .into_iter()
@@ -229,6 +246,9 @@ pub fn guild_items(state: &ClientState) -> Vec<GuildItem> {
             id: g.id,
             name: g.name.clone().into(),
             initials: initials(&g.name).into(),
+            icon_url: media
+                .and_then(|m| guild_icon_url(m, g.id, g.icon.as_deref()))
+                .map(Into::into),
             unread: state.guild_unread(g.id),
         })
         .collect()

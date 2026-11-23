@@ -63,6 +63,10 @@ pub struct Prefs {
     pub voice_output_device: Option<String>,
     pub voice_input_volume: u16,
     pub voice_output_volume: u16,
+    pub voice_push_to_talk: bool,
+    pub voice_noise_suppression: bool,
+    pub allow_guild_dms: bool,
+    pub inline_media_previews: bool,
     pub reduced_motion: ReducedMotionPref,
 }
 
@@ -87,6 +91,10 @@ impl Default for Prefs {
             voice_output_device: None,
             voice_input_volume: DEFAULT_VOICE_VOLUME,
             voice_output_volume: DEFAULT_VOICE_VOLUME,
+            voice_push_to_talk: false,
+            voice_noise_suppression: true,
+            allow_guild_dms: true,
+            inline_media_previews: true,
             reduced_motion: ReducedMotionPref::System,
         }
     }
@@ -176,6 +184,22 @@ impl Prefs {
                 .and_then(|n| u16::try_from(n).ok())
                 .unwrap_or(default.voice_output_volume)
                 .clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME),
+            voice_push_to_talk: value
+                .get("voice_push_to_talk")
+                .and_then(Value::as_bool)
+                .unwrap_or(default.voice_push_to_talk),
+            voice_noise_suppression: value
+                .get("voice_noise_suppression")
+                .and_then(Value::as_bool)
+                .unwrap_or(default.voice_noise_suppression),
+            allow_guild_dms: value
+                .get("allow_guild_dms")
+                .and_then(Value::as_bool)
+                .unwrap_or(default.allow_guild_dms),
+            inline_media_previews: value
+                .get("inline_media_previews")
+                .and_then(Value::as_bool)
+                .unwrap_or(default.inline_media_previews),
             reduced_motion: value
                 .get("reduced_motion")
                 .and_then(Value::as_str)
@@ -200,6 +224,10 @@ impl Prefs {
             "voice_output_device": normalize_device_name(self.voice_output_device.as_deref()),
             "voice_input_volume": self.voice_input_volume.clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME),
             "voice_output_volume": self.voice_output_volume.clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME),
+            "voice_push_to_talk": self.voice_push_to_talk,
+            "voice_noise_suppression": self.voice_noise_suppression,
+            "allow_guild_dms": self.allow_guild_dms,
+            "inline_media_previews": self.inline_media_previews,
             "reduced_motion": self.reduced_motion.as_str(),
         })
     }
@@ -298,6 +326,26 @@ impl PrefsStore {
 
     pub fn set_voice_output_volume(&mut self, volume: u16) {
         self.data.voice_output_volume = volume.clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME);
+        self.persist();
+    }
+
+    pub fn set_voice_push_to_talk(&mut self, enabled: bool) {
+        self.data.voice_push_to_talk = enabled;
+        self.persist();
+    }
+
+    pub fn set_voice_noise_suppression(&mut self, enabled: bool) {
+        self.data.voice_noise_suppression = enabled;
+        self.persist();
+    }
+
+    pub fn set_allow_guild_dms(&mut self, enabled: bool) {
+        self.data.allow_guild_dms = enabled;
+        self.persist();
+    }
+
+    pub fn set_inline_media_previews(&mut self, enabled: bool) {
+        self.data.inline_media_previews = enabled;
         self.persist();
     }
 
@@ -403,6 +451,10 @@ mod tests {
                 },
                 voice_input_volume: if theme == ThemeKind::Light { 150 } else { 80 },
                 voice_output_volume: if theme == ThemeKind::Black { 200 } else { 40 },
+                voice_push_to_talk: theme == ThemeKind::Light,
+                voice_noise_suppression: theme != ThemeKind::Black,
+                allow_guild_dms: theme != ThemeKind::Darker,
+                inline_media_previews: theme != ThemeKind::Light,
                 reduced_motion: match theme {
                     ThemeKind::Light => ReducedMotionPref::On,
                     ThemeKind::Dark => ReducedMotionPref::Off,
@@ -490,7 +542,7 @@ mod tests {
             .keys()
             .map(String::as_str)
             .collect();
-        assert_eq!(keys.len(), 15);
+        assert_eq!(keys.len(), 19);
         for key in [
             "theme",
             "notifications",
@@ -506,6 +558,10 @@ mod tests {
             "voice_output_device",
             "voice_input_volume",
             "voice_output_volume",
+            "voice_push_to_talk",
+            "voice_noise_suppression",
+            "allow_guild_dms",
+            "inline_media_previews",
             "reduced_motion",
         ] {
             assert!(keys.contains(&key), "{key}");

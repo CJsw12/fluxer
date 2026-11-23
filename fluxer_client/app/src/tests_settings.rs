@@ -675,3 +675,56 @@ fn account_tab_renders_passkeys_and_handles_credential_events(cx: &mut TestAppCo
 
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn m5_user_area_popout_and_interactive_settings_prefs_work(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, vcx) = open_client(cx, backend, events);
+
+    // Home button renders brand icon.
+    assert!(vcx.debug_bounds("rail-home-icon").is_some());
+
+    // Clicking user-panel-profile toggles the dedicated bottom-left UserAreaPopout.
+    let profile_row = vcx.debug_bounds("user-panel-profile").expect("user-panel-profile").center();
+    vcx.simulate_click(profile_row, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("user-area-popout").is_some());
+    assert!(vcx.debug_bounds("user-area-status-online").is_some());
+    assert!(vcx.debug_bounds("user-area-status-dnd").is_some());
+    assert!(vcx.debug_bounds("user-area-edit-profile").is_some());
+
+    // Clicking Edit Profile in UserAreaPopout closes the popout and opens Settings on Profile tab.
+    let edit_prof = vcx.debug_bounds("user-area-edit-profile").unwrap().center();
+    vcx.simulate_click(edit_prof, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("user-area-popout").is_none());
+    view.read_with(vcx, |v, _| {
+        let Overlay::Settings(modal) = &v.overlay else {
+            panic!("expected settings overlay");
+        };
+        assert_eq!(modal.active_tab, crate::ui::settings::SettingsTab::Profile);
+    });
+
+    // Switch to Voice & Video tab and toggle Push to Talk + Noise Suppression.
+    view.update(vcx, |v, cx| {
+        v.select_settings_tab(crate::ui::settings::SettingsTab::VoiceVideo, cx);
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("settings-input-mode-vad").is_some());
+    assert!(vcx.debug_bounds("settings-input-mode-ptt").is_some());
+    assert!(vcx.debug_bounds("settings-noise-suppression").is_some());
+
+    let ptt_btn = vcx.debug_bounds("settings-input-mode-ptt").unwrap().center();
+    vcx.simulate_click(ptt_btn, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert!(v.prefs.data.voice_push_to_talk);
+    });
+
+    drop(rt);
+}

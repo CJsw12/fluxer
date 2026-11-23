@@ -87,6 +87,9 @@ def audit_bottom_left_user_area() -> dict[str, Any]:
         "ui/user_panel.rs",
         {
             "unified_user_area_wrapper": r"user-area-wrapper",
+            "user_area_popout_menu": r"user-area-popout",
+            "user_area_status_selector": r"user-area-status-",
+            "user_area_edit_profile_action": r"user-area-edit-profile",
             "effective_muted_danger_highlight": r"effective_muted",
             "effective_deafened_danger_highlight": r"effective_deafened",
             "mute_toggle_locked_handling": r"mute_toggle_locked",
@@ -94,7 +97,14 @@ def audit_bottom_left_user_area() -> dict[str, Any]:
             "user_panel_deafen_selector": r"user-panel-deafen",
         },
     )
-    all_checks = {**voice_checks, **user_checks}
+    voice_popout_checks = check_patterns(
+        "ui/voice_panel.rs",
+        {
+            "inline_voice_details_popout": r"voice-details-popout",
+            "inline_noise_suppression_switch": r"voice-popout-noise-suppression",
+        },
+    )
+    all_checks = {**voice_checks, **user_checks, **voice_popout_checks}
     return {
         "official_data_flx_count": len(official_flx),
         "checks": all_checks,
@@ -120,6 +130,7 @@ def audit_voice_call_stage() -> dict[str, Any]:
             "more_options_button": r"voice-stage-more-btn",
             "control_bar_separator": r"voice-stage-control-separator",
             "disconnect_button": r"voice-stage-disconnect-btn",
+            "inline_voice_control_popout": r"voice-control-popout",
         },
     )
     client_checks = check_patterns(
@@ -156,10 +167,15 @@ def audit_settings_modal() -> dict[str, Any]:
             "tab_windows_advanced": r"settings-tab-advanced",
             "expandable_sidebar_subsections": r"settings-subitem-",
             "voice_input_mode_vad_ptt": r"settings-voice-input-mode",
+            "interactive_input_mode_vad": r"settings-input-mode-vad",
+            "interactive_input_mode_ptt": r"settings-input-mode-ptt",
             "voice_noise_suppression_section": r"settings-voice-processing",
+            "interactive_noise_suppression_switch": r"settings-noise-suppression",
             "voice_mic_test_section": r"settings-voice-mic-test",
             "privacy_dm_and_sensitive_media": r"settings-privacy-dm",
+            "interactive_allow_guild_dms_switch": r"settings-allow-guild-dms",
             "chat_inline_media_and_spoilers": r"settings-chat-display",
+            "interactive_inline_media_switch": r"settings-inline-media",
             "keybinds_reference_table": r"settings-keybinds-list",
         },
     )
@@ -170,12 +186,71 @@ def audit_settings_modal() -> dict[str, Any]:
     }
 
 
+def audit_m5_navigation_and_rows() -> dict[str, Any]:
+    channel_list_checks = check_patterns(
+        "ui/channel_list.rs",
+        {
+            "voice_member_live_badge": r"voice-member-live-",
+            "voice_member_muted_icon": r"voice-member-muted-",
+            "voice_member_deaf_icon": r"voice-member-deaf-",
+        },
+    )
+    rail_checks = check_patterns(
+        "ui/guild_rail.rs",
+        {
+            "home_brand_icon": r"rail-home-icon",
+            "guild_icon_image": r"guild-rail-icon-",
+        },
+    )
+    channel_modal_checks = check_patterns(
+        "ui/channel_modal.rs",
+        {
+            "channel_settings_tab_overview": r"channel-settings-tab-overview",
+            "channel_settings_tab_permissions": r"channel-settings-tab-permissions",
+        },
+    )
+    access_checks = check_patterns(
+        "ui/access.rs",
+        {
+            "access_channel_tab_overview": r"channel-settings-tab-overview",
+            "access_guild_tab_roles": r"guild-settings-tab-roles",
+            "access_guild_tab_bans": r"guild-settings-tab-bans",
+        },
+    )
+    moderation_checks = check_patterns(
+        "ui/moderation_modal.rs",
+        {
+            "bans_guild_tab_roles": r"guild-settings-tab-roles",
+            "bans_guild_tab_bans": r"guild-settings-tab-bans",
+        },
+    )
+    profile_checks = check_patterns(
+        "ui/profile_popout.rs",
+        {
+            "profile_moderation_subcard": r"profile-moderation-card",
+        },
+    )
+    all_checks = {
+        **channel_list_checks,
+        **rail_checks,
+        **channel_modal_checks,
+        **access_checks,
+        **moderation_checks,
+        **profile_checks,
+    }
+    return {
+        "checks": all_checks,
+        "passed": all(all_checks.values()),
+    }
+
+
 def main() -> int:
     report = {
         "voice_state_machine": audit_voice_state_machine(),
         "bottom_left_user_area": audit_bottom_left_user_area(),
         "voice_call_stage": audit_voice_call_stage(),
         "settings_modal": audit_settings_modal(),
+        "m5_navigation_and_rows": audit_m5_navigation_and_rows(),
     }
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
     OUT_JSON.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")

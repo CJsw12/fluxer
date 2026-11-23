@@ -745,7 +745,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             mute_locked,
             theme,
             cx.listener(|this, _, _, cx| this.toggle_voice_mute(cx)),
-            cx.listener(|this, _, window, cx| this.open_voice_settings(window, cx)),
+            cx.listener(|this, _, _, cx| {
+                this.toggle_voice_popout(crate::client_view::VoicePopoutKind::Input, cx);
+            }),
         ))
         .child(split_control_group(
             "voice-stage-deaf-btn",
@@ -762,7 +764,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             view.voice.server_deaf,
             theme,
             cx.listener(|this, _, _, cx| this.toggle_voice_deaf(cx)),
-            cx.listener(|this, _, window, cx| this.open_voice_settings(window, cx)),
+            cx.listener(|this, _, _, cx| {
+                this.toggle_voice_popout(crate::client_view::VoicePopoutKind::Output, cx);
+            }),
         ))
         .child(split_control_group(
             "voice-stage-camera-btn",
@@ -788,12 +792,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             !is_connected,
             theme,
             cx.listener(|this, _, _, cx| this.toggle_screen_share(false, cx)),
-            cx.listener(|this, _, window, cx| {
-                if this.voice.self_stream {
-                    this.toggle_screen_share_audio(cx);
-                } else {
-                    this.open_voice_settings(window, cx);
-                }
+            cx.listener(|this, _, _, cx| {
+                this.toggle_voice_popout(crate::client_view::VoicePopoutKind::Stream, cx);
             }),
         ))
         .child(single_control_button(
@@ -836,6 +836,252 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             ))
         });
 
+    let control_popout = match view.voice_popout {
+        Some(crate::client_view::VoicePopoutKind::Input) => {
+            let active_dev = view
+                .prefs
+                .data
+                .voice_input_device
+                .clone()
+                .unwrap_or_else(|| l10n::tr("System default"));
+            let vol = view.prefs.data.voice_input_volume;
+            Some(
+                div()
+                    .id("voice-control-popout")
+                    .debug_selector(|| "voice-control-popout".to_owned())
+                    .w(px(320.))
+                    .p_3()
+                    .rounded(px(10.))
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.background_secondary)
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_between()
+                            .child(div().text_xs().font_weight(FontWeight::BOLD).child(l10n::tr("Input Device")))
+                            .child(div().text_xs().text_color(theme.muted_foreground).truncate().child(active_dev)),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .child(div().text_xs().font_weight(FontWeight::MEDIUM).child(l10n::tr("Input Volume")))
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap_1()
+                                    .child(
+                                        Button::new("popout-in-vol-dec")
+                                            .ghost()
+                                            .xsmall()
+                                            .label("-10%")
+                                            .on_click(cx.listener(move |this, _, window, cx| {
+                                                this.apply_settings_effect(
+                                                    crate::settings_model::SettingsEffect::VoiceInputVolumeChanged(
+                                                        vol.saturating_sub(10),
+                                                    ),
+                                                    window,
+                                                    cx,
+                                                );
+                                            })),
+                                    )
+                                    .child(div().text_xs().font_weight(FontWeight::SEMIBOLD).child(format!("{vol}%")))
+                                    .child(
+                                        Button::new("popout-in-vol-inc")
+                                            .ghost()
+                                            .xsmall()
+                                            .label("+10%")
+                                            .on_click(cx.listener(move |this, _, window, cx| {
+                                                this.apply_settings_effect(
+                                                    crate::settings_model::SettingsEffect::VoiceInputVolumeChanged(
+                                                        (vol + 10).min(crate::prefs::MAX_VOICE_VOLUME),
+                                                    ),
+                                                    window,
+                                                    cx,
+                                                );
+                                            })),
+                                    ),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .debug_selector(|| "voice-control-popout-settings".to_owned())
+                            .child(
+                                Button::new("voice-control-popout-settings")
+                                    .ghost()
+                                    .xsmall()
+                                    .w_full()
+                                    .label(l10n::tr("Voice & video settings"))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.open_voice_settings(window, cx);
+                                    })),
+                            ),
+                    ),
+            )
+        }
+        Some(crate::client_view::VoicePopoutKind::Output) => {
+            let active_dev = view
+                .prefs
+                .data
+                .voice_output_device
+                .clone()
+                .unwrap_or_else(|| l10n::tr("System default"));
+            let vol = view.prefs.data.voice_output_volume;
+            Some(
+                div()
+                    .id("voice-control-popout")
+                    .debug_selector(|| "voice-control-popout".to_owned())
+                    .w(px(320.))
+                    .p_3()
+                    .rounded(px(10.))
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.background_secondary)
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_between()
+                            .child(div().text_xs().font_weight(FontWeight::BOLD).child(l10n::tr("Output Device")))
+                            .child(div().text_xs().text_color(theme.muted_foreground).truncate().child(active_dev)),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .child(div().text_xs().font_weight(FontWeight::MEDIUM).child(l10n::tr("Output Volume")))
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap_1()
+                                    .child(
+                                        Button::new("popout-out-vol-dec")
+                                            .ghost()
+                                            .xsmall()
+                                            .label("-10%")
+                                            .on_click(cx.listener(move |this, _, window, cx| {
+                                                this.apply_settings_effect(
+                                                    crate::settings_model::SettingsEffect::VoiceOutputVolumeChanged(
+                                                        vol.saturating_sub(10),
+                                                    ),
+                                                    window,
+                                                    cx,
+                                                );
+                                            })),
+                                    )
+                                    .child(div().text_xs().font_weight(FontWeight::SEMIBOLD).child(format!("{vol}%")))
+                                    .child(
+                                        Button::new("popout-out-vol-inc")
+                                            .ghost()
+                                            .xsmall()
+                                            .label("+10%")
+                                            .on_click(cx.listener(move |this, _, window, cx| {
+                                                this.apply_settings_effect(
+                                                    crate::settings_model::SettingsEffect::VoiceOutputVolumeChanged(
+                                                        (vol + 10).min(crate::prefs::MAX_VOICE_VOLUME),
+                                                    ),
+                                                    window,
+                                                    cx,
+                                                );
+                                            })),
+                                    ),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .debug_selector(|| "voice-control-popout-settings".to_owned())
+                            .child(
+                                Button::new("voice-control-popout-settings")
+                                    .ghost()
+                                    .xsmall()
+                                    .w_full()
+                                    .label(l10n::tr("Voice & video settings"))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.open_voice_settings(window, cx);
+                                    })),
+                            ),
+                    ),
+            )
+        }
+        Some(crate::client_view::VoicePopoutKind::Stream) => {
+            let audio_lbl = if view.voice.screen_share_audio {
+                l10n::tr("System Audio: On")
+            } else {
+                l10n::tr("System Audio: Off")
+            };
+            Some(
+                div()
+                    .id("voice-control-popout")
+                    .debug_selector(|| "voice-control-popout".to_owned())
+                    .w(px(320.))
+                    .p_3()
+                    .rounded(px(10.))
+                    .border_1()
+                    .border_color(theme.border)
+                    .bg(theme.background_secondary)
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_between()
+                            .child(div().text_xs().font_weight(FontWeight::BOLD).child(l10n::tr("Screen Share")))
+                            .child(div().text_xs().text_color(theme.muted_foreground).child("1080p · 60fps")),
+                    )
+                    .when(view.voice.self_stream, |d| {
+                        d.child(
+                            Button::new("popout-stream-audio-toggle")
+                                .ghost()
+                                .xsmall()
+                                .w_full()
+                                .label(audio_lbl)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.toggle_screen_share_audio(cx);
+                                })),
+                        )
+                    })
+                    .child(
+                        div()
+                            .debug_selector(|| "voice-control-popout-settings".to_owned())
+                            .child(
+                                Button::new("voice-control-popout-settings")
+                                    .ghost()
+                                    .xsmall()
+                                    .w_full()
+                                    .label(l10n::tr("Voice & video settings"))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.open_voice_settings(window, cx);
+                                    })),
+                            ),
+                    ),
+            )
+        }
+        _ => None,
+    };
+
     let controls = div()
         .id("voice-stage-controls")
         .debug_selector(|| "voice-stage-controls".to_owned())
@@ -846,9 +1092,11 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .border_color(theme.border)
         .bg(theme.background_tertiary)
         .flex()
-        .flex_row()
+        .flex_col()
         .items_center()
         .justify_center()
+        .gap_2()
+        .children(control_popout)
         .child(control_pill);
 
     let is_split_view = !view.voice_stage_expanded && view.selected_channel.is_some();

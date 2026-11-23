@@ -577,6 +577,11 @@ pub fn render(view: &ClientView, modal: &AccessModal, theme: &Theme, cx: &mut Co
     };
 
     let allowed = modal.allowed(view.place, &state);
+    let can_edit_channel = match modal.scope {
+        Scope::Channel { channel, .. } => state.can_manage_channel(channel),
+        Scope::Guild(_) => false,
+    };
+    let can_view_bans = matches!(modal.scope, Scope::Guild(_)) && state.can_ban_members(guild);
     let sidebar_list: AnyElement = if allowed {
         match modal.scope {
             Scope::Guild(_) => role_rows(&state, guild, selected_role, busy, cx).into_any_element(),
@@ -836,6 +841,95 @@ pub fn render(view: &ClientView, modal: &AccessModal, theme: &Theme, cx: &mut Co
         .clone()
         .or_else(|| stale.then(|| l10n::tr("This item changed. Go back and reopen it.")));
 
+    let nav_tabs = match modal.scope {
+        Scope::Channel { channel, .. } => div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .when(can_edit_channel, |d| {
+                d.child(
+                    div()
+                        .id("channel-settings-tab-overview")
+                        .debug_selector(|| "channel-settings-tab-overview".to_owned())
+                        .px_2()
+                        .py(px(6.))
+                        .rounded(px(6.))
+                        .cursor_pointer()
+                        .text_color(theme.muted_foreground)
+                        .hover(|s| s.bg(theme.muted).text_color(theme.foreground))
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_2()
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.open_edit_channel(channel, window, cx);
+                        }))
+                        .child(Icon::new(AppIcon::Hash).small())
+                        .child(div().text_sm().truncate().child(l10n::tr("Overview"))),
+                )
+            })
+            .child(
+                div()
+                    .id("channel-settings-tab-permissions")
+                    .debug_selector(|| "channel-settings-tab-permissions".to_owned())
+                    .px_2()
+                    .py(px(6.))
+                    .rounded(px(6.))
+                    .bg(theme.accent)
+                    .text_color(theme.foreground)
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap_2()
+                    .child(Icon::new(AppIcon::SlidersHorizontal).small())
+                    .child(div().text_sm().truncate().child(l10n::tr("Permissions"))),
+            ),
+        Scope::Guild(_) => div()
+            .flex()
+            .flex_col()
+            .gap_1()
+            .child(
+                div()
+                    .id("guild-settings-tab-roles")
+                    .debug_selector(|| "guild-settings-tab-roles".to_owned())
+                    .px_2()
+                    .py(px(6.))
+                    .rounded(px(6.))
+                    .bg(theme.accent)
+                    .text_color(theme.foreground)
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap_2()
+                    .child(Icon::new(AppIcon::SlidersHorizontal).small())
+                    .child(div().text_sm().truncate().child(l10n::tr("Roles"))),
+            )
+            .when(can_view_bans, |d| {
+                d.child(
+                    div()
+                        .id("guild-settings-tab-bans")
+                        .debug_selector(|| "guild-settings-tab-bans".to_owned())
+                        .px_2()
+                        .py(px(6.))
+                        .rounded(px(6.))
+                        .cursor_pointer()
+                        .text_color(theme.muted_foreground)
+                        .hover(|s| s.bg(theme.muted).text_color(theme.foreground))
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_2()
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.open_guild_bans(window, cx);
+                        }))
+                        .child(Icon::new(AppIcon::Prohibit).small())
+                        .child(div().text_sm().truncate().child(l10n::tr("Bans"))),
+                )
+            }),
+    };
+
     let sidebar = div()
         .flex_1()
         .min_h_0()
@@ -844,23 +938,15 @@ pub fn render(view: &ClientView, modal: &AccessModal, theme: &Theme, cx: &mut Co
         .child(
             div()
                 .flex_none()
-                .px_4()
-                .pt_4()
+                .px_3()
+                .pt_3()
                 .pb_3()
                 .border_b_1()
                 .border_color(theme.border)
                 .flex()
                 .flex_col()
                 .gap_2()
-                .child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap_2()
-                        .child(Icon::new(AppIcon::SlidersHorizontal).small())
-                        .child(div().text_sm().font_weight(FontWeight::BOLD).child(l10n::tr(scope_title))),
-                )
+                .child(nav_tabs)
                 .when(allowed && matches!(modal.scope, Scope::Guild(_)), |d| {
                     d.child(
                         Button::new("access-new-role")

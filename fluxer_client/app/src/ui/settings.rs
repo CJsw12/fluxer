@@ -435,6 +435,22 @@ impl ClientView {
             SettingsEffect::VoiceOutputDeviceChanged(device) => self.settings_set_voice_output_device(device, cx),
             SettingsEffect::VoiceInputVolumeChanged(volume) => self.settings_set_voice_input_volume(volume, cx),
             SettingsEffect::VoiceOutputVolumeChanged(volume) => self.settings_set_voice_output_volume(volume, cx),
+            SettingsEffect::VoicePushToTalkChanged(ptt) => {
+                self.prefs.set_voice_push_to_talk(ptt);
+                cx.notify();
+            }
+            SettingsEffect::VoiceNoiseSuppressionChanged(enabled) => {
+                self.prefs.set_voice_noise_suppression(enabled);
+                cx.notify();
+            }
+            SettingsEffect::AllowGuildDmsChanged(enabled) => {
+                self.prefs.set_allow_guild_dms(enabled);
+                cx.notify();
+            }
+            SettingsEffect::InlineMediaPreviewsChanged(enabled) => {
+                self.prefs.set_inline_media_previews(enabled);
+                cx.notify();
+            }
             SettingsEffect::ReducedMotionChanged(pref) => {
                 self.prefs.set_reduced_motion(pref);
                 cx.set_reduce_motion(crate::platform::resolve_reduced_motion(pref));
@@ -1222,12 +1238,53 @@ fn render_privacy_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientV
                 .flex_col()
                 .gap_2()
                 .child(section_heading(l10n::tr("Friends & direct messages"), theme))
-                .child(info_card_row(
-                    l10n::tr("Direct messages from community members"),
-                    l10n::tr("Allow members of shared communities to start direct messages with you."),
-                    Some(l10n::tr("Enabled")),
-                    theme,
-                ))
+                .child(
+                    div()
+                        .p_3()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_3()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(l10n::tr("Direct messages from community members")),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(l10n::tr(
+                                            "Allow members of shared communities to start direct messages with you.",
+                                        )),
+                                ),
+                        )
+                        .child(
+                            div().debug_selector(|| "settings-allow-guild-dms".to_owned()).child(
+                                Switch::new("settings-allow-guild-dms")
+                                    .checked(view.prefs.data.allow_guild_dms)
+                                    .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                                        this.apply_settings_effect(
+                                            SettingsEffect::AllowGuildDmsChanged(*checked),
+                                            window,
+                                            cx,
+                                        );
+                                    })),
+                            ),
+                        ),
+                )
                 .child(info_card_row(
                     l10n::tr("Friend requests"),
                     l10n::tr("Control who can send you friend requests."),
@@ -1939,7 +1996,7 @@ fn render_notifications_tab(view: &ClientView, theme: &Theme, cx: &mut Context<C
         .into_any_element()
 }
 
-fn render_messages_media_tab(theme: &Theme) -> AnyElement {
+fn render_messages_media_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
     div()
         .debug_selector(|| "settings-chat-display".to_owned())
         .flex()
@@ -1951,12 +2008,53 @@ fn render_messages_media_tab(theme: &Theme) -> AnyElement {
                 .flex_col()
                 .gap_2()
                 .child(section_heading(l10n::tr("Display & previews"), theme))
-                .child(info_card_row(
-                    l10n::tr("Inline image & GIF previews"),
-                    l10n::tr("Display uploaded images, animated GIFs, and media attachments directly in chat."),
-                    Some(l10n::tr("Enabled")),
-                    theme,
-                ))
+                .child(
+                    div()
+                        .p_3()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_3()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(l10n::tr("Inline image & GIF previews")),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(l10n::tr(
+                                            "Display uploaded images, animated GIFs, and media attachments directly in chat.",
+                                        )),
+                                ),
+                        )
+                        .child(
+                            div().debug_selector(|| "settings-inline-media".to_owned()).child(
+                                Switch::new("settings-inline-media")
+                                    .checked(view.prefs.data.inline_media_previews)
+                                    .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                                        this.apply_settings_effect(
+                                            SettingsEffect::InlineMediaPreviewsChanged(*checked),
+                                            window,
+                                            cx,
+                                        );
+                                    })),
+                            ),
+                        ),
+                )
                 .child(info_card_row(
                     l10n::tr("Website link previews & embeds"),
                     l10n::tr("Show rich embed cards and YouTube thumbnails for links posted in chat."),
@@ -2081,12 +2179,78 @@ fn render_voice_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVie
                 .flex_col()
                 .gap_2()
                 .child(section_heading(l10n::tr("Input mode"), theme))
-                .child(info_card_row(
-                    l10n::tr("Voice activity"),
-                    l10n::tr("Automatically transmit microphone audio above the activity gate threshold."),
-                    Some(l10n::tr("Active")),
-                    theme,
-                )),
+                .child(
+                    div()
+                        .p_3()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_3()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(l10n::tr("Voice transmission mode")),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(l10n::tr(
+                                            "Choose automatic voice activity detection or manual push-to-talk.",
+                                        )),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .gap_1()
+                                .child(
+                                    div().debug_selector(|| "settings-input-mode-vad".to_owned()).child({
+                                        let vad = !view.prefs.data.voice_push_to_talk;
+                                        let mut btn = Button::new("settings-input-mode-vad")
+                                            .small()
+                                            .label(l10n::tr("Voice Activity"));
+                                        btn = if vad { btn.primary() } else { btn.ghost() };
+                                        btn.on_click(cx.listener(|this, _, window, cx| {
+                                            this.apply_settings_effect(
+                                                SettingsEffect::VoicePushToTalkChanged(false),
+                                                window,
+                                                cx,
+                                            );
+                                        }))
+                                    }),
+                                )
+                                .child(
+                                    div().debug_selector(|| "settings-input-mode-ptt".to_owned()).child({
+                                        let ptt = view.prefs.data.voice_push_to_talk;
+                                        let mut btn = Button::new("settings-input-mode-ptt")
+                                            .small()
+                                            .label(l10n::tr("Push to Talk"));
+                                        btn = if ptt { btn.primary() } else { btn.ghost() };
+                                        btn.on_click(cx.listener(|this, _, window, cx| {
+                                            this.apply_settings_effect(
+                                                SettingsEffect::VoicePushToTalkChanged(true),
+                                                window,
+                                                cx,
+                                            );
+                                        }))
+                                    }),
+                                ),
+                        ),
+                ),
         )
         .child(
             div()
@@ -2095,12 +2259,53 @@ fn render_voice_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVie
                 .flex_col()
                 .gap_2()
                 .child(section_heading(l10n::tr("Audio processing"), theme))
-                .child(info_card_row(
-                    l10n::tr("Echo cancellation & noise suppression"),
-                    l10n::tr("WebRTC hardware-assisted acoustic echo cancellation, noise suppression, and auto gain."),
-                    Some(l10n::tr("Enabled")),
-                    theme,
-                )),
+                .child(
+                    div()
+                        .p_3()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_3()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(l10n::tr("Echo cancellation & noise suppression")),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(l10n::tr(
+                                            "WebRTC hardware-assisted acoustic echo cancellation, noise suppression, and auto gain.",
+                                        )),
+                                ),
+                        )
+                        .child(
+                            div().debug_selector(|| "settings-noise-suppression".to_owned()).child(
+                                Switch::new("settings-noise-suppression")
+                                    .checked(view.prefs.data.voice_noise_suppression)
+                                    .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                                        this.apply_settings_effect(
+                                            SettingsEffect::VoiceNoiseSuppressionChanged(*checked),
+                                            window,
+                                            cx,
+                                        );
+                                    })),
+                            ),
+                        ),
+                ),
         )
         .child(
             div()
@@ -2579,7 +2784,7 @@ fn render_tab_body(
         SettingsTab::Appearance => render_appearance_tab(view, theme, cx),
         SettingsTab::Themes => render_themes_tab(view, theme, cx),
         SettingsTab::Notifications => render_notifications_tab(view, theme, cx),
-        SettingsTab::MessagesMedia => render_messages_media_tab(theme),
+        SettingsTab::MessagesMedia => render_messages_media_tab(view, theme, cx),
         SettingsTab::VoiceVideo => render_voice_tab(view, theme, cx),
         SettingsTab::Accessibility => render_accessibility_tab(view, theme, cx),
         SettingsTab::Language => render_language_tab(modal, theme, cx),

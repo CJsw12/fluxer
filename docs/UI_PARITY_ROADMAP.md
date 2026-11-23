@@ -141,6 +141,43 @@
     4. 오프라인 시각 갤러리(`visual_gallery.rs`)를 확장해 음성 연결 후 통합 `UserArea`, 상하 분할 음성 스테이지, 확장된 설정 탭 화면을 모두 결정적으로 캡처한다.
   - **수락 기준:** `scripts/audit_ui_parity.py` 감사 100%(52/52) 통과, 기존 및 신규 설정·음성 GPUI 테스트 전수(총 700건) 통과, 릴리스 패키징 경고 0건.
 
+### M5. 세부 인터랙션 팝아웃 · 길드 레일 아이콘 · 모달 탭 통합 · 사이드바 음성 행 1:1 마감
+- [x] **M5.1 채널 사이드바 음성 참가자 행 우측 상태 아이콘·LIVE 배지 정렬**
+  - **대상 파일:** `fluxer_client/app/src/ui/channel_list.rs`, `fluxer_client/app/src/tests_voice.rs`
+  - **공식 참조:** `fluxer_app/src/features/app/components/layout/ChannelItem.tsx`, `VoiceParticipant.tsx`
+  - **작업:** 음성 채널 아래 참가자 행에서 텍스트 `"(muted)"` / `"(deafened)"` 접미사를 제거하고, 좌측에 20px 아바타+이름, 우측 끝에 `MicrophoneSlash` / `SpeakerSlash` 아이콘과 화면 공유 시 붉은 `"LIVE"` 배지(`voice-member-live-{uid}`)를 정렬한다.
+  - **수락 기준:** 사이드바 음성 참가자 행에서 우측 상태 아이콘·LIVE 배지 셀렉터 렌더링 GPUI 테스트 통과.
+
+- [x] **M5.2 채널 설정(`Overview` + `Permissions`) 및 서버 설정(`Roles` + `Bans`) 2단 모달 사이드바 탭 통합**
+  - **대상 파일:** `fluxer_client/app/src/ui/channel_modal.rs`, `fluxer_client/app/src/ui/access.rs`, `fluxer_client/app/src/ui/moderation_modal.rs`
+  - **공식 참조:** `fluxer_app/src/features/channel/components/modals/ChannelSettingsModal.tsx`, `GuildSettingsModal.tsx`
+  - **작업:** 채널 설정 2단 모달 좌측 사이드바에 `Overview`(`channel-settings-tab-overview`)와 `Permissions`(`channel-settings-tab-permissions`) 탭을 함께 배치해 즉시 전환되게 하고, 서버 설정 2단 모달 좌측 사이드바에도 `Roles`(`guild-settings-tab-roles`)와 `Bans`(`guild-settings-tab-bans`) 탭을 통합한다.
+  - **수락 기준:** 채널 설정 `Overview ↔ Permissions` 및 서버 설정 `Roles ↔ Bans` 탭 클릭 전환 GPUI 테스트 통과, 기존 채널/권한/밴 테스트 무회귀.
+
+- [x] **M5.3 길드 레일(좌측 서버 바) 홈 브랜드 아이콘 · 서버 `icon_url` 이미지 · 좌측 알약(pill) 인디케이터**
+  - **대상 파일:** `fluxer_client/app/src/ui/guild_rail.rs`, `fluxer_client/app/src/view_model.rs`, `fluxer_client/app/src/client_view.rs`
+  - **공식 참조:** `fluxer_app/src/features/app/components/layout/GuildsSidebar.tsx`, `GuildItem.tsx`
+  - **작업:** `GuildItem`에 `icon_url: Option<SharedString>`(`guild_icon_url`)을 연결해 서버 아이콘 이미지가 있으면 이미지를 렌더링(없을 때만 약어 폴백)하고, 홈 버튼을 텍스트 `"DM"` 대신 브랜드 아이콘 버튼(`rail-home-icon`)으로 렌더링한다.
+  - **수락 기준:** `guild_icon_url` 단위 테스트 및 길드 레일 홈 아이콘·서버 이미지 렌더링 GPUI 테스트 통과.
+
+- [x] **M5.4 좌측 하단 `UserArea` 클릭 시 전용 `UserAreaPopout` 상태·계정 메뉴 팝아웃**
+  - **대상 파일:** `fluxer_client/app/src/ui/user_panel.rs`, `fluxer_client/app/src/client_view.rs`
+  - **공식 참조:** `fluxer_app/src/features/app/components/floating/UserAreaPopout.tsx`
+  - **작업:** 좌측 하단 `UserArea` 프로필 영역 클릭 시 하단 카드 바로 위에 전용 `UserAreaPopout`(`user-area-popout`)을 열어 `Online` / `Idle` / `Do Not Disturb` / `Invisible` 4종 상태 직접 선택, `Edit profile` 설정 진입, `Switch accounts` 계정 전환을 지원한다.
+  - **수락 기준:** `user-panel-profile` 클릭 → `user-area-popout` 오픈 및 상태 선택 전환 GPUI 테스트 통과.
+
+- [x] **M5.5 음성 컨트롤 바 `[▾]` 드롭다운 및 하단 음성 패널 인라인 설정·연결 상태 팝아웃**
+  - **대상 파일:** `fluxer_client/app/src/ui/voice_stage.rs`, `fluxer_client/app/src/ui/voice_panel.rs`, `fluxer_client/app/src/client_view.rs`, `fluxer_client/app/src/tests_voice.rs`
+  - **공식 참조:** `fluxer_app/src/features/voice/components/VoiceSettingsMenus.tsx`, `VoiceDetailsPopout.tsx`
+  - **작업:** 음성 컨트롤 바의 `[마이크 | ▾]`·`[스피커 | ▾]`·`[화면 공유 | ▾]` 화살표 클릭 시 통화 화면을 가리지 않고 컨트롤 바 바로 위에 인라인 장치·음량·스트림 팝아웃(`voice-control-popout`)을 열고, 좌측 하단 음성 패널의 오디오 처리 버튼 클릭 시 인라인 오디오·연결 상태 요약 팝아웃(`voice-details-popout`)을 연다.
+  - **수락 기준:** 컨트롤 바 `[▾]` 클릭 시 `voice-control-popout` 오픈·음량/장치 조작 및 하단 `voice-details-popout` 토글 GPUI 테스트 통과.
+
+- [x] **M5.6 설정창 신규 섹션 실시간 `Switch`/모드 토글(`prefs.rs`) 연동 및 프로필 팝아웃 레이아웃 정돈**
+  - **대상 파일:** `fluxer_client/app/src/prefs.rs`, `fluxer_client/app/src/ui/settings.rs`, `fluxer_client/app/src/ui/profile_popout.rs`, `scripts/audit_ui_parity.py`
+  - **공식 참조:** `fluxer_app/src/features/user/components/popouts/UserProfilePopout.tsx`, `VoiceVideoTab.tsx`, `PrivacySafetyTab.tsx`, `ChatSettingsTab.tsx`
+  - **작업:** `Prefs`에 `voice_push_to_talk`, `voice_noise_suppression`, `allow_guild_dms`, `inline_media_previews`를 추가해 설정창의 입력 모드(VAD/PTT)·노이즈 억제·길드 DM 허용·인라인 미디어 미리보기 카드를 실제 인터랙티브 `Switch`/버튼으로 연결하고, 프로필 팝아웃의 아바타 6px 배너 컷아웃 링과 모더레이션 액션 카드를 공식 레이아웃으로 정돈한다.
+  - **수락 기준:** `scripts/audit_ui_parity.py` 확장 항목 포함 100% 통과, 전체 테스트 통과 및 무경고 Windows 릴리스 패키징 완료.
+
 ---
 
 ## 표준 검증·빌드 명령 (모든 에이전트 공통)

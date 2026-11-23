@@ -44,7 +44,7 @@ use crate::ui::message_actions::{self, ActionTarget, MessageAction};
 use crate::ui::reply::ReplyingTo;
 use crate::view_model::{
     ChannelIcon, ChannelItem, GuildItem, MessageRow, Place, UserSummary, channel_items, channel_name, current_user,
-    dm_unread, guild_items, message_pane, opens_message_pane,
+    dm_unread, guild_items_with_media, message_pane, opens_message_pane,
 };
 
 /// Gateway connection as shown by the user panel's status dot.
@@ -53,6 +53,15 @@ pub enum Connection {
     Connecting,
     Online,
     Offline,
+}
+
+/// Which inline voice popout (`VoiceControlBar.tsx` / `VoiceConnectionStatusInner.tsx`) is open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum VoicePopoutKind {
+    Input,
+    Output,
+    Stream,
+    Details,
 }
 
 /// Emitted to the window root.
@@ -235,6 +244,10 @@ pub struct ClientView {
     pub(crate) voice_stage_open: bool,
     /// When true, `ui::voice_stage` fills the central pane; when false, renders top call stage + bottom text chat split view.
     pub(crate) voice_stage_expanded: bool,
+    /// When true, the dedicated bottom-left `UserAreaPopout` menu (`UserArea.tsx`) is open above the user row.
+    pub(crate) user_area_popout_open: bool,
+    /// Active inline voice settings/details popout (`VoiceControlBar.tsx` / `VoiceConnectionStatusInner.tsx`).
+    pub(crate) voice_popout: Option<VoicePopoutKind>,
     /// Enumerated OS audio input/output devices for the settings modal.
     pub(crate) audio_devices: crate::audio_devices::AudioDeviceLists,
     /// Track SID currently synced into `watched_video_frame`.
@@ -422,6 +435,8 @@ impl ClientView {
             voice: crate::backend::voice::VoiceSnapshot::default(),
             voice_stage_open: false,
             voice_stage_expanded: true,
+            user_area_popout_open: false,
+            voice_popout: None,
             audio_devices: crate::audio_devices::AudioDeviceLists::default(),
             watched_video_track_sid: None,
             watched_video_frame_seq: 0,
@@ -1108,7 +1123,7 @@ impl ClientView {
             if !dismiss_modal && let Overlay::EditChannel(m) = &mut self.overlay {
                 m.sync_state(&state);
             }
-            self.guilds = guild_items(&state);
+            self.guilds = guild_items_with_media(&state, self.backend.media());
             self.home_unread = dm_unread(&state);
             self.mention_total = self
                 .guilds
@@ -1544,6 +1559,7 @@ impl ClientView {
     pub(crate) fn close_voice_stage(&mut self, cx: &mut Context<Self>) {
         if self.voice_stage_open {
             self.voice_stage_open = false;
+            self.voice_popout = None;
             cx.notify();
         }
     }
@@ -1553,7 +1569,28 @@ impl ClientView {
         cx.notify();
     }
 
+    pub(crate) fn toggle_user_area_popout(&mut self, cx: &mut Context<Self>) {
+        self.user_area_popout_open = !self.user_area_popout_open;
+        if self.user_area_popout_open {
+            self.voice_popout = None;
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn toggle_voice_popout(&mut self, kind: VoicePopoutKind, cx: &mut Context<Self>) {
+        if self.voice_popout == Some(kind) {
+            self.voice_popout = None;
+        } else {
+            self.voice_popout = Some(kind);
+            self.user_area_popout_open = false;
+            self.refresh_audio_devices(cx);
+        }
+        cx.notify();
+    }
+
     pub(crate) fn open_voice_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.voice_popout = None;
+        self.user_area_popout_open = false;
         if !matches!(self.overlay, Overlay::Settings(_)) {
             self.open_settings(window, cx);
         }
@@ -1602,6 +1639,7 @@ impl ClientView {
         self.backend.leave_voice();
         self.voice = self.backend.voice_snapshot();
         self.voice_stage_open = false;
+        self.voice_popout = None;
         self.sync_watched_video_frame();
         cx.notify();
     }

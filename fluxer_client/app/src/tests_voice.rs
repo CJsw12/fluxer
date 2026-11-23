@@ -648,6 +648,30 @@ fn voice_stage_lifecycle_tiles_screen_share_controls_and_back_to_chat(cx: &mut T
     assert!(vcx.debug_bounds("voice-stage-tile-200").is_some(), "remote participant tile rendered");
     assert!(vcx.debug_bounds("voice-tile-muted-200").is_some(), "muted badge rendered on peer tile");
     assert!(vcx.debug_bounds("voice-stage-live-200").is_some(), "LIVE badge rendered on streaming peer");
+    assert!(vcx.debug_bounds("voice-member-live-200").is_some(), "channel sidebar row renders LIVE badge");
+    assert!(vcx.debug_bounds("voice-member-muted-200").is_some(), "channel sidebar row renders muted icon");
+
+    // Caret buttons on grouped split controls open inline voice control popouts; bottom-left noise suppression button opens inline details popout.
+    let in_caret = vcx.debug_bounds("voice-stage-input-settings-btn").unwrap().center();
+    vcx.simulate_click(in_caret, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("voice-control-popout").is_some(), "input caret opens inline voice control popout");
+    vcx.simulate_click(in_caret, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("voice-control-popout").is_none());
+
+    let ns_btn = vcx.debug_bounds("voice-noise-suppression-btn").unwrap().center();
+    vcx.simulate_click(ns_btn, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("voice-details-popout").is_some(), "bottom-left sliders icon opens inline voice details popout");
+    let ns_btn_after = vcx.debug_bounds("voice-noise-suppression-btn").unwrap().center();
+    vcx.simulate_click(ns_btn_after, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("voice-details-popout").is_none());
     let watch_btn = vcx
         .debug_bounds("voice-stage-watch-TR_stage_screen")
         .expect("stage Watch Stream button")

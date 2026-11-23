@@ -67,6 +67,7 @@ pub struct EditChannelModal {
     pub original_nsfw: bool,
     pub original_slowmode: u32,
     pub can_manage_root: bool,
+    pub can_manage_permissions: bool,
     pub can_change_parent: bool,
     pub can_sync_parent: bool,
     pub sync_permissions: bool,
@@ -111,6 +112,7 @@ impl EditChannelModal {
             self.original_parent_id = None;
         }
         self.can_manage_root = state.can_manage_guild_channels(self.guild_id);
+        self.can_manage_permissions = state.can_manage_channel_permissions(self.channel_id);
         self.can_change_parent = !self.original_kind.is_category()
             && (!self.categories.is_empty() || (self.can_manage_root && self.original_parent_id.is_some()));
     }
@@ -362,7 +364,7 @@ impl ClientView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let (guild_id, kind, name, topic, parent_id, nsfw, slowmode, can_manage_root, categories) = {
+        let (guild_id, kind, name, topic, parent_id, nsfw, slowmode, can_manage_root, can_manage_permissions, categories) = {
             let state = self.backend.state();
             let Some(ch) = state.channels.get(&channel_id) else { return };
             let Some(guild_id) = ch.guild_id else { return };
@@ -370,6 +372,7 @@ impl ClientView {
                 return;
             }
             let can_manage_root = state.can_manage_guild_channels(guild_id);
+            let can_manage_permissions = state.can_manage_channel_permissions(channel_id);
             let categories = manageable_categories(&state, guild_id);
             (
                 guild_id,
@@ -380,6 +383,7 @@ impl ClientView {
                 ch.nsfw,
                 ch.rate_limit_per_user.unwrap_or(0),
                 can_manage_root,
+                can_manage_permissions,
                 categories,
             )
         };
@@ -466,6 +470,7 @@ impl ClientView {
             original_nsfw: nsfw,
             original_slowmode: slowmode,
             can_manage_root,
+            can_manage_permissions,
             can_change_parent,
             can_sync_parent: false,
             sync_permissions: false,
@@ -1055,7 +1060,10 @@ pub fn render_edit(modal: &EditChannelModal, theme: &Theme, cx: &mut Context<Cli
                         .child(sidebar_header_label),
                 ),
         )
-        .child(
+        .child({
+            let guild_id = modal.guild_id;
+            let channel_id = modal.channel_id;
+            let can_perms = modal.can_manage_permissions;
             div()
                 .flex_1()
                 .min_h_0()
@@ -1066,6 +1074,8 @@ pub fn render_edit(modal: &EditChannelModal, theme: &Theme, cx: &mut Context<Cli
                 .gap_1()
                 .child(
                     div()
+                        .id("channel-settings-tab-overview")
+                        .debug_selector(|| "channel-settings-tab-overview".to_owned())
                         .px_2()
                         .py(px(6.))
                         .rounded(px(6.))
@@ -1078,8 +1088,37 @@ pub fn render_edit(modal: &EditChannelModal, theme: &Theme, cx: &mut Context<Cli
                         .gap_2()
                         .child(Icon::new(if is_cat { AppIcon::SlidersHorizontal } else { AppIcon::Hash }).small())
                         .child(div().text_sm().truncate().child(l10n::tr("Overview"))),
-                ),
-        )
+                )
+                .when(can_perms, |d| {
+                    d.child(
+                        div()
+                            .id("channel-settings-tab-permissions")
+                            .debug_selector(|| "channel-settings-tab-permissions".to_owned())
+                            .px_2()
+                            .py(px(6.))
+                            .rounded(px(6.))
+                            .cursor_pointer()
+                            .text_color(theme.muted_foreground)
+                            .hover(|s| s.bg(theme.muted).text_color(theme.foreground))
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap_2()
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.open_access(
+                                    crate::ui::access::Scope::Channel {
+                                        guild: guild_id,
+                                        channel: channel_id,
+                                    },
+                                    window,
+                                    cx,
+                                );
+                            }))
+                            .child(Icon::new(AppIcon::SlidersHorizontal).small())
+                            .child(div().text_sm().truncate().child(l10n::tr("Permissions"))),
+                    )
+                })
+        })
         .child(sidebar_footer);
 
     let general_card = div()

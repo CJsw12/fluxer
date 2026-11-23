@@ -419,16 +419,15 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
     }
     let mut group = div().flex().flex_col().child(row);
     for member in members {
-        let display = view.voice_member_name(member.guild_id, member.user_id);
-        let member_avatar = view.voice_member_avatar_url(member.guild_id, member.user_id);
-        let suffix = match (member.self_deaf || member.deaf, member.self_mute || member.mute) {
-            (true, _) => " (deafened)",
-            (false, true) => " (muted)",
-            (false, false) => "",
-        };
+        let uid = member.user_id;
+        let display = view.voice_member_name(member.guild_id, uid);
+        let member_avatar = view.voice_member_avatar_url(member.guild_id, uid);
+        let is_muted = member.self_mute || member.mute;
+        let is_deaf = member.self_deaf || member.deaf;
+        let is_streaming = member.self_stream;
         group = group.child(
             div()
-                .id(("voice-member", member.user_id.0))
+                .id(("voice-member", uid.0))
                 .flex()
                 .flex_row()
                 .items_center()
@@ -438,7 +437,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 .py_0p5()
                 .child(render_avatar(
                     AvatarSpec {
-                        user_id: member.user_id,
+                        user_id: uid,
                         avatar_url: member_avatar,
                         display_name: display.clone(),
                         size: 20.,
@@ -454,8 +453,53 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                         .text_xs()
                         .text_color(muted_fg)
                         .truncate()
-                        .child(format!("{display}{suffix}")),
-                ),
+                        .child(display),
+                )
+                .when(is_streaming || is_muted || is_deaf, |row| {
+                    row.child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap_1()
+                            .flex_none()
+                            .when(is_streaming, |r| {
+                                r.child(
+                                    div()
+                                        .debug_selector(move || format!("voice-member-live-{}", uid.0))
+                                        .px_1()
+                                        .rounded(px(3.))
+                                        .bg(theme.danger)
+                                        .text_color(theme.on_fill)
+                                        .text_size(px(9.))
+                                        .font_weight(FontWeight::BOLD)
+                                        .child("LIVE"),
+                                )
+                            })
+                            .when(is_muted, |r| {
+                                r.child(
+                                    div()
+                                        .debug_selector(move || format!("voice-member-muted-{}", uid.0))
+                                        .child(
+                                            Icon::new(AppIcon::MicrophoneSlash)
+                                                .xsmall()
+                                                .text_color(muted_fg),
+                                        ),
+                                )
+                            })
+                            .when(is_deaf, |r| {
+                                r.child(
+                                    div()
+                                        .debug_selector(move || format!("voice-member-deaf-{}", uid.0))
+                                        .child(
+                                            Icon::new(AppIcon::SpeakerSlash)
+                                                .xsmall()
+                                                .text_color(muted_fg),
+                                        ),
+                                )
+                            }),
+                    )
+                }),
         );
     }
     group.into_any_element()

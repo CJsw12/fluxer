@@ -1,0 +1,1286 @@
+[
+ {
+  "flx": "app.channel-item-icon.icon",
+  "icon": "fill/user-plus-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "app.channel-item.category-icon",
+  "icon": "bold/caret-down-bold",
+  "sizes": [
+   12
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "app.channel-pins-content.sparkle-icon",
+  "icon": "fill/sparkle-fill",
+  "sizes": [
+   80
+  ],
+  "example_state": "Pinned messages"
+ },
+ {
+  "flx": "app.desktop-settings-view.user-profile-hint-icon",
+  "icon": "bold/pencil-bold",
+  "sizes": [
+   12
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.favorites-guild-header.caret-down-icon",
+  "icon": "bold/caret-down-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "Favorites"
+ },
+ {
+  "flx": "app.favorites-guild-header.header-icon",
+  "icon": "fill/star-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "Favorites"
+ },
+ {
+  "flx": "app.floating.unread-channels-content.sparkle-icon",
+  "icon": "fill/sparkle-fill",
+  "sizes": [
+   80
+  ],
+  "example_state": "Inbox > Unread"
+ },
+ {
+  "flx": "app.guild-header.caret-icon",
+  "icon": "bold/caret-down-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "app.modal.header.x-icon",
+  "icon": "bold/x-bold",
+  "sizes": [
+   24
+  ],
+  "example_state": "Create or join a community"
+ },
+ {
+  "flx": "app.native-titlebar.minus-icon",
+  "icon": "bold/minus-bold",
+  "sizes": [
+   17
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "app.native-titlebar.toggle-maximize-icon",
+  "icon": "bold/copy-simple-bold",
+  "sizes": [
+   17
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "app.native-titlebar.x-icon",
+  "icon": "bold/x-bold",
+  "sizes": [
+   17
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "app.settings-heading-link-button.link-icon",
+  "icon": "bold/link-bold",
+  "sizes": [
+   15
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.settings-modal-header.icon",
+  "icon": "bold/x-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-chevron",
+  "icon": "bold/caret-right-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+  "icon": "bold/code-bold",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+  "icon": "bold/translate-bold",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+  "icon": "fill/bell-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+  "icon": "fill/chat-circle-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+  "icon": "fill/desktop-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+  "icon": "fill/eye-slash-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+  "icon": "fill/gear-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+  "icon": "fill/keyboard-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+  "icon": "fill/microphone-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+  "icon": "fill/paint-brush-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+  "icon": "fill/person-simple-circle-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+  "icon": "fill/shield-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+  "icon": "fill/swatches-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+  "icon": "fill/user-list-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.settings-search.magnifying-glass-icon",
+  "icon": "bold/magnifying-glass-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "app.sidebar-nav.add-guild-button.icon-text",
+  "icon": "bold/plus-bold",
+  "sizes": [
+   20
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "app.sidebar-nav.discovery-button.icon-text",
+  "icon": "fill/compass-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "app.sidebar-nav.favorites-button.favorites-icon",
+  "icon": "fill/star-fill",
+  "sizes": [
+   28
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "app.sidebar-nav.fluxer-button.message-bubble-icon",
+  "icon": "fill/chat-circle-fill",
+  "sizes": [
+   28
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "app.user-area.user-area-inner.control-icon",
+  "icon": "fill/gear-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "app.user-area.user-area-inner.control-icon",
+  "icon": "fill/microphone-slash-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "app.user-area.user-area-inner.control-icon",
+  "icon": "fill/speaker-slash-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "channel.channel-header-components.channel-header-icon.button-icon",
+  "icon": "CUSTOM:0 0 24 24",
+  "sizes": [
+   24
+  ],
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "d": "M231.88,175.08A56.26,56.26,0,0,1,176,224C96.6,224,32,159.4,32,80A56.26,56.26,0,0,1,80.92,24.12a16,16,0,0,1,16.62,9.52l21.12,47.15,0,.12A16,16,0,0,1,117.39,96c-.18.27-.37.52-.57.77L96,121.45c7.49,15.22,23.41,31,38.83,38.51l24.34-20.71a8.12,8.12,0,0,1,.75-.56,16,16,0,0,1,15.17-1.4l.13.06,47.11,21.11A16,16,0,0,1,231.88,175.08Z"
+ },
+ {
+  "flx": "channel.channel-header-components.channel-header-icon.button-icon",
+  "icon": "bold/translate-bold",
+  "sizes": [
+   24
+  ],
+  "example_state": "Explore communities"
+ },
+ {
+  "flx": "channel.channel-header-components.channel-header-icon.button-icon",
+  "icon": "bold/x-bold",
+  "sizes": [
+   24
+  ],
+  "example_state": "Open menu > Create thread"
+ },
+ {
+  "flx": "channel.channel-header-components.channel-header-icon.button-icon",
+  "icon": "fill/bell-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "channel.channel-header-components.channel-header-icon.button-icon",
+  "icon": "fill/chats-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "channel.channel-header-components.channel-header-icon.button-icon",
+  "icon": "fill/phone-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": "Direct messages"
+ },
+ {
+  "flx": "channel.channel-header-components.channel-header-icon.button-icon",
+  "icon": "fill/push-pin-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "channel.channel-header-components.channel-header-icon.button-icon",
+  "icon": "fill/users-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "channel.channel-header-components.channel-header-icon.button-icon",
+  "icon": "fill/video-camera-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": "Direct messages"
+ },
+ {
+  "flx": "channel.channel-header-components.updater-icon.update-icon",
+  "icon": "bold/download-simple-bold",
+  "sizes": [
+   24
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "channel.channel-header.button-icon",
+  "icon": "bold/star-bold",
+  "sizes": [
+   24
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "channel.channel-pins-popout.icon-large",
+  "icon": "fill/push-pin-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": "Pinned messages"
+ },
+ {
+  "flx": "channel.channel-utils.get-icon.text-channel-icon",
+  "icon": "CUSTOM:0 0 256 256",
+  "sizes": [
+   16,
+   20,
+   24,
+   48
+  ],
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "d": "M164.193 37.8536c1.186-6.5205 7.433-10.8456 13.953-9.6602 6.521 1.1856 10.846 7.4327 9.661 13.9531L180.197 84H224c6.627 0 12 5.3726 12 12 0 6.627-5.373 12-12 12h-48.167l-7.272 40H208c6.627 0 12 5.373 12 12s-5.373 12-12 12h-43.803l-8.39 46.147c-1.186 6.52-7.433 10.845-13.953 9.66-6.521-1.186-10.846-7.433-9.661-13.953l7.61-41.854h-39.606l-8.3904 46.147c-1.1856 6.52-7.4327 10.845-13.9531 9.66-6.5204-1.186-10.8455-7.433-9.6601-13.953L75.8027 172H32c-6.6274 0-11.9999-5.373-12-12 0-6.627 5.3726-12 12-12h48.167l7.2725-40H48c-6.6274 0-11.9999-5.373-12-12 0-6.6274 5.3726-12 12-12h43.8027l8.3903-46.1464c1.186-6.5205 7.433-10.8456 13.953-9.6602 6.521 1.1856 10.846 7.4327 9.661 13.9531L116.197 84h39.606zM104.561 148h39.606l7.272-40h-39.606z"
+ },
+ {
+  "flx": "channel.channel-utils.get-icon.voice-channel-icon",
+  "icon": "CUSTOM:0 0 256 256",
+  "sizes": [
+   20
+  ],
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "d": "M116.693 32.0001C126.763 21.9201 144 29.056 144 43.3067V212.693c0 14.251-17.237 21.387-27.317 11.307l-48.0003-48H48.0958c-12.1705 0-24.725-7.094-28.3623-20.32-2.4426-8.821-3.7334-18.101-3.7334-27.68-.0115-9.351 1.2371-18.662 3.7119-27.68 3.648-13.237 16.2033-20.3199 28.374-20.3199h20.6074zm87.19 20.124c2.12 0 4.153.8417 5.653 2.3398 40.619 40.608 40.619 106.4541 0 147.0721-1.516 1.413-3.522 2.182-5.595 2.146-2.072-.037-4.049-.876-5.515-2.342s-2.305-3.443-2.342-5.516c-.036-2.072.733-4.078 2.146-5.594 8.172-8.172 14.656-17.874 19.079-28.551 4.423-10.678 6.699-22.122 6.699-33.679s-2.276-23.001-6.699-33.6786c-4.423-10.6774-10.907-20.3791-19.079-28.5508-1.499-1.5-2.34-3.5333-2.34-5.6533 0-2.1201.841-4.1534 2.34-5.6534 1.5-1.4981 3.533-2.3398 5.653-2.3398m-28.282 28.2724c1.051.0001 2.091.2071 3.062.6094.971.4024 1.853.992 2.596 1.7354 5.944 5.9431 10.659 12.9991 13.876 20.7647 3.217 7.765 4.873 16.089 4.873 24.494 0 8.406-1.656 16.729-4.873 24.494-3.217 7.766-7.932 14.822-13.876 20.765-1.51 1.456-3.531 2.261-5.628 2.242-2.098-.019-4.104-.861-5.587-2.345s-2.323-3.491-2.34-5.589c-.017-2.097.79-4.117 2.248-5.626 4.457-4.457 7.993-9.748 10.405-15.572 2.413-5.823 3.655-12.065 3.655-18.369 0-6.303-1.242-12.545-3.655-18.369-2.412-5.824-5.948-11.1151-10.405-15.5723-1.498-1.5-2.34-3.5334-2.34-5.6534 0-2.1199.842-4.1533 2.34-5.6533l-.011-.0107c.743-.7433 1.625-1.333 2.596-1.7354.971-.4023 2.013-.6094 3.064-.6094"
+ },
+ {
+  "flx": "channel.direct-message.dm-list-item.icon-size4",
+  "icon": "bold/x-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "Direct messages"
+ },
+ {
+  "flx": "channel.direct-message.dm-list.icon-size4",
+  "icon": "bold/plus-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "Direct messages"
+ },
+ {
+  "flx": "channel.direct-message.dm-list.icon-size5",
+  "icon": "fill/note-pencil-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Direct messages"
+ },
+ {
+  "flx": "channel.direct-message.dm-list.icon-size5",
+  "icon": "fill/users-three-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Direct messages"
+ },
+ {
+  "flx": "channel.embeds.media.media-container.download-simple-icon",
+  "icon": "bold/download-simple-bold",
+  "sizes": [
+   18
+  ],
+  "example_state": "Direct messages"
+ },
+ {
+  "flx": "channel.embeds.media.media-container.star-icon",
+  "icon": "bold/star-bold",
+  "sizes": [
+   18
+  ],
+  "example_state": "Direct messages"
+ },
+ {
+  "flx": "channel.embeds.media.media-container.trash-icon",
+  "icon": "bold/trash-bold",
+  "sizes": [
+   18
+  ],
+  "example_state": "Direct messages"
+ },
+ {
+  "flx": "channel.emoji-picker.emoji-picker-category-list.icon-size",
+  "icon": "fill/bicycle-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": "Emojis"
+ },
+ {
+  "flx": "channel.emoji-picker.emoji-picker-category-list.icon-size",
+  "icon": "fill/bowl-food-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": "Emojis"
+ },
+ {
+  "flx": "channel.emoji-picker.emoji-picker-category-list.icon-size",
+  "icon": "fill/clock-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": "Emojis"
+ },
+ {
+  "flx": "channel.emoji-picker.emoji-picker-category-list.icon-size",
+  "icon": "fill/flag-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": "Emojis"
+ },
+ {
+  "flx": "channel.emoji-picker.emoji-picker-category-list.icon-size",
+  "icon": "fill/game-controller-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": "Emojis"
+ },
+ {
+  "flx": "channel.emoji-picker.emoji-picker-category-list.icon-size",
+  "icon": "fill/heart-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": "Emojis"
+ },
+ {
+  "flx": "channel.emoji-picker.emoji-picker-category-list.icon-size",
+  "icon": "fill/leaf-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": "Emojis"
+ },
+ {
+  "flx": "channel.emoji-picker.emoji-picker-category-list.icon-size",
+  "icon": "fill/magnet-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": "Emojis"
+ },
+ {
+  "flx": "channel.emoji-picker.emoji-picker-category-list.icon-size",
+  "icon": "fill/smiley-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": "Emojis"
+ },
+ {
+  "flx": "channel.emoji-picker.virtual-row.virtual-row-renderer.caret-icon",
+  "icon": "bold/caret-down-bold",
+  "sizes": [
+   12
+  ],
+  "example_state": "Emojis"
+ },
+ {
+  "flx": "channel.emoji-picker.virtual-row.virtual-row-renderer.header-icon",
+  "icon": "fill/clock-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "Emojis"
+ },
+ {
+  "flx": "channel.member-list-item.crown-icon",
+  "icon": "fill/crown-fill",
+  "sizes": [
+   14
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "channel.message-reactions.smiley-icon",
+  "icon": "fill/smiley-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Direct messages"
+ },
+ {
+  "flx": "channel.message-search-bar.message-search-bar.scope-icon-component",
+  "icon": "bold/globe-bold",
+  "sizes": [
+   8
+  ],
+  "example_state": "Search scope: Current community > All co"
+ },
+ {
+  "flx": "channel.message-search-bar.message-search-bar.search-icon",
+  "icon": "bold/magnifying-glass-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "channel.picker-empty-state.icon",
+  "icon": "fill/smiley-sad-fill",
+  "sizes": [
+   56
+  ],
+  "example_state": "Emojis > Media"
+ },
+ {
+  "flx": "channel.picker-empty-state.icon",
+  "icon": "fill/sticker-fill",
+  "sizes": [
+   56
+  ],
+  "example_state": "Emojis > Stickers"
+ },
+ {
+  "flx": "channel.picker-search-input.magnifying-glass-icon",
+  "icon": "regular/magnifying-glass",
+  "sizes": [
+   18
+  ],
+  "example_state": "Emojis"
+ },
+ {
+  "flx": "channel.pickers.memes.memes-picker-header.filter-pill-icon",
+  "icon": "fill/gif-fill",
+  "sizes": [
+   14
+  ],
+  "example_state": "Emojis > Media"
+ },
+ {
+  "flx": "channel.pickers.memes.memes-picker-header.filter-pill-icon",
+  "icon": "fill/image-fill",
+  "sizes": [
+   14
+  ],
+  "example_state": "Emojis > Media"
+ },
+ {
+  "flx": "channel.pickers.memes.memes-picker-header.filter-pill-icon",
+  "icon": "fill/music-note-fill",
+  "sizes": [
+   14
+  ],
+  "example_state": "Emojis > Media"
+ },
+ {
+  "flx": "channel.pickers.memes.memes-picker-header.filter-pill-icon",
+  "icon": "fill/video-camera-fill",
+  "sizes": [
+   14
+  ],
+  "example_state": "Emojis > Media"
+ },
+ {
+  "flx": "channel.textarea.textarea-button.icon",
+  "icon": "bold/plus-bold",
+  "sizes": [
+   22
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "channel.textarea.textarea-button.icon",
+  "icon": "fill/image-square-fill",
+  "sizes": [
+   22
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "channel.textarea.textarea-button.icon",
+  "icon": "fill/smiley-fill",
+  "sizes": [
+   22
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "channel.textarea.textarea-button.icon",
+  "icon": "fill/sticker-fill",
+  "sizes": [
+   22
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "channel.textarea.textarea-plus-menu.microphone-icon",
+  "icon": "bold/microphone-bold",
+  "sizes": [
+   18
+  ],
+  "example_state": "Open menu"
+ },
+ {
+  "flx": "channel.textarea.textarea-plus-menu.paperclip-icon",
+  "icon": "bold/paperclip-bold",
+  "sizes": [
+   18
+  ],
+  "example_state": "Open menu"
+ },
+ {
+  "flx": "channel.textarea.textarea-plus-menu.upload-simple-icon",
+  "icon": "fill/upload-simple-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "Open menu"
+ },
+ {
+  "flx": "discovery.discovery.discovery-empty-state.icon",
+  "icon": "duotone/compass-duotone",
+  "sizes": [
+   56
+  ],
+  "example_state": "Explore communities"
+ },
+ {
+  "flx": "discovery.discovery.discovery-navbar.search-icon",
+  "icon": "bold/magnifying-glass-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "Explore communities"
+ },
+ {
+  "flx": "discovery.discovery.discovery-sidebar.nav-item-icon",
+  "icon": "bold/app-window-bold",
+  "sizes": [
+   20
+  ],
+  "example_state": "Explore communities"
+ },
+ {
+  "flx": "discovery.discovery.discovery-sidebar.nav-item-icon",
+  "icon": "bold/palette-bold",
+  "sizes": [
+   20
+  ],
+  "example_state": "Explore communities"
+ },
+ {
+  "flx": "discovery.discovery.discovery-sidebar.nav-item-icon",
+  "icon": "fill/users-three-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Explore communities"
+ },
+ {
+  "flx": "expressions.favorites-welcome-section.icon",
+  "icon": "fill/star-fill",
+  "sizes": [
+   48
+  ],
+  "example_state": "Favorites"
+ },
+ {
+  "flx": "guild.add-guild-modal.landing-view.download-simple-icon",
+  "icon": "fill/download-simple-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": "Create or join a community"
+ },
+ {
+  "flx": "guild.add-guild-modal.landing-view.house-icon",
+  "icon": "fill/house-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": "Create or join a community"
+ },
+ {
+  "flx": "guild.add-guild-modal.landing-view.link-icon",
+  "icon": "bold/link-bold",
+  "sizes": [
+   24
+  ],
+  "example_state": "Create or join a community"
+ },
+ {
+  "flx": "guild.guild-header-popout.guild-header-popout-item.icon-medium",
+  "icon": "fill/bell-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab"
+ },
+ {
+  "flx": "guild.guild-header-popout.guild-header-popout-item.icon-medium",
+  "icon": "fill/shield-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab"
+ },
+ {
+  "flx": "guild.guild-header-popout.guild-header-popout-item.icon-medium",
+  "icon": "fill/sign-out-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab"
+ },
+ {
+  "flx": "guild.guild-header-popout.guild-header-popout-item.icon-medium",
+  "icon": "fill/trash-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab"
+ },
+ {
+  "flx": "guild.guild-header-popout.guild-header-popout-item.icon-medium",
+  "icon": "fill/user-circle-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab"
+ },
+ {
+  "flx": "guild.guild-header-popout.guild-header-popout-item.icon-medium",
+  "icon": "fill/user-plus-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab"
+ },
+ {
+  "flx": "invite.invite-modal.magnifying-glass-icon",
+  "icon": "bold/magnifying-glass-bold",
+  "sizes": [
+   20
+  ],
+  "example_state": "Open community menu for Dev Lab > Invite"
+ },
+ {
+  "flx": "messaging.inbox-popout.icon-small",
+  "icon": "bold/at-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "Inbox"
+ },
+ {
+  "flx": "messaging.inbox-popout.icon-small",
+  "icon": "bold/check-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "Inbox > Unread"
+ },
+ {
+  "flx": "messaging.inbox-popout.icon-small",
+  "icon": "fill/bell-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "Inbox"
+ },
+ {
+  "flx": "messaging.inbox-popout.icon-small",
+  "icon": "fill/bookmark-simple-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "Inbox"
+ },
+ {
+  "flx": "messaging.recent-mentions-content.filter-menu-content.check-icon",
+  "icon": "bold/check-bold",
+  "sizes": [
+   18
+  ],
+  "example_state": "Inbox > Filter mentions"
+ },
+ {
+  "flx": "messaging.recent-mentions-content.flag-checkered-icon",
+  "icon": "fill/flag-checkered-fill",
+  "sizes": [
+   48
+  ],
+  "example_state": "Inbox"
+ },
+ {
+  "flx": "messaging.recent-mentions-content.icon-medium",
+  "icon": "bold/dots-three-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "Inbox"
+ },
+ {
+  "flx": "messaging.recent-mentions-content.sparkle-icon",
+  "icon": "fill/sparkle-fill",
+  "sizes": [
+   80
+  ],
+  "example_state": "Inbox > Remove mention"
+ },
+ {
+  "flx": "messaging.recent-mentions-content.x-icon",
+  "icon": "bold/x-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "Inbox"
+ },
+ {
+  "flx": "messaging.saved-messages-content.sparkle-icon",
+  "icon": "fill/sparkle-fill",
+  "sizes": [
+   80
+  ],
+  "example_state": "Inbox > Bookmarks"
+ },
+ {
+  "flx": "threads.thread-browser.empty-state.icon",
+  "icon": "fill/chats-fill",
+  "sizes": [
+   40
+  ],
+  "example_state": "Threads"
+ },
+ {
+  "flx": "threads.thread-browser.header-icon",
+  "icon": "fill/chats-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Threads"
+ },
+ {
+  "flx": "threads.thread-browser.search.magnifying-glass-icon",
+  "icon": "bold/magnifying-glass-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "Threads"
+ },
+ {
+  "flx": "threads.thread-create-pane.icon-glyph",
+  "icon": "fill/chats-fill",
+  "sizes": [
+   32
+  ],
+  "example_state": "Open menu > Create thread"
+ },
+ {
+  "flx": "threads.thread-side-panel.panel-header.icon",
+  "icon": "fill/chats-fill",
+  "sizes": [
+   24
+  ],
+  "example_state": "Open menu > Create thread"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.add-reaction-icon.smiley-icon",
+  "icon": "fill/smiley-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.create-thread-icon.chats-icon",
+  "icon": "fill/chats-fill",
+  "sizes": [
+   18,
+   20
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.edit-message-icon.pencil-simple-icon",
+  "icon": "fill/pencil-simple-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "Emojis > face_with_peeking_eye"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.forward-icon.arrow-bend-up-right-icon",
+  "icon": "fill/arrow-bend-up-right-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.more-icon.dots-three-icon",
+  "icon": "bold/dots-three-bold",
+  "sizes": [
+   20
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.reply-icon.arrow-bend-up-left-icon",
+  "icon": "fill/arrow-bend-up-left-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "ui.action-menu.context-menu.sub-menu.submenu-caret",
+  "icon": "CUSTOM:0 0 256 256",
+  "sizes": [
+   14
+  ],
+  "example_state": "Notification settings",
+  "viewBox": "0 0 256 256",
+  "d": "M184.49 136.49l-80 80a12 12 0 0 1-17-17L159 128L87.51 56.49a12 12 0 1 1 17-17l80 80a12 12 0 0 1-.02 17"
+ },
+ {
+  "flx": "ui.action-menu.menu-item-radio.span",
+  "icon": "bold/chat-centered-dots-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "Search scope: Current community"
+ },
+ {
+  "flx": "ui.action-menu.menu-item-radio.span",
+  "icon": "bold/chat-circle-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "Search scope: Current community"
+ },
+ {
+  "flx": "ui.action-menu.menu-item-radio.span",
+  "icon": "bold/globe-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "Search scope: Current community"
+ },
+ {
+  "flx": "ui.action-menu.menu-item-radio.span",
+  "icon": "bold/hash-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "Search scope: Current community"
+ },
+ {
+  "flx": "ui.action-menu.menu-item-radio.span",
+  "icon": "bold/users-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "Search scope: Current community"
+ },
+ {
+  "flx": "ui.base-avatar.overlay",
+  "icon": "CUSTOM:0 0 114.090625 114.090625",
+  "sizes": [
+   114
+  ],
+  "example_state": "tester1 > user.profile.profile-card.prof",
+  "viewBox": "0 0 32 32",
+  "d": ""
+ },
+ {
+  "flx": "ui.base-avatar.overlay",
+  "icon": "CUSTOM:0 0 16 16",
+  "sizes": [
+   16
+  ],
+  "example_state": "Direct messages",
+  "viewBox": "0 0 32 32",
+  "d": ""
+ },
+ {
+  "flx": "ui.base-avatar.overlay",
+  "icon": "CUSTOM:0 0 32 32",
+  "sizes": [
+   32
+  ],
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 32 32",
+  "d": ""
+ },
+ {
+  "flx": "ui.base-avatar.overlay",
+  "icon": "CUSTOM:0 0 40 40",
+  "sizes": [
+   40
+  ],
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 32 32",
+  "d": ""
+ },
+ {
+  "flx": "ui.base-avatar.overlay",
+  "icon": "CUSTOM:0 0 80 80",
+  "sizes": [
+   80
+  ],
+  "example_state": "@tester2",
+  "viewBox": "0 0 32 32",
+  "d": ""
+ },
+ {
+  "flx": "ui.base-avatar.status-indicator-svg.svg",
+  "icon": "CUSTOM:0 0 1 1",
+  "sizes": [
+   10,
+   12,
+   16,
+   23
+  ],
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 1 1",
+  "d": ""
+ },
+ {
+  "flx": "ui.copy-button.check-circle-icon",
+  "icon": "fill/check-circle-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "Copy code"
+ },
+ {
+  "flx": "ui.copy-button.clipboard-icon",
+  "icon": "fill/clipboard-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": ":relaxed:"
+ },
+ {
+  "flx": "ui.form.combobox.trigger-icon",
+  "icon": "bold/caret-down-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "ui.form.switch.icon-checked",
+  "icon": "bold/check-bold",
+  "sizes": [
+   12
+  ],
+  "example_state": "Open community menu for Dev Lab > Notifi"
+ },
+ {
+  "flx": "ui.form.switch.icon-unchecked",
+  "icon": "bold/x-bold",
+  "sizes": [
+   10
+  ],
+  "example_state": "Open community menu for Dev Lab > Notifi"
+ },
+ {
+  "flx": "ui.radio-group.radio-group.radio-option-item.radio-indicator",
+  "icon": "CUSTOM:0 0 40 40",
+  "sizes": [
+   18
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 40 40",
+  "d": ""
+ },
+ {
+  "flx": "ui.toast.toast.icon",
+  "icon": "bold/check-bold",
+  "sizes": [
+   20
+  ],
+  "example_state": "Add to favorites"
+ },
+ {
+  "flx": "user.profile.profile-card.profile-card-actions.icon-medium",
+  "icon": "bold/snowflake-bold",
+  "sizes": [
+   20
+  ],
+  "example_state": "@tester2"
+ },
+ {
+  "flx": "user.profile.profile-card.profile-card-actions.icon-medium",
+  "icon": "fill/list-plus-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "@tester2"
+ },
+ {
+  "flx": "user.profile.profile-card.profile-card-banner.banner-mask",
+  "icon": "CUSTOM:0 0 300 105",
+  "sizes": [
+   296,
+   301
+  ],
+  "example_state": "@tester2",
+  "viewBox": "0 0 300 105",
+  "d": ""
+ },
+ {
+  "flx": "user.profile.profile-preview.message-icon",
+  "icon": "fill/chat-teardrop-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "Open community menu for Dev Lab > Edit c"
+ },
+ {
+  "flx": "user.user-profile-modal.profile-media-header.svg",
+  "icon": "CUSTOM:0 0 600 210",
+  "sizes": [
+   570
+  ],
+  "example_state": "tester1 > user.profile.profile-card.prof",
+  "viewBox": "0 0 600 210",
+  "d": ""
+ },
+ {
+  "flx": "user.user-profile-modal.render-action-buttons.chat-teardrop-icon",
+  "icon": "fill/chat-teardrop-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "tester1 > user.profile.profile-card.prof"
+ },
+ {
+  "flx": "user.user-profile-modal.render-action-buttons.dots-three-icon",
+  "icon": "bold/dots-three-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "tester1 > user.profile.profile-card.prof"
+ },
+ {
+  "flx": "user.user-profile-modal.render-action-buttons.pencil-icon",
+  "icon": "fill/pencil-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "tester2 > user.profile.profile-card.prof"
+ },
+ {
+  "flx": "user.user-profile-modal.render-primary-action-button.user-plus-icon",
+  "icon": "fill/user-plus-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "tester1 > user.profile.profile-card.prof"
+ },
+ {
+  "flx": "user.user-profile-popout.icon-small",
+  "icon": "fill/chat-teardrop-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "tester1"
+ },
+ {
+  "flx": "user.user-profile-popout.icon-small",
+  "icon": "fill/pencil-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "@tester2"
+ },
+ {
+  "flx": "user.user-profile-shared.user-profile-membership-info.icon-small",
+  "icon": "CUSTOM:0 0 512 512",
+  "sizes": [
+   16
+  ],
+  "example_state": "@tester2",
+  "viewBox": "0 0 512 512",
+  "d": "M121.272 233.143C107.829 233.143 96.5983 222.277 98.2527 208.935C100.041 194.517 103.743 182.243 109.359 172.114C118.044 156.724 129.321 145.524 143.187 138.514C157.206 131.505 171.987 128 187.53 128C203.073 128 217.168 131.505 229.816 138.514C242.616 145.371 257.473 155.886 274.387 170.057C285.816 179.657 294.806 186.514 301.359 190.629C308.063 194.59 315.53 196.571 323.759 196.571C337.016 196.571 347.454 191.848 355.073 182.4C358.706 177.895 361.421 172.385 363.218 165.87C366.904 152.504 377.243 140.8 391.107 140.8V140.8C404.499 140.8 415.745 151.539 414.202 164.842C412.521 179.332 408.811 191.661 403.073 201.829C394.387 217.219 383.035 228.419 369.016 235.429C354.997 242.438 340.216 245.943 324.673 245.943C309.13 245.943 294.959 242.667 282.159 236.114C269.359 229.41 254.578 218.667 237.816 203.886C226.844 194.286 217.93 187.505 211.073 183.543C204.216 179.429 196.673 177.371 188.444 177.371C176.101 177.371 165.892 181.638 157.816 190.171C153.612 194.613 150.564 200.623 148.673 208.202C145.336 221.569 135.05 233.143 121.272 233.143V233.143ZM121.272 371.2C107.829 371.2 96.5983 360.334 98.2527 346.993C100.041 332.574 103.743 320.3 109.359 310.171C118.044 294.781 129.321 283.581 143.187 276.571C157.206 269.562 171.987 266.057 187.53 266.057C203.073 266.057 217.168 269.562 229.816 276.571C242.616 283.429 257.473 293.943 274.387 308.114C285.816 317.714 294.806 324.571 301.359 328.686C308.063 332.648 315.53 334.629 323.759 334.629C337.016 334.629 347.454 329.905 355.073 320.457C358.706 315.952 361.421 310.442 363.218 303.927C366.904 290.561 377.243 278.857 391.107 278.857V278.857C404.499 278.857 415.745 289.597 414.202 302.899C412.521 317.389 408.811 329.718 403.073 339.886C394.387 355.276 383.035 366.476 369.016 373.486C354.997 380.495 340.216 384 324.673 384C309.13 384 294.959 380.724 282.159 374.171C269.359 367.467 254.578 356.724 237.816 341.943C226.844 332.343 217.93 325.562 211.073 321.6C204.216 317.486 196.673 315.429 188.444 315.429C176.101 315.429 165.892 319.695 157.816 328.229C153.612 332.67 150.564 338.68 148.673 346.259C145.336 359.626 135.05 371.2 121.272 371.2V371.2Z"
+ },
+ {
+  "flx": "voice.voice-message-composer-modal.stop-icon",
+  "icon": "fill/stop-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "Open menu > Send voice message\nCTRL\nALT\n"
+ }
+]

@@ -110,17 +110,17 @@ impl SettingsTab {
     const fn icon(self) -> AppIcon {
         match self {
             Self::Profile => AppIcon::UserCircle,
-            Self::Account => AppIcon::UserCircle,
+            Self::Account => AppIcon::Shield,
             Self::PrivacySafety => AppIcon::EyeSlash,
-            Self::Appearance => AppIcon::Palette,
-            Self::Themes => AppIcon::Palette,
+            Self::Appearance => AppIcon::PaintBrush,
+            Self::Themes => AppIcon::Swatches,
             Self::Notifications => AppIcon::Bell,
-            Self::MessagesMedia => AppIcon::ChatsCircle,
-            Self::VoiceVideo => AppIcon::SpeakerHigh,
-            Self::Accessibility => AppIcon::PersonArmsSpread,
-            Self::Language => AppIcon::Globe,
-            Self::Keybinds => AppIcon::SlidersHorizontal,
-            Self::Advanced => AppIcon::Wrench,
+            Self::MessagesMedia => AppIcon::ChatCircleFill,
+            Self::VoiceVideo => AppIcon::Microphone,
+            Self::Accessibility => AppIcon::PersonSimpleCircle,
+            Self::Language => AppIcon::Translate,
+            Self::Keybinds => AppIcon::Keyboard,
+            Self::Advanced => AppIcon::Code,
         }
     }
 
@@ -4257,7 +4257,7 @@ fn render_sidebar_tab(
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.select_settings_tab(tab, cx);
             }))
-            .child(Icon::new(tab.icon()).small())
+            .child(Icon::new(tab.icon()).with_size(px(20.)))
             .child(div().text_sm().truncate().child(tab.label())),
     );
 
@@ -4503,7 +4503,7 @@ fn render_sidebar(
                                 .gap_1()
                                 .text_xs()
                                 .text_color(theme.muted_foreground)
-                                .child(Icon::new(AppIcon::PencilSimple).xsmall())
+                                .child(Icon::new(AppIcon::PencilBold).with_size(px(12.)))
                                 .child(div().truncate().child(l10n::tr("Edit your profile"))),
                         ),
                 ),

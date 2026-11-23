@@ -212,7 +212,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .gap_2()
                         .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx)))
                         .flx("channel.message-search-bar.message-search-bar.input-container")
-                        .child(Icon::new(AppIcon::MagnifyingGlass).xsmall().text_color(theme.muted_foreground))
+                        .child(Icon::new(AppIcon::MagnifyingGlass).with_size(px(16.)).text_color(theme.muted_foreground))
                         .child(
                             div()
                                 .flex_1()

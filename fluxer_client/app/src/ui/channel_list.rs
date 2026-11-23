@@ -300,7 +300,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                     this.open_leave_guild(id, window, cx);
                                 }))
                                 .child(div().text_xs().font_weight(FontWeight::MEDIUM).child(l10n::tr("Leave community")))
-                                .child(Icon::new(AppIcon::SignOut).xsmall().text_color(theme.danger)),
+                                .child(Icon::new(AppIcon::SignOutFill).with_size(px(20.)).text_color(theme.danger)),
                         )
                     })
             });

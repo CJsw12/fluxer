@@ -13,7 +13,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "SlidersHorizontal",
@@ -28,7 +28,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "SlidersHorizontal",
@@ -43,7 +43,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Prohibit",
@@ -58,7 +58,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "EyeSlash",
@@ -73,7 +73,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Eye",
@@ -88,7 +88,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "X",
@@ -103,7 +103,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Plus",
@@ -112,13 +112,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/plus.svg",
    "kind": "phosphor",
    "phosphor": "bold/plus-bold.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "status": "verified",
+   "official_component": "channel.textarea.textarea-button.icon",
+   "official_icon": "plus-bold",
+   "weight": "bold",
+   "size": 22,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "Image",
@@ -157,13 +157,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/smiley.svg",
    "kind": "phosphor",
    "phosphor": "fill/smiley-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "status": "verified",
+   "official_component": "channel.textarea.textarea-button.icon",
+   "official_icon": "smiley-fill",
+   "weight": "fill",
+   "size": 22,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "XCircle",
@@ -178,7 +178,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Plus",
@@ -193,7 +193,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Prohibit",
@@ -208,7 +208,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "SlidersHorizontal",
@@ -223,7 +223,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "SignOut",
@@ -238,7 +238,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "X",
@@ -253,7 +253,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "CaretDown",
@@ -282,7 +282,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Gear",
@@ -297,7 +297,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Prohibit",
@@ -312,22 +312,22 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
-   "rust_icon": "SignOut",
+   "rust_icon": "SignOutFill",
    "file": "fluxer_client/app/src/ui/channel_list.rs",
    "line": 303,
-   "rust_asset": "fluxer_client/app/assets/icons/sign-out.svg",
+   "rust_asset": "fluxer_client/app/assets/icons/sign-out-fill.svg",
    "kind": "phosphor",
-   "phosphor": "bold/sign-out-bold.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "phosphor": "fill/sign-out-fill.svg",
+   "status": "verified",
+   "official_component": "guild.guild-header-popout.guild-header-popout-item.icon-medium",
+   "official_icon": "sign-out-fill",
+   "weight": "fill",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "Users",
@@ -342,7 +342,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Plus",
@@ -351,13 +351,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/plus.svg",
    "kind": "phosphor",
    "phosphor": "bold/plus-bold.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "status": "verified",
+   "official_component": "channel.direct-message.dm-list.icon-size4",
+   "official_icon": "plus-bold",
+   "weight": "bold",
+   "size": 16,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "SlidersHorizontal",
@@ -372,7 +372,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Plus",
@@ -387,7 +387,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Gear",
@@ -402,7 +402,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "CaretDown",
@@ -515,7 +515,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Gear",
@@ -530,7 +530,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "MicrophoneSlash",
@@ -545,7 +545,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "SpeakerSlash",
@@ -560,7 +560,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "SlidersHorizontal",
@@ -575,7 +575,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Hash",
@@ -590,7 +590,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "SlidersHorizontal",
@@ -605,7 +605,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "ChatCircleFill",
@@ -614,13 +614,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/chat-circle-fill.svg",
    "kind": "phosphor",
    "phosphor": "fill/chat-circle-fill.svg",
-   "status": "unmatched",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official home button draws the Fluxer brand mark (FluxerButton), not a Phosphor icon."
+   "status": "verified",
+   "official_component": "app.sidebar-nav.fluxer-button.message-bubble-icon",
+   "official_icon": "chat-circle-fill",
+   "weight": "fill",
+   "size": 28,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "Star",
@@ -789,13 +789,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/magnifying-glass.svg",
    "kind": "phosphor",
    "phosphor": "bold/magnifying-glass-bold.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "status": "verified",
+   "official_component": "channel.message-search-bar.message-search-bar.search-icon",
+   "official_icon": "magnifying-glass-bold",
+   "weight": "bold",
+   "size": 16,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "Inbox",
@@ -824,7 +824,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Eye",
@@ -839,7 +839,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "EyeSlash",
@@ -854,7 +854,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Smiley",
@@ -863,13 +863,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/smiley.svg",
    "kind": "phosphor",
    "phosphor": "fill/smiley-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "status": "verified",
+   "official_component": "ui.action-menu.context-menu-icons.add-reaction-icon.smiley-icon",
+   "official_icon": "smiley-fill",
+   "weight": "fill",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "ArrowBendUpLeft",
@@ -893,13 +893,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/pencil-simple.svg",
    "kind": "phosphor",
    "phosphor": "fill/pencil-simple-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "status": "verified",
+   "official_component": "ui.action-menu.context-menu-icons.edit-message-icon.pencil-simple-icon",
+   "official_icon": "pencil-simple-fill",
+   "weight": "fill",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "ArrowClockwise",
@@ -914,7 +914,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Copy",
@@ -929,7 +929,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Hash",
@@ -944,7 +944,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Trash",
@@ -959,7 +959,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "SlidersHorizontal",
@@ -974,7 +974,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Prohibit",
@@ -989,7 +989,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "X",
@@ -1004,7 +1004,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "SpeakerHigh",
@@ -1019,7 +1019,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "XCircle",
@@ -1034,7 +1034,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "UserCircle",
@@ -1049,22 +1049,22 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
-   "rust_icon": "UserCircle",
+   "rust_icon": "Shield",
    "file": "fluxer_client/app/src/ui/settings.rs",
    "line": 113,
-   "rust_asset": "fluxer_client/app/assets/icons/user-circle.svg",
+   "rust_asset": "fluxer_client/app/assets/icons/shield.svg",
    "kind": "phosphor",
-   "phosphor": "fill/user-circle-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "phosphor": "fill/shield-fill.svg",
+   "status": "verified",
+   "official_component": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+   "official_icon": "shield-fill",
+   "weight": "fill",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "EyeSlash",
@@ -1073,43 +1073,43 @@
    "rust_asset": "fluxer_client/app/assets/icons/eye-slash.svg",
    "kind": "phosphor",
    "phosphor": "fill/eye-slash-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "status": "verified",
+   "official_component": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+   "official_icon": "eye-slash-fill",
+   "weight": "fill",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
-   "rust_icon": "Palette",
+   "rust_icon": "PaintBrush",
    "file": "fluxer_client/app/src/ui/settings.rs",
    "line": 115,
-   "rust_asset": "fluxer_client/app/assets/icons/palette.svg",
+   "rust_asset": "fluxer_client/app/assets/icons/paint-brush.svg",
    "kind": "phosphor",
-   "phosphor": "fill/palette-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "phosphor": "fill/paint-brush-fill.svg",
+   "status": "verified",
+   "official_component": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+   "official_icon": "paint-brush-fill",
+   "weight": "fill",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
-   "rust_icon": "Palette",
+   "rust_icon": "Swatches",
    "file": "fluxer_client/app/src/ui/settings.rs",
    "line": 116,
-   "rust_asset": "fluxer_client/app/assets/icons/palette.svg",
+   "rust_asset": "fluxer_client/app/assets/icons/swatches.svg",
    "kind": "phosphor",
-   "phosphor": "fill/palette-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "phosphor": "fill/swatches-fill.svg",
+   "status": "verified",
+   "official_component": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+   "official_icon": "swatches-fill",
+   "weight": "fill",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "Bell",
@@ -1118,103 +1118,103 @@
    "rust_asset": "fluxer_client/app/assets/icons/bell.svg",
    "kind": "phosphor",
    "phosphor": "fill/bell-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "status": "verified",
+   "official_component": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+   "official_icon": "bell-fill",
+   "weight": "fill",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
-   "rust_icon": "ChatsCircle",
+   "rust_icon": "ChatCircleFill",
    "file": "fluxer_client/app/src/ui/settings.rs",
    "line": 118,
-   "rust_asset": "fluxer_client/app/assets/icons/chats-circle.svg",
+   "rust_asset": "fluxer_client/app/assets/icons/chat-circle-fill.svg",
    "kind": "phosphor",
-   "phosphor": "fill/chats-circle-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "phosphor": "fill/chat-circle-fill.svg",
+   "status": "verified",
+   "official_component": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+   "official_icon": "chat-circle-fill",
+   "weight": "fill",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
-   "rust_icon": "SpeakerHigh",
+   "rust_icon": "Microphone",
    "file": "fluxer_client/app/src/ui/settings.rs",
    "line": 119,
-   "rust_asset": "fluxer_client/app/assets/icons/speaker-high.svg",
+   "rust_asset": "fluxer_client/app/assets/icons/microphone.svg",
    "kind": "phosphor",
-   "phosphor": "fill/speaker-high-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "phosphor": "fill/microphone-fill.svg",
+   "status": "verified",
+   "official_component": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+   "official_icon": "microphone-fill",
+   "weight": "fill",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
-   "rust_icon": "PersonArmsSpread",
+   "rust_icon": "PersonSimpleCircle",
    "file": "fluxer_client/app/src/ui/settings.rs",
    "line": 120,
-   "rust_asset": "fluxer_client/app/assets/icons/person-arms-spread.svg",
+   "rust_asset": "fluxer_client/app/assets/icons/person-simple-circle.svg",
    "kind": "phosphor",
-   "phosphor": "bold/person-arms-spread-bold.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "phosphor": "fill/person-simple-circle-fill.svg",
+   "status": "verified",
+   "official_component": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+   "official_icon": "person-simple-circle-fill",
+   "weight": "fill",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
-   "rust_icon": "Globe",
+   "rust_icon": "Translate",
    "file": "fluxer_client/app/src/ui/settings.rs",
    "line": 121,
-   "rust_asset": "fluxer_client/app/assets/icons/globe.svg",
+   "rust_asset": "fluxer_client/app/assets/icons/translate-bold.svg",
    "kind": "phosphor",
-   "phosphor": "bold/globe-bold.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "phosphor": "bold/translate-bold.svg",
+   "status": "verified",
+   "official_component": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+   "official_icon": "translate-bold",
+   "weight": "bold",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
-   "rust_icon": "SlidersHorizontal",
+   "rust_icon": "Keyboard",
    "file": "fluxer_client/app/src/ui/settings.rs",
    "line": 122,
-   "rust_asset": "fluxer_client/app/assets/icons/sliders-horizontal.svg",
+   "rust_asset": "fluxer_client/app/assets/icons/keyboard.svg",
    "kind": "phosphor",
-   "phosphor": "bold/sliders-horizontal-bold.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "phosphor": "fill/keyboard-fill.svg",
+   "status": "verified",
+   "official_component": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+   "official_icon": "keyboard-fill",
+   "weight": "fill",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
-   "rust_icon": "Wrench",
+   "rust_icon": "Code",
    "file": "fluxer_client/app/src/ui/settings.rs",
    "line": 123,
-   "rust_asset": "fluxer_client/app/assets/icons/wrench.svg",
+   "rust_asset": "fluxer_client/app/assets/icons/code-bold.svg",
    "kind": "phosphor",
-   "phosphor": "fill/wrench-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "phosphor": "bold/code-bold.svg",
+   "status": "verified",
+   "official_component": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+   "official_icon": "code-bold",
+   "weight": "bold",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "Check",
@@ -1229,7 +1229,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Check",
@@ -1244,7 +1244,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "SignOut",
@@ -1259,7 +1259,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Users",
@@ -1274,22 +1274,22 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
-   "rust_icon": "PencilSimple",
+   "rust_icon": "PencilBold",
    "file": "fluxer_client/app/src/ui/settings.rs",
    "line": 4506,
-   "rust_asset": "fluxer_client/app/assets/icons/pencil-simple.svg",
+   "rust_asset": "fluxer_client/app/assets/icons/pencil-bold.svg",
    "kind": "phosphor",
-   "phosphor": "fill/pencil-simple-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "phosphor": "bold/pencil-bold.svg",
+   "status": "verified",
+   "official_component": "app.desktop-settings-view.user-profile-hint-icon",
+   "official_icon": "pencil-bold",
+   "weight": "bold",
+   "size": 12,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "X",
@@ -1304,7 +1304,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "MagnifyingGlass",
@@ -1319,7 +1319,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "SlidersHorizontal",
@@ -1334,7 +1334,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "X",
@@ -1349,7 +1349,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "PhoneDisconnect",
@@ -1364,7 +1364,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "EyeSlash",
@@ -1379,7 +1379,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Monitor",
@@ -1394,7 +1394,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Users",
@@ -1497,7 +1497,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Smiley",
@@ -1512,7 +1512,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "CaretRight",
@@ -1527,7 +1527,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "UsersThree",
@@ -1542,7 +1542,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "IdentificationBadge",
@@ -1557,7 +1557,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "PencilSimple",
@@ -1572,7 +1572,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "CaretRight",
@@ -1587,7 +1587,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Check",
@@ -1602,7 +1602,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Gear",
@@ -1632,7 +1632,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "SpeakerSlash",
@@ -1647,7 +1647,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "MicrophoneSlash",
@@ -1662,7 +1662,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "SpeakerSlash",
@@ -1677,7 +1677,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "CaretDown",
@@ -1692,7 +1692,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "SpeakerHigh",
@@ -1707,7 +1707,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Monitor",
@@ -1722,7 +1722,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "MicrophoneSlash",
@@ -1737,7 +1737,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Microphone",
@@ -1752,7 +1752,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "SpeakerSlash",
@@ -1767,7 +1767,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "SpeakerHigh",
@@ -1782,7 +1782,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "EyeSlash",
@@ -1797,7 +1797,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "Monitor",
@@ -1812,7 +1812,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "SlidersHorizontal",
@@ -1827,7 +1827,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "PhoneDisconnect",
@@ -1842,7 +1842,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   },
   {
    "rust_icon": "EyeSlash",
@@ -1857,7 +1857,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "Official counterpart not audited; asset is its closest Phosphor match."
+   "reason": "not in harvest"
   }
  ]
 }

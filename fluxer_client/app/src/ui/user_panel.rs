@@ -5,14 +5,18 @@
 //! Speaker Deafen / Settings control buttons with official `.controlButton.active`
 //! danger highlight and moderator/permission lock state).
 
-use fluxer_client_core::state::Status;
+use fluxer_client_core::state::{Snowflake, Status};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Icon, Sizable as _};
-use gpui_kit::{AnyElement, Context, FontWeight, MouseButton, Role, SharedString, div, prelude::*, px};
+use gpui_kit::{
+    AnyElement, ClipboardItem, Context, FontWeight, Hsla, MouseButton, ObjectFit, Role, SharedString, deferred, div, img,
+    prelude::*, px, rgb, rgba,
+};
 
 use super::avatar::{AvatarSpec, render_avatar};
 use super::member_list::{status_color, status_label};
 use super::settings::SettingsTab;
+use crate::profile::build_profile_card;
 use super::{l10n, voice_panel};
 use crate::client_view::{ClientView, Connection};
 use crate::icons::AppIcon;
@@ -128,135 +132,6 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         l10n::tr("Deafen")
     };
 
-    let popout = view.user_area_popout_open.then(|| {
-        let status_choices = [
-            (Status::Online, "online"),
-            (Status::Idle, "idle"),
-            (Status::Dnd, "dnd"),
-            (Status::Invisible, "invisible"),
-        ];
-        div()
-            .id("user-area-popout")
-            .debug_selector(|| "user-area-popout".to_owned())
-            .px_2p5()
-            .py_2()
-            .border_b_1()
-            .border_color(theme.border)
-            .bg(theme.background)
-            .flex()
-            .flex_col()
-            .gap_1p5()
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div()
-                            .text_xs()
-                            .font_weight(FontWeight::BOLD)
-                            .text_color(theme.muted_foreground)
-                            .child(l10n::tr("Set Status")),
-                    )
-                    .when_some(self_id, |d, uid| {
-                        d.child(
-                            div()
-                                .id("user-area-view-profile")
-                                .debug_selector(|| "user-area-view-profile".to_owned())
-                                .cursor_pointer()
-                                .text_xs()
-                                .text_color(theme.brand)
-                                .hover(|s| s.underline())
-                                .on_click(cx.listener(move |this, ev: &gpui_kit::ClickEvent, window, cx| {
-                                    this.user_area_popout_open = false;
-                                    this.open_profile(uid, None, ev.position(), window, cx);
-                                }))
-                                .child(l10n::tr("View profile")),
-                        )
-                    }),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_0p5()
-                    .children(status_choices.into_iter().map(|(st, key)| {
-                        let selected = view.own_status == st;
-                        let st_color = status_color(st, theme);
-                        let st_label = status_label(st);
-                        let sel_id = format!("user-area-status-{key}");
-                        div()
-                            .id(SharedString::from(sel_id.clone()))
-                            .debug_selector(move || sel_id.clone())
-                            .px_2()
-                            .py_1()
-                            .rounded(px(5.))
-                            .cursor_pointer()
-                            .when(selected, |d| d.bg(theme.accent).font_weight(FontWeight::SEMIBOLD))
-                            .when(!selected, |d| d.hover(|s| s.bg(theme.muted)))
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_2()
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.own_status = st;
-                                this.backend.set_presence(st);
-                                this.user_area_popout_open = false;
-                                cx.notify();
-                            }))
-                            .child(div().size(px(8.)).rounded_full().bg(st_color))
-                            .child(div().text_xs().child(st_label))
-                    })),
-            )
-            .child(div().h(px(1.)).bg(theme.border))
-            .child(
-                div()
-                    .id("user-area-edit-profile")
-                    .debug_selector(|| "user-area-edit-profile".to_owned())
-                    .px_2()
-                    .py_1()
-                    .rounded(px(5.))
-                    .cursor_pointer()
-                    .hover(|s| s.bg(theme.muted))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_2()
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.user_area_popout_open = false;
-                        if !matches!(this.overlay, crate::ui::overlay::Overlay::Settings(_)) {
-                            this.open_settings(window, cx);
-                        }
-                        this.select_settings_tab(SettingsTab::Profile, cx);
-                    }))
-                    .child(Icon::new(AppIcon::PencilSimple).xsmall().text_color(theme.muted_foreground))
-                    .child(div().text_xs().font_weight(FontWeight::MEDIUM).child(l10n::tr("Edit Profile"))),
-            )
-            .when(view.accounts_enabled, |d| {
-                d.child(
-                    div()
-                        .id("user-area-switch-accounts")
-                        .debug_selector(|| "user-area-switch-accounts".to_owned())
-                        .px_2()
-                        .py_1()
-                        .rounded(px(5.))
-                        .cursor_pointer()
-                        .hover(|s| s.bg(theme.muted))
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap_2()
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.user_area_popout_open = false;
-                            this.open_account_switcher(window, cx);
-                        }))
-                        .child(Icon::new(AppIcon::Users).xsmall().text_color(theme.muted_foreground))
-                        .child(div().text_xs().font_weight(FontWeight::MEDIUM).child(l10n::tr("Switch Accounts"))),
-                )
-            })
-    });
 
     let panel_group: SharedString = "user-panel-group".into();
 
@@ -276,7 +151,6 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .bg(theme.background_secondary)
         .overflow_hidden()
         .children(voice_panel::render(view, theme, cx))
-        .children(popout)
         .child(
             div()
                 .id("user-panel")
@@ -430,4 +304,639 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         )),
                 ),
         )
+}
+
+/// Submenu opened by hovering a `UserAreaPopout` action row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum UserAreaSubmenu {
+    Status,
+    Expiry(Status),
+    Accounts,
+}
+
+const CARD_BG: u32 = 0x0c0b0e;
+const GROUP_BG: u32 = 0x232028;
+const GROUP_DIVIDER: u32 = 0x2f2c36;
+const MENU_BG: u32 = 0x2a2730;
+const SECONDARY_TEXT: u32 = 0xb1acbb;
+const ICON_TEXT: u32 = 0xe5e4e9;
+const ACTIVE_GREEN: u32 = 0x1daf6b;
+const BRAND_FILL: u32 = 0x413cdd;
+
+const EXPIRY_CHOICES: [&str; 9] = [
+    "For 15 minutes",
+    "For 30 minutes",
+    "For 1 hour",
+    "For 3 hours",
+    "For 4 hours",
+    "For 8 hours",
+    "For 24 hours",
+    "For 3 days",
+    "Until I change it",
+];
+
+fn menu_frame(id: &'static str, width: f32) -> gpui_kit::Stateful<gpui_kit::Div> {
+    div()
+        .id(id)
+        .occlude()
+        .w(px(width))
+        .p(px(6.))
+        .flex()
+        .flex_col()
+        .rounded(px(8.))
+        .border_1()
+        .border_color(rgba(0xc9c5d326))
+        .bg(rgb(MENU_BG))
+        .shadow_lg()
+}
+
+fn hover_submenu(
+    target: Option<UserAreaSubmenu>,
+    cx: &mut Context<ClientView>,
+) -> impl Fn(&bool, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static {
+    cx.listener(move |this, hovered: &bool, _, cx| {
+        if *hovered && this.user_area_submenu != target {
+            this.user_area_submenu = target;
+            cx.notify();
+        }
+    })
+}
+
+fn hover_fill() -> Hsla {
+    gpui_kit::hsla(0., 0., 1., 0.06)
+}
+
+/// Official `UserAreaPopout`: profile card (banner, avatar, names, custom status
+/// row, action group, Edit profile) plus the hover submenus on its right.
+pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> Option<AnyElement> {
+    if !view.user_area_popout_open {
+        return None;
+    }
+    let uid = view.user.as_ref()?.id;
+    let card = {
+        let state = view.backend.state();
+        build_profile_card(&state, view.backend.media(), uid, None, view.profile_cache.get(&(uid, None)))
+    };
+    let banner_color = rgb(card.banner_color);
+    let status = view.own_status;
+    let secondary: Hsla = rgb(SECONDARY_TEXT).into();
+    let primary = theme.foreground;
+    let icon_color: Hsla = rgb(ICON_TEXT).into();
+    let username = SharedString::from(card.username_tag.clone());
+    let copy_name = card.username_tag.clone();
+    let user_id_text = uid.0.to_string();
+    let submenu = view.user_area_submenu;
+
+    let banner = div()
+        .relative()
+        .w_full()
+        .h(px(105.))
+        .flex_none()
+        .rounded_t(px(3.5))
+        .overflow_hidden()
+        .bg(banner_color)
+        .flx("user.profile.profile-card.profile-card-banner.banner")
+        .children(
+            card.banner_url
+                .clone()
+                .map(|url| img(url).id("user-area-popout-banner").size_full().object_fit(ObjectFit::Cover)),
+        );
+
+    let avatar = div()
+        .id("user-area-popout-avatar")
+        .absolute()
+        .left(px(12.))
+        .top(px(57.))
+        .size(px(86.))
+        .p(px(3.))
+        .rounded_full()
+        .bg(rgb(CARD_BG))
+        .cursor_pointer()
+        .flx("user.profile.profile-card.profile-card-banner.avatar-button.avatar-click")
+        .on_click(cx.listener(move |this, ev: &gpui_kit::ClickEvent, window, cx| {
+            this.user_area_popout_open = false;
+            this.open_profile(uid, None, ev.position(), window, cx);
+        }))
+        .child(render_avatar(
+            AvatarSpec {
+                user_id: uid,
+                avatar_url: card.avatar_url.clone().map(SharedString::from),
+                display_name: card.display_name.clone().into(),
+                size: 80.,
+                status: None,
+                status_border_bg: None,
+            },
+            theme,
+        ))
+        .child(
+            div()
+                .absolute()
+                .right(px(0.))
+                .bottom(px(0.))
+                .size(px(26.))
+                .rounded_full()
+                .bg(rgb(CARD_BG))
+                .flex()
+                .items_center()
+                .justify_center()
+                .child(div().size(px(18.)).rounded_full().bg(status_color(status, theme))),
+        );
+
+    let content = div()
+        .mt(px(39.))
+        .h(px(76.))
+        .flex_none()
+        .px(px(16.))
+        .pt(px(8.))
+        .flex()
+        .flex_col()
+        .gap(px(8.))
+        .flx("user.profile.profile-card.profile-card-content.content-section")
+        .child(
+            div()
+                .h(px(44.))
+                .flex()
+                .flex_col()
+                .child(
+                    div()
+                        .id("user-area-popout-display-name")
+                        .h(px(24.))
+                        .text_size(px(20.))
+                        .line_height(px(24.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(primary)
+                        .truncate()
+                        .cursor_pointer()
+                        .on_click(cx.listener(move |this, ev: &gpui_kit::ClickEvent, window, cx| {
+                            this.user_area_popout_open = false;
+                            this.open_profile(uid, None, ev.position(), window, cx);
+                        }))
+                        .child(SharedString::from(card.display_name.clone())),
+                )
+                .child(
+                    div()
+                        .h(px(20.))
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(4.))
+                        .child(div().text_size(px(14.)).line_height(px(18.)).text_color(secondary).child(username))
+                        .child(
+                            div()
+                                .id("user-area-copy-username")
+                                .cursor_pointer()
+                                .flex()
+                                .items_center()
+                                .flx("app.floating.user-area-popout.copy-icon")
+                                .on_click(cx.listener(move |_, _, _, cx| {
+                                    cx.write_to_clipboard(ClipboardItem::new_string(copy_name.clone()));
+                                }))
+                                .child(Icon::new(AppIcon::Copy).with_size(px(14.)).text_color(secondary)),
+                        ),
+                ),
+        )
+        .child(
+            div()
+                .id("user-area-custom-status")
+                .h(px(16.))
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(3.))
+                .flx("app.floating.user-area-popout.custom-status-row")
+                .child(Icon::new(AppIcon::Smiley).with_size(px(14.)).text_color(secondary))
+                .child(
+                    div()
+                        .text_size(px(12.))
+                        .line_height(px(16.))
+                        .text_color(secondary)
+                        .child(l10n::tr("Set a custom status")),
+                ),
+        );
+
+    let action_row = |id: &'static str, flx: &'static str| {
+        div()
+            .id(id)
+            .debug_selector(move || id.to_owned())
+            .flx(flx)
+            .h(px(42.))
+            .w_full()
+            .flex_none()
+            .px(px(12.))
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(10.))
+            .cursor_pointer()
+            .hover(|s| s.bg(gpui_kit::hsla(0., 0., 1., 0.04)))
+    };
+    let action_label = |text: String| {
+        div()
+            .flex_1()
+            .text_size(px(13.))
+            .line_height(px(16.25))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(primary)
+            .child(text)
+    };
+    let chevron = |color: Hsla| Icon::new(AppIcon::CaretRight).with_size(px(14.)).text_color(color);
+    let divider = || div().mx(px(12.)).h(px(1.)).flex_none().bg(rgb(GROUP_DIVIDER));
+    let icon_box =
+        |child: AnyElement| div().size(px(22.)).flex_none().flex().items_center().justify_center().child(child);
+
+    let action_group = div()
+        .w_full()
+        .flex_none()
+        .flex()
+        .flex_col()
+        .rounded(px(12.))
+        .overflow_hidden()
+        .bg(rgb(GROUP_BG))
+        .flx("app.floating.user-area-popout.action-group")
+        .child(
+            action_row("user-area-status-row", "app.floating.user-area-popout.action-button")
+                .on_hover(hover_submenu(Some(UserAreaSubmenu::Status), cx))
+                .child(icon_box(div().size(px(14.)).rounded_full().bg(status_color(status, theme)).into_any_element()))
+                .child(action_label(status_label(status)))
+                .child(chevron(secondary)),
+        )
+        .child(divider())
+        .child(
+            action_row(
+                "user-area-switch-accounts",
+                "app.floating.user-area-popout.action-button.open-manage-accounts",
+            )
+            .on_hover(hover_submenu(Some(UserAreaSubmenu::Accounts), cx))
+            .on_click(cx.listener(|this, _, window, cx| {
+                this.user_area_popout_open = false;
+                this.open_account_switcher(window, cx);
+            }))
+            .child(icon_box(Icon::new(AppIcon::UsersThree).with_size(px(16.)).text_color(icon_color).into_any_element()))
+            .child(action_label(l10n::tr("Switch accounts")))
+            .child(chevron(secondary)),
+        )
+        .child(divider())
+        .child(
+            action_row("user-area-copy-user-id", "app.floating.user-area-popout.action-button.copy-user-id")
+                .on_hover(hover_submenu(None, cx))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    cx.write_to_clipboard(ClipboardItem::new_string(user_id_text.clone()));
+                    this.user_area_popout_open = false;
+                    cx.notify();
+                }))
+                .child(icon_box(
+                    Icon::new(AppIcon::IdentificationBadge).with_size(px(16.)).text_color(icon_color).into_any_element(),
+                ))
+                .child(action_label(l10n::tr("Copy user ID"))),
+        );
+
+    let edit_button = div()
+        .id("user-area-edit-profile")
+        .debug_selector(|| "user-area-edit-profile".to_owned())
+        .flx("app.floating.user-area-popout.edit-profile-button.open-edit-profile")
+        .h(px(36.))
+        .w_full()
+        .flex_none()
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_center()
+        .gap(px(8.))
+        .rounded(px(8.))
+        .border_1()
+        .border_color(rgba(0xffffff26))
+        .bg(rgb(BRAND_FILL))
+        .cursor_pointer()
+        .hover(|s| s.bg(theme.brand))
+        .on_hover(hover_submenu(None, cx))
+        .on_click(cx.listener(|this, _, window, cx| {
+            this.user_area_popout_open = false;
+            if !matches!(this.overlay, crate::ui::overlay::Overlay::Settings(_)) {
+                this.open_settings(window, cx);
+            }
+            this.select_settings_tab(SettingsTab::Profile, cx);
+        }))
+        .child(Icon::new(AppIcon::PencilSimple).with_size(px(16.)).text_color(theme.on_fill))
+        .child(
+            div()
+                .text_size(px(13.))
+                .line_height(px(16.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme.on_fill)
+                .child(l10n::tr("Edit profile")),
+        );
+
+    let footer = div()
+        .h(px(192.))
+        .flex_none()
+        .mt(px(4.))
+        .px(px(12.))
+        .pt(px(16.))
+        .flex()
+        .flex_col()
+        .flx("user.profile.profile-card.profile-card-footer.footer-section")
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(12.))
+                .flx("app.floating.user-area-popout.footer")
+                .child(action_group)
+                .child(edit_button),
+        );
+
+    let card_el = div()
+        .id("user-area-popout")
+        .debug_selector(|| "user-area-popout".to_owned())
+        .occlude()
+        .flx("app.floating.user-area-popout.container")
+        .w(px(305.))
+        .h(px(432.))
+        .relative()
+        .flex()
+        .flex_col()
+        .rounded(px(6.))
+        .border_2()
+        .border_color(banner_color)
+        .bg(rgb(CARD_BG))
+        .child(banner)
+        .child(content)
+        .child(footer)
+        .child(avatar);
+
+    let status_menu = matches!(submenu, Some(UserAreaSubmenu::Status | UserAreaSubmenu::Expiry(_))).then(|| {
+        let items = [
+            (Status::Online, "online", None, 32.),
+            (Status::Idle, "idle", None, 32.),
+            (Status::Dnd, "dnd", Some("You won't receive notifications on desktop"), 63.),
+            (Status::Invisible, "invisible", Some("You'll appear offline"), 47.),
+        ];
+        menu_frame("user-area-status-menu", 280.)
+            .absolute()
+            .left(px(315.))
+            .top(px(242.))
+            .gap(px(0.5))
+            .flx("app.floating.user-area-popout.status-menu.status-menu")
+            .children(items.into_iter().map(|(st, key, desc, h)| {
+                let has_expiry = st != Status::Online;
+                let sel_id = format!("user-area-status-{key}");
+                let target = if has_expiry { UserAreaSubmenu::Expiry(st) } else { UserAreaSubmenu::Status };
+                let active = submenu == Some(UserAreaSubmenu::Expiry(st));
+                div()
+                    .id(SharedString::from(sel_id.clone()))
+                    .debug_selector(move || sel_id.clone())
+                    .w_full()
+                    .h(px(h))
+                    .flex_none()
+                    .px(px(8.))
+                    .pt(px(5.))
+                    .rounded(px(6.))
+                    .flex()
+                    .flex_row()
+                    .items_start()
+                    .gap(px(8.))
+                    .cursor_pointer()
+                    .when(active, |d| d.bg(hover_fill()))
+                    .hover(|s| s.bg(hover_fill()))
+                    .on_hover(hover_submenu(Some(target), cx))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.own_status = st;
+                        this.backend.set_presence(st);
+                        this.user_area_popout_open = false;
+                        cx.notify();
+                    }))
+                    .child(
+                        div()
+                            .size(px(18.))
+                            .flex_none()
+                            .mt(px(1.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(div().size(px(14.)).rounded_full().bg(status_color(st, theme))),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .child(
+                                div()
+                                    .text_size(px(14.))
+                                    .line_height(px(18.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(primary)
+                                    .child(status_label(st)),
+                            )
+                            .children(desc.map(|d| {
+                                div().text_size(px(12.)).line_height(px(16.)).text_color(secondary).child(l10n::tr(d))
+                            })),
+                    )
+                    .when(has_expiry, |d| {
+                        d.child(
+                            div()
+                                .flex_none()
+                                .mt(px(1.))
+                                .child(Icon::new(AppIcon::CaretRight).with_size(px(16.)).text_color(icon_color)),
+                        )
+                    })
+            }))
+            .into_any_element()
+    });
+
+    let expiry_menu = match submenu {
+        Some(UserAreaSubmenu::Expiry(st)) => {
+            let item_top = match st {
+                Status::Idle => 32.5,
+                Status::Dnd => 65.,
+                _ => 128.,
+            };
+            Some(
+                menu_frame("user-area-expiry-menu", 220.)
+                    .absolute()
+                    .left(px(607.))
+                    .top(px(242. + 7. + item_top))
+                    .flx("app.floating.user-area-popout.status-menu.expiry-popup")
+                    .children(EXPIRY_CHOICES.into_iter().enumerate().map(|(i, text)| {
+                        div()
+                            .id(("user-area-expiry", i))
+                            .h(px(32.))
+                            .w_full()
+                            .px(px(8.))
+                            .rounded(px(6.))
+                            .flex()
+                            .items_center()
+                            .cursor_pointer()
+                            .hover(|s| s.bg(hover_fill()))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                // The backend has no status-expiry timer; the status applies indefinitely.
+                                this.own_status = st;
+                                this.backend.set_presence(st);
+                                this.user_area_popout_open = false;
+                                cx.notify();
+                            }))
+                            .child(
+                                div()
+                                    .text_size(px(14.))
+                                    .line_height(px(18.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(primary)
+                                    .child(l10n::tr(text)),
+                            )
+                    }))
+                    .into_any_element(),
+            )
+        }
+        _ => None,
+    };
+
+    let account_menu = (submenu == Some(UserAreaSubmenu::Accounts)).then(|| {
+        let mut rows: Vec<(String, SharedString, Option<SharedString>, Snowflake, bool)> = view
+            .saved_accounts
+            .iter()
+            .map(|a| {
+                (
+                    a.key.clone(),
+                    a.display_name.clone(),
+                    a.avatar_url.clone(),
+                    Snowflake(a.user_id.parse::<u64>().unwrap_or(0)),
+                    a.is_active,
+                )
+            })
+            .collect();
+        if rows.is_empty() {
+            rows.push((
+                String::new(),
+                card.display_name.clone().into(),
+                card.avatar_url.clone().map(SharedString::from),
+                uid,
+                true,
+            ));
+        }
+        menu_frame("user-area-account-menu", 280.)
+            .absolute()
+            .left(px(315.))
+            .top(px(285.))
+            .flx("app.floating.user-area-account-switch-menu.switch-menu")
+            .children(rows.into_iter().enumerate().map(|(i, (key, name, avatar_url, id, active))| {
+                div()
+                    .id(("user-area-account", i))
+                    .w_full()
+                    .h(px(44.))
+                    .flex_none()
+                    .px(px(8.))
+                    .rounded(px(6.))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(10.))
+                    .cursor_pointer()
+                    .hover(|s| s.bg(hover_fill()))
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.user_area_popout_open = false;
+                        if !active && !key.is_empty() {
+                            this.switch_account(key.clone(), window, cx);
+                        }
+                        cx.notify();
+                    }))
+                    .child(render_avatar(
+                        AvatarSpec {
+                            user_id: id,
+                            avatar_url,
+                            display_name: name.clone(),
+                            size: 24.,
+                            status: None,
+                            status_border_bg: None,
+                        },
+                        theme,
+                    ))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_col()
+                            .child(
+                                div()
+                                    .text_size(px(13.))
+                                    .line_height(px(16.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(primary)
+                                    .truncate()
+                                    .child(name),
+                            )
+                            .when(active, |d| {
+                                d.child(
+                                    div()
+                                        .text_size(px(11.))
+                                        .line_height(px(14.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(rgb(ACTIVE_GREEN))
+                                        .child(l10n::tr("Active account")),
+                                )
+                            }),
+                    )
+                    .when(active, |d| {
+                        d.child(
+                            div()
+                                .size(px(20.))
+                                .flex_none()
+                                .rounded_full()
+                                .bg(rgb(BRAND_FILL))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child(Icon::new(AppIcon::Check).with_size(px(10.)).text_color(theme.on_fill)),
+                        )
+                    })
+            }))
+            .child(div().my(px(4.)).h(px(1.)).w_full().flex_none().bg(rgba(0xc9c5d326)))
+            .child(
+                div()
+                    .id("user-area-manage-accounts")
+                    .debug_selector(|| "user-area-manage-accounts".to_owned())
+                    .w_full()
+                    .h(px(32.))
+                    .px(px(8.))
+                    .rounded(px(6.))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(8.))
+                    .cursor_pointer()
+                    .hover(|s| s.bg(hover_fill()))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.user_area_popout_open = false;
+                        this.open_account_switcher(window, cx);
+                    }))
+                    .child(Icon::new(AppIcon::Gear).with_size(px(16.)).text_color(icon_color))
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .line_height(px(16.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(primary)
+                            .child(l10n::tr("Manage accounts")),
+                    ),
+            )
+            .into_any_element()
+    });
+
+    Some(
+        deferred(
+            div()
+                .absolute()
+                .left(px(12.))
+                .bottom(px(64.))
+                .w(px(305.))
+                .h(px(432.))
+                .child(card_el)
+                .children(status_menu)
+                .children(expiry_menu)
+                .children(account_menu),
+        )
+        .with_priority(2)
+        .into_any_element(),
+    )
 }

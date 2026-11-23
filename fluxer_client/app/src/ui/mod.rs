@@ -37,6 +37,7 @@ pub mod autocomplete;
 pub mod composer_text;
 pub mod overlay;
 pub mod quick_switcher;
+pub mod rail_tooltip;
 pub mod embed;
 
 use gpui_kit::{div, prelude::*, px};

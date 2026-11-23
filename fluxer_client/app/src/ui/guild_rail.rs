@@ -12,10 +12,10 @@
 use fluxer_client_core::state::Unread;
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
-    AnyElement, App, ClickEvent, Context, Div, Hsla, Window, ElementId, FontWeight, ObjectFit, Role, SharedString, Stateful, div, img, prelude::*, px,
+    AnyElement, App, ClickEvent, Context, Div, Hsla, Window, rgb, rgba, ElementId, FontWeight, ObjectFit, Role, SharedString, Stateful, div, img, prelude::*, px,
 };
 
-use super::{badge, l10n};
+use super::{badge, l10n, rail_tooltip};
 use crate::client_view::{ClientView, RailHoverTarget};
 use crate::icons::AppIcon;
 use crate::parity_probe::FlxExt as _;
@@ -95,6 +95,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             theme.background_tertiary,
         )
         .flx("app.sidebar-nav.fluxer-button.fluxer-button-icon"),
+        home_hovered.then(|| rail_tooltip::text(l10n::tr("Direct messages"), theme, rail_tooltip::TOOLTIP_LEFT)),
     ));
 
     // Official `FavoritesGuildButton` wrapped in the same `rail_item` with left white indicator bar
@@ -137,6 +138,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             )
             .debug_selector(|| "rail-favorites-btn".to_owned())
             .flx("app.sidebar-nav.favorites-button.fluxer-button-icon"),
+            fav_hovered.then(|| rail_tooltip::text(l10n::tr("Favorites"), theme, rail_tooltip::TOOLTIP_LEFT)),
         ))
         .child(
             div()
@@ -162,6 +164,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             theme.foreground
         };
         let has_image = g.icon_url.is_some();
+        let in_voice = view.voice.guild_id == Some(id) && view.voice.channel_id.is_some();
         let content: AnyElement = match &g.icon_url {
             Some(url) => img(url.clone())
                 .id(("guild-icon", id.0))
@@ -195,15 +198,17 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 theme,
                 theme.muted,
             )
-            .flx("app.sidebar-nav.guild-list-item-presentation.guild-icon"),
+            .flx("app.sidebar-nav.guild-list-item-presentation.guild-icon")
+            .when(in_voice, |d| d.child(rail_tooltip::voice_badge(theme))),
+            hovered.then(|| rail_tooltip::guild(g.name.clone(), None, theme)),
         ));
     }
 
     let discover_hovered = view.hovered_rail_item == Some(RailHoverTarget::Discover);
     let discover_fg = if discover_hovered {
-        theme.on_fill
-    } else {
         theme.foreground
+    } else {
+        theme.muted_foreground
     };
     let join_hovered = view.hovered_rail_item == Some(RailHoverTarget::Join);
 
@@ -221,12 +226,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             }))
             .border_2()
             .border_dashed()
-            .border_color(if discover_hovered { theme.brand } else { theme.border })
-            .bg(if discover_hovered {
-                theme.brand
-            } else {
-                theme.background_secondary
-            })
+            .border_color(if discover_hovered { Hsla::from(rgb(0xf4f4f6)) } else { Hsla::from(rgba(0xc9c5d326)) })
+            .bg(gpui_kit::transparent_black())
             .text_color(discover_fg)
             .cursor_pointer()
             .flex()
@@ -237,6 +238,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             }))
             .on_click(cx.listener(|this, _, window, cx| this.open_join_guild(window, cx)))
             .child(Icon::new(AppIcon::Compass).with_size(px(20.)).text_color(discover_fg)),
+        discover_hovered.then(|| rail_tooltip::text(l10n::tr("Explore communities"), theme, 76.)),
     ))
     .child(slot(4., 68., 44., "app.sidebar-nav.add-guild-button.button.add-guild",
         div()
@@ -252,16 +254,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             }))
             .border_2()
             .border_dashed()
-            .border_color(if join_hovered {
-                theme.foreground
-            } else {
-                theme.border
-            })
-            .bg(if join_hovered {
-                theme.muted
-            } else {
-                theme.background_secondary
-            })
+            .border_color(if join_hovered { Hsla::from(rgb(0xf4f4f6)) } else { Hsla::from(rgba(0xc9c5d326)) })
+            .bg(gpui_kit::transparent_black())
             .cursor_pointer()
             .flex()
             .items_center()
@@ -271,12 +265,14 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             }))
             .on_click(cx.listener(|this, _, window, cx| this.open_join_guild(window, cx)))
             .child(Icon::new(AppIcon::Plus).with_size(px(20.)).text_color(if join_hovered { theme.foreground } else { theme.muted_foreground })),
+        join_hovered.then(|| rail_tooltip::create_or_join(l10n::tr("Create or join a community"), theme, 76.)),
     ))
 }
 
 /// Full-width slot that carries the official click-area tag; hover and click live here.
-fn slot(mt: f32, w: f32, h: f32, flx: &'static str, child: impl IntoElement) -> impl IntoElement {
+fn slot(mt: f32, w: f32, h: f32, flx: &'static str, child: impl IntoElement, tooltip: Option<AnyElement>) -> impl IntoElement {
     div()
+        .relative()
         .w(px(w))
         .h(px(h))
         .flex_none()
@@ -285,6 +281,7 @@ fn slot(mt: f32, w: f32, h: f32, flx: &'static str, child: impl IntoElement) -> 
         .items_center()
         .justify_center()
         .child(child)
+        .children(tooltip)
         .flx(flx)
 }
 
@@ -303,6 +300,7 @@ fn rail_item(
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_hover: impl Fn(&bool, &mut Window, &mut App) + 'static,
     button: impl IntoElement,
+    tooltip: Option<AnyElement>,
 ) -> impl IntoElement {
     let pill = resolve_rail_indicator_height(selected, hovered, unread.unread);
     let fg = theme.foreground;
@@ -320,6 +318,7 @@ fn rail_item(
         .on_hover(on_hover)
         .on_click(on_click)
         .child(button)
+        .children(tooltip)
         .children(pill.map(|h| {
             let sel = format!("rail-pill-{pill_key_str}");
             div()

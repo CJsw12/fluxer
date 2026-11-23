@@ -257,6 +257,8 @@ pub struct ClientView {
     pub(crate) voice_stage_expanded: bool,
     /// When true, the dedicated bottom-left `UserAreaPopout` menu (`UserArea.tsx`) is open above the user row.
     pub(crate) user_area_popout_open: bool,
+    /// Hovered `UserAreaPopout` submenu (status / expiry / accounts).
+    pub(crate) user_area_submenu: Option<crate::ui::user_panel::UserAreaSubmenu>,
     /// When true, the Guild Header dropdown menu (`GuildHeaderPopout.tsx`) is open below the guild header.
     pub(crate) guild_header_popout_open: bool,
     /// Currently hovered item in the left Guild Rail (`GuildListIndicator.ts`).
@@ -455,6 +457,7 @@ impl ClientView {
             voice_stage_open: false,
             voice_stage_expanded: true,
             user_area_popout_open: false,
+            user_area_submenu: None,
             guild_header_popout_open: false,
             hovered_rail_item: None,
             favorites_selected: false,
@@ -1615,6 +1618,7 @@ impl ClientView {
 
     pub(crate) fn toggle_user_area_popout(&mut self, cx: &mut Context<Self>) {
         self.user_area_popout_open = !self.user_area_popout_open;
+        self.user_area_submenu = None;
         if self.user_area_popout_open {
             self.voice_popout = None;
             self.guild_header_popout_open = false;
@@ -2820,7 +2824,8 @@ impl Render for ClientView {
                             // Height is content-sized so the popout grows upward.
                             .w(px(381.))
                             .child(ui::user_panel::render(self, &theme, cx)),
-                    ),
+                    )
+                    .children(ui::user_panel::render_popout(self, &theme, cx)),
             )
             .child(div().flex().flex_1().min_w_0().h_full().bg(theme.background_secondary_lighter).child(if show_voice_stage {
                 let split_chat = !self.voice_stage_expanded && self.selected_channel.is_some();

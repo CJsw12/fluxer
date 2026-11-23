@@ -691,6 +691,16 @@ fn m5_user_area_popout_and_interactive_settings_prefs_work(cx: &mut TestAppConte
     vcx.run_until_parked();
     draw(vcx);
     assert!(vcx.debug_bounds("user-area-popout").is_some());
+    assert!(vcx.debug_bounds("user-area-status-row").is_some());
+    assert!(vcx.debug_bounds("user-area-switch-accounts").is_some());
+    assert!(vcx.debug_bounds("user-area-copy-user-id").is_some());
+    // Hovering the status row opens the status submenu.
+    view.update(vcx, |v, cx| {
+        v.user_area_submenu = Some(crate::ui::user_panel::UserAreaSubmenu::Status);
+        cx.notify();
+    });
+    vcx.run_until_parked();
+    draw(vcx);
     assert!(vcx.debug_bounds("user-area-status-online").is_some());
     assert!(vcx.debug_bounds("user-area-status-dnd").is_some());
     assert!(vcx.debug_bounds("user-area-edit-profile").is_some());

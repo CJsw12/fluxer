@@ -19,6 +19,7 @@ pub(super) mod relationships;
 pub(super) mod typing;
 pub(super) mod user_settings;
 pub(super) mod users;
+pub(super) mod voice;
 
 use serde::de::DeserializeOwned;
 use serde_json::Value;

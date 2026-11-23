@@ -164,7 +164,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             theme.foreground
         };
         let has_image = g.icon_url.is_some();
-        let in_voice = view.voice.guild_id == Some(id) && view.voice.channel_id.is_some();
+        let in_voice = g.has_voice_activity;
         let content: AnyElement = match &g.icon_url {
             Some(url) => img(url.clone())
                 .id(("guild-icon", id.0))
@@ -212,7 +212,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             )
             .flx("app.sidebar-nav.guild-list-item-presentation.guild-icon")
             .when(in_voice, |d| d.child(rail_tooltip::voice_badge(theme))),
-            hovered.then(|| rail_tooltip::guild(g.name.clone(), None, theme)),
+            hovered.then(|| rail_tooltip::guild(g.name.clone(), g.counts, theme)),
         ));
     }
 

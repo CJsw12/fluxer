@@ -36,6 +36,10 @@ pub struct GuildItem {
     pub initials: SharedString,
     pub icon_url: Option<SharedString>,
     pub unread: Unread,
+    /// Any user is in a voice channel of the guild (`hasVoiceActivity`).
+    pub has_voice_activity: bool,
+    /// `(online, members)` when known.
+    pub counts: Option<(u32, u32)>,
 }
 
 /// Glyph shown before a channel name (`ChannelUtils.getIcon`, simplified).
@@ -252,6 +256,10 @@ pub fn guild_items_with_media(state: &ClientState, media: Option<&str>) -> Vec<G
                 .and_then(|m| guild_icon_url(m, g.id, g.icon.as_deref()))
                 .map(Into::into),
             unread: state.guild_unread(g.id),
+            has_voice_activity: state.guild_has_voice_activity(g.id),
+            counts: state.guild_counts(g.id).map(|(o, m)| {
+                (u32::try_from(o).unwrap_or(u32::MAX), u32::try_from(m).unwrap_or(u32::MAX))
+            }),
         })
         .collect()
 }

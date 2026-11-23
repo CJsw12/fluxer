@@ -122,7 +122,7 @@ pub(crate) fn guild(name: impl Into<SharedString>, counts: Option<(u32, u32)>, t
                 .items_center()
                 .gap(px(10.))
                 .child(stat(theme.status_online, format!("{online} online")))
-                .child(stat(theme.muted, format!("{members} {}", if members == 1 { "member" } else { "members" })))
+                .child(stat(theme.status_offline, format!("{members} {}", if members == 1 { "member" } else { "members" })))
         }));
     place(shell(body, false), TOOLTIP_LEFT)
 }

@@ -110,6 +110,10 @@ pub struct ClientState {
     pub guild_settings: BTreeMap<Option<Snowflake>, UserGuildSettings>,
     /// guild id -> custom emojis.
     pub emojis: BTreeMap<Snowflake, Vec<GuildEmoji>>,
+    /// guild id -> (user, connection) -> voice channel id.
+    pub(super) guild_voice: BTreeMap<Snowflake, BTreeMap<(Snowflake, String), Snowflake>>,
+    /// guild id -> `online_count` from the guild payload.
+    pub(super) guild_online_counts: BTreeMap<Snowflake, u64>,
     /// Lazy member lists (`GUILD_MEMBER_LIST_UPDATE`).
     pub member_lists: MemberLists,
 }
@@ -163,6 +167,7 @@ impl ClientState {
             // handlers/guilds.rs
             "GUILD_CREATE" | "GUILD_SYNC" => self.apply_guild_create(d, out_ref),
             "GUILD_UPDATE" => self.apply_guild_update(d, out_ref),
+            "VOICE_STATE_UPDATE" => self.apply_voice_state_update(d, out_ref),
             "GUILD_DELETE" => self.apply_guild_delete(d, out_ref),
             "GUILD_ROLE_CREATE" | "GUILD_ROLE_UPDATE" => self.apply_role_upsert(d, out_ref),
             "GUILD_ROLE_UPDATE_BULK" => self.apply_role_bulk(d, out_ref),

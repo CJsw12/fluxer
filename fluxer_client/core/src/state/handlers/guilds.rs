@@ -64,6 +64,11 @@ impl ClientState {
         self.guilds.insert(id, guild);
         self.load_guild_emojis(id, g);
         self.load_guild_presences(id, g);
+        self.load_guild_voice_states(id, g);
+        match g.get("online_count").and_then(Value::as_u64) {
+            Some(n) => self.guild_online_counts.insert(id, n),
+            None => self.guild_online_counts.remove(&id),
+        };
         Some((id, true))
     }
 
@@ -96,6 +101,8 @@ impl ClientState {
         self.guilds.remove(&guild_id);
         self.members.remove(&guild_id);
         self.emojis.remove(&guild_id);
+        self.guild_voice.remove(&guild_id);
+        self.guild_online_counts.remove(&guild_id);
         self.member_lists.remove_guild(guild_id);
         self.remove_guild_channels(guild_id, &BTreeSet::new(), false);
     }
@@ -146,6 +153,9 @@ impl ClientState {
         guild.owner_id = props.owner_id;
         if props.mfa_level.is_some() {
             guild.mfa_level = props.mfa_level;
+        }
+        if let Some(n) = d.get("online_count").and_then(Value::as_u64) {
+            self.guild_online_counts.insert(id, n);
         }
         if let Some(n) = d.get("member_count").and_then(Value::as_u64) {
             guild.member_count = Some(n);

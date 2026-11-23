@@ -2,7 +2,7 @@
 
 현재 상태, 인계, 다음 작업 순서를 관리한다. 마일스톤을 마칠 때 이 문서를 갱신하며, 로드맵은 목표나 수락 기준이 바뀔 때 갱신한다. 기록 보관은 전역 진행 지침을 따른다.
 
-## 현재 상태 (2026-11-23)
+## 현재 상태 (2026-11-24)
 
 - **Baseline:** `desktop-rs`에서 공식 Fluxer 1:1 UI 패리티 로드맵(`docs/UI_PARITY_ROADMAP.md`) **M1~M3 전체(`324718aa8`..`b512e911c`)**, **패스키·보안 키(WebAuthn / FIDO2, `4b4138821`)**, **M4 전체(`80b09962a`)**, **M5 전체(`16d75565f`)**, **M6 전체(`393e32888`)**, 그리고 **M7 전체(M7.1 포팅 검증 도구 `scripts/audit_ui_parity.py` v2 고도화 — 정적 `info_card_row` 배지 치환 차단 및 호버/인디케이터 상태 머신·인터랙티브 컨트롤 155개 항목 전수 감사 · M7.2 좌측 길드 레일 `Direct messages`/`Favorites`/`Guild`/`Discover`/`Join` 1:1 호버 모핑 및 좌측 흰색 인디케이터 바 `40px`/`20px`/`8px` 상태 머신 이식 · M7.3 설정 `Voice & Video` 탭의 화면 공유 해상도/프레임레이트/비디오 코덱/비트레이트/하드웨어 가속/카메라 해상도·미러링 및 음성 처리 프로필/노이즈 억제 백엔드/에코 캔슬레이션/자동 게인/VAD 감도/PTT 해제 지연/인터랙티브 마이크 테스트 전수 이식 · M7.4 `Privacy & Safety`/`Messages & Media`/`Notifications`/`Language` 탭 정적 배지를 인터랙티브 컨트롤로 전수 전환)**까지 완료했다(`docs/progress/progress.json` 기준 추적 대상 **93/93 기능 100% 구현**, 전체 **90%**·일상 사용 **92%**). 검증 기준선은 `scripts/audit_ui_parity.py` **155/155 passed**, `fluxer_client` 전체 워크스페이스 **693 passed**(앱 364·코어 280·마크다운 36·i18n 10·devserver E2E 3, 0 failed) + `voice_worker` **10 passed**(0 failed, 총 **703 passed**), 오프라인 12-시나리오(`1280×800`·`1920×1040`, Light/Dark) 릴리스 PNG 캡처, 로컬 `fluxer_devserver` 릴리스 E2E, 전용 테스트 서버 로그인 상태 32-시나리오 전수 실기 캡처·공식 앱 대조를 포함한다.
 - **Done:** 답장 조회(`cfb8d1b3d`)·재시도 제한(`4dff14772`)·편집 순서(`3184571c8`)·대량 삭제(`e81560367`)·GIF 확대 보기(`b40b7c73f`), 2단계 1~6번 핵심 계약, 음성 장치·볼륨·OS 열거(`d63dd74a3`·`e9afd20d1`·`3d5e5bb0c`), 격리 실기용 `--no-os-integration`(`f48890893`), 접근성 동작 줄이기·AccessKit 라벨(`ad16d65dc`·`5531d8254`), 원격 비디오 발견·구독·디코드·GPUI 뷰어(`3791963b0`·`a33512209`·`9378a8e20`·`92361b719`·`7438375c3`), 안전 URL 검증 업데이트 확인기·에셋 다운로드·SHA-256 검증(`0df3bd344`·`d030b38bf`), `Codex (gpt-6.2-sol)` 1·2·3차 읽기 전용 독립 교차 검토(`7438375c3`·`7f971ed1b`·`8f4ed6548`·`3b516e2b2` 및 WebAuthn T3 교차 검토), `voice_worker` Safe-Rust `DesktopCapturer` 화면 공유 송신(`e94acf19e`), 4단계 진행도 시스템·README 자동 동기화(`98c903b84`), 무인 `/goal` 마일스톤 G1~G4(`2f71d33c3`·`14b56d656`·`367f0c287`·`ba0cb82dd`), Orca 공식 웹↔릴리스 Rust 앱 실시간 E2E 검증(`d030b38bf`, 8개 항목 추가 `done` 승격), 음성 `https://`→`wss://` 엔드포인트 정규화(`c5c12c81a`), 공용 2단 설정 셸·사용자/채널/역할/밴 설정 2단 개편·메인 셸 1차 마감(`588c1ff29`·`f7e9a18d5`·`e08ba4815`), **M1.1** 검색 결과 복구(`324718aa8`), **M1.2** 공용 `ui::avatar` 일괄 교체(`108d53231`), **M1.3** Phosphor SVG 42종 교체(`1b9d2167d`), **M2.1** 공식 `ThemeSizes` 1:1 동기화(`301fade44`), **M2.2** 중앙 음성/비디오 스테이지(`1725a44fa`), **M2.3** 커스텀 타이틀바 및 설정 `Appearance` 테마 스와치·슬라이더(`52afe5f9a`), **M3.1** 오프라인 12-시나리오 시각 갤러리 하네스(`47c1ced3a`), **M3.2** 시각 갤러리 영역별 diff 결함 수렴 및 공식 앱·전용 테스트 서버 실기 대조(`2e9df9f26`·`55cf2c879`·`b512e911c`, 4건 `done` 승격), **패스키·보안 키(WebAuthn / FIDO2)** 전체 구현(`4b4138821`), **M4.1~M4.5** 공식 `fluxer_app/src` 기반 자동 패리티 감사·`LocalVoiceStateMachine` 데픈↔뮤트 결합·통합 `UserArea`+`VoiceConnectionStatus`·상하 분할 및 오디오 아바타 리스트+분할 `VoiceControlBar`·설정 모달 공식 12개 탭 및 하위 섹션 트리 전수 구현(`80b09962a`), **M5.1~M5.6** 세부 인터랙션 팝아웃·길드 레일 홈 브랜드 아이콘 및 서버 이미지·채널/서버 설정 2단 모달 탭 통합·사이드바 음성 행 우측 아이콘/LIVE 배지·설정 신규 섹션 `Prefs` 실시간 스위치 연동(`16d75565f`), **M6.1~M6.4** 로그인 상태 전 시나리오 제어(`fluxer://scene/*`)·실제 서버 YouTube 임베드 중복 썸네일 수정·본인 멘션 행 전체 하이라이트·길드 레일/서버 헤더 드롭다운/채널 헤더/입력창 우측 아이콘 바 수렴 및 전용 테스트 서버 로그인 32-시나리오 전수 실기 캡처·대조(`393e32888`), **M7.1~M7.5** 포팅 검증 도구 v2(정적 배지 치환 금지·155/155 계약 감사)·길드 레일 호버 모핑 및 좌측 흰색 인디케이터 바(`40px`/`20px`/`8px`) 상태 머신·비디오 코덱/해상도/FPS/비트레이트 및 음성 처리/마이크 테스트 등 전체 설정 인터랙티브 컨트롤 100% 이식을 완료했다.
@@ -16,6 +16,8 @@
 
 ### Next Steps (새 세션 진입 시 순서대로 실행)
 
+> **주 검증 방법(2026-11-24~):** `docs/PARITY_LAB.md`(공식 앱 DOM 실측 ↔ Rust 프로브 조인 비교). 정규식 감사(`scripts/audit_ui_parity.py`)와 합성 갤러리는 보조로만 쓴다.
+>
 > **활성 로드맵:** `docs/UI_PARITY_ROADMAP.md` (M1.1~M8.4 + 패스키·보안 키까지 전체 93/93 기능 구현·정적 AST/상태머신/인터랙티브 컨트롤 184/184 자동 감사·오프라인 시각 검증·전용 테스트 서버 실기 대조·릴리스 패키징 완료; 구 `RUST_*_PLAN.md`·`NATIVE_MIGRATION_PLAN.md`·`NEXT_BRIEFS.md`는 보관본이므로 따르지 않는다.)
 
 1. **M1 — 공용 렌더러 강제 재사용 & 에셋 통일 (`docs/UI_PARITY_ROADMAP.md#m1`) [완료]:**
@@ -37,9 +39,12 @@
 9. **M8 — 화면 단위 픽셀 · CSS 레이아웃 · 아이콘 1:1 수렴 (`docs/UI_PARITY_ROADMAP.md#m8`) [완료]:**
    - 좌측 열 통합·`56px` 경계 정렬, 공식 Phosphor 아이콘 5종, 호버 전용 관리·계정 버튼, 친구 탭 스타일, 검은 통화 스테이지·`17px` 코너 배지, 설정 프로필 배너 헤더를 반영했다. 감사 184/184, 워크스페이스 693 + `voice_worker` 10 통과, 릴리스 패키징 경고 0건.
    - **검증 방법 결함 발견:** M8 로그인 실기 재캡처는 하네스가 존재하지 않는 CA 파일을 `SSL_CERT_FILE`로 넘겨 32장 모두 `Reconnecting…` 상태의 같은 화면이었는데도 종료 코드 0으로 끝났다. 장면 성공 여부를 판정하지 않는 캡처는 검증으로 인정하지 않는다. 후속은 10번의 Parity Lab이다.
-10. **Parity Lab — 공식 앱 DOM 기준 자동 비교·탐색 체계 (`docs/PARITY_LAB.md`) [도구 완성, 수렴 진행]:**
-   - `82bed49a3`: CDP 기준값 추출(`web_capture.mjs`), 클릭 크롤러(`crawl.mjs`), 조인 비교기(`compare.py`), Rust 패리티 프로브(`FLUXER_PARITY_PROBE=1`, IPC `probe_inspect/resize/click/hover/key`), 재생 러너(`replay.py`).
-   - 첫 실측(#markdown): 태그 요소 기하 3/49만 ±2px 이내, 공식 버튼 상태 25개 중 트리거 미태그 15·창 구조 미일치 10. 다음은 `docs/PARITY_LAB.md` 8장 순서(같은 계정 맞추기 → 영역별 `.flx` 태깅 확대 → 보고서 기반 영역별 수정 루프)다.
+10. **Parity Lab — 공식 앱 DOM 기준 자동 비교·탐색 체계 (`docs/PARITY_LAB.md`) [도구 완성, 메인 화면 수렴 중 — 다음 세션은 여기서 시작]:**
+   - **도구**(`82bed49a3`·`9acf3254c`): CDP 기준값 추출(`web_capture.mjs`), 클릭 크롤러(`crawl.mjs`, 쓰기 차단 가드 포함), 조인 비교기(`compare.py`), 장면 점검(`check_scene.py`), Rust 패리티 프로브(`FLUXER_PARITY_PROBE=1`, IPC `probe_inspect/resize/click/hover/key`), 재생 러너(`replay.py`). 사용법·상시 실행 구성·위임 방식·함정·복구 점검은 `docs/PARITY_LAB.md` 10장.
+   - **수렴**(`00dbe2159`·`df21a8585` + 이번 인계 커밋): #markdown 기하 일치 4/53 → 셸 대부분 0~1px(다크 데스크톱 기준). 헤더·멤버 목록 배치, 아이콘 버튼, 줄높이, 하단 사용자 영역 겹침, 테마 토큰(`background_secondary_lighter`, `text_chat/secondary/tertiary`), Segoe UI Variable Text, 타임스탬프, 타이틀바, 레일 fill 아이콘을 맞췄다.
+   - **사고와 조치(2026-11-24):** 깊이 2 크롤이 시험 서버에 반응 4개와 #markdown 채널 알림 덮어쓰기(tester2)를 남겼다. 둘 다 API로 원복·확인했고(반응 0개, 덮어쓰기 `muted: false`·`message_notifications: 3`), 크롤러에 GET 외 API 요청을 전송 전에 막는 페이지 내 가드를 넣었다(CDP `Fetch`는 데스크톱 앱의 사용자 정의 스킴을 가로채지 못함).
+   - **다음 순서:** ① 메시지 영역 세로 치수(바닥 여백 25 → 메시지 높이: ①·③ 메시지 본문 아래 28·24px 원인 미확정, 코드 블록 메시지 9px 작음) ② 인라인 스포일러 박스·컬러 이모지·코드 블록 테두리·목록 글머리 ③ 가드가 들어간 크롤러로 다크 깊이 2 크롤 재실행(`crawl-md-dark`는 52개 상태에서 중단) → `replay.py` 체크리스트 → 버튼으로 열리는 창(커뮤니티 메뉴, 알림·검색 범위 메뉴, 스레드·고정·받은 편지함 팝오버, 미디어/스티커/이모지 피커, 사용자 메뉴, 사용자 설정 모달) 공식 구조 이식과 `.flx` 태깅 ④ DM·친구·설정 탭·음성 화면으로 확장.
+   - **미해결:** 공식 비교 사본(tester2)과 Rust(tester1)의 계정이 달라 본인 시점 표시(멘션 강조·사용자 영역)는 비교에서 제외한다. 저장소 `fluxer_app` 직접 빌드(기준 버전 고정)는 미실행.
 11. **후속 하드웨어 실기 검증(사람 개입 필요):**
    - 자체 시험 서버에서 최신 릴리스(`dist/fluxer_client/fluxer_client.exe`)로 실제 Windows Hello/FIDO2 패스키 등록·로그인, 실기기 양방향 음성·화면 공유, 한글 IME 조합, OS 알림·소리, 장시간 부하를 확인한 뒤 확인된 항목만 `docs/progress/progress.json` `done`으로 승격하고 `python -I scripts/progress_svg.py`로 배지·README를 갱신한다.
 

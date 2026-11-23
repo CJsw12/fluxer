@@ -5,7 +5,9 @@
 // Usage: node crawl.mjs --attach 9334 --origin fluxer-app://app --route /channels/<g>/<c>
 //        --out DIR [--depth 2] [--max 400] [--width 1280 --height 800]
 // Safety: window controls, navigation (channel/guild/DM switches) and destructive or outward
-// actions (delete, leave, kick, ban, block, report, logout, send, call) are never clicked.
+// actions (delete, leave, kick, ban, block, report, logout, send, call) are never clicked, and a
+// CDP network guard fails every non-GET API request so no click can mutate server state
+// (reactions, pins, settings). States and the click log are written as they are found.
 import {mkdirSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {Cdp, DOM_DUMP, clientInfo, helpers, pageWsUrl, sleep} from './lib.mjs';
@@ -32,7 +34,7 @@ const DENY = new RegExp(
 		'native-titlebar', 'minimize', 'maximize', 'close-window', 'log-?out', 'sign-?out', 'delete', 'leave',
 		'kick', '\\bban\\b', 'block', 'report', 'revoke', 'deauthori', 'disable-account', 'send-message',
 		'start-call', 'join-call', 'voice-call', 'video-call', 'disconnect', 'hang-?up', 'mark-as-read',
-		'channel-item', 'guild-list-item', 'dm-list-item', 'private-channel', 'nagbar', 'download',
+		'channel-item', 'guild-list-item', 'react', 'reaction', 'message-action', 'action-bar', 'dm-list-item', 'private-channel', 'nagbar', 'download',
 		// Native OS dialogs / device capture would block an unattended crawl.
 		'upload', 'attach', 'voice-message', 'record', 'camera', 'screen-share', 'go-live', 'stream', 'open-file', 'import',
 	].join('|'),
@@ -48,6 +50,41 @@ await cdp.send('Runtime.enable');
 await cdp.send('Emulation.setDeviceMetricsOverride', {width: WIDTH, height: HEIGHT, deviceScaleFactor: 1, mobile: false});
 await cdp.send('Emulation.setEmulatedMedia', {features: [{name: 'prefers-reduced-motion', value: 'reduce'}]});
 const {waitFor, realClickExpr, pressKey} = helpers(cdp);
+
+// Write guard (in-page): the desktop app proxies its API through a custom scheme
+// (fluxer-app://app/api/<encoded url>) that CDP Fetch cannot intercept, so fetch/XHR/beacon are
+// patched in every document to fail any non-GET request to an API path before it is sent.
+const WRITE_GUARD = `(() => {
+  if (window.__parityGuard) return; window.__parityGuard = true; window.__parityBlocked = [];
+  const isApi = (u) => String(u).includes('/api/') || String(u).includes('%2Fapi');
+  const deny = (m, u) => { window.__parityBlocked.push(m + ' ' + String(u).slice(-80)); return new TypeError('parity write guard'); };
+  const f = window.fetch;
+  window.fetch = function (input, init) {
+    const url = typeof input === 'string' ? input : input && input.url;
+    const method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+    if (isApi(url) && !['GET', 'HEAD', 'OPTIONS'].includes(method)) return Promise.reject(deny(method, url));
+    return f.apply(this, arguments);
+  };
+  const open = XMLHttpRequest.prototype.open, send = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.open = function (m, u) { this.__pm = String(m).toUpperCase(); this.__pu = u; return open.apply(this, arguments); };
+  XMLHttpRequest.prototype.send = function () {
+    if (isApi(this.__pu) && !['GET', 'HEAD', 'OPTIONS'].includes(this.__pm)) { deny(this.__pm, this.__pu); throw new TypeError('parity write guard'); }
+    return send.apply(this, arguments);
+  };
+  if (navigator.sendBeacon) navigator.sendBeacon = (u) => { if (isApi(u)) { deny('BEACON', u); return false; } return true; };
+})()`;
+await cdp.send('Page.addScriptToEvaluateOnNewDocument', {source: WRITE_GUARD});
+await cdp.eval(WRITE_GUARD).catch(() => {});
+const blockedWrites = () => cdp.eval('window.__parityBlocked || []').catch(() => []);
+const blocked = [];
+cdp.on('Fetch.requestPaused', async ({requestId, request}) => {
+	if (['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
+		await cdp.send('Fetch.continueRequest', {requestId}).catch(() => {});
+	} else {
+		blocked.push(`${request.method} ${request.url.replace(/^.*?\/api/, '/api')}`);
+		await cdp.send('Fetch.failRequest', {requestId, errorReason: 'BlockedByClient'}).catch(() => {});
+	}
+});
 
 const dump = () => cdp.eval(DOM_DUMP);
 const idSet = (d) => new Set(d.map((e) => base(e.flx)));
@@ -76,6 +113,8 @@ async function loadRoute() {
 
 // Back to the baseline without a reload when Escape is enough.
 async function reset(baselineIds) {
+	blocked.push(...(await blockedWrites()));
+	await cdp.eval('window.__parityBlocked = []').catch(() => {});
 	for (let i = 0; i < 3; i++) {
 		await pressKey('Escape', 27);
 		await sleep(250);
@@ -127,6 +166,11 @@ await shot(join(OUT, 'baseline.png'));
 writeFileSync(join(OUT, 'baseline.dom.json'), JSON.stringify(baseline));
 
 const states = [];
+const writeGraph = () =>
+	writeFileSync(
+		join(OUT, 'graph.json'),
+		JSON.stringify({route: ROUTE, width: WIDTH, height: HEIGHT, clicks, baseline: baseline.length, blocked_writes: blocked, states}, null, 1),
+	);
 const bySignature = new Map();
 let clicks = 0;
 
@@ -172,6 +216,7 @@ async function explore(path, within, depth) {
 		};
 		states.push(state);
 		bySignature.set(signature, state);
+		writeGraph();
 		console.log(`${id} ${trail.map((t) => t.label || t.text || t.flx).join(' > ')} → +${added.length}${route !== ROUTE ? ` route ${route}` : ''}`);
 		if (depth < DEPTH && state.layer && route === ROUTE) {
 			await explore([...path, c], new Set(added), depth + 1);

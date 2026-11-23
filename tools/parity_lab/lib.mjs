@@ -19,12 +19,15 @@ export class Cdp {
 		this.id = 0;
 		this.pending = new Map();
 		this.events = [];
+		this.handlers = new Map();
 		this.ws.onmessage = (m) => {
 			const msg = JSON.parse(m.data);
 			if (msg.id && this.pending.has(msg.id)) {
 				const {resolve, reject} = this.pending.get(msg.id);
 				this.pending.delete(msg.id);
 				msg.error ? reject(new Error(JSON.stringify(msg.error))) : resolve(msg.result);
+			} else if (msg.method && this.handlers.has(msg.method)) {
+				for (const h of this.handlers.get(msg.method)) h(msg.params);
 			} else if (msg.method === 'Runtime.exceptionThrown') {
 				this.events.push(msg.params.exceptionDetails?.text);
 			}
@@ -35,6 +38,10 @@ export class Cdp {
 			this.ws.onopen = r;
 			this.ws.onerror = j;
 		});
+	}
+	on(method, handler) {
+		if (!this.handlers.has(method)) this.handlers.set(method, []);
+		this.handlers.get(method).push(handler);
 	}
 	send(method, params = {}) {
 		const id = ++this.id;

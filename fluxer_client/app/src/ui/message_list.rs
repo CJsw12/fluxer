@@ -94,6 +94,8 @@ pub fn render(view: &ClientView, handle: WeakEntity<ClientView>, theme: &Theme) 
         .id("message-pane")
         .flex_1()
         .min_h_0()
+        // Official stream bottom space: last message ends 25px above the composer (2px row padding + 23px).
+        .pb(px(16.))
         .on_hover(move |hovered, _, cx| {
             if !*hovered {
                 let _ = leave.update(cx, |v, cx| v.hover_message(None, cx));
@@ -215,8 +217,8 @@ fn channel_start(name: &SharedString, theme: &Theme) -> AnyElement {
         .gap_2()
         .px_4()
         .pt_4()
-        // `.container` margin-bottom 2rem + divider slot gap 1rem.
-        .pb(px(45.))
+        // Measured against the official layout: the divider text sits 32px higher than 2rem + 1rem (45px).
+        .pb(px(13.))
         .child(
             div()
                 .size(px(theme.sizes.channel_start_icon))

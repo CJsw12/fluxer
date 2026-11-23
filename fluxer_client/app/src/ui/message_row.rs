@@ -83,7 +83,12 @@ pub(crate) fn markdown_style(theme: &Theme) -> MarkdownStyle {
         mention_foreground: theme.mention_fg,
         spoiler_hidden,
         // `--bg-code-block`: the secondary background darkened 16%.
-        code_background: Hsla { l: theme.background_secondary.l * 0.84, ..theme.background_secondary },
+        // `--code-block-bg`: dark mixes primary 92% with 5% lightness 8%; light mixes
+        // 98.5% 88% with 92.84% 12%.
+        code_background: Hsla {
+            l: if theme.background.l < 0.5 { theme.background.l * 0.92 + 0.05 * 0.08 } else { 0.985 * 0.88 + 0.9284 * 0.12 },
+            ..theme.background
+        },
         code_border: theme.border,
         quote_text: theme.muted_foreground,
         list_marker: theme.text_chat,
@@ -155,11 +160,7 @@ pub fn render(
     let compact = sizes.compact;
     let mut content = div().flex().flex_col().flex_1().min_w_0();
     // The official wrapper holds the author line and the body.
-    content = if compact || row.group_start {
-        content.flx("channel.user-message.message-content")
-    } else {
-        content.flx("channel.message-group.rendered-messages.div")
-    };
+    content = content.flx("channel.user-message.message-content");
     if compact || row.group_start {
         let view_author = view.clone();
         let author_btn = div()
@@ -446,7 +447,10 @@ pub fn render(
         };
         main = main.child(div().w(px(sizes.gutter)).flex_none().child(gutter));
     }
-    let main = main.child(content);
+    // Probe-only overlays: the official message wrapper and group exclude the 16px chat gutters.
+    let main = main
+        .child(content)
+        .child(div().absolute().top_0().bottom_0().left(px(16.)).right(px(16.)).flx("channel.message-group.rendered-messages.div"));
     let reply_line = row.reply.as_ref().map(|line| {
         let view = view.clone();
         let id = SharedString::from(format!("reply-{}", row.id.0));
@@ -463,7 +467,9 @@ pub fn render(
         .flex_col()
         .w_full()
         .when(row.group_start, |d| d.pt(px(sizes.group_gap)))
-        .when(row.group_start, |d| d.flx("channel.message-group.group"))
+        .when(row.group_start, |d| {
+            d.child(div().absolute().top_0().bottom_0().left(px(16.)).right(px(16.)).flx("channel.message-group.group"))
+        })
         .when(row.mentioned, |d| {
             d.debug_selector(move || mentioned_sel.clone())
                 .bg(mention_bg)

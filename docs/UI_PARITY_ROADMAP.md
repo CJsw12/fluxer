@@ -206,6 +206,64 @@
   - **작업:** 전용 테스트 서버 SSH 터널을 연결하고 로그인된 프로필로 전 시나리오(32개 장면) 실기 화면을 캡처(`Logs/live-verify-m6/`)하여 공식 앱 화면 및 컴포넌트 계약과 대조 검증한다.
   - **수락 기준:** `scripts/audit_ui_parity.py` 100%(90/90) 통과, 전체 테스트 통과, 로그인 실기 32개 시나리오 캡처·검증 완료.
 
+### M7. 포팅 검증 방법론 고도화(정적 배지 치환 금지 · 호버/인디케이터 상태 머신 감사) 및 길드 레일 호버 · 음성/비디오/전체 설정 인터랙티브 컨트롤 100% 이식
+> **목적:** 섹션 제목이나 껍데기(`info_card_row` 정적 배지)만 있고 실제 조작 컨트롤(비디오 해상도·프레임레이트·코덱·비트레이트, 음성 처리 프로필·노이즈 억제 백엔드·VAD 감도·PTT 딜레이·마이크 테스트, 길드 레일 좌측 흰색 인디케이터 바 `40px`/`20px`/`8px` 호버 애니메이션 등)이 누락되는 문제를 근본적으로 차단하기 위해, `scripts/audit_ui_parity.py`가 공식 `fluxer_app/src` 원본(`GuildListIndicator.ts`, `GuildsLayout.module.css`, `VoiceSettings.ts`, `UserVoiceTab.tsx`, `UserVideoTab.tsx`, `UserVideoTabState.ts`, `DisplayTab.tsx`, `PrivacySafetyTabInline.tsx`, `NotificationsTab.tsx`)의 인터랙티브 컨트롤과 호버 상태 머신을 전수 파싱·검증하도록 고도화한다.
+
+- [x] **M7.1 포팅 검증 도구(`scripts/audit_ui_parity.py` v2) 고도화 — 컨트롤 전수 인벤토리 & 정적 배지 치환 차단**
+  - **대상 파일:** `scripts/audit_ui_parity.py`
+  - **공식 참조:** `GuildListIndicator.ts`, `GuildsLayout.module.css`, `VoiceSettings.ts`, `UserVoiceTab.tsx`, `UserVideoTab.tsx`, `UserVideoTabState.ts`, `DisplayTab.tsx`, `ChatSettingsTabInputTab.tsx`, `PrivacySafetyTabInline.tsx`, `NotificationsTab.tsx`
+  - **작업:**
+    1. 공식 원본 파일들에서 호버/선택 상태 머신(`resolveGuildListIndicatorHeight`: 선택 `40px`, 호버 `20px`, 미읽음 `8px`)과 모든 설정 탭의 인터랙티브 컨트롤 목록을 추출해 Rust GPUI(`ui/guild_rail.rs`, `prefs.rs`, `settings_model.rs`, `ui/settings.rs`, `ui/voice_stage.rs`)의 실제 상태 필드·이펙트·셀렉터와 1:1 대조한다.
+    2. 설정 탭(`Voice & video`, `Privacy & safety`, `Messages & media`, `Notifications`, `Language`)에서 조작 가능한 설정을 읽기 전용 `info_card_row` 배지로 대체한 경우 감사를 실패 처리한다.
+  - **수락 기준:** `python -I scripts/audit_ui_parity.py`가 M4~M7 전체 계약을 자동 감사하고 100% 통과 시 종료 코드 `0`을 반환함.
+
+- [x] **M7.2 좌측 길드 레일(`Direct messages` · `Favorites` · `Guild` · `Discover` · `Join`) 1:1 호버 모핑 및 좌측 흰색 인디케이터 바(`40px`/`20px`/`8px`) 상태 머신 이식**
+  - **대상 파일:** `fluxer_client/app/src/ui/guild_rail.rs`, `fluxer_client/app/src/client_view.rs`
+  - **공식 참조:** `fluxer_app/src/features/app/components/layout/sidebar_nav/GuildListIndicator.ts`, `GuildListDMItem.tsx`, `GuildListItemPresentation.tsx`, `GuildsLayout.module.css`
+  - **작업:**
+    1. `GuildListIndicator.ts`의 `resolveGuildListIndicatorHeight`를 `resolve_rail_indicator_height(selected: bool, hovered: bool, unread: bool) -> Option<f32>`(`selected => Some(40.)`, `hovered => Some(20.)`, `unread => Some(8.)`, `_ => None`)로 1:1 이식한다.
+    2. `ClientView`에 `hovered_rail_item: Option<RailHoverTarget>`(`Home`, `Favorites`, `Guild(Snowflake)`, `Discover`, `Join`)과 ` active_favorites: bool` 상태를 추가하고 `.on_hover(cx.listener(...))`로 실시간 갱신한다.
+    3. `Direct messages`(`Home`), `Favorites`, 각 `Guild` 버튼을 모두 동일한 `rail_item` + `rail_button_content` 구조로 통일하여, 마우스 호버 시 ① 좌측 흰색 인디케이터 바(`rail-pill-*`)가 즉시 `20px`(선택 시 `40px`, 미읽음 시 `8px`)로 표시·전환되고, ② 버튼 모양이 원형(`24px`)에서 둥근 사각형(`12px`)으로 모핑되며, ③ 배경색이 `theme.brand`(`#5865F2`), 아이콘/텍스트 색상이 `theme.on_fill`(`#FFFFFF`)로 전환되도록 구현한다.
+  - **수락 기준:** `resolve_rail_indicator_height` 단위 테스트 및 `Home`/`Favorites`/`Guild` 호버·선택 인디케이터(`40px`/`20px`/`8px`) GPUI 테스트 통과.
+
+- [x] **M7.3 설정 `Voice & Video` 탭(`UserVoiceTab.tsx` + `UserVideoTab.tsx` + `VoiceSettings.ts`) 인터랙티브 컨트롤 전수 이식**
+  - **대상 파일:** `fluxer_client/app/src/prefs.rs`, `fluxer_client/app/src/settings_model.rs`, `fluxer_client/app/src/ui/settings.rs`, `fluxer_client/app/src/ui/voice_stage.rs`, `fluxer_client/app/src/tests_settings.rs`
+  - **공식 참조:** `UserVoiceTab.tsx`, `UserVideoTab.tsx`, `UserVideoTabState.ts`, `VoiceSettings.ts`
+  - **작업:**
+    1. **음성 처리 및 입력 세부 설정:**
+       - 음성 처리 프로필(`voice_processing_mode`: `Focused Voice` / `Direct Input` / `Custom`) 선택 컨트롤
+       - 에코 캔슬레이션(`voice_echo_cancellation`: `Switch`)
+       - 노이즈 억제 백엔드(`voice_noise_suppression_backend`: `Off` / `Standard (WebRTC)` / `DeepFilterNet`) 및 토글
+       - 자동 게인 제어(`voice_auto_gain_control`: `Switch`)
+       - 음성 감도(`voice_vad_auto_threshold`: `Auto` `Switch` + 수동 `voice_vad_threshold` `0%`~`100%` 스테퍼/슬라이더)
+       - Push-to-Talk 해제 지연(`voice_ptt_release_delay_ms`: `20ms` / `100ms` / `250ms` / `500ms` / `1000ms` / `2000ms`)
+       - 인터랙티브 마이크 테스트(`mic_test_active`: `Start Mic Test` / `Stop Mic Test` 토글 버튼 + 실시간 레벨 미터 바)
+    2. **카메라 및 화면 공유 비디오 품질·코덱·비트레이트 설정:**
+       - 카메라 해상도(`camera_resolution`: `480p` / `720p` / `1080p`) 및 카메라 좌우 반전(`mirror_camera`: `Switch`)
+       - 화면 공유 프리셋(`streaming_mode`: `Screen Share` / `Gaming` / `Custom`)
+       - 화면 공유 해상도(`video_resolution`: `480p` / `720p` / `1080p` / `1440p` / `Source`)
+       - 화면 공유 프레임레이트(`video_fps`: `15 FPS` / `30 FPS` / `60 FPS`)
+       - 비디오 코덱(`video_codec`: `Auto` / `H.265 (HEVC)` / `H.264` / `VP9` / `VP8` / `AV1`)
+       - 화면 공유 비디오 비트레이트(`video_bitrate_kbps`: `Auto` / `2 Mbps` / `4 Mbps` / `6 Mbps` / `8 Mbps` / `10 Mbps` / `15 Mbps`)
+       - 하드웨어 가속(`video_hardware_acceleration`: `Switch`)
+    3. 통화 화면(`ui/voice_stage.rs`)의 화면 공유 `[▾]` 인라인 팝아웃(`VoicePopoutKind::Stream`)에도 `prefs`의 현재 해상도·FPS·코덱·비트레이트를 실시간 반영하고 빠른 품질 전환 버튼을 제공한다.
+  - **수락 기준:** 모든 신규 `Prefs` 필드 직렬화 왕복 단위 테스트 및 설정창 인터랙티브 변경 GPUI 테스트 통과.
+
+- [x] **M7.4 나머지 설정 탭(`Privacy & Safety`, `Messages & Media`, `Notifications`, `Language & Time`)의 정적 배지(`info_card_row`)를 인터랙티브 컨트롤로 전수 전환**
+  - **대상 파일:** `fluxer_client/app/src/prefs.rs`, `fluxer_client/app/src/settings_model.rs`, `fluxer_client/app/src/ui/settings.rs`, `fluxer_client/app/src/tests_settings.rs`
+  - **공식 참조:** `PrivacySafetyTabInline.tsx`, `DisplayTab.tsx`, `ChatSettingsTabInputTab.tsx`, `NotificationsTab.tsx`
+  - **작업:**
+    1. `Privacy & safety`: 친구 요청 허용 범위(`friend_request_access`: `Everyone` / `Friends of Friends` / `No one`), 민감 미디어·스포일러 표시 방식(`spoiler_display`: `On click` / `In channels I moderate` / `Always`) 인터랙티브 선택기 연결.
+    2. `Messages & media`: 웹사이트 링크 미리보기 및 임베드 표시(`render_embeds`: `Switch`), 스포일러 표시 방식(`spoiler_display`), 메시지 이모지 반응 표시(`render_reactions`: `Switch`), 텍스트 이모티콘 자동 변환 및 자동완성(`convert_emoticons`: `Switch`) 연결.
+    3. `Notifications`: 미읽음 채널 및 멘션 배지 표시(`unread_badge_enabled`: `Switch`) 연결.
+    4. `Language`: 시간 표시 형식(`time_format_24h`: `Auto / 12-hour` vs `24-hour` 인터랙티브 선택) 연결.
+  - **수락 기준:** 설정 모달 내 조작 가능한 항목의 정적 `info_card_row` 잔여 0건, GPUI 설정 테스트 전수 통과.
+
+- [x] **M7.5 전용 테스트 서버 실기 검증 · 릴리스 패키징 · 클라이언트 상시 연결 유지**
+  - **대상 파일:** `dist/fluxer_client/fluxer_client.exe`, `PROGRESS.md`
+  - **작업:** `python -I scripts/audit_ui_parity.py` 100% 통과 확인, 워크스페이스 전체 테스트 및 `voice_worker` 테스트 통과, `scripts/package_fluxer_client.ps1`로 릴리스 바이너리 패키징 후 전용 테스트 서버에 연결된 상태로 클라이언트를 실행·검증한다.
+  - **수락 기준:** 감사 스크립트 100% 통과, 전체 테스트 무회귀, 테스트 서버 연결 클라이언트 실행 확인.
+
 ---
 
 ## 표준 검증·빌드 명령 (모든 에이전트 공통)

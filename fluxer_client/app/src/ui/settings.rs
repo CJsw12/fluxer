@@ -443,12 +443,104 @@ impl ClientView {
                 self.prefs.set_voice_noise_suppression(enabled);
                 cx.notify();
             }
+            SettingsEffect::VoiceProcessingModeChanged(mode) => {
+                self.prefs.set_voice_processing_mode(&mode);
+                cx.notify();
+            }
+            SettingsEffect::VoiceEchoCancellationChanged(enabled) => {
+                self.prefs.set_voice_echo_cancellation(enabled);
+                cx.notify();
+            }
+            SettingsEffect::VoiceNoiseSuppressionBackendChanged(backend) => {
+                self.prefs.set_voice_noise_suppression_backend(&backend);
+                cx.notify();
+            }
+            SettingsEffect::VoiceAutoGainControlChanged(enabled) => {
+                self.prefs.set_voice_auto_gain_control(enabled);
+                cx.notify();
+            }
+            SettingsEffect::VoiceVadAutoThresholdChanged(enabled) => {
+                self.prefs.set_voice_vad_auto_threshold(enabled);
+                cx.notify();
+            }
+            SettingsEffect::VoiceVadThresholdChanged(threshold) => {
+                self.prefs.set_voice_vad_threshold(threshold);
+                cx.notify();
+            }
+            SettingsEffect::VoicePttReleaseDelayChanged(delay_ms) => {
+                self.prefs.set_voice_ptt_release_delay_ms(delay_ms);
+                cx.notify();
+            }
+            SettingsEffect::ToggleMicTest => {
+                self.mic_test_active = !self.mic_test_active;
+                cx.notify();
+            }
+            SettingsEffect::CameraResolutionChanged(res) => {
+                self.prefs.set_camera_resolution(&res);
+                cx.notify();
+            }
+            SettingsEffect::MirrorCameraChanged(mirror) => {
+                self.prefs.set_mirror_camera(mirror);
+                cx.notify();
+            }
+            SettingsEffect::StreamingModeChanged(mode) => {
+                self.prefs.set_streaming_mode(&mode);
+                cx.notify();
+            }
+            SettingsEffect::VideoResolutionChanged(res) => {
+                self.prefs.set_video_resolution(&res);
+                cx.notify();
+            }
+            SettingsEffect::VideoFpsChanged(fps) => {
+                self.prefs.set_video_fps(fps);
+                cx.notify();
+            }
+            SettingsEffect::VideoCodecChanged(codec) => {
+                self.prefs.set_video_codec(&codec);
+                cx.notify();
+            }
+            SettingsEffect::VideoBitrateChanged(kbps) => {
+                self.prefs.set_video_bitrate_kbps(kbps);
+                cx.notify();
+            }
+            SettingsEffect::VideoHardwareAccelerationChanged(enabled) => {
+                self.prefs.set_video_hardware_acceleration(enabled);
+                cx.notify();
+            }
             SettingsEffect::AllowGuildDmsChanged(enabled) => {
                 self.prefs.set_allow_guild_dms(enabled);
                 cx.notify();
             }
+            SettingsEffect::FriendRequestAccessChanged(access) => {
+                self.prefs.set_friend_request_access(&access);
+                cx.notify();
+            }
+            SettingsEffect::SpoilerDisplayChanged(mode) => {
+                self.prefs.set_spoiler_display(&mode);
+                cx.notify();
+            }
             SettingsEffect::InlineMediaPreviewsChanged(enabled) => {
                 self.prefs.set_inline_media_previews(enabled);
+                cx.notify();
+            }
+            SettingsEffect::RenderEmbedsChanged(enabled) => {
+                self.prefs.set_render_embeds(enabled);
+                cx.notify();
+            }
+            SettingsEffect::RenderReactionsChanged(enabled) => {
+                self.prefs.set_render_reactions(enabled);
+                cx.notify();
+            }
+            SettingsEffect::ConvertEmoticonsChanged(enabled) => {
+                self.prefs.set_convert_emoticons(enabled);
+                cx.notify();
+            }
+            SettingsEffect::UnreadBadgeEnabledChanged(enabled) => {
+                self.prefs.set_unread_badge_enabled(enabled);
+                cx.notify();
+            }
+            SettingsEffect::TimeFormat24hChanged(enabled) => {
+                self.prefs.set_time_format_24h(enabled);
                 cx.notify();
             }
             SettingsEffect::ReducedMotionChanged(pref) => {
@@ -1227,6 +1319,20 @@ fn render_account_tab(
 
 fn render_privacy_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
     let trusted_count = view.effective_trusted_domains().len();
+    let active_friend_req = view.prefs.data.friend_request_access.as_str();
+    let active_spoiler = view.prefs.data.spoiler_display.as_str();
+
+    let friend_req_options: &[(&str, &str)] = &[
+        ("everyone", "Everyone"),
+        ("friends_of_friends", "Friends of Friends"),
+        ("no_one", "No one"),
+    ];
+    let spoiler_options: &[(&str, &str)] = &[
+        ("on_click", "On click"),
+        ("moderator", "In channels I moderate"),
+        ("always", "Always"),
+    ];
+
     div()
         .debug_selector(|| "settings-privacy-dm".to_owned())
         .flex()
@@ -1285,12 +1391,63 @@ fn render_privacy_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientV
                             ),
                         ),
                 )
-                .child(info_card_row(
-                    l10n::tr("Friend requests"),
-                    l10n::tr("Control who can send you friend requests."),
-                    Some(l10n::tr("Everyone")),
-                    theme,
-                )),
+                .child(
+                    div()
+                        .p_3()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_3()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(l10n::tr("Friend requests")),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(l10n::tr("Control who can send you friend requests.")),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .flex_wrap()
+                                .gap_1()
+                                .children(friend_req_options.iter().map(|&(val, label)| {
+                                    let selected = active_friend_req == val;
+                                    let sel_id = format!("settings-friend-req-{val}");
+                                    let val_owned = val.to_owned();
+                                    let mut btn = Button::new(SharedString::from(sel_id.clone()))
+                                        .small()
+                                        .label(l10n::tr(label));
+                                    btn = if selected { btn.primary() } else { btn.ghost() };
+                                    div().debug_selector(move || sel_id.clone()).child(btn.on_click(cx.listener(
+                                        move |this, _, window, cx| {
+                                            this.apply_settings_effect(
+                                                SettingsEffect::FriendRequestAccessChanged(val_owned.clone()),
+                                                window,
+                                                cx,
+                                            );
+                                        },
+                                    )))
+                                })),
+                        ),
+                ),
         )
         .child(
             div()
@@ -1298,12 +1455,63 @@ fn render_privacy_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientV
                 .flex_col()
                 .gap_2()
                 .child(section_heading(l10n::tr("Sensitive content"), theme))
-                .child(info_card_row(
-                    l10n::tr("Spoilers & sensitive media"),
-                    l10n::tr("Blur spoiler-tagged text and media until clicked."),
-                    Some(l10n::tr("On click")),
-                    theme,
-                )),
+                .child(
+                    div()
+                        .p_3()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_3()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(l10n::tr("Spoilers & sensitive media")),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(l10n::tr("Choose when spoiler-tagged text and media are revealed.")),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .flex_wrap()
+                                .gap_1()
+                                .children(spoiler_options.iter().map(|&(val, label)| {
+                                    let selected = active_spoiler == val;
+                                    let sel_id = format!("settings-spoiler-mode-{val}");
+                                    let val_owned = val.to_owned();
+                                    let mut btn = Button::new(SharedString::from(sel_id.clone()))
+                                        .small()
+                                        .label(l10n::tr(label));
+                                    btn = if selected { btn.primary() } else { btn.ghost() };
+                                    div().debug_selector(move || sel_id.clone()).child(btn.on_click(cx.listener(
+                                        move |this, _, window, cx| {
+                                            this.apply_settings_effect(
+                                                SettingsEffect::SpoilerDisplayChanged(val_owned.clone()),
+                                                window,
+                                                cx,
+                                            );
+                                        },
+                                    )))
+                                })),
+                        ),
+                ),
         )
         .child(
             div()
@@ -1986,17 +2194,63 @@ fn render_notifications_tab(view: &ClientView, theme: &Theme, cx: &mut Context<C
                 .flex_col()
                 .gap_2()
                 .child(section_heading(l10n::tr("Unread & mention badges"), theme))
-                .child(info_card_row(
-                    l10n::tr("Unread channel & mention indicators"),
-                    l10n::tr("Highlight unread channels in the sidebar and show red mention count pills."),
-                    Some(l10n::tr("Enabled")),
-                    theme,
-                )),
+                .child(
+                    div()
+                        .p_3()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_3()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(l10n::tr("Unread channel & mention indicators")),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(l10n::tr(
+                                            "Highlight unread channels in the sidebar and show red mention count pills.",
+                                        )),
+                                ),
+                        )
+                        .child(
+                            div().debug_selector(|| "settings-unread-badge".to_owned()).child(
+                                Switch::new("settings-unread-badge")
+                                    .checked(view.prefs.data.unread_badge_enabled)
+                                    .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                                        this.apply_settings_effect(
+                                            SettingsEffect::UnreadBadgeEnabledChanged(*checked),
+                                            window,
+                                            cx,
+                                        );
+                                    })),
+                            ),
+                        ),
+                ),
         )
         .into_any_element()
 }
 
 fn render_messages_media_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+    let active_spoiler = view.prefs.data.spoiler_display.as_str();
+    let spoiler_options: &[(&str, &str)] = &[
+        ("on_click", "On click"),
+        ("moderator", "In channels I moderate"),
+        ("always", "Always"),
+    ];
     div()
         .debug_selector(|| "settings-chat-display".to_owned())
         .flex()
@@ -2055,12 +2309,53 @@ fn render_messages_media_tab(view: &ClientView, theme: &Theme, cx: &mut Context<
                             ),
                         ),
                 )
-                .child(info_card_row(
-                    l10n::tr("Website link previews & embeds"),
-                    l10n::tr("Show rich embed cards and YouTube thumbnails for links posted in chat."),
-                    Some(l10n::tr("Enabled")),
-                    theme,
-                )),
+                .child(
+                    div()
+                        .p_3()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_3()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(l10n::tr("Website link previews & embeds")),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(l10n::tr(
+                                            "Show rich embed cards and YouTube thumbnails for links posted in chat.",
+                                        )),
+                                ),
+                        )
+                        .child(
+                            div().debug_selector(|| "settings-render-embeds".to_owned()).child(
+                                Switch::new("settings-render-embeds")
+                                    .checked(view.prefs.data.render_embeds)
+                                    .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                                        this.apply_settings_effect(
+                                            SettingsEffect::RenderEmbedsChanged(*checked),
+                                            window,
+                                            cx,
+                                        );
+                                    })),
+                            ),
+                        ),
+                ),
         )
         .child(
             div()
@@ -2068,18 +2363,110 @@ fn render_messages_media_tab(view: &ClientView, theme: &Theme, cx: &mut Context<
                 .flex_col()
                 .gap_2()
                 .child(section_heading(l10n::tr("Spoilers & reactions"), theme))
-                .child(info_card_row(
-                    l10n::tr("Spoiler tags"),
-                    l10n::tr("Click hidden spoiler blocks to reveal text and images."),
-                    Some(l10n::tr("On click")),
-                    theme,
-                ))
-                .child(info_card_row(
-                    l10n::tr("Emoji reactions"),
-                    l10n::tr("Display reaction pills under messages and allow quick reaction toggling."),
-                    Some(l10n::tr("Enabled")),
-                    theme,
-                )),
+                .child(
+                    div()
+                        .p_3()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_3()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(l10n::tr("Spoiler content")),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(l10n::tr("Choose how hidden spoiler blocks are revealed in chat.")),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .flex_wrap()
+                                .gap_1()
+                                .children(spoiler_options.iter().map(|&(val, label)| {
+                                    let selected = active_spoiler == val;
+                                    let sel_id = format!("settings-spoiler-mode-{val}");
+                                    let val_owned = val.to_owned();
+                                    let mut btn = Button::new(SharedString::from(format!("chat-{sel_id}")))
+                                        .small()
+                                        .label(l10n::tr(label));
+                                    btn = if selected { btn.primary() } else { btn.ghost() };
+                                    div().debug_selector(move || sel_id.clone()).child(btn.on_click(cx.listener(
+                                        move |this, _, window, cx| {
+                                            this.apply_settings_effect(
+                                                SettingsEffect::SpoilerDisplayChanged(val_owned.clone()),
+                                                window,
+                                                cx,
+                                            );
+                                        },
+                                    )))
+                                })),
+                        ),
+                )
+                .child(
+                    div()
+                        .p_3()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_3()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(l10n::tr("Emoji reactions")),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(l10n::tr(
+                                            "Display reaction pills under messages and allow quick reaction toggling.",
+                                        )),
+                                ),
+                        )
+                        .child(
+                            div().debug_selector(|| "settings-render-reactions".to_owned()).child(
+                                Switch::new("settings-render-reactions")
+                                    .checked(view.prefs.data.render_reactions)
+                                    .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                                        this.apply_settings_effect(
+                                            SettingsEffect::RenderReactionsChanged(*checked),
+                                            window,
+                                            cx,
+                                        );
+                                    })),
+                            ),
+                        ),
+                ),
         )
         .child(
             div()
@@ -2087,94 +2474,209 @@ fn render_messages_media_tab(view: &ClientView, theme: &Theme, cx: &mut Context<
                 .flex_col()
                 .gap_2()
                 .child(section_heading(l10n::tr("Text input & autocomplete"), theme))
-                .child(info_card_row(
-                    l10n::tr("Autocomplete suggestions"),
-                    l10n::tr("Show popup suggestions when typing @mentions, #channels, and :emoji: shortcodes."),
-                    Some(l10n::tr("Enabled")),
-                    theme,
-                )),
+                .child(
+                    div()
+                        .p_3()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_3()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(l10n::tr("Convert emoticons & autocomplete suggestions")),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(l10n::tr(
+                                            "Automatically convert :) emoticons to emoji and show @ / # / : popup suggestions.",
+                                        )),
+                                ),
+                        )
+                        .child(
+                            div().debug_selector(|| "settings-convert-emoticons".to_owned()).child(
+                                Switch::new("settings-convert-emoticons")
+                                    .checked(view.prefs.data.convert_emoticons)
+                                    .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                                        this.apply_settings_effect(
+                                            SettingsEffect::ConvertEmoticonsChanged(*checked),
+                                            window,
+                                            cx,
+                                        );
+                                    })),
+                            ),
+                        ),
+                ),
         )
         .into_any_element()
 }
 
-fn render_voice_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+fn render_voice_tab(
+    view: &ClientView,
+    active_section: Option<&'static str>,
+    theme: &Theme,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
     let active_in_dev = view
         .prefs
         .data
         .voice_input_device
         .clone()
         .unwrap_or_else(|| l10n::tr("System default"));
-    div()
+    let ptt_enabled = view.prefs.data.voice_push_to_talk;
+    let ptt_delay = view.prefs.data.voice_ptt_release_delay_ms;
+    let vad_auto = view.prefs.data.voice_vad_auto_threshold;
+    let vad_threshold = view.prefs.data.voice_vad_threshold;
+    let voice_profile = view.prefs.data.voice_processing_mode.as_str();
+    let ns_backend = view.prefs.data.voice_noise_suppression_backend.as_str();
+    let echo_cancel = view.prefs.data.voice_echo_cancellation;
+    let auto_gain = view.prefs.data.voice_auto_gain_control;
+    let mic_testing = view.mic_test_active;
+    let cam_res = view.prefs.data.camera_resolution.as_str();
+    let mirror_cam = view.prefs.data.mirror_camera;
+    let stream_mode = view.prefs.data.streaming_mode.as_str();
+    let vid_res = view.prefs.data.video_resolution.as_str();
+    let vid_fps = view.prefs.data.video_fps;
+    let vid_codec = view.prefs.data.video_codec.as_str();
+    let vid_bitrate = view.prefs.data.video_bitrate_kbps;
+    let hw_accel = view.prefs.data.video_hardware_acceleration;
+
+    let ptt_delays: &[(u16, &str)] = &[
+        (20, "20ms"),
+        (100, "100ms"),
+        (250, "250ms"),
+        (500, "500ms"),
+        (1000, "1.0s"),
+        (2000, "2.0s"),
+    ];
+    let profiles: &[(&str, &str)] = &[
+        ("voice", "Focused Voice"),
+        ("studio", "Direct Input"),
+        ("custom", "Custom"),
+    ];
+    let ns_backends: &[(&str, &str)] = &[
+        ("off", "Off"),
+        ("standard", "Standard (WebRTC)"),
+        ("deepfilternet", "DeepFilterNet"),
+    ];
+    let camera_resolutions: &[(&str, &str)] = &[("480p", "480p"), ("720p", "720p"), ("1080p", "1080p")];
+    let stream_presets: &[(&str, &str)] = &[
+        ("screenshare", "Screen Share (1080p · 30 FPS)"),
+        ("gaming", "Gaming (1080p · 60 FPS)"),
+        ("custom", "Custom"),
+    ];
+    let video_resolutions: &[(&str, &str)] = &[
+        ("480p", "480p"),
+        ("720p", "720p"),
+        ("1080p", "1080p"),
+        ("1440p", "1440p"),
+        ("source", "Source"),
+    ];
+    let video_fps_options: &[(u8, &str)] = &[(15, "15 FPS"), (30, "30 FPS"), (60, "60 FPS")];
+    let video_codecs: &[(&str, &str)] = &[
+        ("auto", "Auto"),
+        ("h265", "H.265 / HEVC"),
+        ("h264", "H.264"),
+        ("vp9", "VP9"),
+        ("vp8", "VP8"),
+        ("av1", "AV1"),
+    ];
+    let bitrate_options: &[(u16, &str)] = &[
+        (0, "Automatic"),
+        (2000, "2 Mbps"),
+        (4000, "4 Mbps"),
+        (6000, "6 Mbps"),
+        (8000, "8 Mbps"),
+        (10000, "10 Mbps"),
+        (15000, "15 Mbps"),
+    ];
+
+    let meter_fill = if mic_testing {
+        (f32::from(view.prefs.data.voice_input_volume.min(200)) / 250.).clamp(0.15, 0.92)
+    } else {
+        0.04
+    };
+
+    let devices_section = div()
         .flex()
         .flex_col()
-        .gap_5()
+        .gap_3()
         .child(
             div()
                 .flex()
-                .flex_col()
-                .gap_3()
+                .flex_row()
+                .items_center()
+                .justify_between()
+                .child(section_heading(l10n::tr("Voice & Audio"), theme))
                 .child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .justify_between()
-                        .child(section_heading(l10n::tr("Voice & Audio"), theme))
-                        .child(
-                            div().debug_selector(|| "voice-refresh-devices".to_owned()).child(
-                                Button::new("voice-refresh-devices")
-                                    .ghost()
-                                    .small()
-                                    .label(l10n::tr("Refresh devices"))
-                                    .accessibility_label(l10n::tr("Refresh devices"))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.refresh_audio_devices(cx);
-                                    })),
-                            ),
-                        ),
-                )
-                .child(voice_device_row(
-                    "Input device",
-                    view.prefs.data.voice_input_device.as_deref(),
-                    &view.audio_devices.input_devices,
-                    "voice-input-device",
-                    "voice-input-device-reset",
-                    theme,
-                    SettingsEffect::VoiceInputDeviceChanged,
-                    cx,
-                ))
-                .child(voice_volume_row(
-                    "Input volume",
-                    view.prefs.data.voice_input_volume,
-                    "voice-input-vol-dec",
-                    "voice-input-vol-inc",
-                    "voice-input-vol-reset",
-                    SettingsEffect::VoiceInputVolumeChanged,
-                    cx,
-                ))
-                .child(voice_device_row(
-                    "Output device",
-                    view.prefs.data.voice_output_device.as_deref(),
-                    &view.audio_devices.output_devices,
-                    "voice-output-device",
-                    "voice-output-device-reset",
-                    theme,
-                    SettingsEffect::VoiceOutputDeviceChanged,
-                    cx,
-                ))
-                .child(voice_volume_row(
-                    "Output volume",
-                    view.prefs.data.voice_output_volume,
-                    "voice-output-vol-dec",
-                    "voice-output-vol-inc",
-                    "voice-output-vol-reset",
-                    SettingsEffect::VoiceOutputVolumeChanged,
-                    cx,
-                )),
+                    div().debug_selector(|| "voice-refresh-devices".to_owned()).child(
+                        Button::new("voice-refresh-devices")
+                            .ghost()
+                            .small()
+                            .label(l10n::tr("Refresh devices"))
+                            .accessibility_label(l10n::tr("Refresh devices"))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.refresh_audio_devices(cx);
+                            })),
+                    ),
+                ),
         )
-        .child(
-            div()
-                .debug_selector(|| "settings-voice-input-mode".to_owned())
+        .child(voice_device_row(
+            "Input device",
+            view.prefs.data.voice_input_device.as_deref(),
+            &view.audio_devices.input_devices,
+            "voice-input-device",
+            "voice-input-device-reset",
+            theme,
+            SettingsEffect::VoiceInputDeviceChanged,
+            cx,
+        ))
+        .child(voice_volume_row(
+            "Input volume",
+            view.prefs.data.voice_input_volume,
+            "voice-input-vol-dec",
+            "voice-input-vol-inc",
+            "voice-input-vol-reset",
+            SettingsEffect::VoiceInputVolumeChanged,
+            cx,
+        ))
+        .child(voice_device_row(
+            "Output device",
+            view.prefs.data.voice_output_device.as_deref(),
+            &view.audio_devices.output_devices,
+            "voice-output-device",
+            "voice-output-device-reset",
+            theme,
+            SettingsEffect::VoiceOutputDeviceChanged,
+            cx,
+        ))
+        .child(voice_volume_row(
+            "Output volume",
+            view.prefs.data.voice_output_volume,
+            "voice-output-vol-dec",
+            "voice-output-vol-inc",
+            "voice-output-vol-reset",
+            SettingsEffect::VoiceOutputVolumeChanged,
+            cx,
+        ))
+        .into_any_element();
+
+    let input_mode_section = div()
+        .debug_selector(|| "settings-voice-input-mode".to_owned())
                 .flex()
                 .flex_col()
                 .gap_2()
@@ -2187,74 +2689,253 @@ fn render_voice_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVie
                         .border_color(theme.border)
                         .bg(theme.background_secondary)
                         .flex()
-                        .flex_row()
-                        .items_center()
-                        .justify_between()
+                        .flex_col()
                         .gap_3()
                         .child(
                             div()
                                 .flex()
-                                .flex_col()
-                                .gap_0p5()
-                                .min_w_0()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_3()
                                 .child(
                                     div()
-                                        .text_sm()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .child(l10n::tr("Voice transmission mode")),
+                                        .flex()
+                                        .flex_col()
+                                        .gap_0p5()
+                                        .min_w_0()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .child(l10n::tr("Voice transmission mode")),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child(l10n::tr(
+                                                    "Choose automatic voice activity detection or manual push-to-talk.",
+                                                )),
+                                        ),
                                 )
                                 .child(
                                     div()
-                                        .text_xs()
-                                        .text_color(theme.muted_foreground)
-                                        .child(l10n::tr(
-                                            "Choose automatic voice activity detection or manual push-to-talk.",
-                                        )),
+                                        .flex()
+                                        .flex_row()
+                                        .gap_1()
+                                        .child(
+                                            div().debug_selector(|| "settings-input-mode-vad".to_owned()).child({
+                                                let vad = !ptt_enabled;
+                                                let mut btn = Button::new("settings-input-mode-vad")
+                                                    .small()
+                                                    .label(l10n::tr("Voice Activity"));
+                                                btn = if vad { btn.primary() } else { btn.ghost() };
+                                                btn.on_click(cx.listener(|this, _, window, cx| {
+                                                    this.apply_settings_effect(
+                                                        SettingsEffect::VoicePushToTalkChanged(false),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                }))
+                                            }),
+                                        )
+                                        .child(
+                                            div().debug_selector(|| "settings-input-mode-ptt".to_owned()).child({
+                                                let mut btn = Button::new("settings-input-mode-ptt")
+                                                    .small()
+                                                    .label(l10n::tr("Push to Talk"));
+                                                btn = if ptt_enabled { btn.primary() } else { btn.ghost() };
+                                                btn.on_click(cx.listener(|this, _, window, cx| {
+                                                    this.apply_settings_effect(
+                                                        SettingsEffect::VoicePushToTalkChanged(true),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                }))
+                                            }),
+                                        ),
                                 ),
                         )
                         .child(
                             div()
                                 .flex()
                                 .flex_row()
-                                .gap_1()
+                                .items_center()
+                                .justify_between()
+                                .gap_3()
                                 .child(
-                                    div().debug_selector(|| "settings-input-mode-vad".to_owned()).child({
-                                        let vad = !view.prefs.data.voice_push_to_talk;
-                                        let mut btn = Button::new("settings-input-mode-vad")
-                                            .small()
-                                            .label(l10n::tr("Voice Activity"));
-                                        btn = if vad { btn.primary() } else { btn.ghost() };
-                                        btn.on_click(cx.listener(|this, _, window, cx| {
-                                            this.apply_settings_effect(
-                                                SettingsEffect::VoicePushToTalkChanged(false),
-                                                window,
-                                                cx,
-                                            );
-                                        }))
-                                    }),
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_0p5()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .child(l10n::tr("Auto-set activity threshold")),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child(l10n::tr(
+                                                    "Automatically calibrate microphone voice activation sensitivity.",
+                                                )),
+                                        ),
                                 )
                                 .child(
-                                    div().debug_selector(|| "settings-input-mode-ptt".to_owned()).child({
-                                        let ptt = view.prefs.data.voice_push_to_talk;
-                                        let mut btn = Button::new("settings-input-mode-ptt")
-                                            .small()
-                                            .label(l10n::tr("Push to Talk"));
-                                        btn = if ptt { btn.primary() } else { btn.ghost() };
-                                        btn.on_click(cx.listener(|this, _, window, cx| {
-                                            this.apply_settings_effect(
-                                                SettingsEffect::VoicePushToTalkChanged(true),
-                                                window,
-                                                cx,
-                                            );
-                                        }))
-                                    }),
+                                    div().debug_selector(|| "settings-vad-auto-threshold".to_owned()).child(
+                                        Switch::new("settings-vad-auto-threshold")
+                                            .checked(vad_auto)
+                                            .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                                                this.apply_settings_effect(
+                                                    SettingsEffect::VoiceVadAutoThresholdChanged(*checked),
+                                                    window,
+                                                    cx,
+                                                );
+                                            })),
+                                    ),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_2()
+                                .child(div().text_sm().child(l10n::tr("Activity threshold")))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .gap_1()
+                                        .child(
+                                            div()
+                                                .debug_selector(|| "settings-vad-threshold-dec".to_owned())
+                                                .child(
+                                                    Button::new("settings-vad-threshold-dec")
+                                                        .ghost()
+                                                        .small()
+                                                        .disabled(vad_auto)
+                                                        .label("-")
+                                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                                            this.apply_settings_effect(
+                                                                SettingsEffect::VoiceVadThresholdChanged(
+                                                                    vad_threshold.saturating_sub(5),
+                                                                ),
+                                                                window,
+                                                                cx,
+                                                            );
+                                                        })),
+                                                ),
+                                        )
+                                        .child(
+                                            div()
+                                                .px_2()
+                                                .text_xs()
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .child(format!("{vad_threshold}%")),
+                                        )
+                                        .child(
+                                            div()
+                                                .debug_selector(|| "settings-vad-threshold-inc".to_owned())
+                                                .child(
+                                                    Button::new("settings-vad-threshold-inc")
+                                                        .ghost()
+                                                        .small()
+                                                        .disabled(vad_auto)
+                                                        .label("+")
+                                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                                            this.apply_settings_effect(
+                                                                SettingsEffect::VoiceVadThresholdChanged(
+                                                                    (vad_threshold + 5).min(100),
+                                                                ),
+                                                                window,
+                                                                cx,
+                                                            );
+                                                        })),
+                                                ),
+                                        )
+                                        .child(
+                                            div()
+                                                .debug_selector(|| "settings-vad-threshold-reset".to_owned())
+                                                .child(
+                                                    Button::new("settings-vad-threshold-reset")
+                                                        .ghost()
+                                                        .small()
+                                                        .disabled(vad_auto)
+                                                        .label(l10n::tr("Reset"))
+                                                        .on_click(cx.listener(|this, _, window, cx| {
+                                                            this.apply_settings_effect(
+                                                                SettingsEffect::VoiceVadThresholdChanged(50),
+                                                                window,
+                                                                cx,
+                                                            );
+                                                        })),
+                                                ),
+                                        ),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_0p5()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .child(l10n::tr("Push-to-talk release delay")),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child(l10n::tr(
+                                                    "Keep transmitting briefly after releasing the push-to-talk key.",
+                                                )),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .flex_wrap()
+                                        .gap_1()
+                                        .children(ptt_delays.iter().map(|&(ms, label)| {
+                                            let selected = ptt_delay == ms;
+                                            let sel_id = format!("settings-ptt-delay-{ms}");
+                                            let mut btn = Button::new(SharedString::from(sel_id.clone()))
+                                                .small()
+                                                .label(label);
+                                            btn = if selected { btn.primary() } else { btn.ghost() };
+                                            div().debug_selector(move || sel_id.clone()).child(btn.on_click(
+                                                cx.listener(move |this, _, window, cx| {
+                                                    this.apply_settings_effect(
+                                                        SettingsEffect::VoicePttReleaseDelayChanged(ms),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                }),
+                                            ))
+                                        })),
                                 ),
                         ),
-                ),
-        )
-        .child(
-            div()
-                .debug_selector(|| "settings-voice-processing".to_owned())
+                )
+                .into_any_element();
+
+    let audio_processing_section = div()
+        .debug_selector(|| "settings-voice-processing".to_owned())
                 .flex()
                 .flex_col()
                 .gap_2()
@@ -2267,77 +2948,724 @@ fn render_voice_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVie
                         .border_color(theme.border)
                         .bg(theme.background_secondary)
                         .flex()
-                        .flex_row()
-                        .items_center()
-                        .justify_between()
+                        .flex_col()
                         .gap_3()
                         .child(
                             div()
                                 .flex()
-                                .flex_col()
-                                .gap_0p5()
-                                .min_w_0()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_3()
                                 .child(
                                     div()
-                                        .text_sm()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .child(l10n::tr("Echo cancellation & noise suppression")),
+                                        .flex()
+                                        .flex_col()
+                                        .gap_0p5()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .child(l10n::tr("Voice processing profile")),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child(l10n::tr(
+                                                    "Focused Voice isolates speech; Direct Input passes studio audio untouched.",
+                                                )),
+                                        ),
                                 )
                                 .child(
                                     div()
-                                        .text_xs()
-                                        .text_color(theme.muted_foreground)
-                                        .child(l10n::tr(
-                                            "WebRTC hardware-assisted acoustic echo cancellation, noise suppression, and auto gain.",
-                                        )),
+                                        .flex()
+                                        .flex_row()
+                                        .flex_wrap()
+                                        .gap_1()
+                                        .children(profiles.iter().map(|&(val, label)| {
+                                            let selected = voice_profile == val;
+                                            let sel_id = format!("settings-voice-profile-{val}");
+                                            let val_owned = val.to_owned();
+                                            let mut btn = Button::new(SharedString::from(sel_id.clone()))
+                                                .small()
+                                                .label(l10n::tr(label));
+                                            btn = if selected { btn.primary() } else { btn.ghost() };
+                                            div().debug_selector(move || sel_id.clone()).child(btn.on_click(
+                                                cx.listener(move |this, _, window, cx| {
+                                                    this.apply_settings_effect(
+                                                        SettingsEffect::VoiceProcessingModeChanged(val_owned.clone()),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                }),
+                                            ))
+                                        })),
                                 ),
                         )
                         .child(
-                            div().debug_selector(|| "settings-noise-suppression".to_owned()).child(
-                                Switch::new("settings-noise-suppression")
-                                    .checked(view.prefs.data.voice_noise_suppression)
-                                    .on_change(cx.listener(|this, checked: &bool, window, cx| {
-                                        this.apply_settings_effect(
-                                            SettingsEffect::VoiceNoiseSuppressionChanged(*checked),
-                                            window,
-                                            cx,
-                                        );
-                                    })),
-                            ),
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_0p5()
+                                        .min_w_0()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .child(l10n::tr("Noise suppression")),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child(l10n::tr(
+                                                    "Remove background keyboard, fan, and room noise from your microphone.",
+                                                )),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .gap_2()
+                                        .children(ns_backends.iter().map(|&(val, label)| {
+                                            let selected = ns_backend == val;
+                                            let sel_id = format!("settings-ns-backend-{val}");
+                                            let val_owned = val.to_owned();
+                                            let mut btn = Button::new(SharedString::from(sel_id.clone()))
+                                                .small()
+                                                .label(l10n::tr(label));
+                                            btn = if selected { btn.primary() } else { btn.ghost() };
+                                            div().debug_selector(move || sel_id.clone()).child(btn.on_click(
+                                                cx.listener(move |this, _, window, cx| {
+                                                    this.apply_settings_effect(
+                                                        SettingsEffect::VoiceNoiseSuppressionBackendChanged(
+                                                            val_owned.clone(),
+                                                        ),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                }),
+                                            ))
+                                        }))
+                                        .child(
+                                            div().debug_selector(|| "settings-noise-suppression".to_owned()).child(
+                                                Switch::new("settings-noise-suppression")
+                                                    .checked(view.prefs.data.voice_noise_suppression)
+                                                    .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                                                        this.apply_settings_effect(
+                                                            SettingsEffect::VoiceNoiseSuppressionChanged(*checked),
+                                                            window,
+                                                            cx,
+                                                        );
+                                                    })),
+                                            ),
+                                        ),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_0p5()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .child(l10n::tr("Echo cancellation")),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child(l10n::tr(
+                                                    "Prevent speaker output from feeding back into your microphone.",
+                                                )),
+                                        ),
+                                )
+                                .child(
+                                    div().debug_selector(|| "settings-echo-cancellation".to_owned()).child(
+                                        Switch::new("settings-echo-cancellation")
+                                            .checked(echo_cancel)
+                                            .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                                                this.apply_settings_effect(
+                                                    SettingsEffect::VoiceEchoCancellationChanged(*checked),
+                                                    window,
+                                                    cx,
+                                                );
+                                            })),
+                                    ),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_0p5()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .child(l10n::tr("Automatic gain control")),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child(l10n::tr(
+                                                    "Automatically normalize microphone volume for consistent speech levels.",
+                                                )),
+                                        ),
+                                )
+                                .child(
+                                    div().debug_selector(|| "settings-auto-gain-control".to_owned()).child(
+                                        Switch::new("settings-auto-gain-control")
+                                            .checked(auto_gain)
+                                            .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                                                this.apply_settings_effect(
+                                                    SettingsEffect::VoiceAutoGainControlChanged(*checked),
+                                                    window,
+                                                    cx,
+                                                );
+                                            })),
+                                    ),
+                                ),
                         ),
-                ),
-        )
-        .child(
-            div()
-                .debug_selector(|| "settings-voice-mic-test".to_owned())
+                )
+                .into_any_element();
+
+    let mic_test_section = div()
+        .debug_selector(|| "settings-voice-mic-test".to_owned())
                 .flex()
                 .flex_col()
                 .gap_2()
                 .child(section_heading(l10n::tr("Microphone test"), theme))
-                .child(info_card_row(
-                    l10n::tr("Input monitor"),
-                    format!("{}: {active_in_dev} ({}%)", l10n::tr("Active input"), view.prefs.data.voice_input_volume),
-                    Some(if view.voice.effective_muted() {
-                        l10n::tr("Muted")
-                    } else {
-                        l10n::tr("Ready")
-                    }),
-                    theme,
-                )),
-        )
-        .child(
-            div()
+                .child(
+                    div()
+                        .p_3()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_col()
+                        .gap_2p5()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_0p5()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .child(l10n::tr("Input monitor")),
+                                        )
+                                        .child(
+                                            div().text_xs().text_color(theme.muted_foreground).child(format!(
+                                                "{}: {active_in_dev} ({}%)",
+                                                l10n::tr("Active input"),
+                                                view.prefs.data.voice_input_volume
+                                            )),
+                                        ),
+                                )
+                                .child(
+                                    div().debug_selector(|| "settings-mic-test-btn".to_owned()).child({
+                                        let mut btn = Button::new("settings-mic-test-btn").small().label(if mic_testing {
+                                            l10n::tr("Stop Mic Test")
+                                        } else {
+                                            l10n::tr("Test Microphone")
+                                        });
+                                        btn = if mic_testing { btn.danger() } else { btn.primary() };
+                                        btn.on_click(cx.listener(|this, _, window, cx| {
+                                            this.apply_settings_effect(SettingsEffect::ToggleMicTest, window, cx);
+                                        }))
+                                    }),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .debug_selector(|| "settings-mic-test-meter".to_owned())
+                                .w_full()
+                                .h(px(8.))
+                                .rounded_full()
+                                .bg(theme.background)
+                                .border_1()
+                                .border_color(theme.border)
+                                .overflow_hidden()
+                                .child(
+                                    div()
+                                        .h_full()
+                                        .bg(if mic_testing {
+                                            theme.status_online
+                                        } else {
+                                            theme.muted_foreground
+                                        })
+                                        .w(gpui_kit::relative(meter_fill)),
+                                ),
+                        ),
+                )
+                .into_any_element();
+
+    let video_quality_section = div()
+        .debug_selector(|| "settings-video-quality".to_owned())
                 .flex()
                 .flex_col()
                 .gap_2()
                 .child(section_heading(l10n::tr("Video & screen share"), theme))
-                .child(info_card_row(
-                    l10n::tr("Screen share codec & quality"),
-                    l10n::tr("Automatic H.265 / H.264 / VP8 capability negotiation with system audio capture."),
-                    Some(String::from("1080p · 60fps")),
-                    theme,
-                )),
-        )
+                .child(
+                    div()
+                        .p_3()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_col()
+                        .gap_3()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_0p5()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .child(l10n::tr("Camera quality")),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child(l10n::tr("Target capture resolution for your video camera.")),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .flex_wrap()
+                                        .gap_1()
+                                        .children(camera_resolutions.iter().map(|&(val, label)| {
+                                            let selected = cam_res == val;
+                                            let sel_id = format!("settings-camera-res-{val}");
+                                            let val_owned = val.to_owned();
+                                            let mut btn = Button::new(SharedString::from(sel_id.clone()))
+                                                .small()
+                                                .label(label);
+                                            btn = if selected { btn.primary() } else { btn.ghost() };
+                                            div().debug_selector(move || sel_id.clone()).child(btn.on_click(
+                                                cx.listener(move |this, _, window, cx| {
+                                                    this.apply_settings_effect(
+                                                        SettingsEffect::CameraResolutionChanged(val_owned.clone()),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                }),
+                                            ))
+                                        })),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_0p5()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .child(l10n::tr("Mirror camera")),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child(l10n::tr("Flip your local camera preview horizontally.")),
+                                        ),
+                                )
+                                .child(
+                                    div().debug_selector(|| "settings-mirror-camera".to_owned()).child(
+                                        Switch::new("settings-mirror-camera")
+                                            .checked(mirror_cam)
+                                            .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                                                this.apply_settings_effect(
+                                                    SettingsEffect::MirrorCameraChanged(*checked),
+                                                    window,
+                                                    cx,
+                                                );
+                                            })),
+                                    ),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_0p5()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .child(l10n::tr("Screen share preset")),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child(l10n::tr(
+                                                    "Optimize screen share for readable text or high-motion gaming.",
+                                                )),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .flex_wrap()
+                                        .gap_1()
+                                        .children(stream_presets.iter().map(|&(val, label)| {
+                                            let selected = stream_mode == val;
+                                            let sel_id = format!("settings-stream-mode-{val}");
+                                            let val_owned = val.to_owned();
+                                            let mut btn = Button::new(SharedString::from(sel_id.clone()))
+                                                .small()
+                                                .label(l10n::tr(label));
+                                            btn = if selected { btn.primary() } else { btn.ghost() };
+                                            div().debug_selector(move || sel_id.clone()).child(btn.on_click(
+                                                cx.listener(move |this, _, window, cx| {
+                                                    this.apply_settings_effect(
+                                                        SettingsEffect::StreamingModeChanged(val_owned.clone()),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                }),
+                                            ))
+                                        })),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_0p5()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .child(l10n::tr("Screen share quality (resolution)")),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child(l10n::tr("Choose 480p, 720p, 1080p, 1440p, or native Source resolution.")),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .flex_wrap()
+                                        .gap_1()
+                                        .children(video_resolutions.iter().map(|&(val, label)| {
+                                            let selected = vid_res == val;
+                                            let sel_id = format!("settings-video-res-{val}");
+                                            let val_owned = val.to_owned();
+                                            let mut btn = Button::new(SharedString::from(sel_id.clone()))
+                                                .small()
+                                                .label(l10n::tr(label));
+                                            btn = if selected { btn.primary() } else { btn.ghost() };
+                                            div().debug_selector(move || sel_id.clone()).child(btn.on_click(
+                                                cx.listener(move |this, _, window, cx| {
+                                                    this.apply_settings_effect(
+                                                        SettingsEffect::VideoResolutionChanged(val_owned.clone()),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                }),
+                                            ))
+                                        })),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_0p5()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .child(l10n::tr("Frame rate")),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child(l10n::tr("Target frame rate for screen sharing.")),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .flex_wrap()
+                                        .gap_1()
+                                        .children(video_fps_options.iter().map(|&(fps, label)| {
+                                            let selected = vid_fps == fps;
+                                            let sel_id = format!("settings-video-fps-{fps}");
+                                            let mut btn = Button::new(SharedString::from(sel_id.clone()))
+                                                .small()
+                                                .label(label);
+                                            btn = if selected { btn.primary() } else { btn.ghost() };
+                                            div().debug_selector(move || sel_id.clone()).child(btn.on_click(
+                                                cx.listener(move |this, _, window, cx| {
+                                                    this.apply_settings_effect(
+                                                        SettingsEffect::VideoFpsChanged(fps),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                }),
+                                            ))
+                                        })),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_0p5()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .child(l10n::tr("Video codec")),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child(l10n::tr(
+                                                    "Preferred hardware or software encoder codec for screen sharing and video.",
+                                                )),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .flex_wrap()
+                                        .gap_1()
+                                        .children(video_codecs.iter().map(|&(val, label)| {
+                                            let selected = vid_codec == val;
+                                            let sel_id = format!("settings-video-codec-{val}");
+                                            let val_owned = val.to_owned();
+                                            let mut btn = Button::new(SharedString::from(sel_id.clone()))
+                                                .small()
+                                                .label(label);
+                                            btn = if selected { btn.primary() } else { btn.ghost() };
+                                            div().debug_selector(move || sel_id.clone()).child(btn.on_click(
+                                                cx.listener(move |this, _, window, cx| {
+                                                    this.apply_settings_effect(
+                                                        SettingsEffect::VideoCodecChanged(val_owned.clone()),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                }),
+                                            ))
+                                        })),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_0p5()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .child(l10n::tr("Screen share bitrate")),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child(l10n::tr(
+                                                    "Higher bitrates keep fast motion sharper and use more upload bandwidth.",
+                                                )),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .flex_wrap()
+                                        .gap_1()
+                                        .children(bitrate_options.iter().map(|&(kbps, label)| {
+                                            let selected = vid_bitrate == kbps;
+                                            let sel_id = format!("settings-video-bitrate-{kbps}");
+                                            let mut btn = Button::new(SharedString::from(sel_id.clone()))
+                                                .small()
+                                                .label(l10n::tr(label));
+                                            btn = if selected { btn.primary() } else { btn.ghost() };
+                                            div().debug_selector(move || sel_id.clone()).child(btn.on_click(
+                                                cx.listener(move |this, _, window, cx| {
+                                                    this.apply_settings_effect(
+                                                        SettingsEffect::VideoBitrateChanged(kbps),
+                                                        window,
+                                                        cx,
+                                                    );
+                                                }),
+                                            ))
+                                        })),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_between()
+                                .gap_3()
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_0p5()
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .child(l10n::tr("Hardware acceleration")),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child(l10n::tr(
+                                                    "Use GPU hardware encoders and decoders (NVENC / AMF / QuickSync / MediaFoundation) when available.",
+                                                )),
+                                        ),
+                                )
+                                .child(
+                                    div().debug_selector(|| "settings-video-hw-accel".to_owned()).child(
+                                        Switch::new("settings-video-hw-accel")
+                                            .checked(hw_accel)
+                                            .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                                                this.apply_settings_effect(
+                                                    SettingsEffect::VideoHardwareAccelerationChanged(*checked),
+                                                    window,
+                                                    cx,
+                                                );
+                                            })),
+                                    ),
+                                ),
+                        ),
+                )
+                .into_any_element();
+
+    let mut sections: Vec<(&'static str, AnyElement)> = vec![
+        ("voice-devices", devices_section),
+        ("input-mode", input_mode_section),
+        ("audio-processing", audio_processing_section),
+        ("mic-test", mic_test_section),
+        ("video-quality", video_quality_section),
+    ];
+    if let Some(active_id) = active_section
+        && let Some(pos) = sections.iter().position(|(id, _)| *id == active_id)
+        && pos > 0
+    {
+        let item = sections.remove(pos);
+        sections.insert(0, item);
+    }
+
+    div()
+        .flex()
+        .flex_col()
+        .gap_5()
+        .children(sections.into_iter().map(|(_, el)| el))
         .into_any_element()
 }
 
@@ -2432,8 +3760,14 @@ fn render_accessibility_tab(view: &ClientView, theme: &Theme, cx: &mut Context<C
         .into_any_element()
 }
 
-fn render_language_tab(modal: &SettingsModal, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+fn render_language_tab(
+    view: &ClientView,
+    modal: &SettingsModal,
+    theme: &Theme,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
     let active_locale = l10n::current().locale();
+    let use_24h = view.prefs.data.time_format_24h;
     let locale_list = div()
         .id("settings-locale-list")
         .debug_selector(|| "settings-locale-list".to_owned())
@@ -2489,12 +3823,76 @@ fn render_language_tab(modal: &SettingsModal, theme: &Theme, cx: &mut Context<Cl
                 .flex_col()
                 .gap_2()
                 .child(section_heading(l10n::tr("Time & date format"), theme))
-                .child(info_card_row(
-                    l10n::tr("Regional timestamp formatting"),
-                    l10n::tr("Automatically formats message timestamps and relative dates according to your selected locale."),
-                    Some(active_locale.to_owned()),
-                    theme,
-                )),
+                .child(
+                    div()
+                        .p_3()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_3()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(l10n::tr("Regional timestamp formatting")),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(l10n::tr(
+                                            "Choose 12-hour (AM/PM) or 24-hour clock format for message timestamps.",
+                                        )),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .gap_1()
+                                .child(
+                                    div().debug_selector(|| "settings-time-format-12h".to_owned()).child({
+                                        let mut btn = Button::new("settings-time-format-12h")
+                                            .small()
+                                            .label(l10n::tr("12-hour"));
+                                        btn = if !use_24h { btn.primary() } else { btn.ghost() };
+                                        btn.on_click(cx.listener(|this, _, window, cx| {
+                                            this.apply_settings_effect(
+                                                SettingsEffect::TimeFormat24hChanged(false),
+                                                window,
+                                                cx,
+                                            );
+                                        }))
+                                    }),
+                                )
+                                .child(
+                                    div().debug_selector(|| "settings-time-format-24h".to_owned()).child({
+                                        let mut btn = Button::new("settings-time-format-24h")
+                                            .small()
+                                            .label(l10n::tr("24-hour"));
+                                        btn = if use_24h { btn.primary() } else { btn.ghost() };
+                                        btn.on_click(cx.listener(|this, _, window, cx| {
+                                            this.apply_settings_effect(
+                                                SettingsEffect::TimeFormat24hChanged(true),
+                                                window,
+                                                cx,
+                                            );
+                                        }))
+                                    }),
+                                ),
+                        ),
+                ),
         )
         .into_any_element()
 }
@@ -2785,9 +4183,9 @@ fn render_tab_body(
         SettingsTab::Themes => render_themes_tab(view, theme, cx),
         SettingsTab::Notifications => render_notifications_tab(view, theme, cx),
         SettingsTab::MessagesMedia => render_messages_media_tab(view, theme, cx),
-        SettingsTab::VoiceVideo => render_voice_tab(view, theme, cx),
+        SettingsTab::VoiceVideo => render_voice_tab(view, modal.active_section, theme, cx),
         SettingsTab::Accessibility => render_accessibility_tab(view, theme, cx),
-        SettingsTab::Language => render_language_tab(modal, theme, cx),
+        SettingsTab::Language => render_language_tab(view, modal, theme, cx),
         SettingsTab::Keybinds => render_keybinds_tab(theme),
         SettingsTab::Advanced => render_advanced_tab(view, theme, cx),
     }

@@ -1029,11 +1029,24 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             } else {
                 l10n::tr("System Audio: Off")
             };
+            let res_label = match view.prefs.data.video_resolution.as_str() {
+                "source" => l10n::tr("Source"),
+                other => other.to_owned(),
+            };
+            let fps_val = view.prefs.data.video_fps;
+            let codec_label = view.prefs.data.video_codec.to_uppercase();
+            let bitrate_label = if view.prefs.data.video_bitrate_kbps == 0 {
+                l10n::tr("Auto bitrate")
+            } else {
+                format!("{} Mbps", view.prefs.data.video_bitrate_kbps / 1000)
+            };
+            let summary = format!("{res_label} · {fps_val}fps · {codec_label} · {bitrate_label}");
+            let active_res = view.prefs.data.video_resolution.clone();
             Some(
                 div()
                     .id("voice-control-popout")
                     .debug_selector(|| "voice-control-popout".to_owned())
-                    .w(px(320.))
+                    .w(px(340.))
                     .p_3()
                     .rounded(px(10.))
                     .border_1()
@@ -1049,7 +1062,55 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             .items_center()
                             .justify_between()
                             .child(div().text_xs().font_weight(FontWeight::BOLD).child(l10n::tr("Screen Share")))
-                            .child(div().text_xs().text_color(theme.muted_foreground).child("1080p · 60fps")),
+                            .child(div().text_xs().text_color(theme.muted_foreground).child(summary)),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_between()
+                            .gap_1()
+                            .children(["720p", "1080p", "1440p", "source"].into_iter().map(|res| {
+                                let selected = active_res == res;
+                                let res_owned = res.to_owned();
+                                let lbl = if res == "source" { "Source" } else { res };
+                                let mut btn = Button::new(SharedString::from(format!("popout-res-{res}")))
+                                    .xsmall()
+                                    .label(lbl);
+                                btn = if selected { btn.primary() } else { btn.ghost() };
+                                btn.on_click(cx.listener(move |this, _, window, cx| {
+                                    this.apply_settings_effect(
+                                        crate::settings_model::SettingsEffect::VideoResolutionChanged(
+                                            res_owned.clone(),
+                                        ),
+                                        window,
+                                        cx,
+                                    );
+                                }))
+                            })),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_between()
+                            .gap_1()
+                            .children([15u8, 30u8, 60u8].into_iter().map(|fps| {
+                                let selected = fps_val == fps;
+                                let mut btn = Button::new(SharedString::from(format!("popout-fps-{fps}")))
+                                    .xsmall()
+                                    .label(format!("{fps} FPS"));
+                                btn = if selected { btn.primary() } else { btn.ghost() };
+                                btn.on_click(cx.listener(move |this, _, window, cx| {
+                                    this.apply_settings_effect(
+                                        crate::settings_model::SettingsEffect::VideoFpsChanged(fps),
+                                        window,
+                                        cx,
+                                    );
+                                }))
+                            })),
                     )
                     .when(view.voice.self_stream, |d| {
                         d.child(

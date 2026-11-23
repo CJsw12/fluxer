@@ -728,3 +728,115 @@ fn m5_user_area_popout_and_interactive_settings_prefs_work(cx: &mut TestAppConte
 
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn m7_guild_rail_hover_indicator_and_full_video_voice_settings_work(cx: &mut TestAppContext) {
+    use crate::client_view::RailHoverTarget;
+
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, vcx) = open_client(cx, backend, events);
+
+    // Home is selected by default -> 40px indicator pill on home, none on favorites.
+    assert!(vcx.debug_bounds("rail-pill-home").is_some());
+    assert!(vcx.debug_bounds("rail-pill-favorites").is_none());
+
+    // Hovering Favorites shows its 20px indicator pill!
+    view.update(vcx, |v, cx| {
+        v.set_rail_hover(RailHoverTarget::Favorites, true, cx);
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    let fav_pill_hover = vcx.debug_bounds("rail-pill-favorites").expect("hovered favorites pill");
+    assert!((f32::from(fav_pill_hover.size.height) - 20.0).abs() < 0.5);
+
+    // Clicking Favorites selects it -> 40px indicator pill on favorites!
+    let fav_btn = vcx.debug_bounds("rail-favorites-btn").expect("favorites button").center();
+    vcx.simulate_click(fav_btn, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    let fav_pill_sel = vcx.debug_bounds("rail-pill-favorites").expect("selected favorites pill");
+    assert!((f32::from(fav_pill_sel.size.height) - 40.0).abs() < 0.5);
+
+    // Hovering Home while Favorites is selected shows 20px indicator pill on Home!
+    view.update(vcx, |v, cx| {
+        v.set_rail_hover(RailHoverTarget::Home, true, cx);
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    let home_pill_hover = vcx.debug_bounds("rail-pill-home").expect("hovered home pill");
+    assert!((f32::from(home_pill_hover.size.height) - 20.0).abs() < 0.5);
+
+    // Open Settings -> Voice & Video and exercise video codec, resolution, fps, bitrate, voice profile, mic test.
+    view.update_in(vcx, |v, window, cx| {
+        v.open_settings(window, cx);
+        v.select_settings_tab(crate::ui::settings::SettingsTab::VoiceVideo, cx);
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+
+    for sel in [
+        "settings-voice-profile-custom",
+        "settings-ns-backend-deepfilternet",
+        "settings-echo-cancellation",
+        "settings-auto-gain-control",
+        "settings-ptt-delay-500",
+        "settings-mic-test-btn",
+        "settings-mic-test-meter",
+        "settings-camera-res-1080p",
+        "settings-mirror-camera",
+        "settings-video-res-1440p",
+        "settings-video-res-source",
+        "settings-video-fps-30",
+        "settings-video-codec-h265",
+        "settings-video-codec-av1",
+        "settings-video-bitrate-8000",
+        "settings-video-hw-accel",
+    ] {
+        assert!(vcx.debug_bounds(sel).is_some(), "{sel} must be rendered in Voice & Video tab");
+    }
+
+    for (section_sel, click_sels) in [
+        ("settings-subitem-input-mode", &["settings-ptt-delay-500"][..]),
+        (
+            "settings-subitem-audio-processing",
+            &["settings-voice-profile-custom", "settings-ns-backend-deepfilternet"][..],
+        ),
+        ("settings-subitem-mic-test", &["settings-mic-test-btn"][..]),
+        (
+            "settings-subitem-video-quality",
+            &[
+                "settings-camera-res-1080p",
+                "settings-video-res-1440p",
+                "settings-video-fps-30",
+                "settings-video-codec-h265",
+                "settings-video-bitrate-8000",
+            ][..],
+        ),
+    ] {
+        let sec_pt = vcx.debug_bounds(section_sel).expect(section_sel).center();
+        vcx.simulate_click(sec_pt, gpui_kit::Modifiers::default());
+        vcx.run_until_parked();
+        draw(vcx);
+        for &click_sel in click_sels {
+            let pt = vcx.debug_bounds(click_sel).expect(click_sel).center();
+            vcx.simulate_click(pt, gpui_kit::Modifiers::default());
+            vcx.run_until_parked();
+            draw(vcx);
+        }
+    }
+
+    view.read_with(vcx, |v, _| {
+        assert_eq!(v.prefs.data.voice_processing_mode, "custom");
+        assert_eq!(v.prefs.data.voice_noise_suppression_backend, "deepfilternet");
+        assert_eq!(v.prefs.data.voice_ptt_release_delay_ms, 500);
+        assert!(v.mic_test_active);
+        assert_eq!(v.prefs.data.camera_resolution, "1080p");
+        assert_eq!(v.prefs.data.video_resolution, "1440p");
+        assert_eq!(v.prefs.data.video_fps, 30);
+        assert_eq!(v.prefs.data.video_codec, "h265");
+        assert_eq!(v.prefs.data.video_bitrate_kbps, 8000);
+    });
+
+    drop(rt);
+}

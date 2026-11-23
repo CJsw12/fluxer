@@ -65,8 +65,30 @@ pub struct Prefs {
     pub voice_output_volume: u16,
     pub voice_push_to_talk: bool,
     pub voice_noise_suppression: bool,
+    pub voice_processing_mode: String,
+    pub voice_echo_cancellation: bool,
+    pub voice_noise_suppression_backend: String,
+    pub voice_auto_gain_control: bool,
+    pub voice_vad_auto_threshold: bool,
+    pub voice_vad_threshold: u8,
+    pub voice_ptt_release_delay_ms: u16,
+    pub camera_resolution: String,
+    pub mirror_camera: bool,
+    pub streaming_mode: String,
+    pub video_resolution: String,
+    pub video_fps: u8,
+    pub video_codec: String,
+    pub video_bitrate_kbps: u16,
+    pub video_hardware_acceleration: bool,
     pub allow_guild_dms: bool,
+    pub friend_request_access: String,
+    pub spoiler_display: String,
     pub inline_media_previews: bool,
+    pub render_embeds: bool,
+    pub render_reactions: bool,
+    pub convert_emoticons: bool,
+    pub unread_badge_enabled: bool,
+    pub time_format_24h: bool,
     pub reduced_motion: ReducedMotionPref,
 }
 
@@ -93,8 +115,30 @@ impl Default for Prefs {
             voice_output_volume: DEFAULT_VOICE_VOLUME,
             voice_push_to_talk: false,
             voice_noise_suppression: true,
+            voice_processing_mode: "voice".to_owned(),
+            voice_echo_cancellation: true,
+            voice_noise_suppression_backend: "standard".to_owned(),
+            voice_auto_gain_control: true,
+            voice_vad_auto_threshold: true,
+            voice_vad_threshold: 50,
+            voice_ptt_release_delay_ms: 250,
+            camera_resolution: "720p".to_owned(),
+            mirror_camera: false,
+            streaming_mode: "screenshare".to_owned(),
+            video_resolution: "1080p".to_owned(),
+            video_fps: 60,
+            video_codec: "auto".to_owned(),
+            video_bitrate_kbps: 0,
+            video_hardware_acceleration: true,
             allow_guild_dms: true,
+            friend_request_access: "everyone".to_owned(),
+            spoiler_display: "on_click".to_owned(),
             inline_media_previews: true,
+            render_embeds: true,
+            render_reactions: true,
+            convert_emoticons: true,
+            unread_badge_enabled: true,
+            time_format_24h: false,
             reduced_motion: ReducedMotionPref::System,
         }
     }
@@ -192,14 +236,126 @@ impl Prefs {
                 .get("voice_noise_suppression")
                 .and_then(Value::as_bool)
                 .unwrap_or(default.voice_noise_suppression),
+            voice_processing_mode: value
+                .get("voice_processing_mode")
+                .and_then(Value::as_str)
+                .filter(|s| matches!(*s, "voice" | "studio" | "custom"))
+                .map(str::to_owned)
+                .unwrap_or(default.voice_processing_mode),
+            voice_echo_cancellation: value
+                .get("voice_echo_cancellation")
+                .and_then(Value::as_bool)
+                .unwrap_or(default.voice_echo_cancellation),
+            voice_noise_suppression_backend: value
+                .get("voice_noise_suppression_backend")
+                .and_then(Value::as_str)
+                .filter(|s| matches!(*s, "off" | "standard" | "deepfilternet"))
+                .map(str::to_owned)
+                .unwrap_or(default.voice_noise_suppression_backend),
+            voice_auto_gain_control: value
+                .get("voice_auto_gain_control")
+                .and_then(Value::as_bool)
+                .unwrap_or(default.voice_auto_gain_control),
+            voice_vad_auto_threshold: value
+                .get("voice_vad_auto_threshold")
+                .and_then(Value::as_bool)
+                .unwrap_or(default.voice_vad_auto_threshold),
+            voice_vad_threshold: value
+                .get("voice_vad_threshold")
+                .and_then(Value::as_u64)
+                .and_then(|n| u8::try_from(n).ok())
+                .unwrap_or(default.voice_vad_threshold)
+                .clamp(0, 100),
+            voice_ptt_release_delay_ms: value
+                .get("voice_ptt_release_delay_ms")
+                .and_then(Value::as_u64)
+                .and_then(|n| u16::try_from(n).ok())
+                .unwrap_or(default.voice_ptt_release_delay_ms)
+                .clamp(20, 2000),
+            camera_resolution: value
+                .get("camera_resolution")
+                .and_then(Value::as_str)
+                .filter(|s| matches!(*s, "480p" | "720p" | "1080p"))
+                .map(str::to_owned)
+                .unwrap_or(default.camera_resolution),
+            mirror_camera: value
+                .get("mirror_camera")
+                .and_then(Value::as_bool)
+                .unwrap_or(default.mirror_camera),
+            streaming_mode: value
+                .get("streaming_mode")
+                .and_then(Value::as_str)
+                .filter(|s| matches!(*s, "screenshare" | "gaming" | "custom"))
+                .map(str::to_owned)
+                .unwrap_or(default.streaming_mode),
+            video_resolution: value
+                .get("video_resolution")
+                .and_then(Value::as_str)
+                .filter(|s| matches!(*s, "480p" | "720p" | "1080p" | "1440p" | "source"))
+                .map(str::to_owned)
+                .unwrap_or(default.video_resolution),
+            video_fps: value
+                .get("video_fps")
+                .and_then(Value::as_u64)
+                .and_then(|n| u8::try_from(n).ok())
+                .filter(|n| matches!(*n, 15 | 30 | 60))
+                .unwrap_or(default.video_fps),
+            video_codec: value
+                .get("video_codec")
+                .and_then(Value::as_str)
+                .filter(|s| matches!(*s, "auto" | "h265" | "h264" | "vp9" | "vp8" | "av1"))
+                .map(str::to_owned)
+                .unwrap_or(default.video_codec),
+            video_bitrate_kbps: value
+                .get("video_bitrate_kbps")
+                .and_then(Value::as_u64)
+                .and_then(|n| u16::try_from(n).ok())
+                .unwrap_or(default.video_bitrate_kbps)
+                .min(50_000),
+            video_hardware_acceleration: value
+                .get("video_hardware_acceleration")
+                .and_then(Value::as_bool)
+                .unwrap_or(default.video_hardware_acceleration),
             allow_guild_dms: value
                 .get("allow_guild_dms")
                 .and_then(Value::as_bool)
                 .unwrap_or(default.allow_guild_dms),
+            friend_request_access: value
+                .get("friend_request_access")
+                .and_then(Value::as_str)
+                .filter(|s| matches!(*s, "everyone" | "friends_of_friends" | "no_one"))
+                .map(str::to_owned)
+                .unwrap_or(default.friend_request_access),
+            spoiler_display: value
+                .get("spoiler_display")
+                .and_then(Value::as_str)
+                .filter(|s| matches!(*s, "on_click" | "moderator" | "always"))
+                .map(str::to_owned)
+                .unwrap_or(default.spoiler_display),
             inline_media_previews: value
                 .get("inline_media_previews")
                 .and_then(Value::as_bool)
                 .unwrap_or(default.inline_media_previews),
+            render_embeds: value
+                .get("render_embeds")
+                .and_then(Value::as_bool)
+                .unwrap_or(default.render_embeds),
+            render_reactions: value
+                .get("render_reactions")
+                .and_then(Value::as_bool)
+                .unwrap_or(default.render_reactions),
+            convert_emoticons: value
+                .get("convert_emoticons")
+                .and_then(Value::as_bool)
+                .unwrap_or(default.convert_emoticons),
+            unread_badge_enabled: value
+                .get("unread_badge_enabled")
+                .and_then(Value::as_bool)
+                .unwrap_or(default.unread_badge_enabled),
+            time_format_24h: value
+                .get("time_format_24h")
+                .and_then(Value::as_bool)
+                .unwrap_or(default.time_format_24h),
             reduced_motion: value
                 .get("reduced_motion")
                 .and_then(Value::as_str)
@@ -226,8 +382,30 @@ impl Prefs {
             "voice_output_volume": self.voice_output_volume.clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME),
             "voice_push_to_talk": self.voice_push_to_talk,
             "voice_noise_suppression": self.voice_noise_suppression,
+            "voice_processing_mode": self.voice_processing_mode,
+            "voice_echo_cancellation": self.voice_echo_cancellation,
+            "voice_noise_suppression_backend": self.voice_noise_suppression_backend,
+            "voice_auto_gain_control": self.voice_auto_gain_control,
+            "voice_vad_auto_threshold": self.voice_vad_auto_threshold,
+            "voice_vad_threshold": self.voice_vad_threshold.clamp(0, 100),
+            "voice_ptt_release_delay_ms": self.voice_ptt_release_delay_ms.clamp(20, 2000),
+            "camera_resolution": self.camera_resolution,
+            "mirror_camera": self.mirror_camera,
+            "streaming_mode": self.streaming_mode,
+            "video_resolution": self.video_resolution,
+            "video_fps": self.video_fps,
+            "video_codec": self.video_codec,
+            "video_bitrate_kbps": self.video_bitrate_kbps,
+            "video_hardware_acceleration": self.video_hardware_acceleration,
             "allow_guild_dms": self.allow_guild_dms,
+            "friend_request_access": self.friend_request_access,
+            "spoiler_display": self.spoiler_display,
             "inline_media_previews": self.inline_media_previews,
+            "render_embeds": self.render_embeds,
+            "render_reactions": self.render_reactions,
+            "convert_emoticons": self.convert_emoticons,
+            "unread_badge_enabled": self.unread_badge_enabled,
+            "time_format_24h": self.time_format_24h,
             "reduced_motion": self.reduced_motion.as_str(),
         })
     }
@@ -349,6 +527,153 @@ impl PrefsStore {
         self.persist();
     }
 
+    pub fn set_voice_processing_mode(&mut self, mode: &str) {
+        if matches!(mode, "voice" | "studio" | "custom") {
+            self.data.voice_processing_mode = mode.to_owned();
+            if mode == "studio" {
+                self.data.voice_noise_suppression = false;
+                self.data.voice_echo_cancellation = false;
+                self.data.voice_auto_gain_control = false;
+            } else if mode == "voice" {
+                self.data.voice_noise_suppression = true;
+                self.data.voice_echo_cancellation = true;
+                self.data.voice_auto_gain_control = true;
+            }
+            self.persist();
+        }
+    }
+
+    pub fn set_voice_echo_cancellation(&mut self, enabled: bool) {
+        self.data.voice_echo_cancellation = enabled;
+        self.persist();
+    }
+
+    pub fn set_voice_noise_suppression_backend(&mut self, backend: &str) {
+        if matches!(backend, "off" | "standard" | "deepfilternet") {
+            self.data.voice_noise_suppression_backend = backend.to_owned();
+            self.data.voice_noise_suppression = backend != "off";
+            self.persist();
+        }
+    }
+
+    pub fn set_voice_auto_gain_control(&mut self, enabled: bool) {
+        self.data.voice_auto_gain_control = enabled;
+        self.persist();
+    }
+
+    pub fn set_voice_vad_auto_threshold(&mut self, enabled: bool) {
+        self.data.voice_vad_auto_threshold = enabled;
+        self.persist();
+    }
+
+    pub fn set_voice_vad_threshold(&mut self, threshold: u8) {
+        self.data.voice_vad_threshold = threshold.clamp(0, 100);
+        self.persist();
+    }
+
+    pub fn set_voice_ptt_release_delay_ms(&mut self, delay_ms: u16) {
+        self.data.voice_ptt_release_delay_ms = delay_ms.clamp(20, 2000);
+        self.persist();
+    }
+
+    pub fn set_camera_resolution(&mut self, res: &str) {
+        if matches!(res, "480p" | "720p" | "1080p") {
+            self.data.camera_resolution = res.to_owned();
+            self.persist();
+        }
+    }
+
+    pub fn set_mirror_camera(&mut self, mirror: bool) {
+        self.data.mirror_camera = mirror;
+        self.persist();
+    }
+
+    pub fn set_streaming_mode(&mut self, mode: &str) {
+        if matches!(mode, "screenshare" | "gaming" | "custom") {
+            self.data.streaming_mode = mode.to_owned();
+            if mode == "screenshare" {
+                self.data.video_resolution = "1080p".to_owned();
+                self.data.video_fps = 30;
+            } else if mode == "gaming" {
+                self.data.video_resolution = "1080p".to_owned();
+                self.data.video_fps = 60;
+            }
+            self.persist();
+        }
+    }
+
+    pub fn set_video_resolution(&mut self, res: &str) {
+        if matches!(res, "480p" | "720p" | "1080p" | "1440p" | "source") {
+            self.data.video_resolution = res.to_owned();
+            self.data.streaming_mode = "custom".to_owned();
+            self.persist();
+        }
+    }
+
+    pub fn set_video_fps(&mut self, fps: u8) {
+        if matches!(fps, 15 | 30 | 60) {
+            self.data.video_fps = fps;
+            self.data.streaming_mode = "custom".to_owned();
+            self.persist();
+        }
+    }
+
+    pub fn set_video_codec(&mut self, codec: &str) {
+        if matches!(codec, "auto" | "h265" | "h264" | "vp9" | "vp8" | "av1") {
+            self.data.video_codec = codec.to_owned();
+            self.persist();
+        }
+    }
+
+    pub fn set_video_bitrate_kbps(&mut self, kbps: u16) {
+        self.data.video_bitrate_kbps = kbps.min(50_000);
+        self.persist();
+    }
+
+    pub fn set_video_hardware_acceleration(&mut self, enabled: bool) {
+        self.data.video_hardware_acceleration = enabled;
+        self.persist();
+    }
+
+    pub fn set_friend_request_access(&mut self, access: &str) {
+        if matches!(access, "everyone" | "friends_of_friends" | "no_one") {
+            self.data.friend_request_access = access.to_owned();
+            self.persist();
+        }
+    }
+
+    pub fn set_spoiler_display(&mut self, mode: &str) {
+        if matches!(mode, "on_click" | "moderator" | "always") {
+            self.data.spoiler_display = mode.to_owned();
+            self.persist();
+        }
+    }
+
+    pub fn set_render_embeds(&mut self, enabled: bool) {
+        self.data.render_embeds = enabled;
+        self.persist();
+    }
+
+    pub fn set_render_reactions(&mut self, enabled: bool) {
+        self.data.render_reactions = enabled;
+        self.persist();
+    }
+
+    pub fn set_convert_emoticons(&mut self, enabled: bool) {
+        self.data.convert_emoticons = enabled;
+        self.persist();
+    }
+
+    pub fn set_unread_badge_enabled(&mut self, enabled: bool) {
+        self.data.unread_badge_enabled = enabled;
+        self.persist();
+    }
+
+    pub fn set_time_format_24h(&mut self, enabled: bool) {
+        self.data.time_format_24h = enabled;
+        self.persist();
+    }
+
     pub fn set_reduced_motion(&mut self, pref: ReducedMotionPref) {
         self.data.reduced_motion = pref;
         self.persist();
@@ -453,8 +778,62 @@ mod tests {
                 voice_output_volume: if theme == ThemeKind::Black { 200 } else { 40 },
                 voice_push_to_talk: theme == ThemeKind::Light,
                 voice_noise_suppression: theme != ThemeKind::Black,
+                voice_processing_mode: if theme == ThemeKind::Light {
+                    "custom".to_owned()
+                } else {
+                    "voice".to_owned()
+                },
+                voice_echo_cancellation: theme != ThemeKind::Darker,
+                voice_noise_suppression_backend: if theme == ThemeKind::Black {
+                    "deepfilternet".to_owned()
+                } else {
+                    "standard".to_owned()
+                },
+                voice_auto_gain_control: theme != ThemeKind::Light,
+                voice_vad_auto_threshold: theme != ThemeKind::Black,
+                voice_vad_threshold: if theme == ThemeKind::Light { 35 } else { 50 },
+                voice_ptt_release_delay_ms: if theme == ThemeKind::Darker { 500 } else { 250 },
+                camera_resolution: if theme == ThemeKind::Black {
+                    "1080p".to_owned()
+                } else {
+                    "720p".to_owned()
+                },
+                mirror_camera: theme == ThemeKind::Light,
+                streaming_mode: if theme == ThemeKind::Black {
+                    "gaming".to_owned()
+                } else {
+                    "screenshare".to_owned()
+                },
+                video_resolution: if theme == ThemeKind::Light {
+                    "1440p".to_owned()
+                } else {
+                    "1080p".to_owned()
+                },
+                video_fps: if theme == ThemeKind::Darker { 30 } else { 60 },
+                video_codec: if theme == ThemeKind::Black {
+                    "h265".to_owned()
+                } else {
+                    "auto".to_owned()
+                },
+                video_bitrate_kbps: if theme == ThemeKind::Light { 8000 } else { 0 },
+                video_hardware_acceleration: theme != ThemeKind::Darker,
                 allow_guild_dms: theme != ThemeKind::Darker,
+                friend_request_access: if theme == ThemeKind::Light {
+                    "friends_of_friends".to_owned()
+                } else {
+                    "everyone".to_owned()
+                },
+                spoiler_display: if theme == ThemeKind::Black {
+                    "always".to_owned()
+                } else {
+                    "on_click".to_owned()
+                },
                 inline_media_previews: theme != ThemeKind::Light,
+                render_embeds: theme != ThemeKind::Darker,
+                render_reactions: theme != ThemeKind::Black,
+                convert_emoticons: theme != ThemeKind::Light,
+                unread_badge_enabled: theme != ThemeKind::Darker,
+                time_format_24h: theme == ThemeKind::Black,
                 reduced_motion: match theme {
                     ThemeKind::Light => ReducedMotionPref::On,
                     ThemeKind::Dark => ReducedMotionPref::Off,
@@ -542,7 +921,7 @@ mod tests {
             .keys()
             .map(String::as_str)
             .collect();
-        assert_eq!(keys.len(), 19);
+        assert_eq!(keys.len(), 41);
         for key in [
             "theme",
             "notifications",
@@ -560,8 +939,30 @@ mod tests {
             "voice_output_volume",
             "voice_push_to_talk",
             "voice_noise_suppression",
+            "voice_processing_mode",
+            "voice_echo_cancellation",
+            "voice_noise_suppression_backend",
+            "voice_auto_gain_control",
+            "voice_vad_auto_threshold",
+            "voice_vad_threshold",
+            "voice_ptt_release_delay_ms",
+            "camera_resolution",
+            "mirror_camera",
+            "streaming_mode",
+            "video_resolution",
+            "video_fps",
+            "video_codec",
+            "video_bitrate_kbps",
+            "video_hardware_acceleration",
             "allow_guild_dms",
+            "friend_request_access",
+            "spoiler_display",
             "inline_media_previews",
+            "render_embeds",
+            "render_reactions",
+            "convert_emoticons",
+            "unread_badge_enabled",
+            "time_format_24h",
             "reduced_motion",
         ] {
             assert!(keys.contains(&key), "{key}");

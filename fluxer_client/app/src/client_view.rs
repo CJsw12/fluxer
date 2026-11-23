@@ -64,6 +64,16 @@ pub(crate) enum VoicePopoutKind {
     Details,
 }
 
+/// Which left Guild Rail item is currently hovered (`GuildListIndicator.ts` / `GuildsLayout.module.css`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RailHoverTarget {
+    Home,
+    Favorites,
+    Guild(Snowflake),
+    Discover,
+    Join,
+}
+
 /// Emitted to the window root.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClientEvent {
@@ -248,6 +258,12 @@ pub struct ClientView {
     pub(crate) user_area_popout_open: bool,
     /// When true, the Guild Header dropdown menu (`GuildHeaderPopout.tsx`) is open below the guild header.
     pub(crate) guild_header_popout_open: bool,
+    /// Currently hovered item in the left Guild Rail (`GuildListIndicator.ts`).
+    pub(crate) hovered_rail_item: Option<RailHoverTarget>,
+    /// True when the `Favorites` virtual rail button (`FavoritesGuildButton`) is selected.
+    pub(crate) favorites_selected: bool,
+    /// True while the user is running the interactive Microphone Test monitor in Settings -> Voice & Video.
+    pub(crate) mic_test_active: bool,
     /// Active inline voice settings/details popout (`VoiceControlBar.tsx` / `VoiceConnectionStatusInner.tsx`).
     pub(crate) voice_popout: Option<VoicePopoutKind>,
     /// Enumerated OS audio input/output devices for the settings modal.
@@ -439,6 +455,9 @@ impl ClientView {
             voice_stage_expanded: true,
             user_area_popout_open: false,
             guild_header_popout_open: false,
+            hovered_rail_item: None,
+            favorites_selected: false,
+            mic_test_active: false,
             voice_popout: None,
             audio_devices: crate::audio_devices::AudioDeviceLists::default(),
             watched_video_track_sid: None,
@@ -1530,6 +1549,7 @@ impl ClientView {
 
     pub(crate) fn select_place(&mut self, place: Place, cx: &mut Context<Self>) {
         self.voice_stage_open = false;
+        self.favorites_selected = false;
         self.place = place;
         if let Place::Guild(id) = place {
             self.last_guild = Some(id);
@@ -1542,6 +1562,26 @@ impl ClientView {
         match first {
             Some(id) => self.select_channel(id, cx),
             None => self.clear_selection(cx),
+        }
+    }
+
+    pub(crate) fn select_favorites(&mut self, cx: &mut Context<Self>) {
+        self.select_place(Place::Home, cx);
+        self.favorites_selected = true;
+        cx.notify();
+    }
+
+    pub(crate) fn set_rail_hover(&mut self, target: RailHoverTarget, hovered: bool, cx: &mut Context<Self>) {
+        let next = if hovered {
+            Some(target)
+        } else if self.hovered_rail_item == Some(target) {
+            None
+        } else {
+            self.hovered_rail_item
+        };
+        if self.hovered_rail_item != next {
+            self.hovered_rail_item = next;
+            cx.notify();
         }
     }
 

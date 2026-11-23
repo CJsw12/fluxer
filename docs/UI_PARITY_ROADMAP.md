@@ -93,6 +93,54 @@
   - **작업:** 공식 네이티브 창(`fluxer_desktop_rs` 또는 격리 `fluxer_desktop`)과 GPUI `fluxer_client.exe`를 동일 해상도(`1280×800`, 최대화)로 맞춰 영역별 픽셀/바운딩박스 diff를 실행하고, 기준 초과 영역을 모두 수정한 뒤 `docs/progress/progress.json`의 실기 검증 항목을 `done`으로 승격한다.
   - **실기 검증 결과:** 전용 테스트 서버에서 포터블 공식 앱과 최신 릴리스 `dist/fluxer_client/fluxer_client.exe`를 동일 `#markdown` 채널·동일 해상도(`1280×800`, `2560×1392` 최대화)로 직접 대조했고(`main_content` 6.67%·`composer` 6.01%·`right_panel` 3.03% diff @ 최대화), 대조 과정에서 발견한 결함(첨부 이미지 수직 오버플로우, `button_primary` 브랜드 인디고, 화면 공유 표시명, 타이틀바 좌측 점, 카테고리 화살표 우측 정렬, 사용자 패널 음소거/데픈 버튼, 라이트 테마 스포일러 색상)을 모두 수정·재검증했다. 실서버에서 확인된 4건(`설정 화면`·`글꼴·밀도·확대`·`미디어 뷰어`·`첨부 업로드`)을 `docs/progress/progress.json` `done`으로 승격해 전체 **89%**·일상 사용 **91%**(실기 55·구현 37·부분 0·미착수 1)로 동기화했다.
 
+### M4. 공식 원본(`fluxer_app/src`) 기반 전수 자동 감사 & 음성·하단 패널·설정창 1:1 수렴 (WebView 미사용)
+> **목적:** 사람이 눈으로 일일이 차이를 찾지 않아도 저장소 내 공식 TypeScript/React 원본(`fluxer_app/src`)의 `data-flx` 컴포넌트 트리, XState/Selector 상태 머신, CSS Module 토큰, `SettingsSectionRegistry`를 정적·동적으로 자동 대조해 순수 Rust GPUI(`fluxer_client/`)만으로 1:1 동일 화면·동작을 보장한다.
+
+- [x] **M4.1 공식 `fluxer_app/src` ↔ `fluxer_client/app/src` 자동 패리티 감사 도구(`scripts/audit_ui_parity.py`) 구축**
+  - **대상 파일:** `scripts/audit_ui_parity.py`(신규)
+  - **공식 참조:** `fluxer_app/src/features/voice/state/LocalVoiceStateMachine.ts`, `UserAreaState.ts`, `UserArea.tsx`, `VoiceConnectionStatusInner.tsx`, `LocalParticipantControls.tsx`, `CompactVoiceCallViewInner.tsx`, `VoiceControlBar.tsx`, `DesktopSettingsView.tsx`, `SettingsConstants.tsx`, `SettingsSectionRegistry.ts`
+  - **작업:** 공식 `.tsx`/`.ts`/`.module.css` 원본에서 ① 음성 상태 머신 불변 조건(데픈↔뮤트 연동, `shouldUnmuteOnUndeafen`, 권한/서버 뮤트 잠금), ② 좌측 하단 `UserArea` + `VoiceConnectionStatus` 컴포넌트 트리·아이콘·액션, ③ 음성 참가 화면(`CompactVoiceCallView` 상하 분할, 오디오 전용 원형 아바타 리스트, 드롭다운 분할 `VoiceControlBar`), ④ 사용자 설정 모달(`UserSettingsModal`) 탭·좌측 하위 섹션 트리(`SidebarSections`)·내부 섹션 카드를 추출해 Rust GPUI 소스와 1:1 자동 대조하고 JSON/콘솔 리포트를 출력한다.
+  - **수락 기준:** `python -I scripts/audit_ui_parity.py`가 모든 영역의 계약·셀렉터·상태 전이 일치 여부를 검사하고 누락 0건일 때 종료 코드 `0`을 반환함(52/52 통과 확인).
+
+- [x] **M4.2 공식 `LocalVoiceStateMachine` & `UserAreaState` 1:1 상태 머신 이식 (스피커 단독 뮤트 방지 및 자동 복원)**
+  - **대상 파일:** `fluxer_client/app/src/backend/voice.rs`, `fluxer_client/app/src/client_view.rs`, `fluxer_client/app/src/tests_voice.rs`
+  - **공식 참조:** `fluxer_app/src/features/voice/state/LocalVoiceStateMachine.ts#L307-L402`, `fluxer_app/src/features/app/components/layout/UserAreaState.ts`
+  - **작업:**
+    1. `VoiceManager` 및 `VoiceSnapshot`에 `should_unmute_on_undeafen: bool`과 `effective_muted()` / `effective_deafened()` / `mute_toggle_locked()` 셀렉터를 추가한다.
+    2. `toggle_self_deaf`: 스피커 뮤트(Deafen) 활성화 시 직전 마이크 뮤트 여부(`was_muted_before`)를 확인해 **`self_deaf = true, self_mute = true`로 마이크까지 강제 뮤트**하고 `should_unmute_on_undeafen = !was_muted_before`를 기록한다. 스피커 뮤트 해제 시 `should_unmute_on_undeafen && !mute_toggle_locked()`이면 마이크 뮤트도 함께 해제한다.
+    3. `toggle_self_mute`: 스피커가 뮤트된 상태(`self_deaf == true`)에서 마이크 버튼을 눌러 언뮤트하면 **`self_mute = false, self_deaf = false`로 스피커 뮤트까지 동시에 해제**한다. 서버 뮤트/데픈 또는 발언 권한 없음(`speak_denied`) 상태에서는 로컬 마이크 언뮤트 토글을 잠근다.
+  - **수락 기준:** 데픈↔뮤트 진리표 6가지 전이 시나리오 단위·GPUI 테스트 통과, 어떠한 경로로도 `(self_mute: false, self_deaf: true)` 상태가 발생하지 않음.
+
+- [x] **M4.3 좌측 하단 통합 `UserArea` + `VoiceConnectionStatus` + `LocalParticipantControls` 1:1 레이아웃**
+  - **대상 파일:** `fluxer_client/app/src/ui/user_panel.rs`, `fluxer_client/app/src/ui/voice_panel.rs`, `fluxer_client/app/src/ui/channel_list.rs`, `fluxer_client/app/src/tests_voice.rs`
+  - **공식 참조:** `fluxer_app/src/features/app/components/layout/UserArea.tsx`, `UserArea.module.css`, `VoiceConnectionStatusInner.tsx`, `VoiceConnectionStatus.module.css`, `LocalParticipantControls.tsx`
+  - **작업:**
+    1. 별도 상자로 분리되어 있던 `voice_panel`과 `user_panel`을 공식 `.userAreaInnerWrapper` 단일 카드(`rounded(8px)`, `border_1`, 내부 `.voiceConnectionWrapper` `1px` 하단 구분선)로 통합한다.
+    2. `voice_panel` 1행(`.statusRow`): 좌측 `[신호 강도 아이콘(SignalStrengthIcon) + 상태 버튼("In Voice" / "Connecting..." / "Connection failed")]`, 우측 `[오디오 처리 아이콘 버튼 + 연결 끊기 아이콘 버튼(PhoneDisconnect 32×32)]` (기존 24px 내 아바타 및 텍스트 `"Disconnect"` 버튼 제거).
+    3. `voice_panel` 2행(`.connectionInfo`): 클릭 시 음성 스테이지로 이동하는 **`{채널명} / {서버명}`** 링크(`.channelSourceRow`) + 통화 참가자 아바타 스택(`.channelAvatarStack`, 최대 4명).
+    4. `voice_panel` 3행(`.mediaSection` / `LocalParticipantControls`): 2열 균등 그리드(`repeat(2, 1fr)`) 아이콘 버튼 `[카메라 토글]` + `[화면 공유 토글]` (하단 `user_panel`과 중복되던 텍스트 `"Mute"` / `"Deafen"` 버튼 제거).
+    5. `user_panel` 우측 컨트롤(`.controlsContainer`): 마이크 뮤트·스피커 데픈 활성 시 공식 `.controlButton.active`(붉은 위험 색상 아이콘 + 12% 위험 배경 틴트) 및 권한 잠금(`.disabled` 50% 투명도) 스타일을 1:1 적용한다.
+  - **수락 기준:** 헤드리스 GPUI 테스트 및 시각 갤러리에서 통합 카드·3행 음성 상태·2열 미디어 버튼·활성 붉은 틴트 렌더링 확인.
+
+- [x] **M4.4 음성 참가 화면(`CompactVoiceCallView` 상하 분할 · 오디오 원형 아바타 리스트 · 드롭다운 분할 `VoiceControlBar`) 1:1 개편**
+  - **대상 파일:** `fluxer_client/app/src/ui/voice_stage.rs`, `fluxer_client/app/src/client_view.rs`, `fluxer_client/app/src/tests_voice.rs`
+  - **공식 참조:** `fluxer_app/src/features/channel/components/channel_view/GuildChannelView.tsx#L449-L566`, `CompactVoiceCallViewInner.tsx`, `VoiceParticipantAvatarList.tsx`, `VoiceControlBar.tsx`, `VoiceControlBar.module.css`
+  - **작업:**
+    1. **상하 분할(`voiceTextSplitView`) 및 전체화면 전환:** 음성 채널 화면에서 상단 다크 통화 스테이지(`CompactVoiceCallView`)와 하단 해당 채널 텍스트 채팅(`Messages` + 입력창)을 동시에 볼 수 있는 분할 모드와 전체 높이 확장 토글(`voice-stage-expand-btn`)을 지원한다.
+    2. **오디오 전용 원형 아바타 뷰 vs 비디오 타일 그리드:** 화면 공유/카메라 시청 트랙이 없을 때는 공식 `VoiceParticipantWrappedAvatarList`(중앙 정렬 원형 아바타 + 발화 링 + 우하단 뮤트/데픈 배지 + 하단 이름 필)로 표시하고, 스트림/비디오가 있을 때는 16:9 타일 그리드 및 포커스 스테이지로 표시한다.
+    3. **공식 드롭다운 분할 `VoiceControlBar`:** 하단 컨트롤 바를 공식 `.buttonContainer` 분할 버튼 그룹 `[마이크 | ▾]`, `[스피커(SpeakerHigh/SpeakerSlash) | ▾]`, `[카메라 | ▾]`, `[화면 공유(Monitor) | ▾]`, `[더보기]`, 수직 구분선(`.buttonSeparator`), `[연결 끊기(PhoneDisconnect)]`, (스트림 시청 중) `[시청 중지(EyeSlash)]` 구조로 개편한다.
+  - **수락 기준:** 분할 뷰 토글·오디오 아바타 뷰/비디오 스테이지 전환·분할 컨트롤 바 전 버튼 GPUI 테스트 통과.
+
+- [x] **M4.5 사용자 설정창(`UserSettingsModal`) 공식 탭 계층 · 좌측 하위 섹션 트리(`SidebarSections`) · 프로필 탭 · 내부 섹션 카드 전수 구현**
+  - **대상 파일:** `fluxer_client/app/src/ui/settings.rs`, `fluxer_client/app/src/tests_settings.rs`, `fluxer_client/app/src/visual_gallery.rs`
+  - **공식 참조:** `fluxer_app/src/features/app/components/dialogs/components/DesktopSettingsView.tsx`, `SettingsConstants.tsx`, `SettingsSectionRegistry.ts`, `section_registry/*.ts`
+  - **작업:**
+    1. 좌측 사이드바 상단 40px 프로필 카드(`Edit your profile`)를 클릭 가능한 `Profile`(`my_profile`) 탭 진입 버튼으로 연결하고 프로필 커스터마이징·상태·배지 섹션을 렌더링한다.
+    2. 공식 카테고리(`Your account` / `App settings`)의 전체 탭(`Account & security`, `Privacy & safety`, `Look & feel`, `Themes`, `Notifications`, `Messages & media`, `Voice & video`, `Accessibility`, `Language & time`, `Keybinds`, `Windows app / Advanced`)과 선택된 탭 아래에 펼쳐지는 **좌측 하위 섹션 트리(`SidebarSections`)**를 구현한다.
+    3. 각 탭 내부에 `SettingsSectionRegistry.ts`에 정의된 모든 공식 섹션 카드(로그인 정보·2FA/패스키·신뢰 도메인·계정 위험 구역, DM/프로필 개인정보·민감 미디어 필터, 테마/폰트/줌/메시지 밀도/스트리머 모드, 알림/멘션/사운드, 인라인 미디어/링크 미리보기/스포일러/입력기, 입출력 장치/볼륨/입력 모드 VAD·PTT/노이즈 억제/마이크 테스트/화면 공유 품질, 동작 줄이기/고대비/포커스 링, 언어/시간·날짜 형식/맞춤법, 단축키 일람, Windows 시작/트레이/업데이트)를 1:1 배치한다.
+    4. 오프라인 시각 갤러리(`visual_gallery.rs`)를 확장해 음성 연결 후 통합 `UserArea`, 상하 분할 음성 스테이지, 확장된 설정 탭 화면을 모두 결정적으로 캡처한다.
+  - **수락 기준:** `scripts/audit_ui_parity.py` 감사 100%(52/52) 통과, 기존 및 신규 설정·음성 GPUI 테스트 전수(총 700건) 통과, 릴리스 패키징 경고 0건.
+
 ---
 
 ## 표준 검증·빌드 명령 (모든 에이전트 공통)

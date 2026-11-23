@@ -233,6 +233,8 @@ pub struct ClientView {
     pub(crate) voice: crate::backend::voice::VoiceSnapshot,
     /// When true and voice is active, the central pane renders `ui::voice_stage`.
     pub(crate) voice_stage_open: bool,
+    /// When true, `ui::voice_stage` fills the central pane; when false, renders top call stage + bottom text chat split view.
+    pub(crate) voice_stage_expanded: bool,
     /// Enumerated OS audio input/output devices for the settings modal.
     pub(crate) audio_devices: crate::audio_devices::AudioDeviceLists,
     /// Track SID currently synced into `watched_video_frame`.
@@ -419,6 +421,7 @@ impl ClientView {
             saved_accounts: Vec::new(),
             voice: crate::backend::voice::VoiceSnapshot::default(),
             voice_stage_open: false,
+            voice_stage_expanded: true,
             audio_devices: crate::audio_devices::AudioDeviceLists::default(),
             watched_video_track_sid: None,
             watched_video_frame_seq: 0,
@@ -1545,6 +1548,18 @@ impl ClientView {
         }
     }
 
+    pub(crate) fn toggle_voice_stage_expanded(&mut self, cx: &mut Context<Self>) {
+        self.voice_stage_expanded = !self.voice_stage_expanded;
+        cx.notify();
+    }
+
+    pub(crate) fn open_voice_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !matches!(self.overlay, Overlay::Settings(_)) {
+            self.open_settings(window, cx);
+        }
+        self.select_settings_tab(ui::settings::SettingsTab::VoiceVideo, cx);
+    }
+
     pub(crate) fn join_voice_channel(&mut self, channel_id: Snowflake, cx: &mut Context<Self>) {
         if self.voice.channel_id == Some(channel_id)
             && matches!(
@@ -1592,13 +1607,13 @@ impl ClientView {
     }
 
     pub(crate) fn toggle_voice_mute(&mut self, cx: &mut Context<Self>) {
-        self.backend.set_voice_mute(!self.voice.self_mute);
+        self.backend.toggle_voice_mute();
         self.voice = self.backend.voice_snapshot();
         cx.notify();
     }
 
     pub(crate) fn toggle_voice_deaf(&mut self, cx: &mut Context<Self>) {
-        self.backend.set_voice_deaf(!self.voice.self_deaf);
+        self.backend.toggle_voice_deaf();
         self.voice = self.backend.voice_snapshot();
         cx.notify();
     }
@@ -1676,6 +1691,19 @@ impl ClientView {
             .map(ToOwned::to_owned)
             .unwrap_or_else(|| channel_id.to_string())
             .into()
+    }
+
+    pub(crate) fn voice_guild_name(
+        &self,
+        guild_id: Option<Snowflake>,
+        channel_id: Snowflake,
+    ) -> Option<SharedString> {
+        let state = self.backend.state();
+        let resolved_gid = guild_id.or_else(|| state.channels.get(&channel_id).and_then(|c| c.guild_id))?;
+        state
+            .guilds
+            .get(&resolved_gid)
+            .map(|g| SharedString::from(g.name.clone()))
     }
 
     pub(crate) fn voice_member_name(&self, guild_id: Option<Snowflake>, user_id: Snowflake) -> SharedString {
@@ -2497,15 +2525,30 @@ impl Render for ClientView {
             .child(ui::guild_rail::render(self, &theme, cx))
             .child(ui::channel_list::render(self, &theme, cx))
             .child(if show_voice_stage {
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_w_0()
-                    .h_full()
-                    .child(ui::voice_stage::render(self, &theme, cx))
-                    // Keep composer mounted in a 0px hidden slot so shortcut contexts stay live.
-                    .child(div().h(px(0.)).overflow_hidden().child(composer))
+                let split_chat = !self.voice_stage_expanded && self.selected_channel.is_some();
+                if split_chat {
+                    div()
+                        .debug_selector(|| "voice-stage-split-chat".to_owned())
+                        .flex()
+                        .flex_col()
+                        .flex_1()
+                        .min_w_0()
+                        .h_full()
+                        .on_drop(cx.listener(|v, paths: &ExternalPaths, _, cx| v.add_paths(paths.paths(), cx)))
+                        .child(ui::voice_stage::render(self, &theme, cx))
+                        .child(ui::message_list::render(self, handle, &theme))
+                        .child(composer)
+                } else {
+                    div()
+                        .flex()
+                        .flex_col()
+                        .flex_1()
+                        .min_w_0()
+                        .h_full()
+                        .child(ui::voice_stage::render(self, &theme, cx))
+                        // Keep composer mounted in a 0px hidden slot so shortcut contexts stay live.
+                        .child(div().h(px(0.)).overflow_hidden().child(composer))
+                }
             } else if show_friends {
                 div()
                     .flex()

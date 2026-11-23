@@ -388,7 +388,7 @@ fn a11y_labels_and_roles_render_without_panic(cx: &mut TestAppContext) {
     assert!(vcx.debug_bounds("home-friends").is_some());
     assert!(vcx.debug_bounds("create-group-dm-btn").is_some());
 
-    // Render Guild place with active voice connection: voice panel, text/voice channels, header buttons.
+    // Render Guild place with active voice connection: unified user area, voice panel, text/voice channels, header buttons.
     let _room = connect_voice_in_view(&rt, &backend, &view, vcx);
     view.update(vcx, |v, cx| {
         v.select_place(Place::Guild(GUILD), cx);
@@ -396,10 +396,16 @@ fn a11y_labels_and_roles_render_without_panic(cx: &mut TestAppContext) {
     });
     draw(vcx);
     assert!(vcx.debug_bounds("create-channel-btn").is_some());
+    assert!(vcx.debug_bounds("user-area-wrapper").is_some());
     assert!(vcx.debug_bounds("voice-panel").is_some());
+    assert!(vcx.debug_bounds("voice-signal-icon").is_some());
+    assert!(vcx.debug_bounds("voice-noise-suppression-btn").is_some());
     assert!(vcx.debug_bounds("voice-disconnect-btn").is_some());
-    assert!(vcx.debug_bounds("voice-mute-btn").is_some());
-    assert!(vcx.debug_bounds("voice-deaf-btn").is_some());
+    assert!(vcx.debug_bounds("voice-channel-source-link").is_some());
+    assert!(vcx.debug_bounds("voice-camera-btn").is_some());
+    assert!(vcx.debug_bounds("voice-share-btn").is_some());
+    assert!(vcx.debug_bounds("user-panel-mute").is_some());
+    assert!(vcx.debug_bounds("user-panel-deafen").is_some());
     assert!(vcx.debug_bounds("edit-selected-channel-btn").is_some());
     assert!(vcx.debug_bounds("toggle-search").is_some());
     assert!(vcx.debug_bounds("toggle-member-list").is_some());
@@ -602,11 +608,18 @@ fn voice_stage_lifecycle_tiles_screen_share_controls_and_back_to_chat(cx: &mut T
     draw(vcx);
     assert!(vcx.debug_bounds("voice-stage").is_none());
 
-    // Joining voice channel connects and transitions center pane to VoiceCallView stage.
+    // Joining voice channel connects and transitions center pane to VoiceCallView stage (audio-only wrapped avatar list initially).
     let room = connect_voice_in_view(&rt, &backend, &view, vcx);
     assert!(vcx.debug_bounds("voice-stage").is_some(), "voice stage rendered on connect");
     assert!(vcx.debug_bounds("voice-stage-grid").is_some());
+    assert!(vcx.debug_bounds("voice-stage-avatar-list").is_some(), "audio-only call renders circular avatar list");
     assert!(vcx.debug_bounds("voice-stage-controls").is_some());
+    assert!(vcx.debug_bounds("voice-stage-input-settings-btn").is_some());
+    assert!(vcx.debug_bounds("voice-stage-output-settings-btn").is_some());
+    assert!(vcx.debug_bounds("voice-stage-camera-btn").is_some());
+    assert!(vcx.debug_bounds("voice-stage-share-settings-btn").is_some());
+    assert!(vcx.debug_bounds("voice-stage-more-btn").is_some());
+    assert!(vcx.debug_bounds("voice-stage-control-separator").is_some());
     assert!(vcx.debug_bounds("voice-stage-tile-100").is_some(), "self participant tile rendered");
 
     // Remote muted peer joins and publishes a screen share track.
@@ -644,7 +657,7 @@ fn voice_stage_lifecycle_tiles_screen_share_controls_and_back_to_chat(cx: &mut T
     draw(vcx);
     assert!(vcx.debug_bounds("video-viewer").is_some(), "video viewer expanded inside stage");
 
-    // Bottom circular controls toggle mute, deafen, and screen share.
+    // Bottom grouped controls toggle mute, deafen, and screen share with official LocalVoiceStateMachine coupling.
     let mute_pos = vcx.debug_bounds("voice-stage-mute-btn").unwrap().center();
     vcx.simulate_click(mute_pos, gpui_kit::Modifiers::default());
     vcx.run_until_parked();
@@ -658,8 +671,21 @@ fn voice_stage_lifecycle_tiles_screen_share_controls_and_back_to_chat(cx: &mut T
     view.read_with(vcx, |v, _| {
         assert!(v.voice.self_mute);
         assert!(v.voice.self_deaf);
+        assert!(!v.voice.should_unmute_on_undeafen, "was muted before deafen, so undeafen keeps mute");
         assert!(v.voice.self_stream);
     });
+
+    // Toggle split view (Top Call Surface + Bottom Text Chat) and back to full-height call view.
+    let expand_pos = vcx.debug_bounds("voice-stage-expand-btn").unwrap().center();
+    vcx.simulate_click(expand_pos, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("voice-stage-split-chat").is_some(), "split view renders call stage above text chat");
+    let expand_pos2 = vcx.debug_bounds("voice-stage-expand-btn").unwrap().center();
+    vcx.simulate_click(expand_pos2, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("voice-stage-split-chat").is_none(), "re-expanding returns to full-height stage");
 
     // Back to Chat hides the stage while keeping voice connected; clicking active voice channel reopens stage without extra opcode 4.
     let sent_before_reopen = lock(&backend.sent_voice_states).len();
@@ -684,5 +710,61 @@ fn voice_stage_lifecycle_tiles_screen_share_controls_and_back_to_chat(cx: &mut T
     view.read_with(vcx, |v, _| {
         assert_eq!(v.voice.state, VoiceConnectionState::Disconnected);
         assert_eq!(v.voice.channel_id, None);
+    });
+}
+
+#[gpui_kit::test]
+fn local_voice_state_machine_prevents_speaker_only_deafen_and_restores_mute(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, rx) = Backend::new(rt.handle().clone(), offline_rest(), None);
+    backend.state().apply(&voice_ready());
+    let (view, vcx) = open_client(cx, backend.clone(), rx);
+    let _room = connect_voice_in_view(&rt, &backend, &view, vcx);
+
+    // 1. Starting unmuted: toggling deafen ON forces self_mute=true, self_deaf=true, should_unmute_on_undeafen=true.
+    view.update(vcx, |v, cx| v.toggle_voice_deaf(cx));
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert!(v.voice.self_deaf);
+        assert!(v.voice.self_mute, "deafening must also mute microphone");
+        assert!(v.voice.should_unmute_on_undeafen);
+        assert!(v.voice.effective_muted());
+        assert!(v.voice.effective_deafened());
+    });
+
+    // 2. Toggling deafen OFF restores self_mute=false because user was unmuted before deafening.
+    view.update(vcx, |v, cx| v.toggle_voice_deaf(cx));
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert!(!v.voice.self_deaf);
+        assert!(!v.voice.self_mute, "undeafening restores prior unmuted state");
+        assert!(!v.voice.should_unmute_on_undeafen);
+    });
+
+    // 3. Starting manually muted: toggling deafen ON -> OFF keeps self_mute=true.
+    view.update(vcx, |v, cx| v.toggle_voice_mute(cx));
+    view.update(vcx, |v, cx| v.toggle_voice_deaf(cx));
+    view.read_with(vcx, |v, _| {
+        assert!(v.voice.self_deaf);
+        assert!(v.voice.self_mute);
+        assert!(!v.voice.should_unmute_on_undeafen);
+    });
+    view.update(vcx, |v, cx| v.toggle_voice_deaf(cx));
+    view.read_with(vcx, |v, _| {
+        assert!(!v.voice.self_deaf);
+        assert!(v.voice.self_mute, "undeafening preserves prior manual mute");
+    });
+
+    // 4. While deafened, clicking the mic mute button to unmute automatically undeafens too.
+    view.update(vcx, |v, cx| v.toggle_voice_deaf(cx));
+    view.read_with(vcx, |v, _| {
+        assert!(v.voice.self_deaf && v.voice.self_mute);
+    });
+    view.update(vcx, |v, cx| v.toggle_voice_mute(cx));
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert!(!v.voice.self_mute, "unmuting while deafened unmutes mic");
+        assert!(!v.voice.self_deaf, "unmuting while deafened also clears deafen");
+        assert!(!v.voice.should_unmute_on_undeafen);
     });
 }

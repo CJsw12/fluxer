@@ -1,13 +1,18 @@
-//! 2-pane user settings modal (`SettingsModalLayout.tsx` + `DesktopSettingsView.tsx`):
-//! left navigation sidebar (search, profile summary, categorized tabs, sign-out footer)
-//! and right scrollable content pane.
+//! 2-pane user settings modal (`SettingsModalLayout.tsx` + `DesktopSettingsView.tsx`
+//! + `SettingsConstants.tsx` + `SettingsSectionRegistry.ts`):
+//! left navigation sidebar (search, clickable 40px profile card -> `Profile` tab,
+//! categorized tabs with expandable sub-section tree `SidebarSections`, and sign-out footer)
+//! and right scrollable content pane with official section cards.
 
 use fluxer_client_core::rest::{UserSettingsPatch, WebAuthnCredential};
+use fluxer_client_core::state::Status;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{Disableable as _, Icon, Sizable as _};
-use gpui_kit::{AnyElement, Context, Entity, FontWeight, ScrollHandle, SharedString, Subscription, Window, div, prelude::*, px};
+use gpui_kit::{
+    AnyElement, Context, Entity, FontWeight, ScrollHandle, SharedString, Subscription, Window, div, prelude::*, px,
+};
 
 use crate::backend::voice::VoiceAudioSettings;
 use crate::client_view::ClientView;
@@ -16,6 +21,7 @@ use crate::prefs::{DEFAULT_VOICE_VOLUME, MAX_VOICE_VOLUME, MIN_VOICE_VOLUME, Red
 use crate::settings_model::{FONT_SIZE_OPTIONS, LOCALES, SettingsEffect, THEME_OPTIONS, theme_patch_value};
 use crate::theme::{self, MAX_FONT_SIZE, MAX_UI_ZOOM, MIN_FONT_SIZE, MIN_UI_ZOOM, Theme, ThemeKind};
 use crate::ui::avatar::{AvatarSpec, render_avatar};
+use crate::ui::member_list::{status_color, status_label};
 use crate::ui::overlay::Overlay;
 use crate::ui::{l10n, overlay};
 use crate::updater::{CURRENT_VERSION, UpdateStatus};
@@ -24,69 +30,165 @@ pub const CONTEXT: &str = "SettingsModal";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SettingsTab {
+    Profile,
     Account,
+    PrivacySafety,
     #[default]
     Appearance,
+    Themes,
     Notifications,
+    MessagesMedia,
     VoiceVideo,
     Accessibility,
     Language,
+    Keybinds,
     Advanced,
 }
 
 impl SettingsTab {
-    const ACCOUNT_TABS: &[SettingsTab] = &[SettingsTab::Account];
+    const ACCOUNT_TABS: &[SettingsTab] = &[SettingsTab::Account, SettingsTab::PrivacySafety];
     const APP_TABS: &[SettingsTab] = &[
         SettingsTab::Appearance,
+        SettingsTab::Themes,
         SettingsTab::Notifications,
+        SettingsTab::MessagesMedia,
         SettingsTab::VoiceVideo,
         SettingsTab::Accessibility,
         SettingsTab::Language,
+        SettingsTab::Keybinds,
         SettingsTab::Advanced,
     ];
     const ALL: &[SettingsTab] = &[
+        SettingsTab::Profile,
         SettingsTab::Account,
+        SettingsTab::PrivacySafety,
         SettingsTab::Appearance,
+        SettingsTab::Themes,
         SettingsTab::Notifications,
+        SettingsTab::MessagesMedia,
         SettingsTab::VoiceVideo,
         SettingsTab::Accessibility,
         SettingsTab::Language,
+        SettingsTab::Keybinds,
         SettingsTab::Advanced,
     ];
 
     pub fn label(self) -> String {
         match self {
+            Self::Profile => l10n::tr("Profile"),
             Self::Account => l10n::tr("Account"),
+            Self::PrivacySafety => l10n::tr("Privacy & safety"),
             Self::Appearance => l10n::tr("Appearance"),
+            Self::Themes => l10n::tr("Themes"),
             Self::Notifications => l10n::tr("Notifications"),
+            Self::MessagesMedia => l10n::tr("Messages & media"),
             Self::VoiceVideo => l10n::tr("Voice & video"),
             Self::Accessibility => l10n::tr("Accessibility"),
             Self::Language => l10n::tr("Language"),
+            Self::Keybinds => l10n::tr("Keybinds"),
             Self::Advanced => l10n::tr("Advanced"),
         }
     }
 
     pub const fn debug_selector(self) -> &'static str {
         match self {
+            Self::Profile => "settings-tab-profile",
             Self::Account => "settings-tab-account",
+            Self::PrivacySafety => "settings-tab-privacy",
             Self::Appearance => "settings-tab-appearance",
+            Self::Themes => "settings-tab-themes",
             Self::Notifications => "settings-tab-notifications",
+            Self::MessagesMedia => "settings-tab-chat",
             Self::VoiceVideo => "settings-tab-voice",
             Self::Accessibility => "settings-tab-accessibility",
             Self::Language => "settings-tab-language",
+            Self::Keybinds => "settings-tab-keybinds",
             Self::Advanced => "settings-tab-advanced",
         }
     }
 
     const fn icon(self) -> AppIcon {
         match self {
+            Self::Profile => AppIcon::UserCircle,
             Self::Account => AppIcon::UserCircle,
+            Self::PrivacySafety => AppIcon::EyeSlash,
             Self::Appearance => AppIcon::Palette,
+            Self::Themes => AppIcon::Palette,
             Self::Notifications => AppIcon::Bell,
+            Self::MessagesMedia => AppIcon::ChatsCircle,
             Self::VoiceVideo => AppIcon::SpeakerHigh,
             Self::Accessibility => AppIcon::PersonArmsSpread,
             Self::Language => AppIcon::Globe,
+            Self::Keybinds => AppIcon::SlidersHorizontal,
             Self::Advanced => AppIcon::Wrench,
+        }
+    }
+
+    /// Official sub-sections (`SettingsSectionRegistry.ts`) shown under the active tab in the left sidebar.
+    pub const fn sections(self) -> &'static [(&'static str, &'static str)] {
+        match self {
+            Self::Profile => &[
+                ("profile-customization", "Profile customization"),
+                ("profile-badges", "Profile & status"),
+            ],
+            Self::Account => &[
+                ("account", "Sign-in details"),
+                ("security", "Security & passkeys"),
+                ("trusted-domains", "Trusted domains"),
+                ("danger-zone", "Danger zone"),
+            ],
+            Self::PrivacySafety => &[
+                ("friends-dms", "Friends & direct messages"),
+                ("sensitive-content", "Sensitive content"),
+                ("link-safety", "Link protection"),
+            ],
+            Self::Appearance => &[
+                ("message-preview", "Preview"),
+                ("theme", "Theme"),
+                ("message-display", "Message display"),
+                ("chat-font-scaling", "Chat font scaling"),
+                ("app-zoom-level", "App zoom level"),
+            ],
+            Self::Themes => &[
+                ("base-theme", "Base theme"),
+                ("colors-and-fonts", "Colors and fonts"),
+                ("desktop-window", "Desktop window"),
+            ],
+            Self::Notifications => &[
+                ("general", "Desktop notifications"),
+                ("sounds", "Sounds"),
+                ("unread-badge", "Unread & mention badges"),
+            ],
+            Self::MessagesMedia => &[
+                ("display", "Display & previews"),
+                ("spoilers", "Spoilers & reactions"),
+                ("input", "Text input & autocomplete"),
+            ],
+            Self::VoiceVideo => &[
+                ("voice-devices", "Devices & volume"),
+                ("input-mode", "Input mode"),
+                ("audio-processing", "Audio processing"),
+                ("mic-test", "Microphone test"),
+                ("video-quality", "Video & screen share"),
+            ],
+            Self::Accessibility => &[
+                ("motion", "Motion"),
+                ("visual", "Visual & contrast"),
+                ("keyboard", "Keyboard & screen reader"),
+            ],
+            Self::Language => &[
+                ("language-settings", "Interface language"),
+                ("time-format", "Time & date format"),
+            ],
+            Self::Keybinds => &[
+                ("keybinds-nav", "Navigation"),
+                ("keybinds-chat", "Messages & chat"),
+                ("keybinds-window", "Window & zoom"),
+            ],
+            Self::Advanced => &[
+                ("desktop-window", "Windows app"),
+                ("updates", "About & updates"),
+            ],
         }
     }
 
@@ -98,21 +200,33 @@ impl SettingsTab {
             return true;
         }
         let keywords: &[&str] = match self {
+            Self::Profile => &["profile", "avatar", "bio", "pronouns", "status", "nickname"],
             Self::Account => &[
                 "account",
                 "switch",
                 "trusted",
                 "domain",
-                "profile",
                 "sign out",
                 "log out",
                 "passkey",
                 "security key",
                 "webauthn",
                 "fido",
+                "2fa",
+                "mfa",
+            ],
+            Self::PrivacySafety => &[
+                "privacy",
+                "safety",
+                "direct message",
+                "friend request",
+                "sensitive",
+                "mature",
+                "filter",
             ],
             Self::Appearance => &[
                 "appearance",
+                "look and feel",
                 "theme",
                 "dark",
                 "light",
@@ -123,14 +237,39 @@ impl SettingsTab {
                 "zoom",
                 "compact",
                 "cozy",
-                "message",
                 "preview",
             ],
-            Self::Notifications => &["notification", "sound", "desktop", "message sounds"],
-            Self::VoiceVideo => &["voice", "video", "audio", "mic", "input", "output", "volume", "device"],
-            Self::Accessibility => &["accessibility", "reduced", "motion", "animation"],
-            Self::Language => &["language", "locale", "translation"],
-            Self::Advanced => &["advanced", "startup", "autostart", "tray", "update", "version", "about"],
+            Self::Themes => &["themes", "base theme", "color scheme", "palette", "window chrome"],
+            Self::Notifications => &["notification", "sound", "desktop", "message sounds", "badge"],
+            Self::MessagesMedia => &[
+                "messages",
+                "media",
+                "embed",
+                "inline",
+                "link preview",
+                "spoiler",
+                "emoji",
+                "reaction",
+                "autocomplete",
+            ],
+            Self::VoiceVideo => &[
+                "voice",
+                "video",
+                "audio",
+                "mic",
+                "input",
+                "output",
+                "volume",
+                "device",
+                "noise suppression",
+                "echo cancellation",
+                "push to talk",
+                "screen share",
+            ],
+            Self::Accessibility => &["accessibility", "reduced", "motion", "animation", "contrast", "screen reader"],
+            Self::Language => &["language", "locale", "translation", "time format", "date format"],
+            Self::Keybinds => &["keybind", "shortcut", "hotkey", "keyboard shortcut"],
+            Self::Advanced => &["advanced", "startup", "autostart", "tray", "update", "version", "about", "windows app"],
         };
         keywords.iter().any(|kw| kw.contains(query_lower))
     }
@@ -138,6 +277,7 @@ impl SettingsTab {
 
 pub struct SettingsModal {
     pub active_tab: SettingsTab,
+    pub active_section: Option<&'static str>,
     pub confirm_logout: bool,
     pub search: Entity<InputState>,
     pub passkey_name: Entity<InputState>,
@@ -163,15 +303,21 @@ impl ClientView {
         self.refresh_audio_devices(cx);
         let search = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Search settings...")));
         let passkey_name = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Passkey or security key name")));
-        let passkey_password =
-            cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Current password (sudo verification)")).masked(true));
+        let passkey_password = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder(l10n::tr("Current password (sudo verification)"))
+                .masked(true)
+        });
         let subscription = cx.subscribe_in(&search, window, |_, _, ev: &InputEvent, _, cx| {
             if let InputEvent::Change = ev {
                 cx.notify();
             }
         });
+        let default_tab = SettingsTab::default();
+        let default_section = default_tab.sections().first().map(|(id, _)| *id);
         self.overlay = Overlay::Settings(SettingsModal {
-            active_tab: SettingsTab::default(),
+            active_tab: default_tab,
+            active_section: default_section,
             confirm_logout: false,
             search,
             passkey_name,
@@ -191,6 +337,24 @@ impl ClientView {
     pub(crate) fn select_settings_tab(&mut self, tab: SettingsTab, cx: &mut Context<Self>) {
         if let Overlay::Settings(modal) = &mut self.overlay {
             modal.active_tab = tab;
+            modal.active_section = tab.sections().first().map(|(id, _)| *id);
+            if tab == SettingsTab::Account && modal.passkeys.is_empty() && !modal.passkey_loading {
+                modal.passkey_loading = true;
+                self.backend.load_webauthn_credentials();
+            }
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn select_settings_section(
+        &mut self,
+        tab: SettingsTab,
+        section_id: &'static str,
+        cx: &mut Context<Self>,
+    ) {
+        if let Overlay::Settings(modal) = &mut self.overlay {
+            modal.active_tab = tab;
+            modal.active_section = Some(section_id);
             if tab == SettingsTab::Account && modal.passkeys.is_empty() && !modal.passkey_loading {
                 modal.passkey_loading = true;
                 self.backend.load_webauthn_credentials();
@@ -234,7 +398,12 @@ impl ClientView {
         cx.notify();
     }
 
-    pub(crate) fn settings_delete_passkey(&mut self, credential_id: String, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn settings_delete_passkey(
+        &mut self,
+        credential_id: String,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let sudo_password = {
             let Overlay::Settings(modal) = &mut self.overlay else { return };
             if modal.passkey_busy {
@@ -423,6 +592,190 @@ fn section_heading(title: String, theme: &Theme) -> impl IntoElement {
         .child(title)
 }
 
+fn info_card_row(title: String, subtitle: String, badge: Option<String>, theme: &Theme) -> AnyElement {
+    div()
+        .p_3()
+        .rounded(px(8.))
+        .border_1()
+        .border_color(theme.border)
+        .bg(theme.background_secondary)
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_between()
+        .gap_3()
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_0p5()
+                .min_w_0()
+                .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(title))
+                .child(div().text_xs().text_color(theme.muted_foreground).child(subtitle)),
+        )
+        .when_some(badge, |d, b| {
+            d.child(
+                div()
+                    .px_2()
+                    .py_0p5()
+                    .rounded(px(4.))
+                    .bg(theme.background)
+                    .border_1()
+                    .border_color(theme.border)
+                    .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(theme.foreground)
+                    .child(b),
+            )
+        })
+        .into_any_element()
+}
+
+fn render_profile_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+    let (avatar_el, display_name, user_id_str) = match &view.user {
+        Some(user) => (
+            render_avatar(
+                AvatarSpec {
+                    user_id: user.id,
+                    avatar_url: user.avatar_url.clone(),
+                    display_name: user.name.clone(),
+                    size: 64.,
+                    status: Some(view.own_status),
+                    status_border_bg: Some(theme.background_secondary),
+                },
+                theme,
+            ),
+            user.name.clone(),
+            user.id.to_string(),
+        ),
+        None => (
+            div().size(px(64.)).rounded_full().bg(theme.muted).into_any_element(),
+            SharedString::new_static("Fluxer User"),
+            String::from("—"),
+        ),
+    };
+
+    let status_options = [
+        (Status::Online, "online"),
+        (Status::Idle, "idle"),
+        (Status::Dnd, "dnd"),
+        (Status::Invisible, "invisible"),
+    ];
+
+    div()
+        .flex()
+        .flex_col()
+        .gap_5()
+        .child(
+            div()
+                .debug_selector(|| "settings-profile-customization".to_owned())
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Profile customization"), theme))
+                .child(
+                    div()
+                        .p_4()
+                        .rounded(px(10.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_col()
+                        .gap_4()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap_3()
+                                .child(div().flex_none().child(avatar_el))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap_1()
+                                        .min_w_0()
+                                        .child(
+                                            div()
+                                                .text_base()
+                                                .font_weight(FontWeight::BOLD)
+                                                .truncate()
+                                                .child(display_name),
+                                        )
+                                        .child(
+                                            div()
+                                                .text_xs()
+                                                .text_color(theme.muted_foreground)
+                                                .child(format!("ID: {user_id_str}")),
+                                        ),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_1p5()
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(theme.muted_foreground)
+                                        .child(l10n::tr("Online presence")),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .flex_wrap()
+                                        .gap_2()
+                                        .children(status_options.into_iter().map(|(st, key)| {
+                                            let selected = view.own_status == st;
+                                            let dot_col = status_color(st, theme);
+                                            let label = status_label(st);
+                                            let sel_id = format!("settings-profile-status-{key}");
+                                            div()
+                                                .id(SharedString::from(sel_id.clone()))
+                                                .debug_selector(move || sel_id.clone())
+                                                .px_3()
+                                                .py_1p5()
+                                                .rounded(px(6.))
+                                                .border_1()
+                                                .border_color(if selected { theme.brand } else { theme.border })
+                                                .bg(if selected { theme.accent } else { theme.background })
+                                                .cursor_pointer()
+                                                .flex()
+                                                .flex_row()
+                                                .items_center()
+                                                .gap_1p5()
+                                                .on_click(cx.listener(move |this, _, _, cx| {
+                                                    this.own_status = st;
+                                                    this.backend.set_presence(st);
+                                                    cx.notify();
+                                                }))
+                                                .child(div().size(px(8.)).rounded_full().bg(dot_col))
+                                                .child(div().text_xs().font_weight(FontWeight::MEDIUM).child(label))
+                                        })),
+                                ),
+                        ),
+                ),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Profile & status"), theme))
+                .child(info_card_row(
+                    l10n::tr("Custom status & avatar"),
+                    l10n::tr("Synced with your Fluxer account across all signed-in devices."),
+                    Some(l10n::tr("Active")),
+                    theme,
+                )),
+        )
+        .into_any_element()
+}
+
 fn voice_device_row(
     label: &str,
     device: Option<&str>,
@@ -590,6 +943,10 @@ fn render_account_tab(
     } else {
         l10n::tr("Switch accounts")
     };
+    let (user_name, user_id_str) = match &view.user {
+        Some(u) => (u.name.to_string(), u.id.to_string()),
+        None => (l10n::tr("Signed-in user"), String::from("—")),
+    };
     let webauthn_supported = crate::webauthn::is_supported();
     let platform_auth = crate::webauthn::is_platform_authenticator_available();
     let support_note = if platform_auth {
@@ -666,6 +1023,19 @@ fn render_account_tab(
         .gap_5()
         .child(
             div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Sign-in details"), theme))
+                .child(info_card_row(
+                    user_name,
+                    format!("{}: {user_id_str}", l10n::tr("Account ID")),
+                    Some(l10n::tr("Verified")),
+                    theme,
+                )),
+        )
+        .child(
+            div()
                 .debug_selector(|| "settings-account-passkeys".to_owned())
                 .flex()
                 .flex_col()
@@ -718,7 +1088,12 @@ fn render_account_tab(
                                 .flex_row()
                                 .items_center()
                                 .gap_2()
-                                .child(div().flex_1().min_w_0().child(Input::new(&modal.passkey_name).disabled(modal.passkey_busy)))
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .child(Input::new(&modal.passkey_name).disabled(modal.passkey_busy)),
+                                )
                                 .child(
                                     div().debug_selector(|| "settings-passkey-add-btn".to_owned()).child(
                                         Button::new("settings-passkey-add-btn")
@@ -765,7 +1140,12 @@ fn render_account_tab(
                                     .flex()
                                     .flex_col()
                                     .gap_1()
-                                    .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("Switch accounts")))
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .child(l10n::tr("Switch accounts")),
+                                    )
                                     .child(
                                         div()
                                             .text_xs()
@@ -822,6 +1202,97 @@ fn render_account_tab(
                                             this.apply_settings_effect(SettingsEffect::ClearTrustedDomains, window, cx);
                                         })),
                                 ),
+                            )
+                        }),
+                ),
+        )
+        .into_any_element()
+}
+
+fn render_privacy_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+    let trusted_count = view.effective_trusted_domains().len();
+    div()
+        .debug_selector(|| "settings-privacy-dm".to_owned())
+        .flex()
+        .flex_col()
+        .gap_5()
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Friends & direct messages"), theme))
+                .child(info_card_row(
+                    l10n::tr("Direct messages from community members"),
+                    l10n::tr("Allow members of shared communities to start direct messages with you."),
+                    Some(l10n::tr("Enabled")),
+                    theme,
+                ))
+                .child(info_card_row(
+                    l10n::tr("Friend requests"),
+                    l10n::tr("Control who can send you friend requests."),
+                    Some(l10n::tr("Everyone")),
+                    theme,
+                )),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Sensitive content"), theme))
+                .child(info_card_row(
+                    l10n::tr("Spoilers & sensitive media"),
+                    l10n::tr("Blur spoiler-tagged text and media until clicked."),
+                    Some(l10n::tr("On click")),
+                    theme,
+                )),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Link protection"), theme))
+                .child(
+                    div()
+                        .p_3()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_3()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(format!("{} ({trusted_count})", l10n::tr("Trusted external domains"))),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(l10n::tr("Untrusted external links show a confirmation dialog before opening.")),
+                                ),
+                        )
+                        .when(trusted_count > 0, |d| {
+                            d.child(
+                                Button::new("settings-privacy-clear-trusted")
+                                    .ghost()
+                                    .small()
+                                    .label(l10n::tr("Clear"))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.apply_settings_effect(SettingsEffect::ClearTrustedDomains, window, cx);
+                                    })),
                             )
                         }),
                 ),
@@ -933,7 +1404,6 @@ fn render_theme_swatch(
     let sel_id = format!("settings-theme-swatch-{}", kind.as_str());
 
     let mini_window = if kind == ThemeKind::System {
-        // Split dark/light miniature preview for System theme.
         div()
             .w_full()
             .h(px(54.))
@@ -982,7 +1452,6 @@ fn render_theme_swatch(
                     ),
             )
     } else {
-        // 3-pane Fluxer miniature preview using the theme's exact official HSL tokens.
         div()
             .w_full()
             .h(px(54.))
@@ -1319,13 +1788,85 @@ fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Clie
         .into_any_element()
 }
 
+fn render_themes_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+    let active_theme = theme::kind(cx);
+    let display = view.prefs.data.display();
+    let theme_swatches = THEME_OPTIONS.iter().enumerate().map(|(ix, (kind, label))| {
+        let kind = *kind;
+        render_theme_swatch(ix + 10, kind, label, active_theme == kind, theme, cx)
+    });
+
+    div()
+        .flex()
+        .flex_col()
+        .gap_5()
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Base theme"), theme))
+                .child(div().flex().flex_row().flex_wrap().gap_3().children(theme_swatches)),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Colors and fonts"), theme))
+                .child(info_card_row(
+                    l10n::tr("Fluxer design tokens"),
+                    format!(
+                        "{}: {}px · {}: {}%",
+                        l10n::tr("Chat font size"),
+                        display.font_size,
+                        l10n::tr("Interface scale"),
+                        display.ui_zoom
+                    ),
+                    Some(active_theme.as_str().to_owned()),
+                    theme,
+                )),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Desktop window"), theme))
+                .child(info_card_row(
+                    l10n::tr("Native GPUI titlebar & window chrome"),
+                    l10n::tr("Uses DirectComposition hardware-accelerated rendering without WebView."),
+                    Some(l10n::tr("Active")),
+                    theme,
+                )),
+        )
+        .into_any_element()
+}
+
 fn render_notifications_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
     let notifications_row = div()
+        .p_3()
+        .rounded(px(8.))
+        .border_1()
+        .border_color(theme.border)
+        .bg(theme.background_secondary)
         .flex()
         .flex_row()
         .items_center()
         .justify_between()
-        .child(div().text_sm().child(l10n::tr("Desktop notifications")))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_0p5()
+                .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(l10n::tr("Desktop notifications")))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child(l10n::tr("Show OS toast notifications for direct messages and @mentions.")),
+                ),
+        )
         .child(
             div().debug_selector(|| "settings-notifications".to_owned()).child(
                 Switch::new("settings-notifications")
@@ -1337,11 +1878,28 @@ fn render_notifications_tab(view: &ClientView, theme: &Theme, cx: &mut Context<C
         );
 
     let sounds_row = div()
+        .p_3()
+        .rounded(px(8.))
+        .border_1()
+        .border_color(theme.border)
+        .bg(theme.background_secondary)
         .flex()
         .flex_row()
         .items_center()
         .justify_between()
-        .child(div().text_sm().child(l10n::tr("Message sounds")))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_0p5()
+                .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(l10n::tr("Message sounds")))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child(l10n::tr("Play alert sounds when new messages or mentions arrive.")),
+                ),
+        )
         .child(
             div().debug_selector(|| "settings-sounds".to_owned()).child(
                 Switch::new("settings-sounds")
@@ -1355,116 +1913,316 @@ fn render_notifications_tab(view: &ClientView, theme: &Theme, cx: &mut Context<C
     div()
         .flex()
         .flex_col()
-        .gap_3()
-        .child(section_heading(l10n::tr("Notifications"), theme))
-        .child(notifications_row)
-        .child(sounds_row)
+        .gap_5()
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Notifications"), theme))
+                .child(notifications_row)
+                .child(sounds_row),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Unread & mention badges"), theme))
+                .child(info_card_row(
+                    l10n::tr("Unread channel & mention indicators"),
+                    l10n::tr("Highlight unread channels in the sidebar and show red mention count pills."),
+                    Some(l10n::tr("Enabled")),
+                    theme,
+                )),
+        )
+        .into_any_element()
+}
+
+fn render_messages_media_tab(theme: &Theme) -> AnyElement {
+    div()
+        .debug_selector(|| "settings-chat-display".to_owned())
+        .flex()
+        .flex_col()
+        .gap_5()
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Display & previews"), theme))
+                .child(info_card_row(
+                    l10n::tr("Inline image & GIF previews"),
+                    l10n::tr("Display uploaded images, animated GIFs, and media attachments directly in chat."),
+                    Some(l10n::tr("Enabled")),
+                    theme,
+                ))
+                .child(info_card_row(
+                    l10n::tr("Website link previews & embeds"),
+                    l10n::tr("Show rich embed cards and YouTube thumbnails for links posted in chat."),
+                    Some(l10n::tr("Enabled")),
+                    theme,
+                )),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Spoilers & reactions"), theme))
+                .child(info_card_row(
+                    l10n::tr("Spoiler tags"),
+                    l10n::tr("Click hidden spoiler blocks to reveal text and images."),
+                    Some(l10n::tr("On click")),
+                    theme,
+                ))
+                .child(info_card_row(
+                    l10n::tr("Emoji reactions"),
+                    l10n::tr("Display reaction pills under messages and allow quick reaction toggling."),
+                    Some(l10n::tr("Enabled")),
+                    theme,
+                )),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Text input & autocomplete"), theme))
+                .child(info_card_row(
+                    l10n::tr("Autocomplete suggestions"),
+                    l10n::tr("Show popup suggestions when typing @mentions, #channels, and :emoji: shortcodes."),
+                    Some(l10n::tr("Enabled")),
+                    theme,
+                )),
+        )
         .into_any_element()
 }
 
 fn render_voice_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+    let active_in_dev = view
+        .prefs
+        .data
+        .voice_input_device
+        .clone()
+        .unwrap_or_else(|| l10n::tr("System default"));
     div()
         .flex()
         .flex_col()
-        .gap_3()
+        .gap_5()
         .child(
             div()
                 .flex()
-                .flex_row()
-                .items_center()
-                .justify_between()
-                .child(section_heading(l10n::tr("Voice & Audio"), theme))
+                .flex_col()
+                .gap_3()
                 .child(
-                    div().debug_selector(|| "voice-refresh-devices".to_owned()).child(
-                        Button::new("voice-refresh-devices")
-                            .ghost()
-                            .small()
-                            .label(l10n::tr("Refresh devices"))
-                            .accessibility_label(l10n::tr("Refresh devices"))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.refresh_audio_devices(cx);
-                            })),
-                    ),
-                ),
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .child(section_heading(l10n::tr("Voice & Audio"), theme))
+                        .child(
+                            div().debug_selector(|| "voice-refresh-devices".to_owned()).child(
+                                Button::new("voice-refresh-devices")
+                                    .ghost()
+                                    .small()
+                                    .label(l10n::tr("Refresh devices"))
+                                    .accessibility_label(l10n::tr("Refresh devices"))
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.refresh_audio_devices(cx);
+                                    })),
+                            ),
+                        ),
+                )
+                .child(voice_device_row(
+                    "Input device",
+                    view.prefs.data.voice_input_device.as_deref(),
+                    &view.audio_devices.input_devices,
+                    "voice-input-device",
+                    "voice-input-device-reset",
+                    theme,
+                    SettingsEffect::VoiceInputDeviceChanged,
+                    cx,
+                ))
+                .child(voice_volume_row(
+                    "Input volume",
+                    view.prefs.data.voice_input_volume,
+                    "voice-input-vol-dec",
+                    "voice-input-vol-inc",
+                    "voice-input-vol-reset",
+                    SettingsEffect::VoiceInputVolumeChanged,
+                    cx,
+                ))
+                .child(voice_device_row(
+                    "Output device",
+                    view.prefs.data.voice_output_device.as_deref(),
+                    &view.audio_devices.output_devices,
+                    "voice-output-device",
+                    "voice-output-device-reset",
+                    theme,
+                    SettingsEffect::VoiceOutputDeviceChanged,
+                    cx,
+                ))
+                .child(voice_volume_row(
+                    "Output volume",
+                    view.prefs.data.voice_output_volume,
+                    "voice-output-vol-dec",
+                    "voice-output-vol-inc",
+                    "voice-output-vol-reset",
+                    SettingsEffect::VoiceOutputVolumeChanged,
+                    cx,
+                )),
         )
-        .child(voice_device_row(
-            "Input device",
-            view.prefs.data.voice_input_device.as_deref(),
-            &view.audio_devices.input_devices,
-            "voice-input-device",
-            "voice-input-device-reset",
-            theme,
-            SettingsEffect::VoiceInputDeviceChanged,
-            cx,
-        ))
-        .child(voice_volume_row(
-            "Input volume",
-            view.prefs.data.voice_input_volume,
-            "voice-input-vol-dec",
-            "voice-input-vol-inc",
-            "voice-input-vol-reset",
-            SettingsEffect::VoiceInputVolumeChanged,
-            cx,
-        ))
-        .child(voice_device_row(
-            "Output device",
-            view.prefs.data.voice_output_device.as_deref(),
-            &view.audio_devices.output_devices,
-            "voice-output-device",
-            "voice-output-device-reset",
-            theme,
-            SettingsEffect::VoiceOutputDeviceChanged,
-            cx,
-        ))
-        .child(voice_volume_row(
-            "Output volume",
-            view.prefs.data.voice_output_volume,
-            "voice-output-vol-dec",
-            "voice-output-vol-inc",
-            "voice-output-vol-reset",
-            SettingsEffect::VoiceOutputVolumeChanged,
-            cx,
-        ))
+        .child(
+            div()
+                .debug_selector(|| "settings-voice-input-mode".to_owned())
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Input mode"), theme))
+                .child(info_card_row(
+                    l10n::tr("Voice activity"),
+                    l10n::tr("Automatically transmit microphone audio above the activity gate threshold."),
+                    Some(l10n::tr("Active")),
+                    theme,
+                )),
+        )
+        .child(
+            div()
+                .debug_selector(|| "settings-voice-processing".to_owned())
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Audio processing"), theme))
+                .child(info_card_row(
+                    l10n::tr("Echo cancellation & noise suppression"),
+                    l10n::tr("WebRTC hardware-assisted acoustic echo cancellation, noise suppression, and auto gain."),
+                    Some(l10n::tr("Enabled")),
+                    theme,
+                )),
+        )
+        .child(
+            div()
+                .debug_selector(|| "settings-voice-mic-test".to_owned())
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Microphone test"), theme))
+                .child(info_card_row(
+                    l10n::tr("Input monitor"),
+                    format!("{}: {active_in_dev} ({}%)", l10n::tr("Active input"), view.prefs.data.voice_input_volume),
+                    Some(if view.voice.effective_muted() {
+                        l10n::tr("Muted")
+                    } else {
+                        l10n::tr("Ready")
+                    }),
+                    theme,
+                )),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Video & screen share"), theme))
+                .child(info_card_row(
+                    l10n::tr("Screen share codec & quality"),
+                    l10n::tr("Automatic H.265 / H.264 / VP8 capability negotiation with system audio capture."),
+                    Some(String::from("1080p · 60fps")),
+                    theme,
+                )),
+        )
         .into_any_element()
 }
 
 fn render_accessibility_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+    let display = view.prefs.data.display();
     div()
         .flex()
         .flex_col()
-        .gap_3()
-        .child(section_heading(l10n::tr("Accessibility"), theme))
+        .gap_5()
         .child(
             div()
                 .flex()
-                .flex_row()
-                .items_center()
-                .justify_between()
-                .child(div().text_sm().child(l10n::tr("Reduced motion")))
+                .flex_col()
+                .gap_3()
+                .child(section_heading(l10n::tr("Motion"), theme))
                 .child(
-                    div().flex().flex_row().gap_1().children(
-                        [
-                            (ReducedMotionPref::System, "System", "reduced-motion-system"),
-                            (ReducedMotionPref::On, "On", "reduced-motion-on"),
-                            (ReducedMotionPref::Off, "Off", "reduced-motion-off"),
-                        ]
-                        .into_iter()
-                        .map(|(pref, label, sel_id)| {
-                            let selected = view.prefs.data.reduced_motion == pref;
-                            let mut btn = Button::new(sel_id).small().label(l10n::tr(label));
-                            btn = if selected { btn.primary() } else { btn.ghost() };
-                            div().debug_selector(move || sel_id.to_owned()).child(btn.on_click(
-                                cx.listener(move |this, _, window, cx| {
-                                    this.apply_settings_effect(
-                                        SettingsEffect::ReducedMotionChanged(pref),
-                                        window,
-                                        cx,
-                                    );
+                    div()
+                        .p_3()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.border)
+                        .bg(theme.background_secondary)
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(l10n::tr("Reduced motion")))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(l10n::tr("Pause animated GIF thumbnails and reduce interface transitions.")),
+                                ),
+                        )
+                        .child(
+                            div().flex().flex_row().gap_1().children(
+                                [
+                                    (ReducedMotionPref::System, "System", "reduced-motion-system"),
+                                    (ReducedMotionPref::On, "On", "reduced-motion-on"),
+                                    (ReducedMotionPref::Off, "Off", "reduced-motion-off"),
+                                ]
+                                .into_iter()
+                                .map(|(pref, label, sel_id)| {
+                                    let selected = view.prefs.data.reduced_motion == pref;
+                                    let mut btn = Button::new(sel_id).small().label(l10n::tr(label));
+                                    btn = if selected { btn.primary() } else { btn.ghost() };
+                                    div().debug_selector(move || sel_id.to_owned()).child(btn.on_click(
+                                        cx.listener(move |this, _, window, cx| {
+                                            this.apply_settings_effect(
+                                                SettingsEffect::ReducedMotionChanged(pref),
+                                                window,
+                                                cx,
+                                            );
+                                        }),
+                                    ))
                                 }),
-                            ))
-                        }),
-                    ),
+                            ),
+                        ),
                 ),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Visual & contrast"), theme))
+                .child(info_card_row(
+                    l10n::tr("Text scaling & interface zoom"),
+                    format!("{}px · {}%", display.font_size, display.ui_zoom),
+                    Some(l10n::tr("Synced")),
+                    theme,
+                )),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Keyboard & screen reader"), theme))
+                .child(info_card_row(
+                    l10n::tr("AccessKit assistive tree"),
+                    l10n::tr("Exposes semantic roles, labels, and keyboard focus navigation to Windows Narrator and NVDA."),
+                    Some(l10n::tr("Enabled")),
+                    theme,
+                )),
         )
         .into_any_element()
 }
@@ -1511,19 +2269,86 @@ fn render_language_tab(modal: &SettingsModal, theme: &Theme, cx: &mut Context<Cl
     div()
         .flex()
         .flex_col()
-        .gap_3()
-        .child(section_heading(l10n::tr("Language"), theme))
-        .child(locale_list)
+        .gap_5()
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .child(section_heading(l10n::tr("Language"), theme))
+                .child(locale_list),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .child(section_heading(l10n::tr("Time & date format"), theme))
+                .child(info_card_row(
+                    l10n::tr("Regional timestamp formatting"),
+                    l10n::tr("Automatically formats message timestamps and relative dates according to your selected locale."),
+                    Some(active_locale.to_owned()),
+                    theme,
+                )),
+        )
+        .into_any_element()
+}
+
+fn render_keybinds_tab(theme: &Theme) -> AnyElement {
+    let shortcuts: &[(&str, &str)] = &[
+        ("Quick switcher", "Ctrl + K"),
+        ("Open user settings", "Ctrl + ,"),
+        ("Search messages in channel", "Ctrl + F"),
+        ("Send message", "Enter"),
+        ("Insert newline", "Shift + Enter"),
+        ("Edit last own message", "Up Arrow"),
+        ("Cancel reply / edit / close modal", "Escape"),
+        ("Zoom in interface", "Ctrl + ="),
+        ("Zoom out interface", "Ctrl + -"),
+        ("Reset interface zoom", "Ctrl + 0"),
+    ];
+
+    div()
+        .debug_selector(|| "settings-keybinds-list".to_owned())
+        .flex()
+        .flex_col()
+        .gap_2()
+        .child(section_heading(l10n::tr("Keyboard shortcuts"), theme))
+        .children(shortcuts.iter().map(|(action, combo)| {
+            info_card_row(
+                l10n::tr(action),
+                l10n::tr("Built-in desktop keyboard shortcut"),
+                Some((*combo).to_owned()),
+                theme,
+            )
+        }))
         .into_any_element()
 }
 
 fn render_advanced_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
     let autostart_row = div()
+        .p_3()
+        .rounded(px(8.))
+        .border_1()
+        .border_color(theme.border)
+        .bg(theme.background_secondary)
         .flex()
         .flex_row()
         .items_center()
         .justify_between()
-        .child(div().text_sm().child(l10n::tr("Desktop startup")))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_0p5()
+                .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(l10n::tr("Desktop startup")))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child(l10n::tr("Launch Fluxer automatically when you sign in to Windows.")),
+                ),
+        )
         .child(
             Switch::new("settings-autostart")
                 .checked(view.prefs.data.autostart)
@@ -1533,11 +2358,28 @@ fn render_advanced_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Client
         );
 
     let close_to_tray_row = div()
+        .p_3()
+        .rounded(px(8.))
+        .border_1()
+        .border_color(theme.border)
+        .bg(theme.background_secondary)
         .flex()
         .flex_row()
         .items_center()
         .justify_between()
-        .child(div().text_sm().child(l10n::tr("Minimize to tray")))
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_0p5()
+                .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(l10n::tr("Minimize to tray")))
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child(l10n::tr("Keep Fluxer running in the system tray when closing the window.")),
+                ),
+        )
         .child(
             Switch::new("settings-close-to-tray")
                 .checked(view.prefs.data.close_to_tray)
@@ -1553,12 +2395,17 @@ fn render_advanced_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Client
         .child(section_heading(l10n::tr("About & Updates"), theme))
         .child(
             div()
+                .p_3()
+                .rounded(px(8.))
+                .border_1()
+                .border_color(theme.border)
+                .bg(theme.background_secondary)
                 .flex()
                 .flex_row()
                 .items_center()
                 .justify_between()
                 .gap_2()
-                .child(div().text_sm().child(format!("v{CURRENT_VERSION}")))
+                .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(format!("v{CURRENT_VERSION}")))
                 .child(
                     div().debug_selector(|| "settings-check-updates".to_owned()).child(
                         Button::new("settings-check-updates")
@@ -1709,7 +2556,7 @@ fn render_advanced_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Client
                     .flex()
                     .flex_col()
                     .gap_2()
-                    .child(section_heading(l10n::tr("Desktop"), theme))
+                    .child(section_heading(l10n::tr("Windows app"), theme))
                     .child(autostart_row)
                     .child(close_to_tray_row),
             )
@@ -1726,12 +2573,17 @@ fn render_tab_body(
     cx: &mut Context<ClientView>,
 ) -> AnyElement {
     match tab {
+        SettingsTab::Profile => render_profile_tab(view, theme, cx),
         SettingsTab::Account => render_account_tab(view, modal, theme, cx),
+        SettingsTab::PrivacySafety => render_privacy_tab(view, theme, cx),
         SettingsTab::Appearance => render_appearance_tab(view, theme, cx),
+        SettingsTab::Themes => render_themes_tab(view, theme, cx),
         SettingsTab::Notifications => render_notifications_tab(view, theme, cx),
+        SettingsTab::MessagesMedia => render_messages_media_tab(theme),
         SettingsTab::VoiceVideo => render_voice_tab(view, theme, cx),
         SettingsTab::Accessibility => render_accessibility_tab(view, theme, cx),
         SettingsTab::Language => render_language_tab(modal, theme, cx),
+        SettingsTab::Keybinds => render_keybinds_tab(theme),
         SettingsTab::Advanced => render_advanced_tab(view, theme, cx),
     }
 }
@@ -1739,30 +2591,74 @@ fn render_tab_body(
 fn render_sidebar_tab(
     tab: SettingsTab,
     selected: bool,
+    active_section: Option<&'static str>,
+    show_sections: bool,
     theme: &Theme,
     cx: &mut Context<ClientView>,
 ) -> AnyElement {
     let sel_id = tab.debug_selector();
-    div()
-        .id(sel_id)
-        .debug_selector(move || sel_id.to_owned())
-        .px_2()
-        .py(px(6.))
-        .rounded(px(6.))
-        .cursor_pointer()
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap_2()
-        .text_color(if selected { theme.foreground } else { theme.muted_foreground })
-        .when(selected, |d| d.bg(theme.accent).font_weight(FontWeight::SEMIBOLD))
-        .when(!selected, |d| d.hover(|s| s.bg(theme.muted).text_color(theme.foreground)))
-        .on_click(cx.listener(move |this, _, _, cx| {
-            this.select_settings_tab(tab, cx);
-        }))
-        .child(Icon::new(tab.icon()).small())
-        .child(div().text_sm().truncate().child(tab.label()))
-        .into_any_element()
+    let sections = tab.sections();
+    let mut item = div().flex().flex_col().gap_0p5().child(
+        div()
+            .id(sel_id)
+            .debug_selector(move || sel_id.to_owned())
+            .px_2()
+            .py(px(6.))
+            .rounded(px(6.))
+            .cursor_pointer()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_2()
+            .text_color(if selected { theme.foreground } else { theme.muted_foreground })
+            .when(selected, |d| d.bg(theme.accent).font_weight(FontWeight::SEMIBOLD))
+            .when(!selected, |d| d.hover(|s| s.bg(theme.muted).text_color(theme.foreground)))
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.select_settings_tab(tab, cx);
+            }))
+            .child(Icon::new(tab.icon()).small())
+            .child(div().text_sm().truncate().child(tab.label())),
+    );
+
+    if selected && show_sections && sections.len() > 1 {
+        let mut sub_list = div()
+            .ml_4()
+            .pl_2()
+            .border_l_1()
+            .border_color(theme.border)
+            .flex()
+            .flex_col()
+            .gap(px(2.));
+        for &(sec_id, sec_label) in sections {
+            let is_active_sec = active_section == Some(sec_id);
+            let sub_sel = format!("settings-subitem-{sec_id}");
+            let sub_id = SharedString::from(sub_sel.clone());
+            sub_list = sub_list.child(
+                div()
+                    .id(sub_id)
+                    .debug_selector(move || sub_sel.clone())
+                    .px_2()
+                    .py_1()
+                    .rounded(px(4.))
+                    .cursor_pointer()
+                    .text_xs()
+                    .text_color(if is_active_sec {
+                        theme.foreground
+                    } else {
+                        theme.muted_foreground
+                    })
+                    .when(is_active_sec, |d| d.font_weight(FontWeight::SEMIBOLD).bg(theme.muted))
+                    .hover(|s| s.text_color(theme.foreground))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.select_settings_section(tab, sec_id, cx);
+                    }))
+                    .child(l10n::tr(sec_label)),
+            );
+        }
+        item = item.child(sub_list);
+    }
+
+    item.into_any_element()
 }
 
 fn render_sidebar(
@@ -1781,9 +2677,9 @@ fn render_sidebar(
                         user_id: user.id,
                         avatar_url: user.avatar_url.clone(),
                         display_name: user.name.clone(),
-                        size: 36.,
-                        status: None,
-                        status_border_bg: None,
+                        size: 40.,
+                        status: Some(view.own_status),
+                        status_border_bg: Some(theme.background),
                     },
                     theme,
                 ))
@@ -1791,7 +2687,7 @@ fn render_sidebar(
             user.name.clone(),
         ),
         None => (
-            div().size(px(36.)).rounded_full().bg(theme.muted).into_any_element(),
+            div().size(px(40.)).rounded_full().bg(theme.muted).into_any_element(),
             SharedString::new_static("…"),
         ),
     };
@@ -1806,6 +2702,8 @@ fn render_sidebar(
         .copied()
         .filter(|t| t.matches_query(query_lower))
         .collect();
+    let show_sections = query_lower.is_empty();
+    let profile_selected = modal.active_tab == SettingsTab::Profile;
 
     let footer = if modal.confirm_logout {
         div()
@@ -1928,19 +2826,26 @@ fn render_sidebar(
         )
         .child(
             div()
+                .id("settings-profile-card")
+                .debug_selector(|| "settings-profile-card".to_owned())
                 .flex_none()
                 .mx_3()
                 .mb_2()
                 .px_2()
                 .py_2()
-                .rounded(px(6.))
-                .bg(theme.background)
+                .rounded(px(8.))
+                .bg(if profile_selected { theme.accent } else { theme.background })
                 .border_1()
-                .border_color(theme.border)
+                .border_color(if profile_selected { theme.brand } else { theme.border })
+                .cursor_pointer()
+                .hover(|s| s.border_color(theme.brand))
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.select_settings_tab(SettingsTab::Profile, cx);
+                }))
                 .flex()
                 .flex_row()
                 .items_center()
-                .gap_2()
+                .gap_2p5()
                 .child(div().flex_none().child(avatar_el))
                 .child(
                     div()
@@ -1951,10 +2856,14 @@ fn render_sidebar(
                         .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).truncate().child(user_name))
                         .child(
                             div()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap_1()
                                 .text_xs()
                                 .text_color(theme.muted_foreground)
-                                .truncate()
-                                .child(l10n::tr("Edit your profile")),
+                                .child(Icon::new(AppIcon::PencilSimple).xsmall())
+                                .child(div().truncate().child(l10n::tr("Edit your profile"))),
                         ),
                 ),
         )
@@ -1977,11 +2886,16 @@ fn render_sidebar(
                             .flex_col()
                             .gap_1()
                             .child(div().px_2().child(section_heading(l10n::tr("Your account"), theme)))
-                            .children(
-                                account_tabs
-                                    .iter()
-                                    .map(|&tab| render_sidebar_tab(tab, modal.active_tab == tab, theme, cx)),
-                            ),
+                            .children(account_tabs.iter().map(|&tab| {
+                                render_sidebar_tab(
+                                    tab,
+                                    modal.active_tab == tab,
+                                    modal.active_section,
+                                    show_sections,
+                                    theme,
+                                    cx,
+                                )
+                            })),
                     )
                 })
                 .when(!app_tabs.is_empty(), |d| {
@@ -1991,11 +2905,16 @@ fn render_sidebar(
                             .flex_col()
                             .gap_1()
                             .child(div().px_2().child(section_heading(l10n::tr("App settings"), theme)))
-                            .children(
-                                app_tabs
-                                    .iter()
-                                    .map(|&tab| render_sidebar_tab(tab, modal.active_tab == tab, theme, cx)),
-                            ),
+                            .children(app_tabs.iter().map(|&tab| {
+                                render_sidebar_tab(
+                                    tab,
+                                    modal.active_tab == tab,
+                                    modal.active_section,
+                                    show_sections,
+                                    theme,
+                                    cx,
+                                )
+                            })),
                     )
                 })
                 .when(account_tabs.is_empty() && app_tabs.is_empty(), |d| {

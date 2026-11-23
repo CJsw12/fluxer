@@ -1,35 +1,66 @@
-//! Compact voice connection bar rendered above `user_panel` whenever the user
-//! is connecting to, connected to, reconnecting, or has a failed voice attempt.
-//! Reads only the UI-safe `VoiceSnapshot` (never holds tokens or endpoints).
+//! Bottom-left voice connection status and local media controls
+//! (`VoiceConnectionStatusInner.tsx` + `LocalParticipantControls.tsx`),
+//! rendered inside the top section (`.voiceConnectionWrapper`) of the unified
+//! bottom-left `UserArea` card whenever a voice session is active or failed.
 
-use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::{Context, FontWeight, Role, SharedString, div, prelude::*};
+use gpui_kit::component::{Icon, Sizable as _};
+use gpui_kit::{AnyElement, Context, FontWeight, Hsla, Role, SharedString, div, prelude::*, px};
 
 use super::avatar::{AvatarSpec, render_avatar};
 use super::l10n;
 use crate::backend::voice::{VoiceConnectionState, VoiceTrackSource};
 use crate::client_view::ClientView;
+use crate::icons::AppIcon;
 use crate::theme::Theme;
 
+/// Renders the 3-bar signal strength indicator (`SignalStrengthIcon.tsx`).
+fn render_signal_strength_icon(color: Hsla) -> AnyElement {
+    div()
+        .id("voice-signal-icon")
+        .debug_selector(|| "voice-signal-icon".to_owned())
+        .size(px(20.))
+        .flex_none()
+        .flex()
+        .flex_row()
+        .items_end()
+        .justify_center()
+        .gap(px(2.))
+        .pb(px(3.))
+        .child(div().w(px(3.)).h(px(6.)).rounded(px(1.)).bg(color))
+        .child(div().w(px(3.)).h(px(10.)).rounded(px(1.)).bg(color))
+        .child(div().w(px(3.)).h(px(14.)).rounded(px(1.)).bg(color))
+        .into_any_element()
+}
+
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> Option<impl IntoElement> {
-    let (status_text, status_color): (SharedString, _) = match &view.voice.state {
-        VoiceConnectionState::Disconnected => return None,
-        VoiceConnectionState::Connecting => (l10n::tr("Voice Connecting…").into(), theme.status_connecting),
-        VoiceConnectionState::Connected => (l10n::tr("Voice Connected").into(), theme.status_online),
-        VoiceConnectionState::Reconnecting => (l10n::tr("Voice Reconnecting…").into(), theme.status_connecting),
-        VoiceConnectionState::Failed(reason) => (reason.to_string().into(), theme.danger),
-    };
-    let channel_label: SharedString = view
-        .voice
-        .channel_id
+    let (status_text, status_color, failure_detail): (SharedString, Hsla, Option<SharedString>) =
+        match &view.voice.state {
+            VoiceConnectionState::Disconnected => return None,
+            VoiceConnectionState::Connecting => {
+                (l10n::tr("Connecting...").into(), theme.status_connecting, None)
+            }
+            VoiceConnectionState::Connected => (l10n::tr("In Voice").into(), theme.status_online, None),
+            VoiceConnectionState::Reconnecting => {
+                (l10n::tr("Connecting...").into(), theme.status_connecting, None)
+            }
+            VoiceConnectionState::Failed(reason) => (
+                l10n::tr("Connection failed").into(),
+                theme.danger,
+                Some(reason.to_string().into()),
+            ),
+        };
+
+    let channel_id = view.voice.channel_id;
+    let channel_label: SharedString = channel_id
         .map(|id| view.voice_channel_name(id))
         .unwrap_or_default();
-    let mute_label = if view.voice.self_mute { l10n::tr("Unmute") } else { l10n::tr("Mute") };
-    let deaf_label = if view.voice.self_deaf { l10n::tr("Undeafen") } else { l10n::tr("Deafen") };
+    let guild_label: Option<SharedString> = channel_id
+        .and_then(|id| view.voice_guild_name(view.voice.guild_id, id));
     let is_connected = view.voice.state == VoiceConnectionState::Connected;
+    let is_failed = matches!(view.voice.state, VoiceConnectionState::Failed(_));
     let share_label = if view.voice.self_stream {
-        l10n::tr("Stop Sharing")
+        l10n::tr("Configure or end screen share")
     } else {
         l10n::tr("Share Screen")
     };
@@ -48,6 +79,15 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         None
     };
 
+    let participants = channel_id
+        .map(|cid| view.voice.members_in_channel(cid))
+        .unwrap_or_default();
+
+    let mut share_active_bg = theme.status_online;
+    share_active_bg.a = 0.16;
+    let mut share_active_border = theme.status_online;
+    share_active_border.a = 0.35;
+
     Some(
         div()
             .id("voice-panel")
@@ -57,11 +97,12 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             .flex()
             .flex_col()
             .flex_none()
-            .gap_1()
-            .px_2()
+            .gap_2()
+            .px_2p5()
             .py_2()
-            .border_t_1()
+            .border_b_1()
             .border_color(theme.border)
+            // Row 1: `.statusRow` — Signal icon + status button on left, audio processing + disconnect icon buttons on right.
             .child(
                 div()
                     .flex()
@@ -69,141 +110,278 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     .items_center()
                     .justify_between()
                     .gap_1p5()
-                    .when_some(view.user.as_ref(), |d, user| {
-                        d.child(render_avatar(
-                            AvatarSpec {
-                                user_id: user.id,
-                                avatar_url: user.avatar_url.clone(),
-                                display_name: user.name.clone(),
-                                size: 24.,
-                                status: None,
-                                status_border_bg: None,
-                            },
-                            theme,
-                        ))
-                    })
                     .child(
                         div()
                             .id("voice-panel-open-stage")
+                            .debug_selector(|| "voice-panel-open-stage".to_owned())
                             .cursor_pointer()
                             .on_click(cx.listener(|this, _, _, cx| this.open_voice_stage(cx)))
                             .flex()
-                            .flex_col()
+                            .flex_row()
+                            .items_center()
+                            .gap_1p5()
                             .flex_1()
                             .min_w_0()
+                            .child(render_signal_strength_icon(status_color))
                             .child(
                                 div()
                                     .truncate()
-                                    .text_xs()
+                                    .text_sm()
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(status_color)
                                     .child(status_text),
-                            )
-                            .when(!channel_label.is_empty(), |d| {
-                                d.child(
-                                    div()
-                                        .truncate()
-                                        .text_xs()
-                                        .text_color(theme.muted_foreground)
-                                        .child(channel_label),
-                                )
-                            })
-                            .when(view.voice.speak_denied, |d| {
-                                d.child(
-                                    div()
-                                        .truncate()
-                                        .text_xs()
-                                        .text_color(theme.danger)
-                                        .child(l10n::tr("Mic muted by permissions")),
-                                )
-                            }),
+                            ),
                     )
                     .child(
-                        div().debug_selector(|| "voice-disconnect-btn".to_owned()).child(
-                            Button::new("voice-disconnect-btn")
-                                .ghost()
-                                .xsmall()
-                                .label(l10n::tr("Disconnect"))
-                                .accessibility_label(l10n::tr("Disconnect"))
-                                .on_click(cx.listener(|this, _, _, cx| this.leave_voice_channel(cx))),
-                        ),
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap_1()
+                            .flex_none()
+                            .when(!is_failed, |d| {
+                                d.child(
+                                    div()
+                                        .debug_selector(|| "voice-noise-suppression-btn".to_owned())
+                                        .child(
+                                            Button::new("voice-noise-suppression-btn")
+                                                .ghost()
+                                                .small()
+                                                .icon(AppIcon::SlidersHorizontal)
+                                                .tooltip(l10n::tr("Voice & audio settings"))
+                                                .accessibility_label(l10n::tr("Voice & audio settings"))
+                                                .on_click(cx.listener(|this, _, window, cx| {
+                                                    this.open_voice_settings(window, cx);
+                                                })),
+                                        ),
+                                )
+                            })
+                            .child(
+                                div().debug_selector(|| "voice-disconnect-btn".to_owned()).child(
+                                    Button::new("voice-disconnect-btn")
+                                        .ghost()
+                                        .small()
+                                        .icon(if is_failed {
+                                            AppIcon::X
+                                        } else {
+                                            AppIcon::PhoneDisconnect
+                                        })
+                                        .tooltip(if is_failed {
+                                            l10n::tr("Dismiss")
+                                        } else {
+                                            l10n::tr("Disconnect")
+                                        })
+                                        .accessibility_label(if is_failed {
+                                            l10n::tr("Dismiss")
+                                        } else {
+                                            l10n::tr("Disconnect")
+                                        })
+                                        .on_click(cx.listener(|this, _, _, cx| this.leave_voice_channel(cx))),
+                                ),
+                            ),
                     ),
             )
+            // Row 2: `.connectionInfo` — `{channelName} / {guildName}` link + speaking avatar stack + permission / failure notice.
             .child(
                 div()
                     .flex()
-                    .flex_row()
-                    .flex_wrap()
-                    .items_center()
+                    .flex_col()
                     .gap_1()
-                    .child(
-                        div().debug_selector(|| "voice-mute-btn".to_owned()).child(
-                            Button::new("voice-mute-btn")
-                                .ghost()
-                                .xsmall()
-                                .label(mute_label.clone())
-                                .accessibility_label(mute_label)
-                                .on_click(cx.listener(|this, _, _, cx| this.toggle_voice_mute(cx))),
-                        ),
-                    )
-                    .child(
-                        div().debug_selector(|| "voice-deaf-btn".to_owned()).child(
-                            Button::new("voice-deaf-btn")
-                                .ghost()
-                                .xsmall()
-                                .label(deaf_label.clone())
-                                .accessibility_label(deaf_label)
-                                .on_click(cx.listener(|this, _, _, cx| this.toggle_voice_deaf(cx))),
-                        ),
-                    )
-                    .when(is_connected, |d| {
-                        d.child(
-                            div().debug_selector(|| "voice-share-btn".to_owned()).child(
-                                Button::new("voice-share-btn")
-                                    .ghost()
-                                    .xsmall()
-                                    .label(share_label.clone())
-                                    .accessibility_label(share_label)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.toggle_screen_share(false, cx);
-                                    })),
-                            ),
-                        )
-                    })
-                    .when(is_connected && view.voice.self_stream, |d| {
-                        d.child(
-                            div().debug_selector(|| "voice-share-audio-btn".to_owned()).child(
-                                Button::new("voice-share-audio-btn")
-                                    .ghost()
-                                    .xsmall()
-                                    .label(share_audio_label.clone())
-                                    .accessibility_label(share_audio_label)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.toggle_screen_share_audio(cx);
-                                    })),
-                            ),
-                        )
-                    })
-                    .when_some(watchable_video_track, |d, track| {
-                        let is_watching = view.voice.watched_video_track.as_ref() == Some(&track);
-                        let watch_label = if is_watching {
-                            l10n::tr("Stop Watching")
-                        } else {
-                            l10n::tr("Watch Stream")
+                    .when(!channel_label.is_empty(), |d| {
+                        let source_text = match &guild_label {
+                            Some(g) if !g.is_empty() => format!("{channel_label} / {g}"),
+                            _ => channel_label.to_string(),
                         };
                         d.child(
-                            div().debug_selector(|| "voice-watch-btn".to_owned()).child(
-                                Button::new("voice-watch-btn")
-                                    .ghost()
-                                    .xsmall()
-                                    .label(watch_label.clone())
-                                    .accessibility_label(watch_label)
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.toggle_watch_video_track(track.clone(), cx);
-                                    })),
-                            ),
+                            div()
+                                .id("voice-channel-source-link")
+                                .debug_selector(|| "voice-channel-source-link".to_owned())
+                                .cursor_pointer()
+                                .on_click(cx.listener(|this, _, _, cx| this.open_voice_stage(cx)))
+                                .truncate()
+                                .text_xs()
+                                .text_color(theme.muted_foreground)
+                                .hover(|s| s.text_color(theme.foreground))
+                                .child(source_text),
                         )
+                    })
+                    .when_some(failure_detail, |d, reason| {
+                        d.child(
+                            div()
+                                .truncate()
+                                .text_xs()
+                                .text_color(theme.danger)
+                                .child(reason),
+                        )
+                    })
+                    .when(view.voice.speak_denied, |d| {
+                        d.child(
+                            div()
+                                .truncate()
+                                .text_xs()
+                                .text_color(theme.danger)
+                                .child(l10n::tr("Mic muted by permissions")),
+                        )
+                    })
+                    .when(is_connected && !participants.is_empty(), |d| {
+                        let mut stack = div()
+                            .id("voice-channel-avatar-stack")
+                            .debug_selector(|| "voice-channel-avatar-stack".to_owned())
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap_1();
+                        for member in participants.iter().take(4) {
+                            let name = view.voice_member_name(member.guild_id, member.user_id);
+                            let avatar_url = view.voice_member_avatar_url(member.guild_id, member.user_id);
+                            let speaking = !member.self_mute && !member.mute && !member.self_deaf && !member.deaf;
+                            stack = stack.child(
+                                div()
+                                    .rounded_full()
+                                    .border_1()
+                                    .border_color(if speaking { theme.status_online } else { theme.border })
+                                    .child(render_avatar(
+                                        AvatarSpec {
+                                            user_id: member.user_id,
+                                            avatar_url,
+                                            display_name: name,
+                                            size: 20.,
+                                            status: None,
+                                            status_border_bg: None,
+                                        },
+                                        theme,
+                                    )),
+                            );
+                        }
+                        d.child(stack)
                     }),
+            )
+            // Row 3: `.mediaSection` (`LocalParticipantControls.tsx`) — 2-column grid of Camera + Screen Share icon buttons.
+            .when(!is_failed, |d| {
+                d.child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_1()
+                        .w_full()
+                        .child(
+                            div()
+                                .id("voice-camera-btn")
+                                .role(Role::Button)
+                                .aria_label(l10n::tr("Turn on camera"))
+                                .debug_selector(|| "voice-camera-btn".to_owned())
+                                .flex_1()
+                                .h(px(32.))
+                                .rounded(px(6.))
+                                .border_1()
+                                .border_color(theme.border)
+                                .bg(theme.background)
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .when(!is_connected, |b| b.opacity(0.5))
+                                .when(is_connected, |b| {
+                                    b.cursor_pointer()
+                                        .hover(|s| s.bg(theme.muted))
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.open_voice_settings(window, cx);
+                                        }))
+                                })
+                                .child(
+                                    Icon::new(AppIcon::EyeSlash)
+                                        .small()
+                                        .text_color(theme.muted_foreground),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .id("voice-share-btn")
+                                .role(Role::Button)
+                                .aria_label(share_label)
+                                .debug_selector(|| "voice-share-btn".to_owned())
+                                .flex_1()
+                                .h(px(32.))
+                                .rounded(px(6.))
+                                .border_1()
+                                .border_color(if view.voice.self_stream {
+                                    share_active_border
+                                } else {
+                                    theme.border
+                                })
+                                .bg(if view.voice.self_stream {
+                                    share_active_bg
+                                } else {
+                                    theme.background
+                                })
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .when(!is_connected, |b| b.opacity(0.5))
+                                .when(is_connected, |b| {
+                                    b.cursor_pointer()
+                                        .hover(|s| s.bg(if view.voice.self_stream { share_active_bg } else { theme.muted }))
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.toggle_screen_share(false, cx);
+                                        }))
+                                })
+                                .child(
+                                    Icon::new(AppIcon::Monitor).small().text_color(if view.voice.self_stream {
+                                        theme.status_online
+                                    } else {
+                                        theme.foreground
+                                    }),
+                                ),
+                        ),
+                )
+            })
+            // Active stream audio toggle & remote stream quick-watch pill when applicable.
+            .when(
+                is_connected && (view.voice.self_stream || watchable_video_track.is_some()),
+                |d| {
+                    d.child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .flex_wrap()
+                            .items_center()
+                            .gap_1()
+                            .when(view.voice.self_stream, |row| {
+                                row.child(
+                                    div().debug_selector(|| "voice-share-audio-btn".to_owned()).child(
+                                        Button::new("voice-share-audio-btn")
+                                            .ghost()
+                                            .xsmall()
+                                            .label(share_audio_label.clone())
+                                            .accessibility_label(share_audio_label)
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.toggle_screen_share_audio(cx);
+                                            })),
+                                    ),
+                                )
+                            })
+                            .when_some(watchable_video_track, |row, track| {
+                                let is_watching = view.voice.watched_video_track.as_ref() == Some(&track);
+                                let watch_label = if is_watching {
+                                    l10n::tr("Stop Watching")
+                                } else {
+                                    l10n::tr("Watch Stream")
+                                };
+                                row.child(
+                                    div().debug_selector(|| "voice-watch-btn".to_owned()).child(
+                                        Button::new("voice-watch-btn")
+                                            .ghost()
+                                            .xsmall()
+                                            .label(watch_label.clone())
+                                            .accessibility_label(watch_label)
+                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                this.toggle_watch_video_track(track.clone(), cx);
+                                            })),
+                                    ),
+                                )
+                            }),
+                    )
+                },
             ),
     )
 }

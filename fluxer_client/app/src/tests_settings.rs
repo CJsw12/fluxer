@@ -530,13 +530,28 @@ fn settings_modal_switches_tabs_filters_search_and_closes(cx: &mut TestAppContex
     assert!(cx.debug_bounds("settings-appearance-preview").is_some());
     assert!(cx.debug_bounds("settings-density-compact").is_some());
 
-    // Switch through tabs via sidebar clicks.
+    // Switch through tabs via sidebar clicks (including official Profile card, Privacy, Themes, Messages & Media, Keybinds, and sub-section tree).
+    assert!(cx.debug_bounds("settings-subitem-theme").is_some(), "active Appearance tab expands sub-section tree");
+    let profile_card = cx.debug_bounds("settings-profile-card").expect("clickable profile card drawn");
+    cx.simulate_click(profile_card.center(), gpui_kit::Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    view.read_with(cx, |v, _| match &v.overlay {
+        Overlay::Settings(modal) => assert_eq!(modal.active_tab, SettingsTab::Profile),
+        _ => panic!("expected settings overlay"),
+    });
+    assert!(cx.debug_bounds("settings-profile-customization").is_some());
+
     for (selector, expected_tab, body_selector) in [
         ("settings-tab-account", SettingsTab::Account, "settings-account-trusted"),
+        ("settings-tab-privacy", SettingsTab::PrivacySafety, "settings-privacy-dm"),
+        ("settings-tab-themes", SettingsTab::Themes, "settings-theme-swatch-dark"),
         ("settings-tab-notifications", SettingsTab::Notifications, "settings-notifications"),
+        ("settings-tab-chat", SettingsTab::MessagesMedia, "settings-chat-display"),
         ("settings-tab-voice", SettingsTab::VoiceVideo, "voice-refresh-devices"),
         ("settings-tab-accessibility", SettingsTab::Accessibility, "reduced-motion-system"),
         ("settings-tab-language", SettingsTab::Language, "settings-locale-list"),
+        ("settings-tab-keybinds", SettingsTab::Keybinds, "settings-keybinds-list"),
         ("settings-tab-advanced", SettingsTab::Advanced, "settings-check-updates"),
         ("settings-tab-appearance", SettingsTab::Appearance, "settings-appearance-preview"),
     ] {

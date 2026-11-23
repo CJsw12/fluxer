@@ -6,7 +6,7 @@ use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{AnyElement, Context, FontWeight, MouseButton, Role, SharedString, div, prelude::*, px};
 
 use super::avatar::{AvatarSpec, render_avatar};
-use super::{access::Scope, badge, user_panel, voice_panel};
+use super::{access::Scope, badge, user_panel};
 use crate::client_view::ClientView;
 use crate::icons::AppIcon;
 use crate::theme::Theme;
@@ -223,7 +223,6 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .border_r_1()
         .border_color(theme.border)
         .child(list)
-        .children(voice_panel::render(view, theme, cx))
         .child(user_panel::render(view, theme, cx))
 }
 

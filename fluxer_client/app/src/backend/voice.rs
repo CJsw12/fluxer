@@ -104,6 +104,7 @@ pub struct VoiceSnapshot {
     pub attempt_id: u64,
     pub self_mute: bool,
     pub self_deaf: bool,
+    pub should_unmute_on_undeafen: bool,
     pub self_stream: bool,
     pub screen_share_audio: bool,
     pub server_mute: bool,
@@ -126,6 +127,7 @@ impl Default for VoiceSnapshot {
             attempt_id: 0,
             self_mute: false,
             self_deaf: false,
+            should_unmute_on_undeafen: false,
             self_stream: false,
             screen_share_audio: false,
             server_mute: false,
@@ -148,6 +150,25 @@ impl VoiceSnapshot {
             .filter(|m| m.channel_id == channel_id)
             .cloned()
             .collect()
+    }
+
+    /// Effective microphone muted state (`UserAreaState.ts:selectUserAreaMicrophoneState`).
+    pub fn effective_muted(&self) -> bool {
+        self.self_mute
+            || self.self_deaf
+            || self.server_mute
+            || self.server_deaf
+            || self.speak_denied
+    }
+
+    /// Effective speaker deafened state.
+    pub fn effective_deafened(&self) -> bool {
+        self.self_deaf || self.server_deaf
+    }
+
+    /// True when moderator mute/deaf or channel permissions lock local unmute (`UserAreaState.ts:30`).
+    pub fn mute_toggle_locked(&self) -> bool {
+        self.server_mute || self.server_deaf || self.speak_denied
     }
 }
 
@@ -470,6 +491,7 @@ pub(crate) struct VoiceManager {
     attempt_id: u64,
     self_mute: bool,
     self_deaf: bool,
+    should_unmute_on_undeafen: bool,
     self_stream: bool,
     screen_share_audio: bool,
     server_mute: bool,
@@ -497,6 +519,7 @@ impl VoiceManager {
             attempt_id: 0,
             self_mute: false,
             self_deaf: false,
+            should_unmute_on_undeafen: false,
             self_stream: false,
             screen_share_audio: false,
             server_mute: false,
@@ -521,6 +544,7 @@ impl VoiceManager {
             attempt_id: self.attempt_id,
             self_mute: self.self_mute,
             self_deaf: self.self_deaf,
+            should_unmute_on_undeafen: self.should_unmute_on_undeafen,
             self_stream: self.self_stream,
             screen_share_audio: self.screen_share_audio,
             server_mute: self.server_mute,
@@ -687,14 +711,98 @@ impl VoiceManager {
         self.begin_leave()
     }
 
-    fn set_self_mute(&mut self, muted: bool) -> Option<VoiceStateUpdate> {
-        self.self_mute = muted;
+    fn mute_denied(&self) -> bool {
+        self.server_mute || self.server_deaf || self.speak_denied
+    }
+
+    /// Official `LocalVoiceStateMachine.ts:toggleSelfMute` 1:1 transition.
+    fn toggle_self_mute(&mut self) -> Option<VoiceStateUpdate> {
+        let mic_denied = self.mute_denied();
+        let new_self_mute = !self.self_mute;
+        if self.self_deaf && !new_self_mute {
+            if mic_denied {
+                self.self_deaf = false;
+                self.self_mute = true;
+                self.should_unmute_on_undeafen = false;
+            } else {
+                self.self_mute = false;
+                self.self_deaf = false;
+                self.should_unmute_on_undeafen = false;
+            }
+        } else if mic_denied && !new_self_mute {
+            self.self_mute = true;
+        } else {
+            self.self_mute = new_self_mute;
+            if !self.self_deaf {
+                self.should_unmute_on_undeafen = false;
+            }
+        }
         self.apply_audio_mute_flags();
         self.current_state_update_payload()
     }
 
+    /// Official `LocalVoiceStateMachine.ts:toggleSelfDeaf` 1:1 transition.
+    fn toggle_self_deaf(&mut self) -> Option<VoiceStateUpdate> {
+        let mic_denied = self.mute_denied();
+        let new_self_deaf = !self.self_deaf;
+        if new_self_deaf {
+            let was_muted_before = self.self_mute || mic_denied;
+            self.self_deaf = true;
+            self.self_mute = true;
+            self.should_unmute_on_undeafen = !was_muted_before;
+        } else {
+            self.self_deaf = false;
+            if self.should_unmute_on_undeafen && !mic_denied {
+                self.self_mute = false;
+            }
+            self.should_unmute_on_undeafen = false;
+        }
+        self.apply_audio_mute_flags();
+        self.current_state_update_payload()
+    }
+
+    #[allow(dead_code)]
+    fn set_self_mute(&mut self, muted: bool) -> Option<VoiceStateUpdate> {
+        let mic_denied = self.mute_denied();
+        if self.self_deaf && !muted {
+            if mic_denied {
+                self.self_deaf = false;
+                self.self_mute = true;
+                self.should_unmute_on_undeafen = false;
+            } else {
+                self.self_mute = false;
+                self.self_deaf = false;
+                self.should_unmute_on_undeafen = false;
+            }
+        } else if mic_denied && !muted {
+            self.self_mute = true;
+        } else {
+            self.self_mute = muted;
+            if !self.self_deaf {
+                self.should_unmute_on_undeafen = false;
+            }
+        }
+        self.apply_audio_mute_flags();
+        self.current_state_update_payload()
+    }
+
+    #[allow(dead_code)]
     fn set_self_deaf(&mut self, deafened: bool) -> Option<VoiceStateUpdate> {
-        self.self_deaf = deafened;
+        let mic_denied = self.mute_denied();
+        if deafened {
+            if !self.self_deaf {
+                let was_muted_before = self.self_mute || mic_denied;
+                self.should_unmute_on_undeafen = !was_muted_before;
+            }
+            self.self_deaf = true;
+            self.self_mute = true;
+        } else {
+            self.self_deaf = false;
+            if self.should_unmute_on_undeafen && !mic_denied {
+                self.self_mute = false;
+            }
+            self.should_unmute_on_undeafen = false;
+        }
         self.apply_audio_mute_flags();
         self.current_state_update_payload()
     }
@@ -1721,6 +1829,7 @@ impl Backend {
     }
 
     /// Updates local self-mute state and forwards opcode 4 if currently in a voice channel.
+    #[allow(dead_code)]
     pub fn set_voice_mute(&self, muted: bool) {
         let payload = lock(&self.voice).set_self_mute(muted);
         if let Some(payload) = payload {
@@ -1731,9 +1840,34 @@ impl Backend {
         let _ = self.events.send(UiEvent::VoiceChanged);
     }
 
+    /// Toggles local self-mute using the official `LocalVoiceStateMachine` transition
+    /// (unmuting while deafened automatically undeafens).
+    pub fn toggle_voice_mute(&self) {
+        let payload = lock(&self.voice).toggle_self_mute();
+        if let Some(payload) = payload {
+            #[cfg(test)]
+            lock(&self.sent_voice_states).push(payload.clone());
+            let _ = send_voice_gateway_update(self.gateway.as_ref(), &payload);
+        }
+        let _ = self.events.send(UiEvent::VoiceChanged);
+    }
+
     /// Updates local self-deaf state and forwards opcode 4 if currently in a voice channel.
+    #[allow(dead_code)]
     pub fn set_voice_deaf(&self, deafened: bool) {
         let payload = lock(&self.voice).set_self_deaf(deafened);
+        if let Some(payload) = payload {
+            #[cfg(test)]
+            lock(&self.sent_voice_states).push(payload.clone());
+            let _ = send_voice_gateway_update(self.gateway.as_ref(), &payload);
+        }
+        let _ = self.events.send(UiEvent::VoiceChanged);
+    }
+
+    /// Toggles local self-deaf using the official `LocalVoiceStateMachine` transition
+    /// (deafening forces self-mute and records `should_unmute_on_undeafen`; undeafening restores prior unmute).
+    pub fn toggle_voice_deaf(&self) {
+        let payload = lock(&self.voice).toggle_self_deaf();
         if let Some(payload) = payload {
             #[cfg(test)]
             lock(&self.sent_voice_states).push(payload.clone());

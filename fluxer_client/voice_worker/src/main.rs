@@ -187,6 +187,12 @@ async fn stop_screen_share(active_screen_share: &mut Option<ActiveScreenShare>, 
     }
 }
 
+/// libyuv names packed formats by 32-bit word order (little-endian), so the bytes in memory are
+/// reversed: `VideoFormatType::ABGR` yields R, G, B, A in memory, while `RGBA` yields A, B, G, R.
+/// The app's `VideoFrame` contract is RGBA bytes (it swaps R/B for GPUI's BGRA itself), so remote
+/// frames must be converted with `ABGR`; using `RGBA` turned red into alpha and tinted video red.
+const RGBA_MEMORY_ORDER: VideoFormatType = VideoFormatType::ABGR;
+
 /// Converts a BGRA8888 buffer into planar I420 (YUV 4:2:0) using integer BT.601 math.
 ///
 /// Returns `false` without panicking if dimensions are `< 2`, odd, or any buffer/stride
@@ -332,7 +338,7 @@ fn spawn_video_decode_task(
             };
             rgba.resize(byte_len, 0);
             frame.buffer.to_argb(
-                VideoFormatType::RGBA,
+                RGBA_MEMORY_ORDER,
                 &mut rgba,
                 stride,
                 dst_w_i32,
@@ -1314,6 +1320,26 @@ mod tests {
             }
         }
         buf
+    }
+
+    #[test]
+    fn remote_frames_convert_to_rgba_byte_order() {
+        use livekit::webrtc::video_frame::VideoBuffer;
+        // Pure red in BT.601 limited range (same values bgra_to_i420 produces for red).
+        let mut i420 = I420Buffer::new(2, 2);
+        {
+            let (y, u, v) = i420.data_mut();
+            y.fill(82);
+            u.fill(90);
+            v.fill(240);
+        }
+        let mut out = vec![0u8; 2 * 2 * 4];
+        // Same call shape as the decode path: remote frames arrive as `Box<dyn VideoBuffer>`.
+        let boxed: Box<dyn VideoBuffer> = Box::new(i420);
+        boxed.to_argb(RGBA_MEMORY_ORDER, &mut out, 2 * 4, 2, 2);
+        let px = &out[0..4];
+        assert!(px[0] > 230 && px[1] < 30 && px[2] < 30, "expected red first in memory, got {px:?}");
+        assert_eq!(px[3], 255, "alpha must be the last byte, got {px:?}");
     }
 
     #[test]

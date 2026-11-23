@@ -138,6 +138,8 @@ Git Bash에서는 `/channels/...` 인자가 Windows 경로로 바뀌지 않도�
 2. **Rust 클라이언트**: `dist/fluxer_client/fluxer_client.exe --no-os-integration`을 `FLUXER_PARITY_PROBE=1`과 시험 프로필용 `LOCALAPPDATA`로 실행한다. `SSL_CERT_FILE`은 설정하지 않는다(없는 파일을 가리키면 TLS가 실패해 `Reconnecting…`에서 멈춘다). 연결 확인은 `orca computer get-app-state --app fluxer_client --no-screenshot --query Status` → `Status: Online`.
 3. **공식 비교 앱**: 포터블 공식 데스크톱 사본을 `--remote-debugging-port=9334`로 실행한다(다크 테마, tester2). 사용자가 평소 쓰는 공식 앱(`%LOCALAPPDATA%\fluxer_desktop`)과 같은 이름(`Fluxer.exe`)이므로 경로로 구분하고, 개인 앱에는 절대 붙지 않는다.
 
+- 세 프로세스는 에이전트 도구의 백그라운드 실행(최대 2시간)으로 띄우면 시간이 지나 강제 종료된다. `pwsh`의 `Start-Process`로 분리 실행한다. 클라이언트에 줄 `FLUXER_PARITY_PROBE`·`LOCALAPPDATA`는 같은 `pwsh` 세션에서 `$env:`로 설정한 뒤 실행하면 상속된다. SSH 키 경로에 공백이 있으면 인자에 따옴표를 넣어야 하며, 그렇지 않으면 터널이 조용히 바로 종료된다.
+
 ### 10.2 한 장면 수렴 루프
 1. 공식 기준 캡처: `web_capture.mjs --attach 9334 ...`(장면 JSON의 `path`, `wait_for`, `settle_ms`, `actions`). 캡처 전에 멤버 목록 표시 상태처럼 레이아웃을 바꾸는 토글을 확인한다.
 2. 수정 후 `cargo test --workspace`(`target/fc-root`, `-j 4`, `--test-threads=2`) → 클라이언트 종료 → `scripts/package_fluxer_client.ps1` → 프로브를 켜고 클라이언트 재실행.
@@ -153,6 +155,8 @@ Git Bash에서는 `/channels/...` 인자가 Windows 경로로 바뀌지 않도�
 ### 10.4 자주 겪은 함정
 - `MSYS_NO_PATHCONV=1` 없이 Git Bash에서 `/channels/...`를 넘기면 `C:/Program Files/Git/channels/...`로 바뀐다. 스크립트는 저장소 루트에서 실행한다(상대 경로).
 - 공식 앱은 부팅 후 `window.localStorage`를 지우고, React 핸들러가 합성 `.click()`을 무시하는 경우가 있어 CDP 실제 입력을 쓴다. 웹 앱은 토큰 주입으로 로그인되지 않으므로 실제 로그인 폼을 한 번 거친다.
+- **voice_worker 재빌드**: `scripts/package_fluxer_client.ps1`은 `-IncludeVoiceWorker`를 줄 때만 워커를 다시 빌드해 `dist`에 복사한다. 워커(`fluxer_client/voice_worker`)를 고쳤다면 반드시 이 스위치로 패키징한다. 2026-11-24까지 `dist`의 워커는 11/22 빌드에 머물러 있었다.
+- 공식 데스크톱 앱에서 음성 채널 경로를 열면 "Join voice channel" 버튼이 있는 안내 화면이 나온다. 앱 재시작 뒤에는 "Reconnect / Not now" 알림 막대도 뜬다.
 - 시험 서버 로그인은 짧은 시간에 반복하면 429(`retry_after` 약 20초)가 난다. 토큰을 한 번 받아 재사용한다. Node에서 시험 서버에 직접 붙을 때는 `NODE_EXTRA_CA_CERTS`에 서버 루트 인증서를 준다.
 - 사용자 길드 알림 설정은 REST GET이 없다. 게이트웨이 `READY`의 `user_guild_settings`로 읽는다.
 - 같은 계정이 아니면 본인 멘션 강조·사용자 영역·계정 테마가 달라 색 비교가 어긋난다. 색 비교 결과에서 이런 항목은 버그로 세지 않는다.

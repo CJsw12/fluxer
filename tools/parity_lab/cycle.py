@@ -4,7 +4,8 @@
         [--check OFFICIAL.dom.json OFFICIAL.png fluxer://... OUT_DIR]
 
 Default builds the fast incremental debug binary (target/fc-root/debug/fluxer_client.exe);
---release packages dist/ (add --worker when voice_worker changed). The client runs detached
+--release packages dist/ (add --worker when voice_worker changed). The debug binary has no
+voice_worker next to it, so voice/screen-share scenes need --release. The client runs detached
 with FLUXER_PARITY_PROBE=1 and the test profile from env PARITY_PROFILE (LOCALAPPDATA override).
 """
 

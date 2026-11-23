@@ -716,7 +716,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                                         .debug_selector(move || format!("voice-member-muted-{}", uid.0))
                                         .child(
                                             Icon::new(AppIcon::MicrophoneSlash)
-                                                .xsmall()
+                                                .with_size(px(16.))
                                                 .text_color(muted_fg),
                                         ),
                                 )
@@ -727,7 +727,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                                         .debug_selector(move || format!("voice-member-deaf-{}", uid.0))
                                         .child(
                                             Icon::new(AppIcon::SpeakerSlash)
-                                                .xsmall()
+                                                .with_size(px(16.))
                                                 .text_color(muted_fg),
                                         ),
                                 )

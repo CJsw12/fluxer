@@ -183,7 +183,7 @@ fn render_audio_avatar_slot(
                                         .debug_selector(move || format!("voice-tile-muted-{}", uid.0))
                                         .child(
                                             Icon::new(AppIcon::MicrophoneSlash)
-                                                .xsmall()
+                                                .with_size(px(14.))
                                                 .text_color(theme.danger),
                                         ),
                                 )
@@ -194,7 +194,7 @@ fn render_audio_avatar_slot(
                                         .debug_selector(move || format!("voice-tile-deaf-{}", uid.0))
                                         .child(
                                             Icon::new(AppIcon::SpeakerSlash)
-                                                .xsmall()
+                                                .with_size(px(14.))
                                                 .text_color(theme.danger),
                                         ),
                                 )
@@ -327,14 +327,14 @@ fn render_participant_tile(
                             d.child(
                                 div()
                                     .debug_selector(move || format!("voice-tile-muted-{}", uid.0))
-                                    .child(Icon::new(AppIcon::MicrophoneSlash).xsmall().text_color(theme.danger)),
+                                    .child(Icon::new(AppIcon::MicrophoneSlash).with_size(px(14.)).text_color(theme.danger)),
                             )
                         })
                         .when(participant.deafened, |d| {
                             d.child(
                                 div()
                                     .debug_selector(move || format!("voice-tile-deaf-{}", uid.0))
-                                    .child(Icon::new(AppIcon::SpeakerSlash).xsmall().text_color(theme.danger)),
+                                    .child(Icon::new(AppIcon::SpeakerSlash).with_size(px(14.)).text_color(theme.danger)),
                             )
                         }),
                 ),
@@ -443,7 +443,7 @@ fn split_control_group(
                 .cursor_pointer()
                 .hover(|s| s.border_color(gpui_kit::hsla(0., 0., 1., 0.40)))
                 .on_click(on_caret_click)
-                .child(Icon::new(AppIcon::CaretDown).xsmall().text_color(gpui_kit::hsla(0., 0., 1., 0.88))),
+                .child(Icon::new(AppIcon::CaretDown).with_size(px(10.)).text_color(gpui_kit::hsla(0., 0., 1., 0.88))),
         )
         .into_any_element()
 }
@@ -767,7 +767,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .child(split_control_group(
             "voice-stage-camera-btn",
             "voice-stage-camera-settings-btn",
-            AppIcon::EyeSlash,
+            AppIcon::CameraSlash,
             l10n::tr("Turn on camera"),
             l10n::tr("Camera settings"),
             false,
@@ -780,7 +780,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .child(split_control_group(
             "voice-stage-share-btn",
             "voice-stage-share-settings-btn",
-            AppIcon::Monitor,
+            AppIcon::MonitorPlay,
             share_label,
             l10n::tr("Screen share settings"),
             false,
@@ -794,7 +794,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         ))
         .child(single_control_button(
             "voice-stage-more-btn",
-            AppIcon::SlidersHorizontal,
+            AppIcon::DotsThreeBold,
             l10n::tr("More options"),
             false,
             false,
@@ -811,7 +811,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         )
         .child(single_control_button(
             "voice-stage-disconnect-btn",
-            AppIcon::PhoneDisconnect,
+            AppIcon::PhoneX,
             l10n::tr("Disconnect"),
             true,
             false,

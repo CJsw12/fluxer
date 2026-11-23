@@ -150,7 +150,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                                 .ghost()
                                                 .small()
                                                 .selected(view.voice_popout == Some(VoicePopoutKind::Details))
-                                                .icon(AppIcon::SlidersHorizontal)
+                                                .icon(AppIcon::Waveform)
                                                 .tooltip(l10n::tr("Voice & audio settings"))
                                                 .accessibility_label(l10n::tr("Voice & audio settings"))
                                                 .on_click(cx.listener(|this, _, _, cx| {
@@ -167,7 +167,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                         .icon(if is_failed {
                                             AppIcon::X
                                         } else {
-                                            AppIcon::PhoneDisconnect
+                                            AppIcon::PhoneX
                                         })
                                         .tooltip(if is_failed {
                                             l10n::tr("Dismiss")
@@ -292,8 +292,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                         }))
                                 })
                                 .child(
-                                    Icon::new(AppIcon::EyeSlash)
-                                        .small()
+                                    Icon::new(AppIcon::CameraSlash)
+                                        .with_size(px(20.))
                                         .text_color(theme.muted_foreground),
                                 ),
                         )
@@ -329,7 +329,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                         }))
                                 })
                                 .child(
-                                    Icon::new(AppIcon::Monitor).small().text_color(if view.voice.self_stream {
+                                    Icon::new(AppIcon::MonitorPlay).with_size(px(20.)).text_color(if view.voice.self_stream {
                                         theme.status_online
                                     } else {
                                         theme.foreground

@@ -1282,5 +1282,275 @@
    16
   ],
   "example_state": "Open menu > Send voice message\nCTRL\nALT\n"
+ },
+ {
+  "flx": "app.sidebar-nav.voice-badge.get-voice-badge-icon.speaker-high-icon",
+  "icon": "fill/speaker-high-fill",
+  "sizes": [
+   12
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "app.channel-item-icon.icon",
+  "icon": "fill/chat-teardrop-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "ui.base-avatar.overlay",
+  "icon": "CUSTOM:0 0 24 24",
+  "sizes": [
+   24
+  ],
+  "example_state": "voice_stage",
+  "viewBox": "0 0 24 24",
+  "d": ""
+ },
+ {
+  "flx": "app.voice-state-icons.icon",
+  "icon": "fill/microphone-slash-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "app.voice-state-icons.icon",
+  "icon": "fill/speaker-slash-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "ui.base-avatar.overlay",
+  "icon": "CUSTOM:0 0 192 192",
+  "sizes": [
+   141
+  ],
+  "example_state": "voice_stage",
+  "viewBox": "0 0 192 192",
+  "d": ""
+ },
+ {
+  "flx": "voice.voice-participant-tile.voice-participant-tile-inner.participant-icon",
+  "icon": "fill/microphone-slash-fill",
+  "sizes": [
+   14
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-participant-tile.voice-participant-tile-inner.participant-icon",
+  "icon": "fill/speaker-slash-fill",
+  "sizes": [
+   14
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-participant-tile.voice-participant-tile-inner.participant-icon-white",
+  "icon": "regular/desktop",
+  "sizes": [
+   14
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon",
+  "icon": "fill/microphone-slash-fill",
+  "sizes": [
+   22
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon-small",
+  "icon": "bold/caret-down-bold",
+  "sizes": [
+   10
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon",
+  "icon": "fill/speaker-slash-fill",
+  "sizes": [
+   22
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon-small.output-settings",
+  "icon": "bold/caret-down-bold",
+  "sizes": [
+   10
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon",
+  "icon": "fill/camera-slash-fill",
+  "sizes": [
+   22
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon",
+  "icon": "fill/monitor-play-fill",
+  "sizes": [
+   22
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon-small.screen-share-settings",
+  "icon": "bold/caret-down-bold",
+  "sizes": [
+   10
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon",
+  "icon": "bold/dots-three-bold",
+  "sizes": [
+   22
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon",
+  "icon": "fill/phone-x-fill",
+  "sizes": [
+   22
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.compact-voice-call-view.compact-call-height-toggle-button.chat-teardrop-icon",
+  "icon": "fill/chat-teardrop-fill",
+  "sizes": [
+   21
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "channel.channel-header-components.channel-header-icon.button-icon",
+  "icon": "fill/arrow-square-out-fill",
+  "sizes": [
+   21
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "channel.channel-header-components.channel-header-icon.button-icon",
+  "icon": "fill/corners-out-fill",
+  "sizes": [
+   21
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.signal-strength-icon.svg",
+  "icon": "CUSTOM:0 0 16 16",
+  "sizes": [
+   16
+  ],
+  "example_state": "voice_stage",
+  "viewBox": "0 0 16 16",
+  "d": "M 1 11.5 A 3.5 3.5 0 0 1 4.5 15|M 1 8 A 7 7 0 0 1 8 15|M 1 4.5 A 10.5 10.5 0 0 1 11.5 15|M 1 1 A 14 14 0 0 1 15 15"
+ },
+ {
+  "flx": "voice.voice-connection-status.audio-processing-button.icon",
+  "icon": "fill/waveform-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-connection-status.voice-connection-status-inner.icon",
+  "icon": "fill/phone-x-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-connection-status.voice-connection-status-inner.connection-id-icon",
+  "icon": "regular/desktop",
+  "sizes": [
+   16
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "ui.avatars.avatar-with-presence.voice-indicator-icon",
+  "icon": "fill/speaker-slash-fill",
+  "sizes": [
+   8
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-connection-status.local-participant-controls.media-icon",
+  "icon": "fill/camera-slash-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-connection-status.local-participant-controls.media-icon",
+  "icon": "fill/monitor-play-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-settings-menus.voice-settings-menu-item.icon",
+  "icon": "fill/gear-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "mic_menu"
+ },
+ {
+  "flx": "voice.voice-control-bar.render-screen-share-menu.gear-icon",
+  "icon": "fill/gear-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "share_menu"
+ },
+ {
+  "flx": "voice.voice-settings-menus.voice-camera-settings-menu.icon",
+  "icon": "fill/eye-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "camera_menu"
+ },
+ {
+  "flx": "voice.voice-settings-menus.voice-camera-settings-menu.icon",
+  "icon": "fill/gear-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "camera_menu"
+ },
+ {
+  "flx": "voice.voice-settings-menus.voice-more-options-menu.icon",
+  "icon": "fill/gear-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "more_menu"
  }
 ]

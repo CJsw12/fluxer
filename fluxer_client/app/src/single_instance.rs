@@ -15,6 +15,7 @@ use gpui_kit::{AnyWindowHandle, App, AsyncApp, WeakEntity};
 use serde_json::Value;
 use tokio::sync::mpsc;
 
+use crate::parity_probe::{self, ProbeRequest};
 use crate::deep_links::{MAX_DEEP_LINK_LEN, has_blocked_chars, is_app_protocol_url};
 use crate::root::AppRoot;
 
@@ -25,10 +26,26 @@ const MAX_ACTIVE_CLIENTS: usize = 4;
 const IO_TIMEOUT: Duration = Duration::from_millis(500);
 const RETRY_POLL_INTERVAL: Duration = Duration::from_millis(50);
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+const PROBE_REPLY_TIMEOUT: Duration = Duration::from_secs(3);
+
+#[derive(Debug, Clone)]
 pub enum SingleInstanceMessage {
     Activate,
     DeepLink(String),
+    /// Parity probe request (only produced when `FLUXER_PARITY_PROBE=1`); the
+    /// UI thread answers with one JSON line on the sender.
+    Probe(ProbeRequest, std::sync::mpsc::Sender<String>),
+}
+
+impl PartialEq for SingleInstanceMessage {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Activate, Self::Activate) => true,
+            (Self::DeepLink(a), Self::DeepLink(b)) => a == b,
+            (Self::Probe(a, _), Self::Probe(b, _)) => a == b,
+            _ => false,
+        }
+    }
 }
 
 fn random_token_hex() -> String {
@@ -110,10 +127,15 @@ fn read_bounded_line(stream: &mut TcpStream, deadline: Instant) -> Option<String
     }
 }
 
-fn handle_client(
+fn handle_client(stream: TcpStream, expected_token: &str, tx: &mpsc::UnboundedSender<SingleInstanceMessage>) {
+    handle_client_with(stream, expected_token, tx, parity_probe::enabled());
+}
+
+fn handle_client_with(
     mut stream: TcpStream,
     expected_token: &str,
     tx: &mpsc::UnboundedSender<SingleInstanceMessage>,
+    probe_enabled: bool,
 ) {
     let deadline = Instant::now() + IO_TIMEOUT;
     let _ = stream.set_write_timeout(Some(IO_TIMEOUT));
@@ -143,6 +165,25 @@ fn handle_client(
                 return;
             }
             SingleInstanceMessage::DeepLink(trimmed.to_owned())
+        }
+        Some(action) if action.starts_with("probe_") => {
+            if !probe_enabled {
+                return;
+            }
+            let Some(request) = parity_probe::parse_request(action, &val) else {
+                return;
+            };
+            let (reply_tx, reply_rx) = std::sync::mpsc::channel();
+            if tx.send(SingleInstanceMessage::Probe(request, reply_tx)).is_err() {
+                return;
+            }
+            let reply = reply_rx
+                .recv_timeout(PROBE_REPLY_TIMEOUT)
+                .unwrap_or_else(|_| r#"{"ok":false,"error":"timeout"}"#.to_owned());
+            let _ = stream.write_all(reply.as_bytes());
+            let _ = stream.write_all(b"\n");
+            let _ = stream.flush();
+            return;
         }
         _ => return,
     };
@@ -351,6 +392,15 @@ pub fn install(
                         let _ = root.update(cx, |r, cx| r.handle_deep_link(&url, window, cx));
                     });
                 }
+                SingleInstanceMessage::Probe(request, reply) => {
+                    let failed = reply.clone();
+                    if window_handle
+                        .update(cx, |_, window, cx| parity_probe::execute(request, window, cx, reply))
+                        .is_err()
+                    {
+                        let _ = failed.send(r#"{"ok":false,"error":"window unavailable"}"#.to_owned());
+                    }
+                }
             }
         }
     })
@@ -447,5 +497,50 @@ mod tests {
         assert_eq!(rx.try_recv(), Ok(SingleInstanceMessage::Activate));
 
         drop(server);
+    }
+
+    fn probe_roundtrip(token: &str, probe_enabled: bool) -> (Option<SingleInstanceMessage>, String) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let addr = listener.local_addr().expect("addr");
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let handler = std::thread::spawn(move || {
+            if let Ok((stream, _)) = listener.accept() {
+                handle_client_with(stream, "secret", &tx, probe_enabled);
+            }
+        });
+        let mut client = TcpStream::connect_timeout(&addr, IO_TIMEOUT).expect("connect");
+        client.set_read_timeout(Some(Duration::from_secs(5))).expect("timeout");
+        let line = format!("{{\"token\":\"{token}\",\"action\":\"probe_inspect\"}}
+");
+        client.write_all(line.as_bytes()).expect("write");
+        let mut msg = None;
+        if probe_enabled && token == "secret" {
+            if let Some(m) = rx.blocking_recv() {
+                if let SingleInstanceMessage::Probe(_, reply) = &m {
+                    let _ = reply.send(r#"{"ok":true}"#.to_owned());
+                }
+                msg = Some(m);
+            }
+        }
+        let mut resp = String::new();
+        let _ = BufReader::new(client).read_line(&mut resp);
+        let _ = handler.join();
+        if msg.is_none() {
+            msg = rx.try_recv().ok();
+        }
+        (msg, resp)
+    }
+
+    #[test]
+    fn probe_actions_require_enabled_flag_and_token() {
+        let (msg, resp) = probe_roundtrip("secret", false);
+        assert!(msg.is_none() && resp.is_empty(), "probe must be ignored when disabled");
+
+        let (msg, resp) = probe_roundtrip("wrong", true);
+        assert!(msg.is_none() && resp.is_empty(), "bad token must be rejected");
+
+        let (msg, resp) = probe_roundtrip("secret", true);
+        assert!(matches!(msg, Some(SingleInstanceMessage::Probe(ProbeRequest::Inspect, _))));
+        assert_eq!(resp.trim(), r#"{"ok":true}"#);
     }
 }

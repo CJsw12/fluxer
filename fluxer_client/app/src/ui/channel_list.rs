@@ -9,6 +9,7 @@ use super::avatar::{AvatarSpec, render_avatar};
 use super::{access::Scope, badge};
 use crate::client_view::ClientView;
 use crate::icons::AppIcon;
+use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 use crate::ui::l10n;
 use crate::view_model::{ChannelIcon, ChannelItem, Place};
@@ -91,6 +92,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .border_b_1()
                 .border_color(theme.border)
                 .hover(|s| s.bg(theme.muted))
+                .flx("app.guild-header.header-wrapper")
                 .child(
                     div()
                         .id("guild-header-title")
@@ -100,6 +102,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .truncate()
                         .font_weight(FontWeight::SEMIBOLD)
                         .on_click(cx.listener(|this, _, _, cx| this.toggle_guild_header_popout(cx)))
+                        .flx_text("app.guild-header.guild-name", name.to_string())
                         .child(name),
                 )
                 .child(
@@ -170,7 +173,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         }),
                 )
                 .child(
-                    div().debug_selector(|| "guild-header-menu-btn".to_owned()).child(
+                    div().debug_selector(|| "guild-header-menu-btn".to_owned()).flx("app.guild-header.caret-icon").child(
                         Button::new("guild-header-menu-btn")
                             .ghost()
                             .xsmall()
@@ -384,6 +387,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .h_full()
         .flex_none()
         .bg(theme.background_secondary)
+        .flx("app.guild-sidebar.guild-navbar")
         .child(header_bar)
         .child(list)
 }
@@ -426,7 +430,14 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
             .text_xs()
             .text_color(muted_fg)
             .font_weight(FontWeight::MEDIUM)
-            .child(div().flex_1().min_w_0().truncate().child(c.name.clone()))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .flx_text("app.channel-item-content.category-name", c.name.to_string())
+                    .child(c.name.clone()),
+            )
             .when(c.can_manage, |d| {
                 d.child(
                     div()
@@ -543,7 +554,14 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 .child(Icon::new(icon).small().text_color(if selected { fg } else { muted_fg }))
                 .into_any_element()
         })
-        .child(div().flex_1().min_w_0().truncate().child(c.name.clone()));
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .flx_text("app.channel-item-content.channel-name", c.name.to_string())
+                .child(c.name.clone()),
+        );
     if c.muted {
         row = row.child(Icon::new(AppIcon::BellSlash).xsmall());
     }

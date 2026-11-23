@@ -16,6 +16,7 @@ use super::settings::SettingsTab;
 use super::{l10n, voice_panel};
 use crate::client_view::{ClientView, Connection};
 use crate::icons::AppIcon;
+use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 
 fn render_control_icon_button(
@@ -37,11 +38,17 @@ fn render_control_icon_button(
         theme.muted_foreground
     };
 
+    let flx = match id {
+        "user-panel-mute" => Some("app.user-area.user-area-inner.control-button.mute"),
+        "user-panel-deafen" => Some("app.user-area.user-area-inner.control-button.deafen"),
+        _ => None,
+    };
     div()
         .id(id)
         .role(Role::Button)
         .aria_label(label)
         .debug_selector(move || id.to_owned())
+        .when_some(flx, |d, f| d.flx(f))
         .size(px(32.))
         .rounded(px(6.))
         .flex()
@@ -257,6 +264,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .role(Role::Region)
         .aria_label(l10n::tr("User controls"))
         .debug_selector(|| "user-area-wrapper".to_owned())
+        .flx("app.user-area.user-area-inner.section")
         .flex()
         .flex_col()
         .flex_none()
@@ -274,6 +282,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .id("user-panel")
                 .group(panel_group.clone())
                 .debug_selector(|| "user-panel".to_owned())
+                .flx("app.user-area.user-area-inner.user-area-container")
                 .min_h(px(theme.sizes.composer_height - 2.))
                 .flex()
                 .flex_row()
@@ -322,8 +331,22 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 this.toggle_user_area_popout(cx);
                             }
                         }))
-                        .child(div().truncate().text_sm().font_weight(FontWeight::MEDIUM).child(name))
-                        .child(div().truncate().text_xs().text_color(theme.muted_foreground).child(label)),
+                        .child(
+                            div()
+                                .truncate()
+                                .text_sm()
+                                .font_weight(FontWeight::MEDIUM)
+                                .flx_text("app.user-area.user-area-inner.user-name", name.to_string())
+                                .child(name),
+                        )
+                        .child(
+                            div()
+                                .truncate()
+                                .text_xs()
+                                .text_color(theme.muted_foreground)
+                                .flx_text("app.user-area.user-area-inner.user-status", label.to_string())
+                                .child(label),
+                        ),
                 )
                 .child(
                     div()
@@ -378,13 +401,15 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             cx.listener(|this, _, _, cx| this.toggle_voice_deaf(cx)),
                         ))
                         .child(
-                            Button::new("open-settings")
-                                .ghost()
-                                .small()
-                                .icon(AppIcon::Gear)
-                                .tooltip(l10n::tr("User settings"))
-                                .accessibility_label(l10n::tr("User settings"))
-                                .on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx))),
+                            div().flex_none().flx("app.user-area.user-area-inner.control-button.settings-click").child(
+                                Button::new("open-settings")
+                                    .ghost()
+                                    .small()
+                                    .icon(AppIcon::Gear)
+                                    .tooltip(l10n::tr("User settings"))
+                                    .accessibility_label(l10n::tr("User settings"))
+                                    .on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx))),
+                            ),
                         ),
                 ),
         )

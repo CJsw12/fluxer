@@ -21,6 +21,7 @@ use gpui_kit::{
 use super::avatar::{AvatarSpec, render_avatar};
 use crate::client_view::ClientView;
 use crate::format::{default_avatar_index, initials};
+use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 use crate::ui::l10n;
 use crate::view_model::avatar_url;
@@ -261,6 +262,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .h_full()
         .border_l_1()
         .border_color(theme.border)
+        .flx("channel.member-list-container.member-list-container")
         .child(list)
         .into_any_element()
 }
@@ -306,6 +308,7 @@ fn render_row(
             .text_xs()
             .font_weight(FontWeight::SEMIBOLD)
             .text_color(theme.muted_foreground)
+            .flx_text("channel.member-list-group-header", label.to_string())
             .child(div().truncate().child(label.clone())),
         Some(MemberRowView::Member(m)) => {
             let offline = m.status.is_offline();
@@ -326,6 +329,7 @@ fn render_row(
                 .gap_3()
                 .cursor_pointer()
                 .when(offline, |d| d.opacity(0.4))
+                .flx("channel.member-list-item.focus-ring-wrapper")
                 .on_click(move |ev, window, cx| {
                     if !ev.modifiers().shift {
                         let pos = ev.position();
@@ -347,6 +351,7 @@ fn render_row(
                                 .truncate()
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(m.color.unwrap_or(theme.foreground))
+                                .flx_text("channel.member-list-item.name", m.name.to_string())
                                 .child(m.name.clone()),
                         )
                         .when(m.is_owner, |d| {

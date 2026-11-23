@@ -686,6 +686,7 @@ impl Render for AppRoot {
             .flex()
             .flex_col()
             .bg(app_theme.background)
+            .when(crate::parity_probe::enabled(), |d| d.child(crate::parity_probe::frame_marker()))
             .child(crate::ui::titlebar::render(title, &app_theme))
             .child(div().flex_1().min_h_0().w_full().child(body))
     }

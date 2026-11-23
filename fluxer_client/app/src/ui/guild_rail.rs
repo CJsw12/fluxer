@@ -19,6 +19,7 @@ use gpui_kit::{
 use super::{badge, l10n};
 use crate::client_view::{ClientView, RailHoverTarget};
 use crate::icons::AppIcon;
+use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 use crate::view_model::Place;
 
@@ -52,7 +53,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .bg(theme.background_secondary)
         .overflow_y_scroll()
         .border_r_1()
-        .border_color(theme.border);
+        .border_color(theme.border)
+        .flx("app.guilds-layout.guild-list.guild-list-scroller-wrapper");
 
     let home_selected = view.place == Place::Home && !view.favorites_selected;
     let home_hovered = view.hovered_rail_item == Some(RailHoverTarget::Home);
@@ -134,7 +136,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .w(px(32.))
                 .h(px(2.))
                 .rounded(px(1.))
-                .bg(theme.border),
+                .bg(theme.border)
+                .flx("app.guilds-layout.guild-list-divider.guild-divider"),
         );
 
     for g in &view.guilds {
@@ -177,7 +180,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
                 this.set_rail_hover(RailHoverTarget::Guild(id), *hovered, cx);
             }))
-            .on_click(cx.listener(move |this, _, _, cx| this.select_place(Place::Guild(id), cx))),
+            .on_click(cx.listener(move |this, _, _, cx| this.select_place(Place::Guild(id), cx)))
+            .flx("app.sidebar-nav.guild-list-item-presentation.guild-icon"),
         ));
     }
 
@@ -290,6 +294,7 @@ fn rail_item(
                 .h(px(h))
                 .rounded_r(px(4.))
                 .bg(fg)
+                .flx("app.sidebar-nav.guild-list-item-presentation.guild-indicator-bar")
         }))
 }
 

@@ -10,6 +10,7 @@ use gpui_kit::{
 use super::avatar::{AvatarSpec, render_avatar};
 use super::message_row::{self, RowBar};
 use crate::client_view::ClientView;
+use crate::parity_probe::FlxExt as _;
 use crate::format::SystemIcon;
 use crate::theme::Theme;
 use crate::ui::l10n;
@@ -293,7 +294,14 @@ fn divider(label: Option<SharedString>, new: bool, theme: &Theme) -> AnyElement 
     let mut row = div().flex().flex_row().items_center().gap_2().mx_4().my(px(8.)).h(px(16.)).child(line());
     if let Some(label) = label {
         row = row
-            .child(div().text_xs().font_weight(FontWeight::SEMIBOLD).text_color(theme.muted_foreground).child(label))
+            .child(
+                div()
+                    .text_xs()
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(theme.muted_foreground)
+                    .flx_text("channel.divider.text", label.to_string())
+                    .child(label),
+            )
             .child(line());
     }
     if new {

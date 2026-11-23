@@ -27,6 +27,7 @@ mod icons;
 mod login;
 mod nav;
 mod notify;
+mod parity_probe;
 mod platform;
 mod prefs;
 mod profile;

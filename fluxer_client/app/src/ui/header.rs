@@ -9,6 +9,7 @@ use gpui_kit::{Context, FontWeight, Role, SharedString, div, prelude::*, px};
 
 use crate::client_view::ClientView;
 use crate::icons::AppIcon;
+use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 use crate::ui::l10n;
 use crate::view_model::Place;
@@ -36,6 +37,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .px_4()
         .border_b_1()
         .border_color(theme.border)
+        .flx("channel.channel-header.header-wrapper")
         .child(
             div()
                 .flex_1()
@@ -62,6 +64,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .flex_none()
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme.foreground)
+                        .flx_text("channel.channel-header.channel-name", view.channel_title.to_string())
                         .child(view.channel_title.clone()),
                 )
                 .when_some(view.channel_topic.clone(), |d, topic| {
@@ -111,7 +114,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         (false, false) => l10n::tr("Mute channel"),
                     };
                     d.child(
-                        div().debug_selector(|| "toggle-channel-mute".to_owned()).child(
+                        div().debug_selector(|| "toggle-channel-mute".to_owned()).flx("channel.channel-header-components.channel-notification-settings-button.channel-header-icon.click").child(
                             Button::new("toggle-channel-mute")
                                 .ghost()
                                 .small()
@@ -123,7 +126,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         ),
                     )
                     .child(
-                        div().debug_selector(|| "header-threads-btn".to_owned()).child(
+                        div().debug_selector(|| "header-threads-btn".to_owned()).flx("threads.threads-button.channel-header-icon").child(
                             Button::new("header-threads-btn")
                                 .ghost()
                                 .small()
@@ -134,7 +137,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         ),
                     )
                     .child(
-                        div().debug_selector(|| "header-pins-btn".to_owned()).child(
+                        div().debug_selector(|| "header-pins-btn".to_owned()).flx("channel.channel-header-components.channel-pins-button.channel-header-icon").child(
                             Button::new("header-pins-btn")
                                 .ghost()
                                 .small()
@@ -145,7 +148,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         ),
                     )
                     .child(
-                        div().debug_selector(|| "header-favorite-btn".to_owned()).child(
+                        div().debug_selector(|| "header-favorite-btn".to_owned()).flx("channel.channel-header.icon-button.toggle-favorite").child(
                             Button::new("header-favorite-btn")
                                 .ghost()
                                 .small()
@@ -162,7 +165,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         l10n::tr("Show members")
                     };
                     d.child(
-                        div().debug_selector(|| "toggle-member-list".to_owned()).child(
+                        div().debug_selector(|| "toggle-member-list".to_owned()).flx("channel.channel-header.channel-header-icon.toggle-members").child(
                             Button::new("toggle-member-list")
                                 .ghost()
                                 .small()
@@ -195,6 +198,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .items_center()
                         .gap_2()
                         .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx)))
+                        .flx("channel.message-search-bar.message-search-bar.input-container")
                         .child(Icon::new(AppIcon::MagnifyingGlass).xsmall().text_color(theme.muted_foreground))
                         .child(
                             div()
@@ -208,7 +212,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         )
                 })
                 .child(
-                    div().debug_selector(|| "header-inbox-btn".to_owned()).child(
+                    div().debug_selector(|| "header-inbox-btn".to_owned()).flx("channel.channel-header.inbox-button").child(
                         Button::new("header-inbox-btn")
                             .ghost()
                             .small()

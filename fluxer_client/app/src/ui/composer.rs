@@ -12,6 +12,7 @@ use gpui_kit::{AnyElement, App, Context, Div, SharedString, Window, div, prelude
 
 use crate::client_view::ClientView;
 use crate::icons::AppIcon;
+use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 use crate::ui::l10n;
 use crate::ui::reply::ReplyingTo;
@@ -38,12 +39,14 @@ pub fn render_with(
         .selected_channel
         .and_then(|channel_id| crate::ui::attachments::tray::render(view.attachments.files(channel_id), theme, cx));
     let upload = view.can_send.then(|| {
-        Button::new("composer-upload")
-            .ghost()
-            .compact()
-            .icon(AppIcon::Plus)
-            .tooltip(l10n::tr("Upload a file"))
-            .on_click(cx.listener(|v, _, _, cx| v.pick_files(cx)))
+        div().flex_none().flx("channel.lexical-channel-textarea-content.plus-button-above-backdrop.clear-slash-command").child(
+            Button::new("composer-upload")
+                .ghost()
+                .compact()
+                .icon(AppIcon::Plus)
+                .tooltip(l10n::tr("Upload a file"))
+                .on_click(cx.listener(|v, _, _, cx| v.pick_files(cx))),
+        )
     });
     let gif_btn = view.can_send.then(|| {
         div().debug_selector(|| "composer-gif".to_owned()).child(
@@ -103,11 +106,22 @@ pub fn render_with(
                 .border_color(theme.border)
                 .px_2()
                 .py_1()
+                .flx("channel.lexical-channel-textarea-content.textarea-outer")
                 .children(upload)
                 .child(div().flex_1().child(field))
-                .children(gif_btn)
-                .children(sticker_btn)
-                .children(emoji),
+                .when(view.can_send, |d| {
+                    d.child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap_1()
+                            .flx("channel.textarea.textarea-buttons.button-container-dense")
+                            .children(gif_btn)
+                            .children(sticker_btn)
+                            .children(emoji),
+                    )
+                }),
         );
     div()
         .flex()

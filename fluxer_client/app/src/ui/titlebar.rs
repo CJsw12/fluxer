@@ -6,6 +6,7 @@
 use gpui_kit::component::TitleBar;
 use gpui_kit::{AnyElement, FontWeight, SharedString, div, prelude::*, px};
 
+use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 
 pub fn render(title: SharedString, theme: &Theme) -> AnyElement {
@@ -14,7 +15,7 @@ pub fn render(title: SharedString, theme: &Theme) -> AnyElement {
     } else {
         title
     };
-    TitleBar::new()
+    let bar = TitleBar::new()
         .h(px(theme.sizes.titlebar_height))
         .bg(theme.background_tertiary)
         .border_b_1()
@@ -34,6 +35,15 @@ pub fn render(title: SharedString, theme: &Theme) -> AnyElement {
                         .text_color(theme.muted_foreground)
                         .child(display_title),
                 ),
-        )
+        );
+    if !crate::parity_probe::enabled() {
+        return bar.into_any_element();
+    }
+    div()
+        .w_full()
+        .flex_none()
+        .flx("app.native-titlebar.titlebar")
+        .child(crate::parity_probe::titlebar_controls_marker())
+        .child(bar)
         .into_any_element()
 }

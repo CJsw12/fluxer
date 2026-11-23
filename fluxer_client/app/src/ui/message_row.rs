@@ -13,6 +13,7 @@ use gpui_kit::{
 };
 
 use crate::client_view::ClientView;
+use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 use crate::ui::avatar::{AvatarSpec, render_avatar};
 use crate::ui::media_viewer::{self, MediaViewerItem};
@@ -163,6 +164,7 @@ pub fn render(
                     });
                 }
             })
+            .flx_text("channel.message-username.context-menu-underline.key-down", row.author.to_string())
             .child(row.author.clone());
         let header = if compact {
             div()
@@ -197,7 +199,13 @@ pub fn render(
         if document.spoiler_count > 0 {
             body = body.spoiler_state(spoiler_state(row.id, cx));
         }
-        content = content.child(div().w_full().max_w(px(760.)).child(body));
+        content = content.child(
+            div()
+                .w_full()
+                .max_w(px(760.))
+                .flx("channel.user-message.message-content")
+                .child(body),
+        );
     }
     if let (MessageState::Sending, Some(percent)) = (row.state, row.upload_percent) {
         content = content.child(upload_bar(percent, theme));

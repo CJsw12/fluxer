@@ -99,6 +99,40 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .accessibility_label(notif_label)
                 .on_click(cx.listener(|this, _, _, cx| this.toggle_notifications(cx)))
         })
+        .when(view.selected_channel.is_some(), |d| {
+            d.child(
+                div().debug_selector(|| "header-threads-btn".to_owned()).child(
+                    Button::new("header-threads-btn")
+                        .ghost()
+                        .small()
+                        .icon(AppIcon::ChatsCircle)
+                        .tooltip(l10n::tr("Threads"))
+                        .accessibility_label(l10n::tr("Threads"))
+                        .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx))),
+                ),
+            )
+            .child(
+                div().debug_selector(|| "header-pins-btn".to_owned()).child(
+                    Button::new("header-pins-btn")
+                        .ghost()
+                        .small()
+                        .icon(AppIcon::PushPin)
+                        .tooltip(l10n::tr("Pinned messages"))
+                        .accessibility_label(l10n::tr("Pinned messages"))
+                        .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx))),
+                ),
+            )
+            .child(
+                div().debug_selector(|| "header-favorite-btn".to_owned()).child(
+                    Button::new("header-favorite-btn")
+                        .ghost()
+                        .small()
+                        .icon(AppIcon::LinkSimple)
+                        .tooltip(l10n::tr("Add to Favorites"))
+                        .accessibility_label(l10n::tr("Add to Favorites")),
+                ),
+            )
+        })
         .when(view.member_target.is_some() || view.group_dm.is_some(), |d| {
             let members_label = if open {
                 l10n::tr("Hide members")
@@ -151,4 +185,15 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .child(l10n::tr("Search messages")),
                 )
         })
+        .child(
+            div().debug_selector(|| "header-inbox-btn".to_owned()).child(
+                Button::new("header-inbox-btn")
+                    .ghost()
+                    .small()
+                    .icon(AppIcon::Megaphone)
+                    .tooltip(l10n::tr("Inbox"))
+                    .accessibility_label(l10n::tr("Inbox"))
+                    .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx))),
+            ),
+        )
 }

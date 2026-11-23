@@ -48,6 +48,9 @@ pub enum DeepLink {
         user_id: Snowflake,
     },
     Settings,
+    /// Deterministic live-session scenario route (`fluxer://scene/<path>`) for
+    /// driving a logged-in client across every UI surface and modal state.
+    Scene(String),
 }
 
 /// Suppresses identical deep links fired twice within 1.5s (Windows protocol double-dispatch).
@@ -161,6 +164,9 @@ fn parse_route_segments(segments: &[&str], allow_non_channel: bool) -> Option<De
             extract_invite_code(code).map(|code| DeepLink::Invite { code })
         }
         ["settings", ..] if allow_non_channel => Some(DeepLink::Settings),
+        ["scene", rest @ ..] if allow_non_channel && !rest.is_empty() => {
+            Some(DeepLink::Scene(rest.join("/")))
+        }
         _ => None,
     }
 }

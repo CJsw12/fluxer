@@ -241,7 +241,35 @@ fn sized_image(media: ValidMedia<'_>, width: f32, height: f32) -> MediaView {
 }
 
 /// `EmbedYouTube` / `EmbedVideo`: the thumbnail as poster. YouTube portrait
-/// videos may be 450 tall.
+/// videos may be 450 tall. Real server YouTube embeds often omit `video.proxy_url`
+/// (since `video.url` is an iframe embed URL) while providing `thumbnail.proxy_url`.
+fn youtube_or_proxied_video_view(embed: &Embed) -> Option<MediaView> {
+    if let Some(video) = valid_media(embed.video.as_ref()) {
+        return Some(video_view(embed, video));
+    }
+    if embed.is_youtube() || embed.embed_kind() == EmbedKind::Video {
+        let video = embed.video.as_ref().filter(|v| !v.url.is_empty())?;
+        let thumbnail = valid_media(embed.thumbnail.as_ref())?;
+        let vw = video.width.unwrap_or(thumbnail.width).max(1);
+        let vh = video.height.unwrap_or(thumbnail.height).max(1);
+        let tall = embed.is_youtube() && vh > vw;
+        let (width, height) = embed_media_size(vw, vh, tall);
+        return Some(MediaView {
+            kind: MediaKind::Video,
+            source: None,
+            poster: Some(shared(thumbnail.proxy_url)),
+            width: width as f32,
+            height: height as f32,
+            open_url: non_empty(embed.url.as_deref())
+                .or(Some(video.url.as_str()))
+                .map(shared),
+            explicit: video.is_explicit() || thumbnail.media.is_explicit(),
+            label: non_empty(embed.title.as_deref()).map(shared),
+        });
+    }
+    None
+}
+
 fn video_view(embed: &Embed, video: ValidMedia<'_>) -> MediaView {
     let tall = embed.is_youtube() && video.height > video.width;
     let (width, height) = embed_media_size(video.width, video.height, tall);
@@ -317,8 +345,8 @@ fn media_only_view(embed: &Embed) -> Option<MediaView> {
 
 /// `EmbedMediaRenderer`: video, else image, else thumbnail.
 fn card_media_view(embed: &Embed) -> Option<MediaView> {
-    if let Some(video) = valid_media(embed.video.as_ref()) {
-        return Some(video_view(embed, video));
+    if let Some(video) = youtube_or_proxied_video_view(embed) {
+        return Some(video);
     }
     valid_media(embed.image.as_ref()).or_else(|| valid_media(embed.thumbnail.as_ref())).map(image_view)
 }
@@ -360,17 +388,17 @@ fn card_view(
 ) -> CardView {
     let kind = embed.embed_kind();
     let rich_text = kind.allows_markdown();
-    let has_video = valid_media(embed.video.as_ref()).is_some();
+    let has_video = youtube_or_proxied_video_view(embed).is_some();
     let has_image = valid_media(embed.image.as_ref()).is_some();
     let thumbnail = valid_media(embed.thumbnail.as_ref());
     let has_any_media = has_video || has_image || thumbnail.is_some();
     let gallery = gallery_images(index, embeds);
-    // Divergence: a YouTube card with a video draws the one poster with a
-    // play button, never a gallery. The unfurler adds a second same-URL
-    // embed with another thumbnail size (hqdefault beside maxresdefault),
-    // which the web client is seen to draw as a single card.
-    let youtube_video = has_video && embed.is_youtube();
-    let show_gallery = !youtube_video && (gallery.len() > 1 || (!has_any_media && !gallery.is_empty()));
+    // Divergence: a YouTube card draws the one poster (with a play button when
+    // video metadata is present), never a multi-thumbnail gallery. The unfurler
+    // adds a second same-URL embed with another thumbnail size (hqdefault beside
+    // maxresdefault), which the web client draws as a single card.
+    let youtube_card = embed.is_youtube();
+    let show_gallery = !youtube_card && !has_video && (gallery.len() > 1 || (!has_any_media && !gallery.is_empty()));
     let promotes_thumbnail = matches!(kind, EmbedKind::Article | EmbedKind::Image);
     let inline_thumbnail =
         (!has_video && thumbnail.is_some() && !has_image && !promotes_thumbnail && !show_gallery).then_some(thumbnail).flatten();

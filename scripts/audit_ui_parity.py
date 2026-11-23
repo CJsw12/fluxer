@@ -244,6 +244,71 @@ def audit_m5_navigation_and_rows() -> dict[str, Any]:
     }
 
 
+def audit_m6_live_parity_and_scenes() -> dict[str, Any]:
+    rail_m6 = check_patterns(
+        "ui/guild_rail.rs",
+        {
+            "rail_favorites_button": r"rail-favorites-btn",
+            "rail_top_separator": r"rail-separator",
+            "rail_discover_button": r"rail-discover-btn",
+        },
+    )
+    channel_list_m6 = check_patterns(
+        "ui/channel_list.rs",
+        {
+            "guild_header_caret_menu_btn": r"guild-header-menu-btn",
+            "guild_header_popout_menu": r"guild-header-popout",
+        },
+    )
+    header_m6 = check_patterns(
+        "ui/header.rs",
+        {
+            "header_threads_button": r"header-threads-btn",
+            "header_pins_button": r"header-pins-btn",
+            "header_favorite_button": r"header-favorite-btn",
+            "header_inbox_button": r"header-inbox-btn",
+        },
+    )
+    composer_m6 = check_patterns(
+        "ui/composer.rs",
+        {
+            "composer_gif_button": r"composer-gif",
+            "composer_sticker_button": r"composer-sticker",
+        },
+    )
+    message_m6 = check_patterns(
+        "ui/message_row.rs",
+        {
+            "self_mention_row_highlight": r"msg-mentioned-",
+        },
+    )
+    embed_m6 = check_patterns(
+        "ui/embed.rs",
+        {
+            "youtube_unproxied_video_poster_support": r"youtube_or_proxied_video_view",
+        },
+    )
+    deeplink_m6 = check_patterns(
+        "client_view.rs",
+        {
+            "live_scene_deeplink_driver": r"apply_scene_deep_link",
+        },
+    )
+    all_checks = {
+        **rail_m6,
+        **channel_list_m6,
+        **header_m6,
+        **composer_m6,
+        **message_m6,
+        **embed_m6,
+        **deeplink_m6,
+    }
+    return {
+        "checks": all_checks,
+        "passed": all(all_checks.values()),
+    }
+
+
 def main() -> int:
     report = {
         "voice_state_machine": audit_voice_state_machine(),
@@ -251,6 +316,7 @@ def main() -> int:
         "voice_call_stage": audit_voice_call_stage(),
         "settings_modal": audit_settings_modal(),
         "m5_navigation_and_rows": audit_m5_navigation_and_rows(),
+        "m6_live_parity_and_scenes": audit_m6_live_parity_and_scenes(),
     }
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
     OUT_JSON.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")

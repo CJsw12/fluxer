@@ -87,13 +87,20 @@ impl Embed {
             && (self.image.is_some() || self.thumbnail.is_some() || self.video.is_some() || self.audio.is_some())
     }
 
-    /// The provider is YouTube (`getUrlHostname(provider.url) === 'www.youtube.com'`).
+    /// The provider is YouTube (`getUrlHostname(provider.url) === 'www.youtube.com'` or provider name `"YouTube"`).
     pub fn is_youtube(&self) -> bool {
-        self.provider
-            .as_ref()
-            .and_then(|p| p.url.as_deref())
-            .and_then(url_hostname)
-            .is_some_and(|host| host == YOUTUBE_PROVIDER_HOST)
+        self.provider.as_ref().is_some_and(|p| {
+            p.name.eq_ignore_ascii_case("YouTube")
+                || p.url
+                    .as_deref()
+                    .and_then(url_hostname)
+                    .is_some_and(|host| {
+                        host.eq_ignore_ascii_case(YOUTUBE_PROVIDER_HOST)
+                            || host.eq_ignore_ascii_case("youtube.com")
+                            || host.eq_ignore_ascii_case("m.youtube.com")
+                            || host.eq_ignore_ascii_case("youtu.be")
+                    })
+        })
     }
 }
 

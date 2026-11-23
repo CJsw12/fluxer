@@ -246,6 +246,8 @@ pub struct ClientView {
     pub(crate) voice_stage_expanded: bool,
     /// When true, the dedicated bottom-left `UserAreaPopout` menu (`UserArea.tsx`) is open above the user row.
     pub(crate) user_area_popout_open: bool,
+    /// When true, the Guild Header dropdown menu (`GuildHeaderPopout.tsx`) is open below the guild header.
+    pub(crate) guild_header_popout_open: bool,
     /// Active inline voice settings/details popout (`VoiceControlBar.tsx` / `VoiceConnectionStatusInner.tsx`).
     pub(crate) voice_popout: Option<VoicePopoutKind>,
     /// Enumerated OS audio input/output devices for the settings modal.
@@ -436,6 +438,7 @@ impl ClientView {
             voice_stage_open: false,
             voice_stage_expanded: true,
             user_area_popout_open: false,
+            guild_header_popout_open: false,
             voice_popout: None,
             audio_devices: crate::audio_devices::AudioDeviceLists::default(),
             watched_video_track_sid: None,
@@ -1573,6 +1576,16 @@ impl ClientView {
         self.user_area_popout_open = !self.user_area_popout_open;
         if self.user_area_popout_open {
             self.voice_popout = None;
+            self.guild_header_popout_open = false;
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn toggle_guild_header_popout(&mut self, cx: &mut Context<Self>) {
+        self.guild_header_popout_open = !self.guild_header_popout_open;
+        if self.guild_header_popout_open {
+            self.user_area_popout_open = false;
+            self.voice_popout = None;
         }
         cx.notify();
     }
@@ -2398,6 +2411,171 @@ impl ClientView {
                 }
                 true
             }
+            DeepLink::Scene(route) => self.apply_scene_deep_link(route, window, cx),
+        }
+    }
+
+    fn apply_scene_deep_link(&mut self, route: &str, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let parts: Vec<&str> = route.split('/').filter(|s| !s.is_empty()).collect();
+        self.user_area_popout_open = false;
+        self.guild_header_popout_open = false;
+        self.voice_popout = None;
+        if parts.first().copied() != Some("search") && self.search.is_some() {
+            self.close_search(window, cx);
+        }
+        match parts.as_slice() {
+            ["settings", tab] => {
+                if !matches!(self.overlay, Overlay::Settings(_)) {
+                    self.open_settings(window, cx);
+                }
+                let target_tab = match *tab {
+                    "profile" => ui::settings::SettingsTab::Profile,
+                    "account" => ui::settings::SettingsTab::Account,
+                    "privacy" => ui::settings::SettingsTab::PrivacySafety,
+                    "appearance" => ui::settings::SettingsTab::Appearance,
+                    "themes" => ui::settings::SettingsTab::Themes,
+                    "notifications" => ui::settings::SettingsTab::Notifications,
+                    "chat" => ui::settings::SettingsTab::MessagesMedia,
+                    "voice" => ui::settings::SettingsTab::VoiceVideo,
+                    "accessibility" => ui::settings::SettingsTab::Accessibility,
+                    "language" => ui::settings::SettingsTab::Language,
+                    "keybinds" => ui::settings::SettingsTab::Keybinds,
+                    "advanced" => ui::settings::SettingsTab::Advanced,
+                    _ => ui::settings::SettingsTab::Appearance,
+                };
+                self.select_settings_tab(target_tab, cx);
+                true
+            }
+            ["voice", gid, cid] => {
+                let (Some(g), Some(c)) = (Snowflake::parse(gid), Snowflake::parse(cid)) else {
+                    return true;
+                };
+                if !self.backend.state().guilds.contains_key(&g) {
+                    return false;
+                }
+                self.close_overlay(window, cx);
+                self.select_place(Place::Guild(g), cx);
+                self.voice_stage_expanded = true;
+                self.join_voice_channel(c, cx);
+                true
+            }
+            ["voice-split", gid, cid] => {
+                let (Some(g), Some(c)) = (Snowflake::parse(gid), Snowflake::parse(cid)) else {
+                    return true;
+                };
+                if !self.backend.state().guilds.contains_key(&g) {
+                    return false;
+                }
+                self.close_overlay(window, cx);
+                if self.place != Place::Guild(g) {
+                    self.select_place(Place::Guild(g), cx);
+                }
+                self.join_voice_channel(c, cx);
+                self.voice_stage_open = true;
+                self.voice_stage_expanded = false;
+                cx.notify();
+                true
+            }
+            ["voice-popout", kind] => {
+                self.close_overlay(window, cx);
+                self.voice_popout = match *kind {
+                    "input" => Some(VoicePopoutKind::Input),
+                    "output" => Some(VoicePopoutKind::Output),
+                    "stream" => Some(VoicePopoutKind::Stream),
+                    "details" => Some(VoicePopoutKind::Details),
+                    _ => None,
+                };
+                cx.notify();
+                true
+            }
+            ["voice-leave"] => {
+                self.close_overlay(window, cx);
+                self.leave_voice_channel(cx);
+                true
+            }
+            ["user-area-popout"] => {
+                self.close_overlay(window, cx);
+                self.user_area_popout_open = true;
+                cx.notify();
+                true
+            }
+            ["guild-header-popout", gid] => {
+                let Some(g) = Snowflake::parse(gid) else { return true };
+                if !self.backend.state().guilds.contains_key(&g) {
+                    return false;
+                }
+                self.close_overlay(window, cx);
+                if self.place != Place::Guild(g) {
+                    self.select_place(Place::Guild(g), cx);
+                }
+                self.guild_header_popout_open = true;
+                cx.notify();
+                true
+            }
+            ["channel-settings", gid, cid, tab] => {
+                let (Some(g), Some(c)) = (Snowflake::parse(gid), Snowflake::parse(cid)) else {
+                    return true;
+                };
+                if !self.backend.state().guilds.contains_key(&g) {
+                    return false;
+                }
+                self.close_overlay(window, cx);
+                if self.place != Place::Guild(g) {
+                    self.select_place(Place::Guild(g), cx);
+                }
+                if *tab == "permissions" {
+                    self.open_access(ui::access::Scope::Channel { guild: g, channel: c }, window, cx);
+                } else {
+                    self.open_edit_channel(c, window, cx);
+                }
+                true
+            }
+            ["guild-settings", gid, tab] => {
+                let Some(g) = Snowflake::parse(gid) else { return true };
+                if !self.backend.state().guilds.contains_key(&g) {
+                    return false;
+                }
+                self.close_overlay(window, cx);
+                if self.place != Place::Guild(g) {
+                    self.select_place(Place::Guild(g), cx);
+                }
+                if *tab == "bans" {
+                    self.open_guild_bans(window, cx);
+                } else {
+                    self.open_access(ui::access::Scope::Guild(g), window, cx);
+                }
+                true
+            }
+            ["quick-switcher"] => {
+                self.open_quick_switcher(window, cx);
+                true
+            }
+            ["emoji-picker"] => {
+                self.close_overlay(window, cx);
+                self.open_emoji_picker(
+                    ui::emoji_picker::sections::PickerTarget::Composer,
+                    gpui_kit::point(px(900.), px(700.)),
+                    window,
+                    cx,
+                );
+                true
+            }
+            ["search"] => {
+                self.close_overlay(window, cx);
+                if self.search.is_none() {
+                    self.toggle_search(window, cx);
+                }
+                true
+            }
+            ["close-overlays"] => {
+                self.close_overlay(window, cx);
+                if self.search.is_some() {
+                    self.close_search(window, cx);
+                }
+                cx.notify();
+                true
+            }
+            _ => true,
         }
     }
 

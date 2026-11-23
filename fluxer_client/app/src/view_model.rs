@@ -185,6 +185,8 @@ pub struct MessageRow {
     pub channel_start: Option<SharedString>,
     /// First message of a group: shows avatar, author and time.
     pub group_start: bool,
+    /// True when the message mentions the logged-in user (`@user`, `@everyone`, or one of the user's roles).
+    pub mentioned: bool,
     /// Markdown source: the content, then a `📎 [name](url)` line per
     /// non-image attachment.
     pub body: SharedString,
@@ -519,6 +521,16 @@ impl RowContext<'_> {
         if show_embeds && document.as_deref().is_some_and(|d| embed::hides_bare_url(m, d)) {
             document = None;
         }
+        let me_id = self.state.current_user_id();
+        let mentions_me = m.mention_everyone
+            || me_id.is_some_and(|me| {
+                m.mentions.iter().any(|u| u.id == me)
+                    || (!m.mention_roles.is_empty()
+                        && self
+                            .guild_id
+                            .and_then(|gid| self.state.members.get(&gid)?.get(&me))
+                            .is_some_and(|member| m.mention_roles.iter().any(|rid| member.roles.contains(rid))))
+            });
         MessageRow {
             id: m.id,
             author_id: m.author.id,
@@ -532,6 +544,7 @@ impl RowContext<'_> {
             new_divider: false,
             channel_start: None,
             group_start,
+            mentioned: mentions_me,
             body,
             document,
             images,

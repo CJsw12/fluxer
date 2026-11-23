@@ -178,6 +178,34 @@
   - **작업:** `Prefs`에 `voice_push_to_talk`, `voice_noise_suppression`, `allow_guild_dms`, `inline_media_previews`를 추가해 설정창의 입력 모드(VAD/PTT)·노이즈 억제·길드 DM 허용·인라인 미디어 미리보기 카드를 실제 인터랙티브 `Switch`/버튼으로 연결하고, 프로필 팝아웃의 아바타 6px 배너 컷아웃 링과 모더레이션 액션 카드를 공식 레이아웃으로 정돈한다.
   - **수락 기준:** `scripts/audit_ui_parity.py` 확장 항목 포함 100% 통과, 전체 테스트 통과 및 무경고 Windows 릴리스 패키징 완료.
 
+### M6. 로그인 실기 전 시나리오 자동 제어(`fluxer://scene/*`) · 공식 앱(`fluxer-ref`) 실기 대조 격차 100% 수렴
+- [x] **M6.1 로그인 상태 전 시나리오 제어 라우트(`DeepLink::Scene`) 및 라이브 서버 전수 검증 하네스**
+  - **대상 파일:** `fluxer_client/app/src/deep_links.rs`, `fluxer_client/app/src/client_view.rs`
+  - **작업:** 오프라인 합성 픽스처(`--visual-gallery`)만으로는 실제 서버 응답(YouTube unfurler 등)과 로그인 상태 전용 상호작용을 모두 검증할 수 없으므로, 로그인된 `fluxer_client.exe` 프로세스를 단일 인스턴스 IPC(`--url fluxer://scene/...`)로 모든 시나리오 장면(텍스트/마크다운/공지/DM/친구 목록, 음성 채널 접속·중앙 통화 스테이지·상하 분할 채팅·인라인 음성 컨트롤/상세 팝아웃, 하단 `UserAreaPopout`, 서버 헤더 `GuildHeaderPopout`, 설정 모달 12개 탭 전수, 채널 설정 `Overview`/`Permissions`, 서버 설정 `Roles`/`Bans`, 프로필 팝아웃, 검색 패널, 빠른 전환기, 이모지 피커)으로 즉시 전환·캡처하는 라이브 실기 하네스를 구축한다.
+  - **수락 기준:** `DeepLink::Scene` 라우트 단위 테스트 통과 및 전용 테스트 서버 로그인 상태에서 전 시나리오 연속 전환·캡처 성공.
+
+- [x] **M6.2 로그인 실기 대조(`live_official` vs `live_rust`)에서 확인된 메인 셸 1:1 패리티 격차 수렴**
+  - **대상 파일:** `fluxer_client/app/src/ui/guild_rail.rs`, `fluxer_client/app/src/ui/channel_list.rs`, `fluxer_client/app/src/ui/header.rs`, `fluxer_client/app/src/ui/composer.rs`
+  - **공식 참조:** `GuildsSidebar.tsx`, `GuildHeader.tsx`, `GuildHeaderPopout.tsx`, `ChannelHeader.tsx`, `ChannelComposer.tsx`
+  - **작업:**
+    1. 좌측 길드 레일에 공식 `Favorites`(`rail-favorites-btn`) 버튼, 상단 구분선(`rail-separator`), 선택된 서버의 브랜드 블루(`theme.brand`) 배경 및 `theme.on_fill` 텍스트, 하단 `Discover`(`Globe`, `rail-discover-btn`) 및 48×48 원형 `Join/Create`(`Plus`, `join-guild`) 버튼을 구현한다.
+    2. 서버 헤더 우측에 공식 `CaretDown` 드롭다운 버튼(`guild-header-menu-btn`)과 클릭 시 열리는 `GuildHeaderPopout`(`guild-header-popout`) 메뉴를 추가한다.
+    3. 채널 헤더 우측 액션 바에 공식 `ChannelHeader.tsx` 아이콘(`header-threads-btn`, `header-pins-btn`, `header-favorite-btn`, `header-inbox-btn`)을 배치하고, 메시지 입력창 우측에 `[GIF/Image (`composer-gif`)]` · `[Sticker (`composer-sticker`)]` · `[Emoji (`composer-emoji`)]` 아이콘 바를 완성한다.
+  - **수락 기준:** `scripts/audit_ui_parity.py` M6 항목 통과 및 기존 GPUI 테스트 무회귀.
+
+- [x] **M6.3 실제 서버 YouTube 임베드 중복 썸네일 수정 및 본인 멘션(`@user`) 행 전체 하이라이트**
+  - **대상 파일:** `fluxer_client/core/src/state/embed_model.rs`, `fluxer_client/app/src/ui/embed.rs`, `fluxer_client/app/src/view_model.rs`, `fluxer_client/app/src/ui/message_row.rs`
+  - **공식 참조:** `EmbedMediaRenderer.tsx`, `EmbedYouTube.tsx`, `MessageItem.tsx`, `Message.module.css`
+  - **작업:**
+    1. 실제 서버 unfurler가 반환하는 YouTube 임베드(`video.proxy_url == None`, 동일 URL 썸네일 임베드 2개)를 비디오 포스터(`MediaKind::Video`, 재생 버튼 오버레이) 단일 카드로 렌더링하고 중복 2열 갤러리 폴백을 방지한다.
+    2. 로그인한 본인이 멘션(`@user`, `@everyone`, 보유 역할 멘션)된 메시지 행(`MessageRow.mentioned`)에 공식 앰버 배경(`rgba(250, 166, 26, 0.10)`)과 좌측 2px 앰버 강조선(`msg-mentioned-{id}`)을 렌더링한다.
+  - **수락 기준:** 실제 서버 YouTube 임베드 단일 비디오 카드 렌더링 및 멘션 행 하이라이트 단위·GPUI 테스트 통과.
+
+- [x] **M6.4 전용 테스트 서버 로그인 상태에서 공식 앱(`fluxer-ref`) 및 Rust 앱 전 시나리오 실기 캡처·대조**
+  - **대상 파일:** `scripts/audit_ui_parity.py`, `PROGRESS.md`
+  - **작업:** 전용 테스트 서버 SSH 터널을 연결하고 로그인된 프로필로 전 시나리오(32개 장면) 실기 화면을 캡처(`Logs/live-verify-m6/`)하여 공식 앱 화면 및 컴포넌트 계약과 대조 검증한다.
+  - **수락 기준:** `scripts/audit_ui_parity.py` 100%(90/90) 통과, 전체 테스트 통과, 로그인 실기 32개 시나리오 캡처·검증 완료.
+
 ---
 
 ## 표준 검증·빌드 명령 (모든 에이전트 공통)

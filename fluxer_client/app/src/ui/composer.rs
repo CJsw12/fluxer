@@ -45,6 +45,35 @@ pub fn render_with(
             .tooltip(l10n::tr("Upload a file"))
             .on_click(cx.listener(|v, _, _, cx| v.pick_files(cx)))
     });
+    let gif_btn = view.can_send.then(|| {
+        div().debug_selector(|| "composer-gif".to_owned()).child(
+            Button::new("composer-gif")
+                .ghost()
+                .compact()
+                .icon(AppIcon::Monitor)
+                .tooltip(l10n::tr("GIFs & media"))
+                .accessibility_label(l10n::tr("GIFs & media"))
+                .on_click(cx.listener(|v, _, _, cx| v.pick_files(cx))),
+        )
+    });
+    let sticker_btn = view.can_send.then(|| {
+        div().debug_selector(|| "composer-sticker".to_owned()).child(
+            Button::new("composer-sticker")
+                .ghost()
+                .compact()
+                .icon(AppIcon::Palette)
+                .tooltip(l10n::tr("Stickers"))
+                .accessibility_label(l10n::tr("Stickers"))
+                .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
+                    v.open_emoji_picker(
+                        crate::ui::emoji_picker::sections::PickerTarget::Composer,
+                        ev.position(),
+                        window,
+                        cx,
+                    );
+                })),
+        )
+    });
     let emoji = view.can_send.then(|| {
         Button::new("composer-emoji")
             .ghost()
@@ -76,6 +105,8 @@ pub fn render_with(
                 .py_1()
                 .children(upload)
                 .child(div().flex_1().child(field))
+                .children(gif_btn)
+                .children(sticker_btn)
                 .children(emoji),
         );
     div()

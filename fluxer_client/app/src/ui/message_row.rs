@@ -426,11 +426,21 @@ pub fn render(
             let _ = view.update(cx, |v, cx| v.jump_to_message(channel_id, message_id, cx));
         }))
     });
+    let mentioned_sel = format!("msg-mentioned-{}", row.id.0);
+    let mut mention_bg: Hsla = rgb(0xfaa61a).into();
+    mention_bg.a = 0.10;
+    let mention_border: Hsla = rgb(0xfaa61a).into();
     let column = div()
         .flex()
         .flex_col()
         .w_full()
         .when(row.group_start, |d| d.pt(px(sizes.group_gap)))
+        .when(row.mentioned, |d| {
+            d.debug_selector(move || mentioned_sel.clone())
+                .bg(mention_bg)
+                .border_l_2()
+                .border_color(mention_border)
+        })
         .children(reply_line)
         .child(main);
     let bar = match bar {

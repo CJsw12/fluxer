@@ -12,7 +12,7 @@
 ## 현재 상태 (2026-11-24)
 
 - **Baseline:** 브랜치 `desktop-rs`(작업), `main` = `upstream/main`. 주력은 `fluxer_client/`(Rust GPUI + gpui-kit). 음성·화면 공유는 별도 헬퍼 `fluxer_client/voice_worker`(LiveKit, 정적 CRT) 프로세스. `fluxer_desktop_rs/`는 WebView2 전환기 셸.
-- **Done(최근):** Parity Lab 구축(공식 앱 CDP 실측 ↔ Rust 측정 기능 조인 비교, 클릭 크롤러, 재생 러너, 쓰기 차단 가드)과 #markdown 메인 화면 1~5차 수렴. 셸 대부분 0~1px 일치. 상세는 `docs/PARITY_LAB.md` 7.1, 커밋 `82bed49a3`..`7ddeff5ed`.
+- **Done(최근):** 화면 공유 양방향 자동 시험과 수신 색 결함 수정(`ac638a6a3`, M9.5 1차), 업스트림 2026-11-23 병합(`3cc9d8ffb`). Parity Lab 구축(공식 앱 CDP 실측 ↔ Rust 측정 기능 조인 비교, 클릭 크롤러, 재생 러너, 쓰기 차단 가드)과 #markdown 메인 화면 1~5차 수렴. 셸 대부분 0~1px 일치. 상세는 `docs/PARITY_LAB.md` 7.1, 커밋 `82bed49a3`..`7ddeff5ed`.
 - **Decisions:**
   - 1:1 판정은 공식 데스크톱 앱 실측이 기준이다. 정규식 감사(`scripts/audit_ui_parity.py`)와 합성 갤러리는 보조다.
   - 비교 기준 앱은 포터블 공식 데스크톱 사본(Web 2026.1120, 다크, tester2)이다. 사용자 개인 공식 앱은 조작하지 않는다.
@@ -21,7 +21,7 @@
 - **Blockers:**
   - 진행도의 "93/93 구현"은 동작 확인 없이 센 값이라 신뢰하지 않는다(M9.6에서 집계 기준 변경).
   - 비교 앱(tester2)과 Rust(tester1)의 계정이 달라 본인 시점 표시는 비교에서 뺀다.
-  - 기준 버전이 고정되지 않았다(저장소 소스 2026-11-16 vs 비교 앱 Web 2026.1120).
+  - 기준 버전: 저장소는 업스트림 2026-11-23(`3608a387c`)으로 갱신했지만 비교 앱은 Web 2026.1120이다(M9.10 남은 일).
   - 사람·하드웨어가 필요한 항목: 한글 IME 조합, OS 알림·소리, Windows Hello·FIDO2 실기, 장시간 부하.
 
 ## Next Steps

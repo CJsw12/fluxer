@@ -459,6 +459,104 @@ def audit_m6_live_parity_and_scenes() -> dict[str, Any]:
     }
 
 
+def audit_m8_screen_layout_and_icon_parity() -> dict[str, Any]:
+    icons_m8 = check_patterns(
+        "icons.rs",
+        {
+            "phosphor_star_icon": r"Self::Star\s*=>\s*\"icons/phosphor/star\.svg\"",
+            "phosphor_compass_icon": r"Self::Compass\s*=>\s*\"icons/phosphor/compass\.svg\"",
+            "phosphor_tray_icon": r"Self::Tray\s*=>\s*\"icons/phosphor/tray\.svg\"",
+            "phosphor_image_icon": r"Self::Image\s*=>\s*\"icons/phosphor/image\.svg\"",
+            "phosphor_sticker_icon": r"Self::Sticker\s*=>\s*\"icons/phosphor/sticker\.svg\"",
+        },
+    )
+    layout_m8 = check_patterns(
+        "client_view.rs",
+        {
+            "unified_left_column_rail_plus_sidebar_width": r"theme\.sizes\.rail_width\s*\+\s*theme\.sizes\.channel_list_width",
+            "profile_self_scene_deeplink": r'\["profile-self"\]',
+        },
+    )
+    rail_m8 = check_patterns(
+        "ui/guild_rail.rs",
+        {
+            "rail_background_secondary": r"\.bg\(theme\.background_secondary\)",
+            "rail_favorites_star_icon": r"AppIcon::Star",
+            "rail_discover_compass_icon": r"AppIcon::Compass",
+        },
+    )
+    channel_list_m8 = check_patterns(
+        "ui/channel_list.rs",
+        {
+            "sidebar_background_secondary": r"\.bg\(theme\.background_secondary\)",
+            "header_height_56px_alignment": r"\.h\(px\(theme\.sizes\.header_height\)\)",
+            "channel_row_32px_min_height": r"\.min_h\(px\(32\.\)\)",
+            "channel_row_16px_small_icon": r"Icon::new\(icon\)\.small\(\)",
+        },
+    )
+    header_m8 = check_patterns(
+        "ui/header.rs",
+        {
+            "channel_title_never_prematurely_truncated": r"\.flex_none\(\)\s*\.font_weight\(FontWeight::SEMIBOLD\)",
+            "header_favorite_star_icon": r"AppIcon::Star",
+            "header_inbox_tray_icon": r"AppIcon::Tray",
+        },
+    )
+    composer_m8 = check_patterns(
+        "ui/composer.rs",
+        {
+            "composer_gif_image_icon": r"AppIcon::Image",
+            "composer_sticker_icon": r"AppIcon::Sticker",
+        },
+    )
+    friends_m8 = check_patterns(
+        "ui/friends.rs",
+        {
+            "friends_header_height_56px": r"\.h\(px\(theme\.sizes\.header_height\)\)",
+            "friends_header_vertical_divider": r"\.w\(px\(1\.\)\)\.h\(px\(24\.\)\)",
+            "friends_add_tab_brand_primary": r"tab == FriendsTab::AddFriend[\s\S]{0,160}\.bg\(theme\.brand\)[\s\S]{0,80}\.text_color\(theme\.on_fill\)",
+            "friends_active_tab_accent_surface": r"else if active[\s\S]{0,120}\.bg\(accent\)\.text_color\(fg\)",
+        },
+    )
+    user_panel_m8 = check_patterns(
+        "ui/user_panel.rs",
+        {
+            "user_panel_switch_accounts_hover_reveal": r"\.group\(panel_group\.clone\(\)\)[\s\S]*?switch-accounts[\s\S]{0,300}\.opacity\(0\.\)[\s\S]{0,160}\.group_hover\(panel_group",
+        },
+    )
+    settings_m8 = check_patterns(
+        "ui/settings.rs",
+        {
+            "profile_tab_banner_cutout_card": r"fn render_profile_tab[\s\S]{0,2400}settings-profile-banner[\s\S]{0,600}\.p\(px\(6\.\)\)",
+        },
+    )
+    voice_stage_m8 = check_patterns(
+        "ui/voice_stage.rs",
+        {
+            "voice_stage_pure_black_canvas": r"\.bg\(rgb\(0x000000\)\)",
+            "voice_control_44px_button": r"\.size\(px\(44\.\)\)",
+            "voice_control_16px_radius": r"\.rounded\(px\(16\.\)\)",
+            "voice_control_17px_corner_caret_badge": r"\.size\(px\(17\.\)\)",
+        },
+    )
+    all_checks = {
+        **icons_m8,
+        **layout_m8,
+        **rail_m8,
+        **channel_list_m8,
+        **header_m8,
+        **composer_m8,
+        **friends_m8,
+        **user_panel_m8,
+        **settings_m8,
+        **voice_stage_m8,
+    }
+    return {
+        "checks": all_checks,
+        "passed": all(all_checks.values()),
+    }
+
+
 def main() -> int:
     report = {
         "voice_state_machine": audit_voice_state_machine(),
@@ -468,6 +566,7 @@ def main() -> int:
         "settings_modal_and_interactive_controls": audit_settings_modal_and_interactive_controls(),
         "m5_navigation_and_rows": audit_m5_navigation_and_rows(),
         "m6_live_parity_and_scenes": audit_m6_live_parity_and_scenes(),
+        "m8_screen_layout_and_icon_parity": audit_m8_screen_layout_and_icon_parity(),
     }
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
     OUT_JSON.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")

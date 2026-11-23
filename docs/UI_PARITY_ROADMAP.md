@@ -264,6 +264,25 @@
   - **작업:** `python -I scripts/audit_ui_parity.py` 100% 통과 확인, 워크스페이스 전체 테스트 및 `voice_worker` 테스트 통과, `scripts/package_fluxer_client.ps1`로 릴리스 바이너리 패키징 후 전용 테스트 서버에 연결된 상태로 클라이언트를 실행·검증한다.
   - **수락 기준:** 감사 스크립트 100% 통과, 전체 테스트 무회귀, 테스트 서버 연결 클라이언트 실행 확인.
 
+### M8. 화면 단위 픽셀 · CSS 레이아웃 · 아이콘 1:1 수렴
+> **목적:** 로그인 실기 화면을 공식 앱과 나란히 놓았을 때 남아 있던 레이아웃 정렬, 아이콘 형상, 호버 전용 버튼, 탭 스타일, 통화 스테이지 색상 차이를 공식 CSS 모듈 값 기준으로 맞추고 감사 스크립트에 계약으로 고정한다.
+
+- [x] **M8.1 좌측 열 통합 및 가로 경계선 정렬**
+  - **대상 파일:** `fluxer_client/app/src/client_view.rs`, `fluxer_client/app/src/ui/channel_list.rs`, `fluxer_client/app/src/ui/header.rs`
+  - **작업:** 하단 `UserArea`가 길드 레일과 채널 사이드바 너비 전체에 걸치도록 좌측 열을 통합하고, `UserArea`↔`Composer` 하단 경계와 `GuildHeader`↔`ChannelHeader` 상단 경계(`56px`)를 같은 높이에 맞춘다. 채널 헤더 제목은 잘리지 않게 한다.
+- [x] **M8.2 공식 Phosphor 아이콘 · 호버 전용 버튼 · 친구 탭 스타일**
+  - **대상 파일:** `fluxer_client/app/src/icons.rs`, `fluxer_client/app/assets/icons/{star,compass,tray,image,sticker}.svg`, `fluxer_client/app/src/ui/{guild_rail,header,composer,friends,user_panel}.rs`
+  - **공식 참조:** `DMFriendsView.module.css`(`.tabButton`, `.tabButton.active`, `.tabButton.primary`)
+  - **작업:** 즐겨찾기·탐색·받은 편지함·미디어·스티커 아이콘을 공식 Phosphor SVG로 교체하고, 서버 헤더·채널 헤더 관리 버튼과 `UserArea`의 계정 전환 버튼을 그룹 호버 시에만 노출한다. 친구 탭은 `Add friend`를 브랜드 색 알약 버튼으로, 선택된 일반 탭을 `accent` 배경으로 맞춘다.
+- [x] **M8.3 통화 스테이지 · 설정 프로필 탭 헤더**
+  - **대상 파일:** `fluxer_client/app/src/ui/voice_stage.rs`, `fluxer_client/app/src/ui/settings.rs`
+  - **공식 참조:** `CompactVoiceCallView`, `VoiceControlBar`, `UserProfileTab.tsx`
+  - **작업:** 통화 스테이지를 검은 배경과 떠 있는 컨트롤 알약, 반투명 빨강·초록 활성 상태, 우상단 `17px` `CaretDown` 배지로 맞추고, 설정 `Profile` 탭 상단에 배너와 `6px` 컷아웃 링 아바타 헤더를 넣는다.
+- [x] **M8.4 감사 계약 확장 및 로그인 실기 재검증**
+  - **대상 파일:** `scripts/audit_ui_parity.py`
+  - **작업:** `audit_m8_screen_layout_and_icon_parity()`로 위 레이아웃·아이콘·호버·탭 스타일 계약 29개를 추가하고, 전용 테스트 서버 로그인 32-시나리오 캡처와 공식 앱 대조를 다시 수행한다.
+  - **수락 기준:** 감사 스크립트 100% 통과, 전체 테스트 무회귀, 릴리스 패키징 경고 0건.
+
 ---
 
 ## 표준 검증·빌드 명령 (모든 에이전트 공통)

@@ -6,7 +6,7 @@ use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{AnyElement, Context, FontWeight, MouseButton, Role, SharedString, div, prelude::*, px};
 
 use super::avatar::{AvatarSpec, render_avatar};
-use super::{access::Scope, badge, user_panel};
+use super::{access::Scope, badge};
 use crate::client_view::ClientView;
 use crate::icons::AppIcon;
 use crate::theme::Theme;
@@ -16,47 +16,55 @@ use crate::view_model::{ChannelIcon, ChannelItem, Place};
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> impl IntoElement {
     let header_bar = match view.place {
         Place::Home => div()
-            .id("dm-quick-switcher-btn")
-            .role(Role::Button)
-            .aria_label(l10n::tr("Quick switcher"))
-            .debug_selector(|| "dm-quick-switcher-btn".to_owned())
-            .flex()
-            .flex_row()
-            .items_center()
-            .justify_between()
-            .gap_2()
-            .mx_2()
-            .mt_2()
-            .mb_1()
+            .h(px(theme.sizes.header_height))
+            .flex_none()
             .px_2()
-            .py_1p5()
-            .rounded(px(6.))
-            .bg(theme.background_secondary)
-            .border_1()
+            .border_b_1()
             .border_color(theme.border)
-            .cursor_pointer()
-            .hover(|s| s.bg(theme.muted))
-            .on_click(cx.listener(|this, _, window, cx| this.open_quick_switcher(window, cx)))
+            .flex()
+            .items_center()
             .child(
                 div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .text_xs()
-                    .text_color(theme.muted_foreground)
-                    .child(l10n::tr("Quick switcher")),
-            )
-            .child(
-                div()
-                    .flex_none()
-                    .px_1p5()
-                    .py_0p5()
-                    .rounded(px(4.))
-                    .bg(theme.muted)
-                    .text_size(px(10.))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme.muted_foreground)
-                    .child("CTRL K"),
+                    .id("dm-quick-switcher-btn")
+                    .role(Role::Button)
+                    .aria_label(l10n::tr("Quick switcher"))
+                    .debug_selector(|| "dm-quick-switcher-btn".to_owned())
+                    .w_full()
+                    .h(px(34.))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .px_2p5()
+                    .rounded(px(6.))
+                    .bg(theme.background)
+                    .border_1()
+                    .border_color(theme.border)
+                    .cursor_pointer()
+                    .hover(|s| s.bg(theme.muted))
+                    .on_click(cx.listener(|this, _, window, cx| this.open_quick_switcher(window, cx)))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .truncate()
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child(l10n::tr("Quick switcher")),
+                    )
+                    .child(
+                        div()
+                            .flex_none()
+                            .px_1p5()
+                            .py_0p5()
+                            .rounded(px(4.))
+                            .bg(theme.background_secondary)
+                            .text_size(px(10.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.muted_foreground)
+                            .child("CTRL K"),
+                    ),
             )
             .into_any_element(),
         Place::Guild(id) => {
@@ -69,16 +77,20 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             let can_leave = !view.current_guild_is_owner();
             let can_manage_roles = view.backend.state().can_manage_guild_roles(id);
             let menu_open = view.guild_header_popout_open;
+            let header_group: SharedString = "guild-header-group".into();
             let header_row = div()
+                .group(header_group.clone())
+                .h(px(theme.sizes.header_height))
+                .flex_none()
                 .flex()
                 .flex_row()
                 .items_center()
                 .justify_between()
                 .gap_1()
-                .px_3()
-                .py_2()
+                .px_4()
                 .border_b_1()
                 .border_color(theme.border)
+                .hover(|s| s.bg(theme.muted))
                 .child(
                     div()
                         .id("guild-header-title")
@@ -86,62 +98,77 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .flex_1()
                         .min_w_0()
                         .truncate()
-                        .font_weight(FontWeight::BOLD)
+                        .font_weight(FontWeight::SEMIBOLD)
                         .on_click(cx.listener(|this, _, _, cx| this.toggle_guild_header_popout(cx)))
                         .child(name),
                 )
-                .when(view.can_manage_guild_channels, |d| {
-                    d.child(
-                        div().debug_selector(|| "create-channel-btn".to_owned()).child(
-                            Button::new("create-channel-btn")
-                                .ghost()
-                                .xsmall()
-                                .icon(AppIcon::Plus)
-                                .tooltip(l10n::tr("Create channel"))
-                                .accessibility_label(l10n::tr("Create channel"))
-                                .on_click(cx.listener(|this, _, window, cx| this.open_create_channel(None, window, cx))),
-                        ),
-                    )
-                })
-                .when(view.can_ban_members, |d| {
-                    d.child(
-                        div().debug_selector(|| "guild-bans-btn".to_owned()).child(
-                            Button::new("guild-bans-btn")
-                                .ghost()
-                                .xsmall()
-                                .icon(AppIcon::Prohibit)
-                                .tooltip(l10n::tr("Bans"))
-                                .accessibility_label(l10n::tr("Bans"))
-                                .on_click(cx.listener(|this, _, window, cx| this.open_guild_bans(window, cx))),
-                        ),
-                    )
-                })
-                .when(can_manage_roles, |d| {
-                    d.child(
-                        div().debug_selector(|| "guild-roles-btn".to_owned()).child(
-                            Button::new("guild-roles-btn")
-                                .ghost()
-                                .xsmall()
-                                .icon(AppIcon::SlidersHorizontal)
-                                .tooltip(l10n::tr("Roles"))
-                                .accessibility_label(l10n::tr("Roles"))
-                                .on_click(cx.listener(move |this, _, window, cx| this.open_access(Scope::Guild(id), window, cx))),
-                        ),
-                    )
-                })
-                .when(can_leave, |d| {
-                    d.child(
-                        div().debug_selector(|| "leave-guild-btn".to_owned()).child(
-                            Button::new("leave-guild-btn")
-                                .ghost()
-                                .xsmall()
-                                .icon(AppIcon::SignOut)
-                                .tooltip(l10n::tr("Leave community"))
-                                .accessibility_label(l10n::tr("Leave community"))
-                                .on_click(cx.listener(move |this, _, window, cx| this.open_leave_guild(id, window, cx))),
-                        ),
-                    )
-                })
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_0p5()
+                        .opacity(0.)
+                        .group_hover(header_group, |s| s.opacity(1.))
+                        .when(view.can_manage_guild_channels, |d| {
+                            d.child(
+                                div().debug_selector(|| "create-channel-btn".to_owned()).child(
+                                    Button::new("create-channel-btn")
+                                        .ghost()
+                                        .xsmall()
+                                        .icon(AppIcon::Plus)
+                                        .tooltip(l10n::tr("Create channel"))
+                                        .accessibility_label(l10n::tr("Create channel"))
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.open_create_channel(None, window, cx)
+                                        })),
+                                ),
+                            )
+                        })
+                        .when(view.can_ban_members, |d| {
+                            d.child(
+                                div().debug_selector(|| "guild-bans-btn".to_owned()).child(
+                                    Button::new("guild-bans-btn")
+                                        .ghost()
+                                        .xsmall()
+                                        .icon(AppIcon::Prohibit)
+                                        .tooltip(l10n::tr("Bans"))
+                                        .accessibility_label(l10n::tr("Bans"))
+                                        .on_click(cx.listener(|this, _, window, cx| this.open_guild_bans(window, cx))),
+                                ),
+                            )
+                        })
+                        .when(can_manage_roles, |d| {
+                            d.child(
+                                div().debug_selector(|| "guild-roles-btn".to_owned()).child(
+                                    Button::new("guild-roles-btn")
+                                        .ghost()
+                                        .xsmall()
+                                        .icon(AppIcon::SlidersHorizontal)
+                                        .tooltip(l10n::tr("Roles"))
+                                        .accessibility_label(l10n::tr("Roles"))
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            this.open_access(Scope::Guild(id), window, cx)
+                                        })),
+                                ),
+                            )
+                        })
+                        .when(can_leave, |d| {
+                            d.child(
+                                div().debug_selector(|| "leave-guild-btn".to_owned()).child(
+                                    Button::new("leave-guild-btn")
+                                        .ghost()
+                                        .xsmall()
+                                        .icon(AppIcon::SignOut)
+                                        .tooltip(l10n::tr("Leave community"))
+                                        .accessibility_label(l10n::tr("Leave community"))
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            this.open_leave_guild(id, window, cx)
+                                        })),
+                                ),
+                            )
+                        }),
+                )
                 .child(
                     div().debug_selector(|| "guild-header-menu-btn".to_owned()).child(
                         Button::new("guild-header-menu-btn")
@@ -276,8 +303,10 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .flex_col()
         .flex_1()
         .min_h_0()
-        .overflow_y_scroll()
-        .child(header_bar);
+        .pt_2()
+        .pb_2()
+        .gap_0p5()
+        .overflow_y_scroll();
     if view.place == Place::Home {
         let active = view.selected_channel.is_none();
         list = list
@@ -354,10 +383,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .w(px(theme.sizes.channel_list_width))
         .h_full()
         .flex_none()
-        .border_r_1()
-        .border_color(theme.border)
+        .bg(theme.background_secondary)
+        .child(header_bar)
         .child(list)
-        .child(user_panel::render(view, theme, cx))
 }
 
 fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
@@ -455,20 +483,33 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         .role(Role::Button)
         .aria_label(channel_aria_label)
         .aria_selected(selected)
+        .relative()
         .flex()
         .flex_row()
         .items_center()
-        .gap_1()
+        .gap_2()
         .mx_2()
         .px_2()
+        .min_h(px(32.))
         .py_1()
         .rounded(px(6.))
-        .when(c.nested, |d| d.pl_5())
         .text_color(if (highlight_unread || selected) && (c.has_messages || is_voice) { fg } else { muted_fg })
-        .when(highlight_unread || voice_active, |d| d.font_weight(FontWeight::BOLD))
+        .when(highlight_unread || voice_active || selected, |d| d.font_weight(FontWeight::MEDIUM))
         .when(selected, |d| d.bg(theme.accent))
-        .hover(|s| s.bg(theme.muted))
-        .when(is_voice, |d| d.cursor_pointer())
+        .hover(|s| s.bg(theme.muted).text_color(fg))
+        .when(is_voice || c.has_messages, |d| d.cursor_pointer())
+        .when(highlight_unread && !selected, |d| {
+            d.child(
+                div()
+                    .absolute()
+                    .left(px(-8.))
+                    .top(px(12.))
+                    .w(px(4.))
+                    .h(px(8.))
+                    .rounded_r(px(4.))
+                    .bg(fg),
+            )
+        })
         .child(if c.icon == ChannelIcon::Dm {
             div()
                 .debug_selector(|| "dm-row-avatar".to_owned())
@@ -480,7 +521,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                         display_name: c.name.clone(),
                         size: 28.,
                         status: c.dm_status,
-                        status_border_bg: Some(if selected { theme.accent } else { theme.background }),
+                        status_border_bg: Some(if selected { theme.accent } else { theme.background_secondary }),
                     },
                     theme,
                 ))
@@ -494,12 +535,12 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 _ => AppIcon::Hash,
             };
             div()
-                .w(px(18.))
+                .w(px(20.))
                 .flex_none()
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(Icon::new(icon).xsmall().text_color(muted_fg))
+                .child(Icon::new(icon).small().text_color(if selected { fg } else { muted_fg }))
                 .into_any_element()
         })
         .child(div().flex_1().min_w_0().truncate().child(c.name.clone()));

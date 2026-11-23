@@ -2539,6 +2539,13 @@ impl ClientView {
                 cx.notify();
                 true
             }
+            ["profile-self"] => {
+                self.close_overlay(window, cx);
+                if let Some(uid) = self.user.as_ref().map(|u| u.id) {
+                    self.open_profile(uid, self.current_guild_id(), gpui_kit::point(px(340.), px(180.)), window, cx);
+                }
+                true
+            }
             ["guild-header-popout", gid] => {
                 let Some(g) = Snowflake::parse(gid) else { return true };
                 if !self.backend.state().guilds.contains_key(&g) {
@@ -2778,8 +2785,28 @@ impl Render for ClientView {
             .bg(theme.background)
             .text_color(theme.foreground)
             .text_size(px(theme.sizes.text))
-            .child(ui::guild_rail::render(self, &theme, cx))
-            .child(ui::channel_list::render(self, &theme, cx))
+            .child(
+                div()
+                    .w(px(theme.sizes.rail_width + theme.sizes.channel_list_width))
+                    .h_full()
+                    .flex_none()
+                    .bg(theme.background_secondary)
+                    .border_r_1()
+                    .border_color(theme.border)
+                    .flex()
+                    .flex_col()
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_h_0()
+                            .w_full()
+                            .flex()
+                            .flex_row()
+                            .child(ui::guild_rail::render(self, &theme, cx))
+                            .child(ui::channel_list::render(self, &theme, cx)),
+                    )
+                    .child(ui::user_panel::render(self, &theme, cx)),
+            )
             .child(if show_voice_stage {
                 let split_chat = !self.voice_stage_expanded && self.selected_channel.is_some();
                 if split_chat {

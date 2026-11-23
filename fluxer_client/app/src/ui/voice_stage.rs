@@ -369,7 +369,9 @@ fn render_participant_tile(
     tile.into_any_element()
 }
 
-/// Official `VoiceControlBar.tsx` split button group (`.buttonContainer`: primary action + `CaretDown` settings trigger).
+/// Official `VoiceControlBar.tsx` + `VoiceControlBar.module.css` button container:
+/// `44x44px` (`--vc-button-size: 2.75rem`) rounded square (`--vc-button-radius: 1rem` = 16px)
+/// with top-right floating `17x17px` (`rounded 7px`) `.settingsButton` (`CaretDown`) corner badge.
 fn split_control_group(
     main_id: &'static str,
     caret_id: &'static str,
@@ -379,40 +381,34 @@ fn split_control_group(
     active_danger: bool,
     active_online: bool,
     disabled: bool,
-    theme: &Theme,
+    _theme: &Theme,
     on_main_click: impl Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
     on_caret_click: impl Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
 ) -> AnyElement {
-    let (bg, fg) = if active_danger {
-        (theme.danger, theme.on_fill)
+    let (bg, fg): (Hsla, Hsla) = if active_danger {
+        let mut danger_bg: Hsla = rgb(0xff453a).into();
+        danger_bg.a = 0.16;
+        (danger_bg, rgb(0xff453a).into())
     } else if active_online {
-        (theme.status_online, theme.on_fill)
+        let mut success_bg: Hsla = rgb(0x30d158).into();
+        success_bg.a = 0.16;
+        (success_bg, rgb(0x30d158).into())
     } else {
-        (theme.background, theme.foreground)
-    };
-    let border_col = if active_danger || active_online {
-        bg
-    } else {
-        theme.border
+        (gpui_kit::hsla(0., 0., 1., 0.06), gpui_kit::hsla(0., 0., 1., 0.90))
     };
 
     div()
-        .flex()
-        .flex_row()
-        .items_center()
-        .rounded(px(10.))
-        .border_1()
-        .border_color(border_col)
-        .bg(theme.background)
-        .overflow_hidden()
+        .relative()
+        .size(px(44.))
+        .flex_none()
         .child(
             div()
                 .id(main_id)
                 .role(Role::Button)
                 .aria_label(main_label)
                 .debug_selector(move || main_id.to_owned())
-                .w(px(40.))
-                .h(px(36.))
+                .size(px(44.))
+                .rounded(px(16.))
                 .bg(bg)
                 .text_color(fg)
                 .flex()
@@ -432,19 +428,22 @@ fn split_control_group(
                 .role(Role::Button)
                 .aria_label(caret_label)
                 .debug_selector(move || caret_id.to_owned())
-                .w(px(22.))
-                .h(px(36.))
-                .border_l_1()
-                .border_color(theme.border)
-                .bg(theme.background)
-                .text_color(theme.muted_foreground)
+                .absolute()
+                .top(px(-2.))
+                .right(px(-2.))
+                .size(px(17.))
+                .rounded(px(7.))
+                .border_1()
+                .border_color(gpui_kit::hsla(0., 0., 1., 0.18))
+                .bg(rgb(0x000000))
+                .text_color(gpui_kit::hsla(0., 0., 1., 0.88))
                 .flex()
                 .items_center()
                 .justify_center()
                 .cursor_pointer()
-                .hover(|s| s.bg(theme.muted).text_color(theme.foreground))
+                .hover(|s| s.border_color(gpui_kit::hsla(0., 0., 1., 0.40)))
                 .on_click(on_caret_click)
-                .child(Icon::new(AppIcon::CaretDown).xsmall().text_color(theme.muted_foreground)),
+                .child(Icon::new(AppIcon::CaretDown).xsmall().text_color(gpui_kit::hsla(0., 0., 1., 0.88))),
         )
         .into_any_element()
 }
@@ -455,27 +454,24 @@ fn single_control_button(
     label: String,
     active_danger: bool,
     disabled: bool,
-    theme: &Theme,
+    _theme: &Theme,
     on_click: impl Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
 ) -> AnyElement {
-    let (bg, fg) = if active_danger {
-        (theme.danger, theme.on_fill)
+    let (bg, fg): (Hsla, Hsla) = if active_danger {
+        (rgb(0xff3b30).into(), gpui_kit::white())
     } else {
-        (theme.background, theme.foreground)
+        (gpui_kit::hsla(0., 0., 1., 0.06), gpui_kit::hsla(0., 0., 1., 0.90))
     };
     div()
         .id(id)
         .role(Role::Button)
         .aria_label(label)
         .debug_selector(move || id.to_owned())
-        .w(px(40.))
-        .h(px(36.))
-        .rounded(px(10.))
+        .size(px(44.))
+        .rounded(px(16.))
         .flex()
         .items_center()
         .justify_center()
-        .border_1()
-        .border_color(if active_danger { bg } else { theme.border })
         .bg(bg)
         .text_color(fg)
         .when(disabled, |d| d.opacity(0.45))
@@ -654,7 +650,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .flex_col()
         .justify_center()
         .gap_3()
-        .bg(theme.background_tertiary);
+        .bg(rgb(0x000000));
 
     if let Some(track) = &watched_track {
         let label = video_viewer::participant_display_name(view, track);
@@ -716,20 +712,20 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         l10n::tr("Share Screen")
     };
 
-    // Official `VoiceControlBar.tsx`: grouped split buttons + separator + disconnect.
+    // Official `VoiceControlBar.tsx` + `VoiceControlBar.module.css`:
+    // black floating capsule (`--vc-control-material-bg: #000`, `border-radius: 24px`, `padding: 6px`, `gap: 4px`).
     let control_pill = div()
-        .px_3()
-        .py_2()
-        .rounded(px(14.))
+        .p(px(6.))
+        .rounded(px(24.))
         .border_1()
-        .border_color(theme.border)
-        .bg(theme.background_secondary)
+        .border_color(gpui_kit::hsla(0., 0., 1., 0.10))
+        .bg(rgb(0x000000))
         .flex()
         .flex_row()
         .flex_wrap()
         .items_center()
         .justify_center()
-        .gap_2()
+        .gap_1()
         .child(split_control_group(
             "voice-stage-mute-btn",
             "voice-stage-input-settings-btn",
@@ -1149,9 +1145,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .flex_none()
         .py_3()
         .px_4()
-        .border_t_1()
-        .border_color(theme.border)
-        .bg(theme.background_tertiary)
+        .bg(rgb(0x000000))
         .flex()
         .flex_col()
         .items_center()
@@ -1178,7 +1172,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .border_color(theme.border)
         })
         .min_w_0()
-        .bg(theme.background_tertiary)
+        .bg(rgb(0x000000))
         .child(header)
         .child(stage_body)
         .child(controls)

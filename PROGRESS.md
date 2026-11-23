@@ -16,7 +16,7 @@
 
 ### Next Steps (새 세션 진입 시 순서대로 실행)
 
-> **활성 로드맵:** `docs/UI_PARITY_ROADMAP.md` (M1.1~M7.5 + 패스키·보안 키까지 전체 93/93 기능 구현·정적 AST/상태머신/인터랙티브 컨트롤 155/155 자동 감사·오프라인 시각 검증·전용 테스트 서버 실기 대조·릴리스 패키징 완료; 구 `RUST_*_PLAN.md`·`NATIVE_MIGRATION_PLAN.md`·`NEXT_BRIEFS.md`는 보관본이므로 따르지 않는다.)
+> **활성 로드맵:** `docs/UI_PARITY_ROADMAP.md` (M1.1~M8.4 + 패스키·보안 키까지 전체 93/93 기능 구현·정적 AST/상태머신/인터랙티브 컨트롤 184/184 자동 감사·오프라인 시각 검증·전용 테스트 서버 실기 대조·릴리스 패키징 완료; 구 `RUST_*_PLAN.md`·`NATIVE_MIGRATION_PLAN.md`·`NEXT_BRIEFS.md`는 보관본이므로 따르지 않는다.)
 
 1. **M1 — 공용 렌더러 강제 재사용 & 에셋 통일 (`docs/UI_PARITY_ROADMAP.md#m1`) [완료]:**
    - `M1.1` 완료(`324718aa8`), `M1.2` 완료(`108d53231`), `M1.3` 완료(`1b9d2167d`).
@@ -34,7 +34,12 @@
    - `M6.1`~`M6.4` 완료(`393e32888`).
 8. **M7 — 포팅 검증 방법론 고도화(정적 배지 치환 금지 · 호버/인디케이터 상태 머신 감사) 및 길드 레일 호버 · 음성/비디오/전체 설정 인터랙티브 컨트롤 100% 이식 (`docs/UI_PARITY_ROADMAP.md#m7`) [완료]:**
    - `M7.1`(`scripts/audit_ui_parity.py` v2 155/155 통과 및 정적 배지 치환 금지), `M7.2`(길드 레일 `Direct messages`/`Favorites`/`Guild` 호버 모핑 및 좌측 흰색 인디케이터 바 `40px`/`20px`/`8px` 상태 머신), `M7.3`(`Voice & Video` 탭 카메라·화면 공유 해상도/프레임레이트/코덱/비트레이트/하드웨어 가속 및 음성 처리 프로필/노이즈 억제 백엔드/에코 캔슬레이션/자동 게인/VAD 감도/PTT 해제 지연/마이크 테스트 전수 이식), `M7.4`(`Privacy & Safety`/`Messages & Media`/`Notifications`/`Language` 인터랙티브 컨트롤 전수 전환), `M7.5`(테스트 서버 실기 검증 및 릴리스 패키징) 완료.
-9. **후속 하드웨어 실기 검증(사람 개입 필요):**
+9. **M8 — 화면 단위 픽셀 · CSS 레이아웃 · 아이콘 1:1 수렴 (`docs/UI_PARITY_ROADMAP.md#m8`) [완료]:**
+   - 좌측 열 통합·`56px` 경계 정렬, 공식 Phosphor 아이콘 5종, 호버 전용 관리·계정 버튼, 친구 탭 스타일, 검은 통화 스테이지·`17px` 코너 배지, 설정 프로필 배너 헤더를 반영했다. 감사 184/184, 워크스페이스 693 + `voice_worker` 10 통과, 릴리스 패키징 경고 0건.
+   - **검증 방법 결함 발견:** M8 로그인 실기 재캡처는 하네스가 존재하지 않는 CA 파일을 `SSL_CERT_FILE`로 넘겨 32장 모두 `Reconnecting…` 상태의 같은 화면이었는데도 종료 코드 0으로 끝났다. 장면 성공 여부를 판정하지 않는 캡처는 검증으로 인정하지 않는다. 후속은 10번의 Parity Lab이다.
+10. **Parity Lab — 공식 앱 DOM 기준 자동 비교·탐색 체계 (`docs/PARITY_LAB.md`) [진행 중]:**
+   - 공식 데스크톱 앱(Electron, `--remote-debugging-port`)과 공식 웹을 CDP로 구동해 `data-flx` 요소의 위치·계산 스타일·텍스트와 접근성 트리를 기준값으로 추출하고, Rust 앱은 같은 `data-flx` ID를 단 요소의 경계를 내보내 1:1 조인 비교한다. 모든 버튼 클릭으로 열리는 팝아웃·모달을 자동 탐색해 양쪽 상태를 대조한다.
+11. **후속 하드웨어 실기 검증(사람 개입 필요):**
    - 자체 시험 서버에서 최신 릴리스(`dist/fluxer_client/fluxer_client.exe`)로 실제 Windows Hello/FIDO2 패스키 등록·로그인, 실기기 양방향 음성·화면 공유, 한글 IME 조합, OS 알림·소리, 장시간 부하를 확인한 뒤 확인된 항목만 `docs/progress/progress.json` `done`으로 승격하고 `python -I scripts/progress_svg.py`로 배지·README를 갱신한다.
 
 ## 에이전트 지침 정리 (2026-11-21)

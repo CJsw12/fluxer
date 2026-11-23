@@ -250,6 +250,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             })
     });
 
+    let panel_group: SharedString = "user-panel-group".into();
+
     div()
         .id("user-area-wrapper")
         .role(Role::Region)
@@ -270,13 +272,15 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .child(
             div()
                 .id("user-panel")
+                .group(panel_group.clone())
                 .debug_selector(|| "user-panel".to_owned())
+                .min_h(px(theme.sizes.composer_height - 2.))
                 .flex()
                 .flex_row()
                 .flex_none()
                 .items_center()
-                .gap_2()
-                .px_2()
+                .gap_2p5()
+                .px_2p5()
                 .py_1p5()
                 .child(
                     div().relative().flex_none().child(picture).child(
@@ -330,17 +334,21 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .flex_none()
                         .when(view.accounts_enabled, |d| {
                             d.child(
-                                div().debug_selector(|| "switch-accounts".to_owned()).child(
-                                    Button::new("switch-accounts")
-                                        .ghost()
-                                        .small()
-                                        .icon(AppIcon::Users)
-                                        .tooltip(l10n::tr("Switch accounts"))
-                                        .accessibility_label(l10n::tr("Switch accounts"))
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.open_account_switcher(window, cx);
-                                        })),
-                                ),
+                                div()
+                                    .debug_selector(|| "switch-accounts".to_owned())
+                                    .opacity(0.)
+                                    .group_hover(panel_group, |s| s.opacity(1.))
+                                    .child(
+                                        Button::new("switch-accounts")
+                                            .ghost()
+                                            .small()
+                                            .icon(AppIcon::Users)
+                                            .tooltip(l10n::tr("Switch accounts"))
+                                            .accessibility_label(l10n::tr("Switch accounts"))
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.open_account_switcher(window, cx);
+                                            })),
+                                    ),
                             )
                         })
                         .child(render_control_icon_button(

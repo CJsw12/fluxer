@@ -50,7 +50,7 @@ pub fn render_with(
             Button::new("composer-gif")
                 .ghost()
                 .compact()
-                .icon(AppIcon::Monitor)
+                .icon(AppIcon::Image)
                 .tooltip(l10n::tr("GIFs & media"))
                 .accessibility_label(l10n::tr("GIFs & media"))
                 .on_click(cx.listener(|v, _, _, cx| v.pick_files(cx))),
@@ -61,7 +61,7 @@ pub fn render_with(
             Button::new("composer-sticker")
                 .ghost()
                 .compact()
-                .icon(AppIcon::Palette)
+                .icon(AppIcon::Sticker)
                 .tooltip(l10n::tr("Stickers"))
                 .accessibility_label(l10n::tr("Stickers"))
                 .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {

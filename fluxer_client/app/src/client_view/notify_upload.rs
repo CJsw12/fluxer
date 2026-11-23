@@ -64,7 +64,10 @@ impl ClientView {
         }
     }
 
-    /// The header's bell: toasts and sounds on/off for this session and saved prefs.
+    /// Toasts and sounds on/off for this session and saved prefs. The official channel header
+    /// only carries the per-channel mute bell, so the app reaches this via tray/settings
+    /// (`settings_set_notifications`); this flip helper remains for tests.
+    #[cfg(test)]
     pub(crate) fn toggle_notifications(&mut self, cx: &mut Context<Self>) {
         self.notifier.enabled = !self.notifier.enabled;
         self.prefs.set_notifications(self.notifier.enabled);

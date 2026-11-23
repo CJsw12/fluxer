@@ -165,15 +165,37 @@ fn tab_button(
     theme: &Theme,
     cx: &mut Context<ClientView>,
 ) -> impl IntoElement {
-    let mut btn = Button::new(id).small().label(label);
-    btn = if active { btn.primary() } else { btn.ghost() };
-    div()
+    let accent = theme.accent;
+    let fg = theme.foreground;
+    let base = div()
+        .id(id)
+        .role(gpui_kit::Role::Button)
         .debug_selector(move || id.to_owned())
+        .cursor_pointer()
         .flex()
         .flex_row()
         .items_center()
-        .gap_1()
-        .child(btn.on_click(cx.listener(move |this, _, _, cx| this.set_friends_tab(tab, cx))))
+        .gap_1p5()
+        .px(px(12.))
+        .py(px(4.))
+        .rounded(px(6.))
+        .text_sm()
+        .font_weight(FontWeight::SEMIBOLD)
+        .on_click(cx.listener(move |this, _, _, cx| this.set_friends_tab(tab, cx)));
+
+    let styled = if tab == FriendsTab::AddFriend {
+        base.bg(theme.brand)
+            .text_color(theme.on_fill)
+            .hover(|s| s.opacity(0.9))
+    } else if active {
+        base.bg(accent).text_color(fg)
+    } else {
+        base.text_color(theme.muted_foreground)
+            .hover(move |s| s.bg(accent).text_color(fg))
+    };
+
+    styled
+        .child(label)
         .when(badge_count > 0, |d| d.child(badge(badge_count, theme)))
 }
 
@@ -319,29 +341,69 @@ fn render_row(row: &FriendRow, theme: &Theme, cx: &mut Context<ClientView>) -> A
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> impl IntoElement {
     let tab = view.friends_tab;
     let header = div()
+        .h(px(theme.sizes.header_height))
+        .flex_none()
         .flex()
         .flex_row()
-        .flex_wrap()
         .items_center()
-        .gap_2()
+        .gap_3()
         .px_4()
-        .py_2()
         .border_b_1()
         .border_color(theme.border)
-        .child(div().font_weight(FontWeight::BOLD).pr_2().child(l10n::tr("Friends")))
-        .child(tab_button("friends-tab-online", l10n::tr("Online"), tab == FriendsTab::Online, 0, FriendsTab::Online, theme, cx))
-        .child(tab_button("friends-tab-all", l10n::tr("All"), tab == FriendsTab::All, 0, FriendsTab::All, theme, cx))
-        .child(tab_button(
-            "friends-tab-pending",
-            l10n::tr("Pending"),
-            tab == FriendsTab::Pending,
-            view.pending_incoming,
-            FriendsTab::Pending,
-            theme,
-            cx,
-        ))
-        .child(tab_button("friends-tab-blocked", l10n::tr("Blocked"), tab == FriendsTab::Blocked, 0, FriendsTab::Blocked, theme, cx))
-        .child(tab_button("friends-tab-add", l10n::tr("Add friend"), tab == FriendsTab::AddFriend, 0, FriendsTab::AddFriend, theme, cx));
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_2()
+                .child(gpui_kit::component::Icon::new(crate::icons::AppIcon::Users).small().text_color(theme.muted_foreground))
+                .child(div().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("Friends"))),
+        )
+        .child(div().w(px(1.)).h(px(24.)).bg(theme.border))
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_1p5()
+                .child(tab_button(
+                    "friends-tab-online",
+                    l10n::tr("Online"),
+                    tab == FriendsTab::Online,
+                    0,
+                    FriendsTab::Online,
+                    theme,
+                    cx,
+                ))
+                .child(tab_button("friends-tab-all", l10n::tr("All"), tab == FriendsTab::All, 0, FriendsTab::All, theme, cx))
+                .child(tab_button(
+                    "friends-tab-pending",
+                    l10n::tr("Pending"),
+                    tab == FriendsTab::Pending,
+                    view.pending_incoming,
+                    FriendsTab::Pending,
+                    theme,
+                    cx,
+                ))
+                .child(tab_button(
+                    "friends-tab-blocked",
+                    l10n::tr("Blocked"),
+                    tab == FriendsTab::Blocked,
+                    0,
+                    FriendsTab::Blocked,
+                    theme,
+                    cx,
+                ))
+                .child(tab_button(
+                    "friends-tab-add",
+                    l10n::tr("Add friend"),
+                    tab == FriendsTab::AddFriend,
+                    0,
+                    FriendsTab::AddFriend,
+                    theme,
+                    cx,
+                )),
+        );
 
     let body: AnyElement = if tab == FriendsTab::AddFriend {
         let status_el = view.friends_status.as_ref().map(|res| match res {

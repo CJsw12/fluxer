@@ -49,6 +49,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .w(px(theme.sizes.rail_width))
         .h_full()
         .flex_none()
+        .bg(theme.background_secondary)
         .overflow_y_scroll()
         .border_r_1()
         .border_color(theme.border);
@@ -111,7 +112,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     .flex()
                     .items_center()
                     .justify_center()
-                    .child(Icon::new(AppIcon::PushPin).small().text_color(fav_fg))
+                    .child(Icon::new(AppIcon::Star).small().text_color(fav_fg))
                     .into_any_element(),
                 l10n::tr("Favorites"),
                 fav_selected,
@@ -216,7 +217,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 this.set_rail_hover(RailHoverTarget::Discover, *hovered, cx);
             }))
             .on_click(cx.listener(|this, _, window, cx| this.open_join_guild(window, cx)))
-            .child(Icon::new(AppIcon::Globe).small().text_color(discover_fg)),
+            .child(Icon::new(AppIcon::Compass).small().text_color(discover_fg)),
     )
     .child(
         div()

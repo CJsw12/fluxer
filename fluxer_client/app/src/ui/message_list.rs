@@ -215,7 +215,8 @@ fn channel_start(name: &SharedString, theme: &Theme) -> AnyElement {
         .gap_2()
         .px_4()
         .pt_4()
-        .pb_2()
+        // `.container` margin-bottom 2rem + divider slot gap 1rem.
+        .pb(px(45.))
         .child(
             div()
                 .size(px(theme.sizes.channel_start_icon))
@@ -231,11 +232,12 @@ fn channel_start(name: &SharedString, theme: &Theme) -> AnyElement {
         .child(
             div()
                 .text_color(theme.foreground)
-                .text_size(px(28.))
-                .font_weight(FontWeight::BOLD)
+                .text_size(px(30.))
+                .line_height(px(45.))
+                .font_weight(FontWeight::SEMIBOLD)
                 .child(l10n::tr_args("Welcome to {channelDisplayName}", &[("channelDisplayName", name.as_ref())])),
         )
-        .child(div().text_color(theme.muted_foreground).child(l10n::tr_args(
+        .child(div().text_color(theme.muted_foreground).text_size(px(18.)).line_height(px(27.)).child(l10n::tr_args(
             "This is the start of {channelDisplayName}.",
             &[("channelDisplayName", name.as_ref())],
         )))
@@ -289,16 +291,18 @@ fn dm_start(
 
 /// Date separator (`ChannelDivider`) and/or the red "NEW" divider.
 fn divider(label: Option<SharedString>, new: bool, theme: &Theme) -> AnyElement {
-    let line_color = if new { theme.danger } else { theme.border };
-    let line = move || div().flex_1().h(px(1.)).bg(line_color);
-    let mut row = div().flex().flex_row().items_center().gap_2().mx_4().my(px(8.)).h(px(16.)).child(line());
+    let line_color = if new { theme.danger } else { gpui_kit::hsla(252. / 360., 0.17, 0.80, 0.15) };
+    let line = move || div().flex_1().h(px(2.)).bg(line_color);
+    // `ChannelDivider.container`: 20px tall, 0 1.25rem padding, text padding 0 0.75rem.
+    let mut row = div().flex().flex_row().items_center().gap(px(12.)).mx(px(20.)).h(px(20.)).child(line());
     if let Some(label) = label {
         row = row
             .child(
                 div()
-                    .text_xs()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme.muted_foreground)
+                    .text_size(px(12.))
+                    .line_height(px(18.))
+                    .font_weight(FontWeight::MEDIUM)
+                    .text_color(theme.text_tertiary)
                     .flx_text("channel.divider.text", label.to_string())
                     .child(label),
             )

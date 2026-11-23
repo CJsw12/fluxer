@@ -81,6 +81,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             let header_group: SharedString = "guild-header-group".into();
             let header_row = div()
                 .group(header_group.clone())
+                .relative()
                 .h(px(theme.sizes.header_height))
                 .flex_none()
                 .flex()
@@ -91,28 +92,41 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .px_4()
                 .border_b_1()
                 .border_color(theme.border)
+                .bg(theme.background_secondary)
                 .hover(|s| s.bg(theme.muted))
+                .id("guild-header")
+                .role(Role::Button)
+                .aria_label(l10n::tr("Community menu"))
+                .cursor_pointer()
+                .on_click(cx.listener(|this, _, _, cx| this.toggle_guild_header_popout(cx)))
                 .flx("app.guild-header.header-wrapper")
+                .flx("app.guild-header-shell.button.context-menu-wrapper")
                 .child(
                     div()
                         .id("guild-header-title")
-                        .cursor_pointer()
                         .flex_1()
                         .min_w_0()
                         .truncate()
+                        .text_size(px(16.))
+                        .line_height(px(20.))
+                        .text_color(theme.foreground)
                         .font_weight(FontWeight::SEMIBOLD)
-                        .on_click(cx.listener(|this, _, _, cx| this.toggle_guild_header_popout(cx)))
                         .flx_text("app.guild-header.guild-name", name.to_string())
                         .child(name),
                 )
                 .child(
                     div()
+                        .id("guild-header-actions")
+                        .absolute()
+                        .right(px(40.))
                         .flex()
                         .flex_row()
                         .items_center()
                         .gap_0p5()
                         .opacity(0.)
                         .group_hover(header_group, |s| s.opacity(1.))
+                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                        .on_click(|_, _, cx| cx.stop_propagation())
                         .when(view.can_manage_guild_channels, |d| {
                             d.child(
                                 div().debug_selector(|| "create-channel-btn".to_owned()).child(
@@ -173,15 +187,16 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         }),
                 )
                 .child(
-                    div().debug_selector(|| "guild-header-menu-btn".to_owned()).flx("app.guild-header.caret-icon").child(
-                        Button::new("guild-header-menu-btn")
-                            .ghost()
-                            .xsmall()
-                            .icon(if menu_open { AppIcon::X } else { AppIcon::CaretDown })
-                            .tooltip(l10n::tr("Community menu"))
-                            .accessibility_label(l10n::tr("Community menu"))
-                            .on_click(cx.listener(|this, _, _, cx| this.toggle_guild_header_popout(cx))),
-                    ),
+                    div()
+                        .debug_selector(|| "guild-header-menu-btn".to_owned())
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .justify_center()
+                        .size(px(16.))
+                        .text_color(theme.foreground)
+                        .child(Icon::new(if menu_open { AppIcon::X } else { AppIcon::CaretDown }).with_size(px(16.)))
+                        .flx("app.guild-header.caret-icon"),
                 );
 
             let popout = menu_open.then(|| {
@@ -306,9 +321,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .flex_col()
         .flex_1()
         .min_h_0()
-        .pt_2()
+        .pt(px(11.))
         .pb_2()
-        .gap_0p5()
+        .gap(px(1.))
         .overflow_y_scroll();
     if view.place == Place::Home {
         let active = view.selected_channel.is_none();
@@ -387,19 +402,27 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .h_full()
         .flex_none()
         .bg(theme.background_secondary)
-        .flx("app.guild-sidebar.guild-navbar")
         .child(header_bar)
         .child(list)
 }
 
 fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
-    let (muted_fg, fg) = (theme.muted_foreground, theme.foreground);
+    let (muted_fg, fg) = (theme.text_tertiary_muted, theme.foreground);
     let row_group: SharedString = format!("channel-row-{}", c.id.0).into();
+    let perm_right = if c.is_category {
+        76.
+    } else if c.can_manage {
+        32.
+    } else {
+        8.
+    };
     let permissions = match view.place {
         Place::Guild(guild) if c.can_manage_permissions => {
             let channel = c.id;
             Some(div().id(("channel-permissions-wrap", channel.0))
                 .debug_selector(move || format!("channel-permissions-{}", channel.0))
+                .absolute()
+                .right(px(perm_right))
                 .opacity(0.)
                 .group_hover(row_group.clone(), |s| s.opacity(1.))
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
@@ -421,15 +444,21 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         let edit_sel = format!("edit-channel-{}", cat_id.0);
         return div()
             .group(row_group.clone())
+            .relative()
             .flex()
             .flex_row()
             .items_center()
-            .gap_1()
-            .px_3()
-            .pt_3()
-            .text_xs()
+            .gap(px(6.))
+            .mx_2()
+            .px_2()
+            .mt(px(3.))
+            .h(px(32.))
+            .flex_none()
+            .flx("app.generic-channel-item.long-pressable.click")
+            .text_size(px(14.))
+            .line_height(px(20.))
             .text_color(muted_fg)
-            .font_weight(FontWeight::MEDIUM)
+            .font_weight(FontWeight::SEMIBOLD)
             .child(
                 div()
                     .flex_1()
@@ -442,6 +471,8 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 d.child(
                     div()
                         .debug_selector(move || create_sel.clone())
+                        .absolute()
+                        .right(px(52.))
                         .opacity(0.)
                         .group_hover(row_group.clone(), |s| s.opacity(1.))
                         .child(
@@ -459,6 +490,8 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 .child(
                     div()
                         .debug_selector(move || edit_sel.clone())
+                        .absolute()
+                        .right(px(28.))
                         .opacity(0.)
                         .group_hover(row_group.clone(), |s| s.opacity(1.))
                         .child(
@@ -475,7 +508,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 )
             })
             .children(permissions)
-            .child(div().flex_none().child(Icon::new(AppIcon::CaretDown).xsmall().text_color(muted_fg)))
+            .child(div().flex_none().child(Icon::new(AppIcon::CaretDown).with_size(px(12.)).text_color(muted_fg)))
             .into_any_element();
     }
     let is_voice = c.icon == ChannelIcon::Voice;
@@ -498,14 +531,18 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         .flex()
         .flex_row()
         .items_center()
-        .gap_2()
+        .gap(px(6.))
         .mx_2()
-        .px_2()
+        .pl_2()
+        .pr(px(if selected { 30. } else { 14. }))
         .min_h(px(32.))
-        .py_1()
+        .py(px(6.))
+        .text_size(px(16.))
+        .line_height(px(20.))
+        .font_weight(FontWeight::MEDIUM)
         .rounded(px(6.))
+        .flx("app.generic-channel-item.long-pressable.click")
         .text_color(if (highlight_unread || selected) && (c.has_messages || is_voice) { fg } else { muted_fg })
-        .when(highlight_unread || voice_active || selected, |d| d.font_weight(FontWeight::MEDIUM))
         .when(selected, |d| d.bg(theme.accent))
         .hover(|s| s.bg(theme.muted).text_color(fg))
         .when(is_voice || c.has_messages, |d| d.cursor_pointer())
@@ -546,12 +583,13 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 _ => AppIcon::Hash,
             };
             div()
-                .w(px(20.))
+                .size(px(20.))
                 .flex_none()
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(Icon::new(icon).small().text_color(if selected { fg } else { muted_fg }))
+                .child(Icon::new(icon).with_size(px(20.)).text_color(if selected { fg } else { muted_fg }))
+                .flx("app.channel-item-content.div")
                 .into_any_element()
         })
         .child(
@@ -577,6 +615,8 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
             div()
                 .id(("edit-channel-wrap", ch_id.0))
                 .debug_selector(move || edit_sel.clone())
+                .absolute()
+                .right(px(8.))
                 .opacity(0.)
                 .group_hover(row_group, |s| s.opacity(1.))
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())

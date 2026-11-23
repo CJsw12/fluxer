@@ -79,31 +79,6 @@ pub fn frame_marker() -> impl IntoElement {
     canvas(|_, _, _| begin_frame(), |_, (), _, _| {}).absolute().size_0()
 }
 
-/// Window control buttons are drawn inside `gpui_component::TitleBar` (not ours
-/// to tag), so their boxes are derived from the titlebar bounds: three square
-/// buttons (`TITLE_BAR_HEIGHT` wide) right-aligned as minimize, maximize, close.
-pub fn titlebar_controls_marker() -> impl IntoElement {
-    canvas(
-        |bounds, _, _| {
-            let side = f32::from(gpui_kit::component::TITLE_BAR_HEIGHT);
-            let right = f32::from(bounds.origin.x) + f32::from(bounds.size.width);
-            let ids = [
-                "app.native-titlebar.control-button.minimize",
-                "app.native-titlebar.control-button.toggle-maximize",
-                "app.native-titlebar.control-button.close",
-            ];
-            for (i, id) in ids.iter().enumerate() {
-                let x = right - side * (3 - i) as f32;
-                let rect = Bounds { origin: point(px(x), bounds.origin.y), size: size(px(side), bounds.size.height) };
-                record(id, rect, Some("derived"));
-            }
-        },
-        |_, (), _, _| {},
-    )
-    .absolute()
-    .inset_0()
-}
-
 /// Tags an element with an official `data-flx` id.
 pub trait FlxExt: ParentElement + Sized {
     fn flx(self, id: &'static str) -> Self {

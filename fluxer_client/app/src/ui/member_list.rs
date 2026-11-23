@@ -14,7 +14,7 @@ use std::rc::Rc;
 use fluxer_client_core::gateway::normalize_member_list_ranges;
 use fluxer_client_core::state::{ClientState, MemberListRow, Snowflake, Status};
 use gpui_kit::{
-    AnyElement, Context, FontWeight, Hsla, SharedString, UniformListScrollHandle, WeakEntity, div, prelude::*, px,
+    AnyElement, Context, FontWeight, Hsla, SharedString, UniformListScrollHandle, WeakEntity, div, hsla, prelude::*, px,
     rgb, uniform_list,
 };
 
@@ -251,19 +251,29 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     .track_scroll(&view.member_scroll)
     .flex_1()
     .min_h_0()
-    .py_2();
+    // Official rows start 6px above the container top (group header slot 83..127, container 89).
+    .mt(px(-6.))
+    .mb(px(4.));
+    let divider_color = if theme.background.l < 0.5 { hsla(0., 0., 1., 0.035) } else { theme.border };
     div()
         .id("member-panel")
         .debug_selector(|| "member-panel".to_owned())
         .flex()
-        .flex_col()
+        .flex_row()
         .flex_none()
         .w(px(theme.sizes.member_list_width))
         .h_full()
-        .border_l_1()
-        .border_color(theme.border)
+        .bg(theme.background_secondary_lighter)
         .flx("channel.member-list-container.member-list-container")
-        .child(list)
+        .child(
+            div()
+                .w(px(1.))
+                .h_full()
+                .flex_none()
+                .bg(divider_color)
+                .flx("channel.channel-view.channel-view-scaffold.member-list-divider"),
+        )
+        .child(div().flex_1().min_w_0().flex().flex_col().pl(px(7.)).pr(px(8.)).child(list))
         .into_any_element()
 }
 
@@ -299,17 +309,27 @@ fn render_row(
     view: &WeakEntity<ClientView>,
     theme: &Theme,
 ) -> gpui_kit::Stateful<gpui_kit::Div> {
-    let base = div().id(("member-item", ix)).h(px(ROW_HEIGHT)).w_full().flex().flex_row().px_2();
+    let base = div().id(("member-item", ix)).h(px(ROW_HEIGHT)).w_full().flex().flex_row().items_start();
     match row {
-        Some(MemberRowView::Group { label }) => base
-            .items_end()
-            .pb_1()
-            .px_4()
-            .text_xs()
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(theme.muted_foreground)
-            .flx_text("channel.member-list-group-header", label.to_string())
-            .child(div().truncate().child(label.clone())),
+        // Official group header: 32px box at +10 inside the 44px slot
+        // (`MemberListGroupHeader`: 14px/600, lh 16, "Online—2").
+        Some(MemberRowView::Group { label }) => {
+            let text: SharedString = label.replace(" — ", "—").into();
+            base.pt(px(10.)).child(
+                div()
+                    .h(px(32.))
+                    .w_full()
+                    .flex()
+                    .items_center()
+                    .px_2()
+                    .text_size(px(14.))
+                    .line_height(px(16.))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(theme.muted_foreground)
+                    .flx_text("channel.member-list-group-header", text.to_string())
+                    .child(div().truncate().child(text)),
+            )
+        }
         Some(MemberRowView::Member(m)) => {
             let offline = m.status.is_offline();
             let picture = render_avatar(
@@ -319,52 +339,63 @@ fn render_row(
                     display_name: m.name.clone(),
                     size: AVATAR,
                     status: Some(m.status),
-                    status_border_bg: Some(theme.background),
+                    status_border_bg: Some(theme.background_secondary_lighter),
                 },
                 theme,
             );
             let user_id = m.user_id;
             let view = view.clone();
-            base.items_center()
-                .gap_3()
-                .cursor_pointer()
-                .when(offline, |d| d.opacity(0.4))
-                .flx("channel.member-list-item.focus-ring-wrapper")
-                .on_click(move |ev, window, cx| {
-                    if !ev.modifiers().shift {
-                        let pos = ev.position();
-                        let _ = view.update(cx, |v, cx| v.open_profile(user_id, guild_id, pos, window, cx));
-                    }
-                })
-                .child(picture)
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap_1()
-                        .child(
-                            div()
-                                .min_w_0()
-                                .truncate()
-                                .font_weight(FontWeight::MEDIUM)
-                                .text_color(m.color.unwrap_or(theme.foreground))
-                                .flx_text("channel.member-list-item.name", m.name.to_string())
-                                .child(m.name.clone()),
-                        )
-                        .when(m.is_owner, |d| {
-                            d.child(
+            base.child(
+                div()
+                    .h(px(40.))
+                    .w_full()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(10.))
+                    .px_2()
+                    .rounded(px(6.))
+                    .cursor_pointer()
+                    .when(offline, |d| d.opacity(0.4))
+                    .flx("channel.member-list-item.focus-ring-wrapper")
+                    .child(picture)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap_1()
+                            .child(
                                 div()
-                                    .flex_none()
-                                    .text_xs()
-                                    .text_color(rgb(0xf0b232))
-                                    .debug_selector(move || format!("member-owner-crown-{}", user_id.0))
-                                    .child("👑"),
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_size(px(16.))
+                                    .line_height(px(20.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(m.color.unwrap_or(theme.text_chat))
+                                    .flx_text("channel.member-list-item.name", m.name.to_string())
+                                    .child(m.name.clone()),
                             )
-                        }),
-                )
+                            .when(m.is_owner, |d| {
+                                d.child(
+                                    div()
+                                        .flex_none()
+                                        .text_xs()
+                                        .text_color(rgb(0xf0b232))
+                                        .debug_selector(move || format!("member-owner-crown-{}", user_id.0))
+                                        .child("👑"),
+                                )
+                            }),
+                    ),
+            )
+            .on_click(move |ev, window, cx| {
+                if !ev.modifiers().shift {
+                    let pos = ev.position();
+                    let _ = view.update(cx, |v, cx| v.open_profile(user_id, guild_id, pos, window, cx));
+                }
+            })
         }
         None => base
             .items_center()

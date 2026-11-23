@@ -20,6 +20,7 @@ use gpui_kit::{
 };
 use tokio::sync::mpsc;
 
+use crate::parity_probe::FlxExt as _;
 use crate::ack::AckScheduler;
 use crate::backend::{Backend, GatewayStatus, TypingSender, UiEvent};
 use crate::frecency::FrecencyStore;
@@ -2731,8 +2732,9 @@ impl Render for ClientView {
             self.window_title = title;
         }
         ui::composer::sync_placeholder(self, window, cx);
+        crate::format::set_time_24h(self.prefs.data.time_format_24h);
         let theme = Theme::current(cx);
-        let right_panel = if self.search.is_some() {
+        let mut right_panel = if self.search.is_some() {
             Some(ui::search_panel::render(self, &theme, window, cx))
         } else if self.shows_member_list() {
             Some(ui::member_list::render(self, &theme, cx))
@@ -2782,32 +2784,45 @@ impl Render for ClientView {
             .size_full()
             .flex()
             .flex_row()
+            // Official outline frame leaves 2px of app background at the right edge.
+            .pr(px(2.))
             .bg(theme.background)
             .text_color(theme.foreground)
             .text_size(px(theme.sizes.text))
             .child(
+                // Rail and sidebar run to the bottom; the user area floats
+                // over them (official `user-area-inner`: left 6, bottom 7,
+                // 381x58). Rail 72 + 1px gap + sidebar 320.
                 div()
-                    .w(px(theme.sizes.rail_width + theme.sizes.channel_list_width))
+                    .relative()
+                    .w(px(theme.sizes.rail_width + 1. + theme.sizes.channel_list_width))
                     .h_full()
                     .flex_none()
                     .bg(theme.background_secondary)
-                    .border_r_1()
-                    .border_color(theme.border)
                     .flex()
-                    .flex_col()
+                    .flex_row()
+                    .child(ui::guild_rail::render(self, &theme, cx))
+                    .child(div().w(px(1.)).h_full().flex_none().bg(theme.background_secondary))
+                    // `channel-list-content.bottom-spacer` (73px).
                     .child(
                         div()
-                            .flex_1()
-                            .min_h_0()
-                            .w_full()
-                            .flex()
-                            .flex_row()
-                            .child(ui::guild_rail::render(self, &theme, cx))
+                            .h_full()
+                            .flex_none()
+                            .pb(px(73.))
+                            .flx("app.guild-sidebar.guild-navbar")
                             .child(ui::channel_list::render(self, &theme, cx)),
                     )
-                    .child(ui::user_panel::render(self, &theme, cx)),
+                    .child(
+                        div()
+                            .absolute()
+                            .left(px(6.))
+                            .bottom(px(7.))
+                            // Height is content-sized so the popout grows upward.
+                            .w(px(381.))
+                            .child(ui::user_panel::render(self, &theme, cx)),
+                    ),
             )
-            .child(if show_voice_stage {
+            .child(div().flex().flex_1().min_w_0().h_full().bg(theme.background_secondary_lighter).child(if show_voice_stage {
                 let split_chat = !self.voice_stage_expanded && self.selected_channel.is_some();
                 if split_chat {
                     div()
@@ -2853,25 +2868,42 @@ impl Render for ClientView {
                     // Files dropped anywhere on the message pane go to the tray.
                     .on_drop(cx.listener(|v, paths: &ExternalPaths, _, cx| v.add_paths(paths.paths(), cx)))
                     .child(ui::header::render(self, &theme, cx))
-                    .when_some(self.voice.watched_video_track.as_ref(), |d, track| {
-                        let label = ui::video_viewer::participant_display_name(self, track);
-                        d.child(ui::video_viewer::render(
-                            track,
-                            label,
-                            self.watched_video_frame.clone(),
-                            &theme,
-                            cx,
-                        ))
-                    })
-                    .when(!self.guild_unavailable && self.selected_channel.is_some() && self.unread_anchor.is_some(), |d| {
-                        d.child(self.render_unread_bar(&theme, cx))
-                    })
-                    .child(ui::message_list::render(self, handle, &theme))
-                    .when(self.has_more_after && self.selected_channel.is_some(), |d| {
-                        d.child(self.render_jump_to_present(&theme, cx))
-                    })
-                    .child(composer)
-            })
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .flex_1()
+                            .min_h_0()
+                            .w_full()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .h_full()
+                            .when_some(self.voice.watched_video_track.as_ref(), |d, track| {
+                                let label = ui::video_viewer::participant_display_name(self, track);
+                                d.child(ui::video_viewer::render(
+                                    track,
+                                    label,
+                                    self.watched_video_frame.clone(),
+                                    &theme,
+                                    cx,
+                                ))
+                            })
+                            .when(!self.guild_unavailable && self.selected_channel.is_some() && self.unread_anchor.is_some(), |d| {
+                                d.child(self.render_unread_bar(&theme, cx))
+                            })
+                            .child(ui::message_list::render(self, handle, &theme))
+                            .when(self.has_more_after && self.selected_channel.is_some(), |d| {
+                                d.child(self.render_jump_to_present(&theme, cx))
+                            })
+                                    .child(composer),
+                            )
+                            .children(right_panel.take()),
+                    )
+            }))
             .children(right_panel)
             .children(overlay)
     }

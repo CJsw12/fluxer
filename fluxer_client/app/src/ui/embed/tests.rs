@@ -132,7 +132,7 @@ fn classifies_like_the_web_client() {
     assert_eq!(rich.max_width, 516.);
     let footer = rich.footer.as_ref().expect("footer");
     assert_eq!(footer.text.as_deref(), Some("v1.0"));
-    assert_eq!(footer.time.as_deref(), Some("Today at 10:00"));
+    assert_eq!(footer.time.as_deref(), Some("11/18/2026, 10:00 AM"));
     assert_eq!(rich.author.as_ref().and_then(|a| a.icon.as_deref()), Some("https://media.example/i.png"));
 
     let EmbedBody::Card(article) = &embeds[3].body else { panic!("article card") };

@@ -60,21 +60,23 @@ pub fn message_time<Tz: TimeZone>(m: &Message, tz: &Tz) -> Option<DateTime<Tz>> 
     tz.timestamp_millis_opt(ms).single()
 }
 
-/// `getRelativeDateString`: "Today at 10:20", "Yesterday at 10:20", else
-/// the date and time (24-hour; locale presets are not ported).
-pub fn format_message_time<Tz: TimeZone>(at: &DateTime<Tz>, now: &DateTime<Tz>) -> String
+static TIME_24H: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Mirrors the Language setting "24-hour time" for message timestamps.
+pub fn set_time_24h(enabled: bool) {
+    TIME_24H.store(enabled, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Official message timestamp (en-US `toLocaleString`): "11/18/2026, 1:17 AM",
+/// or "11/18/2026, 13:17" when the 24-hour setting is on.
+pub fn format_message_time<Tz: TimeZone>(at: &DateTime<Tz>, _now: &DateTime<Tz>) -> String
 where
     Tz::Offset: std::fmt::Display,
 {
-    let day = at.date_naive();
-    let today = now.with_timezone(&at.timezone()).date_naive();
-    let time = at.format("%H:%M").to_string();
-    if day == today {
-        l10n::tr_args("Today at {timeString}", &[("timeString", &time)])
-    } else if today.pred_opt() == Some(day) {
-        l10n::tr_args("Yesterday at {timeString}", &[("timeString", &time)])
+    if TIME_24H.load(std::sync::atomic::Ordering::Relaxed) {
+        at.format("%-m/%-d/%Y, %H:%M").to_string()
     } else {
-        at.format("%Y-%m-%d %H:%M").to_string()
+        at.format("%-m/%-d/%Y, %-I:%M %p").to_string()
     }
 }
 
@@ -485,16 +487,13 @@ mod tests {
     }
 
     #[test]
-    fn times_are_relative_and_local() {
+    fn times_use_official_en_us_format() {
         let kst = FixedOffset::east_opt(9 * 3600).expect("offset");
         let now = kst.with_ymd_and_hms(2026, 11, 18, 20, 0, 0).single().expect("now");
         let parse = |s: &str| DateTime::parse_from_rfc3339(s).expect("ts").with_timezone(&kst);
         // 10:20 UTC is 19:20 in UTC+9.
-        assert_eq!(format_message_time(&parse("2026-11-18T10:20:30+00:00"), &now), "Today at 19:20");
-        // 2026-11-17 16:00 UTC is 2026-11-18 01:00 local: still today.
-        assert_eq!(format_message_time(&parse("2026-11-17T16:00:00+00:00"), &now), "Today at 01:00");
-        assert_eq!(format_message_time(&parse("2026-11-17T10:00:00+00:00"), &now), "Yesterday at 19:00");
-        assert_eq!(format_message_time(&parse("2026-11-01T00:00:00+00:00"), &now), "2026-11-01 09:00");
+        assert_eq!(format_message_time(&parse("2026-11-18T10:20:30+00:00"), &now), "11/18/2026, 7:20 PM");
+        assert_eq!(format_message_time(&parse("2026-11-17T16:00:00+00:00"), &now), "11/18/2026, 1:00 AM");
     }
 
     #[test]

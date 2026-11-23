@@ -6,9 +6,10 @@
 //! (`ClientView`) drives it from the input's events and [`key_hooks`].
 
 use fluxer_client_core::state::{ClientState, MESSAGE_TYPE_REPLY, Message, MessageState, Snowflake};
+use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Enter, Escape, IndentInline, Input, InputContent, MoveDown, MoveUp};
-use gpui_kit::{AnyElement, App, Context, Div, SharedString, Window, div, prelude::*, px};
+use gpui_kit::{AnyElement, App, Context, Div, SharedString, Window, div, prelude::*, px, rgb};
 
 use crate::client_view::ClientView;
 use crate::icons::AppIcon;
@@ -42,7 +43,8 @@ pub fn render_with(
         div().flex_none().flx("channel.lexical-channel-textarea-content.plus-button-above-backdrop.clear-slash-command").child(
             Button::new("composer-upload")
                 .ghost()
-                .compact()
+                .with_size(px(32.))
+                .rounded(px(6.))
                 .icon(AppIcon::Plus)
                 .tooltip(l10n::tr("Upload a file"))
                 .on_click(cx.listener(|v, _, _, cx| v.pick_files(cx))),
@@ -52,7 +54,8 @@ pub fn render_with(
         div().debug_selector(|| "composer-gif".to_owned()).child(
             Button::new("composer-gif")
                 .ghost()
-                .compact()
+                .with_size(px(32.))
+                .rounded(px(6.))
                 .icon(AppIcon::Image)
                 .tooltip(l10n::tr("GIFs & media"))
                 .accessibility_label(l10n::tr("GIFs & media"))
@@ -63,7 +66,8 @@ pub fn render_with(
         div().debug_selector(|| "composer-sticker".to_owned()).child(
             Button::new("composer-sticker")
                 .ghost()
-                .compact()
+                .with_size(px(32.))
+                .rounded(px(6.))
                 .icon(AppIcon::Sticker)
                 .tooltip(l10n::tr("Stickers"))
                 .accessibility_label(l10n::tr("Stickers"))
@@ -80,7 +84,8 @@ pub fn render_with(
     let emoji = view.can_send.then(|| {
         Button::new("composer-emoji")
             .ghost()
-            .compact()
+            .with_size(px(32.))
+            .rounded(px(6.))
             .icon(AppIcon::Smiley)
             .tooltip(l10n::tr("Add emoji"))
             .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
@@ -98,24 +103,24 @@ pub fn render_with(
                 .flex()
                 .flex_row()
                 .items_center()
-                .gap_1()
+                .gap(px(16.))
                 .min_h(px(theme.sizes.composer_height))
                 .rounded(px(theme.sizes.composer_radius))
-                .bg(theme.background_secondary)
-                .border_1()
-                .border_color(theme.border)
-                .px_2()
-                .py_1()
+                .bg(rgb(0x242229))
+                .pl(px(14.))
+                .pr(px(10.))
+                .py(px(13.))
                 .flx("channel.lexical-channel-textarea-content.textarea-outer")
                 .children(upload)
-                .child(div().flex_1().child(field))
+                .child(div().flex_1().line_height(px(22.)).child(field))
                 .when(view.can_send, |d| {
                     d.child(
                         div()
                             .flex()
                             .flex_row()
                             .items_center()
-                            .gap_1()
+                            .gap(px(4.))
+                            .px(px(4.))
                             .flx("channel.textarea.textarea-buttons.button-container-dense")
                             .children(gif_btn)
                             .children(sticker_btn)
@@ -127,11 +132,22 @@ pub fn render_with(
         .flex()
         .flex_col()
         .children(view.error.clone().map(|e| div().px_4().text_color(theme.danger).child(e)))
-        .child(div().px_3().pt_3().pb_3().child(key_hooks(input, keys, cx)))
-        .child(typing_row)
-        .when(view.gateway_status != crate::backend::GatewayStatus::Ready, |d| {
-            d.child(div().px_4().pb_1().text_xs().text_color(theme.muted_foreground).child(view.status.clone()))
-        })
+        // Official: the textarea area is flush with the window bottom; the
+        // typing row and connection status overlay the chat above it.
+        .child(
+            div().relative().h(px(0.)).w_full().child(
+                div()
+                    .absolute()
+                    .bottom(px(0.))
+                    .left(px(0.))
+                    .w_full()
+                    .child(typing_row)
+                    .when(view.gateway_status != crate::backend::GatewayStatus::Ready, |d| {
+                        d.child(div().px_4().pb_1().text_xs().text_color(theme.muted_foreground).child(view.status.clone()))
+                    }),
+            ),
+        )
+        .child(div().px(px(6.)).pb(px(6.)).flx("channel.channel-chat-layout.textarea-area").child(key_hooks(input, keys, cx)))
 }
 
 /// Placeholder for the current channel and send permission.

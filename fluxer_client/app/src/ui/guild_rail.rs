@@ -10,10 +10,9 @@
 //! - Bottom `Discover` (`Globe`) and `Join a community` (`Plus`) buttons with hover morphing.
 
 use fluxer_client_core::state::Unread;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
-    AnyElement, Context, Div, ElementId, FontWeight, ObjectFit, Role, SharedString, Stateful, div, img, prelude::*, px,
+    AnyElement, App, ClickEvent, Context, Div, Hsla, Window, ElementId, FontWeight, ObjectFit, Role, SharedString, Stateful, div, img, prelude::*, px,
 };
 
 use super::{badge, l10n};
@@ -37,6 +36,10 @@ pub(crate) fn resolve_rail_indicator_height(selected: bool, hovered: bool, unrea
     }
 }
 
+const RAIL_ICON: f32 = 24.;
+/// 30% of the 44px guild icon.
+const GUILD_RADIUS: f32 = 13.2;
+
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> impl IntoElement {
     let mut rail = div()
         .id("guild-rail")
@@ -45,15 +48,13 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .flex()
         .flex_col()
         .items_center()
-        .gap_2()
-        .py_2()
+        .gap(px(6.))
+        .py(px(4.))
         .w(px(theme.sizes.rail_width))
         .h_full()
         .flex_none()
         .bg(theme.background_secondary)
         .overflow_y_scroll()
-        .border_r_1()
-        .border_color(theme.border)
         .flx("app.guilds-layout.guild-list.guild-list-scroller-wrapper");
 
     let home_selected = view.place == Place::Home && !view.favorites_selected;
@@ -70,6 +71,12 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         home_hovered,
         view.home_unread,
         theme,
+        48.,
+        "app.sidebar-nav.fluxer-button.fluxer-button.select",
+        cx.listener(|this, _, _, cx| this.select_place(Place::Home, cx)),
+        cx.listener(|this, hovered: &bool, _, cx| {
+            this.set_rail_hover(RailHoverTarget::Home, *hovered, cx);
+        }),
         rail_button_content(
             "home",
             div()
@@ -77,7 +84,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(Icon::new(AppIcon::ChatsCircle).text_color(home_fg))
+                .child(Icon::new(AppIcon::ChatsCircle).with_size(px(RAIL_ICON)).text_color(home_fg))
                 .into_any_element(),
             l10n::tr("Direct messages"),
             home_selected,
@@ -85,11 +92,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             true,
             view.home_unread,
             theme,
+            theme.background_tertiary,
         )
-        .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
-            this.set_rail_hover(RailHoverTarget::Home, *hovered, cx);
-        }))
-        .on_click(cx.listener(|this, _, _, cx| this.select_place(Place::Home, cx))),
+        .flx("app.sidebar-nav.fluxer-button.fluxer-button-icon"),
     ));
 
     // Official `FavoritesGuildButton` wrapped in the same `rail_item` with left white indicator bar
@@ -108,13 +113,19 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             fav_hovered,
             Unread::default(),
             theme,
+            48.,
+            "app.sidebar-nav.favorites-button.fluxer-button.select",
+            cx.listener(|this, _, _, cx| this.select_favorites(cx)),
+            cx.listener(|this, hovered: &bool, _, cx| {
+                this.set_rail_hover(RailHoverTarget::Favorites, *hovered, cx);
+            }),
             rail_button_content(
                 "rail-favorites-btn",
                 div()
                     .flex()
                     .items_center()
                     .justify_center()
-                    .child(Icon::new(AppIcon::Star).small().text_color(fav_fg))
+                    .child(Icon::new(AppIcon::Star).with_size(px(RAIL_ICON)).text_color(fav_fg))
                     .into_any_element(),
                 l10n::tr("Favorites"),
                 fav_selected,
@@ -122,12 +133,10 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 true,
                 Unread::default(),
                 theme,
+                theme.background_tertiary,
             )
             .debug_selector(|| "rail-favorites-btn".to_owned())
-            .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
-                this.set_rail_hover(RailHoverTarget::Favorites, *hovered, cx);
-            }))
-            .on_click(cx.listener(|this, _, _, cx| this.select_favorites(cx))),
+            .flx("app.sidebar-nav.favorites-button.fluxer-button-icon"),
         ))
         .child(
             div()
@@ -135,6 +144,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .debug_selector(|| "rail-separator".to_owned())
                 .w(px(32.))
                 .h(px(2.))
+                .my(px(1.))
+                .flex_none()
                 .rounded(px(1.))
                 .bg(theme.border)
                 .flx("app.guilds-layout.guild-list-divider.guild-divider"),
@@ -156,7 +167,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .id(("guild-icon", id.0))
                 .debug_selector(move || format!("guild-rail-icon-{}", id.0))
                 .size_full()
-                .rounded(px(if active { 12. } else { theme.sizes.rail_button / 2. }))
+                .rounded(px(if active { GUILD_RADIUS } else { theme.sizes.rail_button / 2. }))
                 .object_fit(ObjectFit::Cover)
                 .into_any_element(),
             None => div().text_color(initials_fg).child(g.initials.clone()).into_any_element(),
@@ -167,6 +178,12 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             hovered,
             g.unread,
             theme,
+            54.,
+            "app.sidebar-nav.guild-list-item-presentation.guild-list-item.click",
+            cx.listener(move |this, _, _, cx| this.select_place(Place::Guild(id), cx)),
+            cx.listener(move |this, hovered: &bool, _, cx| {
+                this.set_rail_hover(RailHoverTarget::Guild(id), *hovered, cx);
+            }),
             rail_button_content(
                 ("guild", id.0),
                 content,
@@ -176,11 +193,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 !has_image,
                 g.unread,
                 theme,
+                theme.muted,
             )
-            .on_hover(cx.listener(move |this, hovered: &bool, _, cx| {
-                this.set_rail_hover(RailHoverTarget::Guild(id), *hovered, cx);
-            }))
-            .on_click(cx.listener(move |this, _, _, cx| this.select_place(Place::Guild(id), cx)))
             .flx("app.sidebar-nav.guild-list-item-presentation.guild-icon"),
         ));
     }
@@ -193,7 +207,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     };
     let join_hovered = view.hovered_rail_item == Some(RailHoverTarget::Join);
 
-    rail.child(
+    rail.child(slot(2., 68., 44., "app.sidebar-nav.discovery-button.button.click",
         div()
             .id("rail-discover-btn")
             .role(Role::Button)
@@ -201,11 +215,12 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             .debug_selector(|| "rail-discover-btn".to_owned())
             .size(px(theme.sizes.rail_button))
             .rounded(px(if discover_hovered {
-                12.
+                GUILD_RADIUS
             } else {
                 theme.sizes.rail_button / 2.
             }))
-            .border_1()
+            .border_2()
+            .border_dashed()
             .border_color(if discover_hovered { theme.brand } else { theme.border })
             .bg(if discover_hovered {
                 theme.brand
@@ -221,19 +236,22 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 this.set_rail_hover(RailHoverTarget::Discover, *hovered, cx);
             }))
             .on_click(cx.listener(|this, _, window, cx| this.open_join_guild(window, cx)))
-            .child(Icon::new(AppIcon::Compass).small().text_color(discover_fg)),
-    )
-    .child(
+            .child(Icon::new(AppIcon::Compass).with_size(px(20.)).text_color(discover_fg)),
+    ))
+    .child(slot(4., 68., 44., "app.sidebar-nav.add-guild-button.button.add-guild",
         div()
             .id("join-guild-wrapper")
+            .role(Role::Button)
+            .aria_label(l10n::tr("Join a community"))
             .debug_selector(|| "join-guild".to_owned())
             .size(px(theme.sizes.rail_button))
             .rounded(px(if join_hovered {
-                12.
+                GUILD_RADIUS
             } else {
                 theme.sizes.rail_button / 2.
             }))
-            .border_1()
+            .border_2()
+            .border_dashed()
             .border_color(if join_hovered {
                 theme.foreground
             } else {
@@ -251,51 +269,71 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
                 this.set_rail_hover(RailHoverTarget::Join, *hovered, cx);
             }))
-            .child(
-                Button::new("join-guild")
-                    .ghost()
-                    .small()
-                    .icon(AppIcon::Plus)
-                    .tooltip(l10n::tr("Join a community"))
-                    .accessibility_label(l10n::tr("Join a community"))
-                    .on_click(cx.listener(|this, _, window, cx| this.open_join_guild(window, cx))),
-            ),
-    )
+            .on_click(cx.listener(|this, _, window, cx| this.open_join_guild(window, cx)))
+            .child(Icon::new(AppIcon::Plus).with_size(px(20.)).text_color(if join_hovered { theme.foreground } else { theme.muted_foreground })),
+    ))
+}
+
+/// Full-width slot that carries the official click-area tag; hover and click live here.
+fn slot(mt: f32, w: f32, h: f32, flx: &'static str, child: impl IntoElement) -> impl IntoElement {
+    div()
+        .w(px(w))
+        .h(px(h))
+        .flex_none()
+        .mt(px(mt))
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(child)
+        .flx(flx)
 }
 
 /// Rail entry: the button with the left-edge white indicator bar
-/// (`GuildListIndicator.ts`: 40px selected, 20px hovered, 8px unread).
+/// (`GuildListIndicator.ts`: 40px selected, 20px hovered, 8px unread). The slot
+/// wrapper spans the rail width and owns the click/hover handlers and the official tag.
+#[allow(clippy::too_many_arguments)]
 fn rail_item(
     pill_key: impl Into<SharedString>,
     selected: bool,
     hovered: bool,
     unread: Unread,
     theme: &Theme,
+    slot_height: f32,
+    flx: &'static str,
+    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_hover: impl Fn(&bool, &mut Window, &mut App) + 'static,
     button: impl IntoElement,
 ) -> impl IntoElement {
     let pill = resolve_rail_indicator_height(selected, hovered, unread.unread);
-    let button_size = theme.sizes.rail_button;
     let fg = theme.foreground;
-    let pill_key_str = pill_key.into().to_string();
+    let pill_key_str: String = pill_key.into().to_string();
     div()
+        .id(SharedString::from(format!("rail-slot-{pill_key_str}")))
         .relative()
         .w_full()
+        .h(px(slot_height))
+        .flex_none()
         .flex()
+        .items_center()
         .justify_center()
+        .cursor_pointer()
+        .on_hover(on_hover)
+        .on_click(on_click)
         .child(button)
         .children(pill.map(|h| {
             let sel = format!("rail-pill-{pill_key_str}");
             div()
                 .debug_selector(move || sel.clone())
                 .absolute()
-                .left_0()
-                .top(px((button_size - h) / 2.))
-                .w(px(4.))
+                .left(px(-1.))
+                .top(px((slot_height - h) / 2.))
+                .w(px(6.))
                 .h(px(h))
-                .rounded_r(px(4.))
+                .rounded_r(px(6.))
                 .bg(fg)
                 .flx("app.sidebar-nav.guild-list-item-presentation.guild-indicator-bar")
         }))
+        .flx(flx)
 }
 
 fn rail_button_content(
@@ -307,6 +345,7 @@ fn rail_button_content(
     brand_when_active: bool,
     unread: Unread,
     theme: &Theme,
+    inactive_bg: Hsla,
 ) -> Stateful<Div> {
     let size = theme.sizes.rail_button;
     let active = selected || hovered;
@@ -317,7 +356,7 @@ fn rail_button_content(
             theme.accent
         }
     } else {
-        theme.muted
+        inactive_bg
     };
     div()
         .id(id)
@@ -330,7 +369,7 @@ fn rail_button_content(
         .items_center()
         .justify_center()
         .size(px(size))
-        .rounded(px(if active { 12. } else { size / 2. }))
+        .rounded(px(if active { GUILD_RADIUS } else { size / 2. }))
         .bg(bg)
         .text_color(if active { theme.on_fill } else { theme.foreground })
         .when(unread.unread, |d| d.font_weight(FontWeight::BOLD))

@@ -808,7 +808,7 @@ mod tests {
         let document = rows[0].document.as_ref().expect("parsed body");
         assert_eq!(document.plain_text(), "@Ali @Carol general @Mods <:wave:5>");
         assert_eq!(rows[0].author.as_ref(), "Ali", "member nick is the author name");
-        assert_eq!(rows[0].time.as_ref(), "Today at 10:01");
+        assert_eq!(rows[0].time.as_ref(), "11/18/2026, 10:01 AM");
         let starts: Vec<bool> = rows.iter().map(|r| r.group_start).collect();
         assert_eq!(starts, [true, false, true]);
         assert_eq!(

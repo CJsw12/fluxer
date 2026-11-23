@@ -11,11 +11,11 @@ use std::sync::Arc;
 
 use gpui_kit::component::text::{
     InlineElement, InlineRenderContext, MarkdownExtensions, MarkdownNode, MarkdownParseContext, MarkdownPlugin,
-    TextView, markdown_ast,
+    TextView, TextViewStyle, markdown_ast,
 };
 use gpui_kit::{
-    App, ElementId, Entity, FontWeight, Hsla, IntoElement, ObjectFit, Pixels, RenderOnce, SharedString, Window, div,
-    hsla, img, prelude::*, px, rgb,
+    App, ElementId, Entity, FontWeight, Hsla, IntoElement, ObjectFit, Pixels, RenderOnce, SharedString,
+    StyleRefinement, Window, div, hsla, img, prelude::*, px, rgb,
 };
 
 use gpui_kit::base::TextSelection;
@@ -56,6 +56,16 @@ pub struct MarkdownStyle {
     pub spoiler_revealed: Hsla,
     pub timestamp_background: Hsla,
     pub subtext: Hsla,
+    /// `--bg-code-block` behind a fenced code block.
+    pub code_background: Hsla,
+    /// `--code-block-border`.
+    pub code_border: Hsla,
+    /// `--interactive-muted`, the blockquote bar.
+    pub quote_bar: Hsla,
+    /// `--text-chat-muted`, blockquote text.
+    pub quote_text: Hsla,
+    /// List marker color (the body text color).
+    pub list_marker: Hsla,
 }
 
 impl Default for MarkdownStyle {
@@ -68,6 +78,11 @@ impl Default for MarkdownStyle {
             spoiler_revealed: hsla(0., 0., 0.5, 0.15),
             timestamp_background: hsla(0., 0., 0.5, 0.12),
             subtext: hsla(220. / 360., 0.05, 0.6, 1.),
+            code_background: hsla(270. / 360., 0.10, 0.135, 1.),
+            code_border: hsla(250. / 360., 0.08, 0.20, 1.),
+            quote_bar: hsla(232. / 360., 0.12, 0.46, 1.),
+            quote_text: hsla(265. / 360., 0.08, 0.80, 1.),
+            list_marker: hsla(260. / 360., 0.12, 0.94, 1.),
         }
     }
 }
@@ -152,10 +167,17 @@ impl RenderOnce for MessageMarkdown {
         let extensions = MarkdownExtensions::default().plugin(plugin);
         let subtext = self.style.subtext;
         let on_link_click = self.on_link_click;
+        let block_style = self.style;
         div().id(self.id).flex().flex_col().min_w_0().children(lowered.segments.into_iter().enumerate().map(
             move |(i, segment)| {
                 let mut view = TextView::markdown(ElementId::named_usize("fluxer-md-segment", i), segment.source)
                     .markdown_extensions(extensions.clone())
+                    .style(text_view_style(&block_style))
+                    .blockquote_style(blockquote_refinement(&block_style))
+                    .list_style(StyleRefinement::default().text_color(block_style.list_marker))
+                    // Official code blocks show no language label; an
+                    // (empty) actions slot suppresses TextView's own.
+                    .code_block_actions(|_, _, _| div())
                     .selectable(true);
                 if let Some(handler) = on_link_click.clone() {
                     view = view.on_link_click(move |url, _, window, cx| handler(url, window, cx));
@@ -168,6 +190,39 @@ impl RenderOnce for MessageMarkdown {
             },
         ))
     }
+}
+
+/// Official heading sizes (`Markup.module.css`: h1 1.375em .. h6 .875em of 16px).
+/// A code block is 14px padded, radius 6, 12px/16px mono.
+fn text_view_style(style: &MarkdownStyle) -> TextViewStyle {
+    let code_block = StyleRefinement::default()
+        .p(px(14.))
+        .rounded(px(6.))
+        .bg(style.code_background)
+        .border_color(style.code_border)
+        .text_size(px(12.))
+        .line_height(px(16.));
+    TextViewStyle::default().code_block(code_block).heading_font_size(|level, _| {
+        px(match level {
+            1 => 22.,
+            2 => 20.,
+            3 => 18.,
+            4 => 16.,
+            5 => 15.,
+            _ => 14.,
+        })
+    })
+}
+
+/// `.blockquoteDivider` (4px bar, 12px gap) and `.blockquoteContent` (4px
+/// vertical padding, muted text).
+fn blockquote_refinement(style: &MarkdownStyle) -> StyleRefinement {
+    StyleRefinement::default()
+        .border_l(px(4.))
+        .border_color(style.quote_bar)
+        .pl(px(12.))
+        .py(px(4.))
+        .text_color(style.quote_text)
 }
 
 /// `#rrggbbaa`, the form `<mark color>` takes.

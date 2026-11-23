@@ -162,8 +162,19 @@ pub struct Theme {
     pub background: Hsla,
     /// `--background-secondary` (channel list, user panel).
     pub background_secondary: Hsla,
+    /// `--background-secondary-lighter` (`OutlineFrame` main content frame:
+    /// channel header, chat area, member list, right panels).
+    pub background_secondary_lighter: Hsla,
     /// `--background-tertiary` (guild rail).
     pub background_tertiary: Hsla,
+    /// `--text-chat` (message body, member names).
+    pub text_chat: Hsla,
+    /// `--text-secondary`.
+    pub text_secondary: Hsla,
+    /// `--text-tertiary`.
+    pub text_tertiary: Hsla,
+    /// `--text-tertiary-muted` (unselected channel names, categories).
+    pub text_tertiary_muted: Hsla,
     /// `--text-primary`.
     pub foreground: Hsla,
     /// Unselected rail buttons / hover fill.
@@ -399,6 +410,10 @@ type SurfaceStops = (f32, f32, f32);
 const DARK_STOPS: SurfaceStops = (0., 0.16, 0.4);
 const LIGHT_STOPS: SurfaceStops = (1., 0.74, 0.42);
 
+/// First family of the official `--font-sans` stack on Windows.
+#[cfg(windows)]
+const OFFICIAL_WINDOWS_SANS: &str = "Segoe UI Variable Text";
+
 const STATUS_DANGER: Hsl = Hsl::new(1., 77., 55.);
 const BRAND_PRIMARY: Hsl = Hsl::new(242., 70., 55.);
 
@@ -536,10 +551,29 @@ impl Theme {
             p.surface(p.stops.1)
         };
         let text_primary = p.text(light, 1.);
+        // `--background-secondary-lighter`: position 0.22 dark, 0.83 light;
+        // coal aliases it to `--background-primary`.
+        let lighter = if p.secondary_is_primary {
+            primary
+        } else {
+            p.surface(if light { 0.83 } else { 0.22 })
+        };
+        // Text stop positions of `ColorSystemPalette` as strengths (the light
+        // scale position is `1 - strength`).
+        let (chat, secondary_text, tertiary, tertiary_muted) = if light {
+            (0.92, 0.72, 0.4, 0.15)
+        } else {
+            (0.82, 0.72, 0.38, 0.2)
+        };
         Self {
             background: primary.color(),
             background_secondary: secondary.color(),
+            background_secondary_lighter: lighter.color(),
             background_tertiary: p.surface(p.stops.2).color(),
+            text_chat: p.text(light, chat).color(),
+            text_secondary: p.text(light, secondary_text).color(),
+            text_tertiary: p.text(light, tertiary).color(),
+            text_tertiary_muted: p.text(light, tertiary_muted).color(),
             foreground: text_primary.color(),
             muted: secondary.color(),
             muted_foreground: p.text(light, 0.55).color(),
@@ -581,6 +615,12 @@ pub fn apply(kind: ThemeKind, window: &mut Window, cx: &mut App) {
     let brand_hover = Hsl::new(BRAND_PRIMARY.h, BRAND_PRIMARY.s, (BRAND_PRIMARY.l - 6.0).max(0.0)).color();
     let brand_active = Hsl::new(BRAND_PRIMARY.h, BRAND_PRIMARY.s, (BRAND_PRIMARY.l - 12.0).max(0.0)).color();
     let kit = KitTheme::global_mut(cx);
+    // Official desktop `--font-sans` starts with "Segoe UI Variable Text" on Windows 11 (measured
+    // via the official DOM); the GPUI default system font is plain Segoe UI with narrower metrics.
+    #[cfg(windows)]
+    {
+        kit.font_family = OFFICIAL_WINDOWS_SANS.into();
+    }
     kit.colors.primary = brand;
     kit.colors.primary_hover = brand_hover;
     kit.colors.primary_active = brand_active;
@@ -652,6 +692,28 @@ mod tests {
         assert_eq!(theme.background, hsla(258. / 360., 0.10, 0.05, 1.));
         assert_eq!(theme.brand, hsla(242. / 360., 0.70, 0.55, 1.));
         assert_eq!(theme.status_online, hsla(152. / 360., 0.72, 0.40, 1.));
+    }
+
+    #[test]
+    fn lighter_surface_and_text_tokens_match_the_manifest() {
+        let near = |a: Hsla, h: f32, sat: f32, l: f32| {
+            assert!((a.h - h / 360.).abs() < 1e-4 && (a.s - sat / 100.).abs() < 1e-4 && (a.l - l / 100.).abs() < 6e-4, "{a:?} vs {l}");
+        };
+        let d = Theme::from_kind(ThemeKind::Dark);
+        near(d.background_secondary_lighter, 258., 10., 12.44);
+        near(d.text_chat, 258., 10., 93.67);
+        near(d.text_secondary, 258., 10., 90.36);
+        near(d.text_tertiary, 258., 10., 70.4);
+        near(d.text_tertiary_muted, 258., 10., 62.88);
+        near(d.muted_foreground, 258., 10., 81.42);
+        let l = Theme::from_kind(ThemeKind::Light);
+        near(l.background_secondary_lighter, 220., 10., 94.61);
+        near(l.text_chat, 220., 10., 20.99);
+        near(l.text_secondary, 220., 10., 33.78);
+        near(l.text_tertiary, 220., 10., 47.76);
+        near(l.text_tertiary_muted, 220., 10., 53.12);
+        let c = Theme::from_kind(ThemeKind::Black);
+        assert_eq!(c.background_secondary_lighter, c.background);
     }
 
     #[test]

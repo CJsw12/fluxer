@@ -82,6 +82,11 @@ pub(crate) fn markdown_style(theme: &Theme) -> MarkdownStyle {
         mention_background: theme.mention_bg,
         mention_foreground: theme.mention_fg,
         spoiler_hidden,
+        // `--bg-code-block`: the secondary background darkened 16%.
+        code_background: Hsla { l: theme.background_secondary.l * 0.84, ..theme.background_secondary },
+        code_border: theme.border,
+        quote_text: theme.muted_foreground,
+        list_marker: theme.text_chat,
         ..default_style
     }
 }
@@ -149,13 +154,21 @@ pub fn render(
     let author_id = row.author_id;
     let compact = sizes.compact;
     let mut content = div().flex().flex_col().flex_1().min_w_0();
+    // The official wrapper holds the author line and the body.
+    content = if compact || row.group_start {
+        content.flx("channel.user-message.message-content")
+    } else {
+        content.flx("channel.message-group.rendered-messages.div")
+    };
     if compact || row.group_start {
         let view_author = view.clone();
         let author_btn = div()
             .id(("msg-author", row.id.0))
             .cursor_pointer()
             .text_color(fg)
-            .font_weight(FontWeight::SEMIBOLD)
+            .text_size(px(16.))
+            .line_height(px(22.))
+            .font_weight(FontWeight::MEDIUM)
             .on_click(move |ev, window, cx| {
                 if !ev.modifiers().shift {
                     let pos = ev.position();
@@ -164,7 +177,7 @@ pub fn render(
                     });
                 }
             })
-            .flx_text("channel.message-username.context-menu-underline.key-down", row.author.to_string())
+            .flx_text("channel.user-message.message-author-name", row.author.to_string())
             .child(row.author.clone());
         let header = if compact {
             div()
@@ -172,7 +185,7 @@ pub fn render(
                 .flex_row()
                 .items_baseline()
                 .gap_2()
-                .child(div().text_color(muted_fg).text_xs().child(row.time.clone()))
+                .child(div().text_color(muted_fg).text_size(px(12.)).line_height(px(22.)).child(row.time.clone()))
                 .child(author_btn)
                 .children(state_label.map(|(label, color)| render_state_label(label, color, view)))
         } else {
@@ -181,8 +194,10 @@ pub fn render(
                 .flex_row()
                 .items_baseline()
                 .gap_2()
+                .h(px(23.))
+                .flx("channel.user-message.message-author-info")
                 .child(author_btn)
-                .child(div().text_color(muted_fg).text_xs().child(row.time.clone()))
+                .child(div().text_color(muted_fg).text_size(px(12.)).line_height(px(22.)).child(row.time.clone()))
                 .children(state_label.map(|(label, color)| render_state_label(label, color, view)))
         };
         content = content.child(header);
@@ -203,7 +218,10 @@ pub fn render(
             div()
                 .w_full()
                 .max_w(px(760.))
-                .flx("channel.user-message.message-content")
+                .text_size(px(16.))
+                .line_height(px(24.))
+                .text_color(theme.text_chat)
+                .flx("channel.user-message.message-text")
                 .child(body),
         );
     }
@@ -392,7 +410,9 @@ pub fn render(
         .flex()
         .flex_row()
         .w_full()
-        .px_4()
+        // Official `padding-inline-end` leaves 64px to the chat area edge.
+        .pl_4()
+        .pr(px(64.))
         .py(px(sizes.message_padding_y))
         .when(row.state == MessageState::Sending, |d| d.opacity(0.6));
     if !compact {
@@ -443,6 +463,7 @@ pub fn render(
         .flex_col()
         .w_full()
         .when(row.group_start, |d| d.pt(px(sizes.group_gap)))
+        .when(row.group_start, |d| d.flx("channel.message-group.group"))
         .when(row.mentioned, |d| {
             d.debug_selector(move || mentioned_sel.clone())
                 .bg(mention_bg)

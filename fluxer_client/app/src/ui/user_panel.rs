@@ -41,6 +41,7 @@ fn render_control_icon_button(
     let flx = match id {
         "user-panel-mute" => Some("app.user-area.user-area-inner.control-button.mute"),
         "user-panel-deafen" => Some("app.user-area.user-area-inner.control-button.deafen"),
+        "user-panel-settings" => Some("app.user-area.user-area-inner.control-button.settings-click"),
         _ => None,
     };
     div()
@@ -67,7 +68,7 @@ fn render_control_icon_button(
                 })
                 .on_click(on_click)
         })
-        .child(Icon::new(icon).small().text_color(icon_color))
+        .child(Icon::new(icon).with_size(px(20.)).text_color(icon_color))
         .into_any_element()
 }
 
@@ -259,6 +260,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
 
     let panel_group: SharedString = "user-panel-group".into();
 
+    let mut status_color_text = theme.muted_foreground;
+    status_color_text.a = 0.85;
+
     div()
         .id("user-area-wrapper")
         .role(Role::Region)
@@ -268,12 +272,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .flex()
         .flex_col()
         .flex_none()
-        .mx_2()
-        .mb_2()
         .rounded(px(8.))
         .bg(theme.background_secondary)
-        .border_1()
-        .border_color(theme.border)
         .overflow_hidden()
         .children(voice_panel::render(view, theme, cx))
         .children(popout)
@@ -283,42 +283,21 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .group(panel_group.clone())
                 .debug_selector(|| "user-panel".to_owned())
                 .flx("app.user-area.user-area-inner.user-area-container")
-                .min_h(px(theme.sizes.composer_height - 2.))
+                .min_h(px(58.))
                 .flex()
                 .flex_row()
                 .flex_none()
                 .items_center()
-                .gap_2p5()
-                .px_2p5()
-                .py_1p5()
-                .child(
-                    div().relative().flex_none().child(picture).child(
-                        div()
-                            .id("user-status-dot")
-                            .role(Role::Button)
-                            .aria_label(status_aria_label)
-                            .cursor_pointer()
-                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                cx.stop_propagation();
-                                this.cycle_status(cx);
-                            }))
-                            .absolute()
-                            .right(px(-1.))
-                            .bottom(px(-1.))
-                            .size(px(dot_size))
-                            .rounded_full()
-                            .border_2()
-                            .border_color(theme.background_secondary)
-                            .bg(dot),
-                    ),
-                )
+                .pl(px(14.))
+                .pr(px(8.))
                 .child(
                     div()
                         .id("user-panel-profile")
                         .debug_selector(|| "user-panel-profile".to_owned())
                         .flex()
-                        .flex_col()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(8.))
                         .flex_1()
                         .min_w_0()
                         .cursor_pointer()
@@ -331,21 +310,55 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 this.toggle_user_area_popout(cx);
                             }
                         }))
+                        .flx("app.user-area.user-area-inner.focus-ring-wrapper")
                         .child(
-                            div()
-                                .truncate()
-                                .text_sm()
-                                .font_weight(FontWeight::MEDIUM)
-                                .flx_text("app.user-area.user-area-inner.user-name", name.to_string())
-                                .child(name),
+                            div().relative().flex_none().child(picture).child(
+                                div()
+                                    .id("user-status-dot")
+                                    .role(Role::Button)
+                                    .aria_label(status_aria_label)
+                                    .cursor_pointer()
+                                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        cx.stop_propagation();
+                                        this.cycle_status(cx);
+                                    }))
+                                    .absolute()
+                                    .right(px(-1.))
+                                    .bottom(px(-1.))
+                                    .size(px(dot_size))
+                                    .rounded_full()
+                                    .border_2()
+                                    .border_color(theme.background_secondary)
+                                    .bg(dot),
+                            ),
                         )
                         .child(
                             div()
-                                .truncate()
-                                .text_xs()
-                                .text_color(theme.muted_foreground)
-                                .flx_text("app.user-area.user-area-inner.user-status", label.to_string())
-                                .child(label),
+                                .flex()
+                                .flex_col()
+                                .flex_1()
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .truncate()
+                                        .text_size(px(14.))
+                                        .line_height(px(18.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(theme.foreground)
+                                        .flx_text("app.user-area.user-area-inner.user-name", name.to_string())
+                                        .child(name),
+                                )
+                                .child(
+                                    div()
+                                        .truncate()
+                                        .text_size(px(11.))
+                                        .line_height(px(14.))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(status_color_text)
+                                        .flx_text("app.user-area.user-area-inner.user-status", label.to_string())
+                                        .child(label),
+                                ),
                         ),
                 )
                 .child(
@@ -355,10 +368,15 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .items_center()
                         .gap_1()
                         .flex_none()
+                        .relative()
+                        .pl(px(12.))
+                        .flx("app.user-area.user-area-inner.controls-container")
                         .when(view.accounts_enabled, |d| {
                             d.child(
                                 div()
                                     .debug_selector(|| "switch-accounts".to_owned())
+                                    .absolute()
+                                    .left(px(-36.))
                                     .opacity(0.)
                                     .group_hover(panel_group, |s| s.opacity(1.))
                                     .child(
@@ -400,17 +418,15 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             theme,
                             cx.listener(|this, _, _, cx| this.toggle_voice_deaf(cx)),
                         ))
-                        .child(
-                            div().flex_none().flx("app.user-area.user-area-inner.control-button.settings-click").child(
-                                Button::new("open-settings")
-                                    .ghost()
-                                    .small()
-                                    .icon(AppIcon::Gear)
-                                    .tooltip(l10n::tr("User settings"))
-                                    .accessibility_label(l10n::tr("User settings"))
-                                    .on_click(cx.listener(|this, _, window, cx| this.open_settings(window, cx))),
-                            ),
-                        ),
+                        .child(render_control_icon_button(
+                            "user-panel-settings",
+                            AppIcon::Gear,
+                            l10n::tr("User settings"),
+                            false,
+                            false,
+                            theme,
+                            cx.listener(|this, _, window, cx| this.open_settings(window, cx)),
+                        )),
                 ),
         )
 }

@@ -159,3 +159,19 @@ Git Bash에서는 `/channels/...` 인자가 Windows 경로로 바뀌지 않도�
 
 ### 10.5 시험 서버 상태 복구 점검
 크롤이나 수동 시험 뒤에는 다음을 확인한다: #markdown 메시지 4개의 반응 없음, 고정 메시지 없음, tester2 `user_guild_settings`의 채널 덮어쓰기 없음(`muted: false`), 포터블 앱의 즐겨찾기 해제·멤버 목록 표시·마이크/스피커 켜짐·다크 테마.
+
+## 11. 외부 사례 조사 (2026-11-24)
+
+확인 표시: **[직접 확인]** = 루트가 원문을 열어 대조함, **[2차]** = 조사 에이전트 보고만 있음.
+
+- **Discord [직접 확인, 2차 기사 경유]:** CTO Stanislav Vishnevskiy가 2026-11-04 X에서 데스크톱 클라이언트를 Rust + **GPUI**(Discord 자체 수정 포함)로 다시 만든다고 밝혔다. Electron과 React Native를 걷어내고, 웹뷰는 영상·Activities처럼 가치가 있는 곳에만 남긴다. 비공개 테스트 직전이며 출시일은 없고 Electron 앱은 병행 갱신한다(https://www.andrealosavio.com/en/blog/discord-rust-client-rewrite, 원문 X 게시물은 열지 못함). 시각 회귀·디자인 시스템 운영 방식은 공개 자료를 찾지 못했다.
+- **Fluxer [직접 확인]:** 데스크톱은 Electron이고 웹과 같은 코드를 쓰며 네이티브 Rust 모듈이 20개 넘게 들어 있다. 웹·데스크톱을 Rust로 다시 만들 계획은 없다. 별도로 Flutter 앱 "Oxygen"(현재 iOS·Android)의 데스크톱판을 개발 중이며 출시일은 없다(https://fluxer.com/help/is-fluxer-electron). 즉 공식 팀도 네이티브 클라이언트는 웹 UI 복제가 아닌 별도 구현(Flutter)으로 간다.
+- **Electron → Rust 전환 유형 [2차]:** ① Tauri 계열(GitButler, Spacedrive 등)은 웹 UI를 OS WebView로 그대로 써서 패리티 문제 자체를 피한다. ② Zed·Warp·Lapce는 처음부터 네이티브 디자인이라 웹 UI 복제 사례가 아니다. ③ 웹 UI를 Rust에서 직접 렌더링하는 Dioxus Blitz(Stylo + Taffy + Parley + Vello)는 README 기준 beta이고 JS가 필요한 앱은 범위 밖이다. Servo는 2026-04 crates.io 0.1.0, 임베딩 API가 자주 바뀐다.
+- **검증 기법 [2차]:** GPUI 헤드리스 렌더(Zed `HeadlessAppContext`, wgpu 오프스크린 PR #62341 — crates.io 릴리스에는 없어 Zed 커밋 고정 필요), 커뮤니티 골든 이미지 도구(gpui-shot 등, 성숙도 미검증), 구조화 스냅샷(insta), 토큰 단일 출처(Style Dictionary). 웹↔네이티브 렌더러 간 패리티 검증의 공개 사례는 찾지 못했다.
+
+### 우리 계획에 대한 시사점
+1. 가장 가까운 선례는 Discord다. 같은 GPUI를 쓰지만 기존 웹 UI의 픽셀 복제가 아니라 자체 수정한 GPUI 위의 새 구현이고, 복제 가치가 낮거나 어려운 영역(영상, Activities)은 웹뷰로 남긴다. 우리도 1:1 비용이 큰 영역(화면 공유 뷰어, 일부 설정 화면 등)에 WebView2 혼용을 선택지로 둔다(`fluxer_desktop_rs`가 이미 WebView2 셸).
+2. 웹↔네이티브 패리티를 자동 검증하는 공개 도구가 없으므로, 지금의 Parity Lab(CDP 실측 ↔ Rust 프로브 조인)을 계속 주 경로로 쓴다. 외부 사례가 이를 대체하지 않는다.
+3. 토큰 드리프트는 공식 `ThemeVariableManifest.ts`를 단일 출처로 삼아 Rust 테마 상수를 생성하는 방식으로 막는다(Style Dictionary와 같은 발상, 손으로 옮기지 않음).
+4. 컴포넌트 단위 회귀는 GPUI 헤드리스 스냅샷(구조는 insta JSON, 픽셀은 허용 오차)으로 CI에서 잡는다. 실기 비교는 장면 단위로만 한다.
+5. Blitz·Servo로 공식 HTML/CSS를 그대로 그리는 방식은 공식 앱이 JS 의존이라 현재는 부적합하다. 정적 부분 실험 정도만 가치가 있다.

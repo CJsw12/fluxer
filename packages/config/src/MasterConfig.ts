@@ -81,6 +81,8 @@ export interface MasterConfig {
 			port: number;
 			keyspace: string;
 			local_dc: string;
+			consistency: string;
+			serial_consistency: string;
 			username: string;
 			password: string;
 		};
@@ -116,6 +118,19 @@ export interface MasterConfig {
 			uploads: string;
 			reports: string;
 			harvests: string;
+		};
+		store_id: string;
+		dual_store_enabled: boolean;
+		fallback_reads_enabled: boolean;
+		fallback?: {
+			store_id: string;
+			endpoint: string;
+			presigned_url_base?: string;
+			force_path_style: boolean;
+			region: string;
+			access_key_id: string;
+			secret_access_key: string;
+			bucket_map: string;
 		};
 	};
 	services: {
@@ -159,6 +174,12 @@ export interface MasterConfig {
 				enabled?: boolean;
 				stream?: string;
 				skip_buckets?: Array<string>;
+			};
+			cassandra_write_capture?: {
+				mode?: 'off' | 'behind';
+				nats_url?: string;
+				auth_token?: string;
+				stream?: string;
 			};
 		};
 		nats?: {

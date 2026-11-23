@@ -107,6 +107,8 @@ function defaultConfig(): MasterConfig {
 				port: 9042,
 				keyspace: 'fluxer',
 				local_dc: 'datacenter1',
+				consistency: 'local_quorum',
+				serial_consistency: 'local_serial',
 				username: '',
 				password: '',
 			},
@@ -136,6 +138,9 @@ function defaultConfig(): MasterConfig {
 				reports: 'fluxer-reports',
 				harvests: 'fluxer-harvests',
 			},
+			store_id: 'primary',
+			dual_store_enabled: false,
+			fallback_reads_enabled: false,
 		},
 		services: {
 			api: {
@@ -586,6 +591,7 @@ function validateStorageConfig(config: MasterConfig): void {
 	if (storage.backend === 's3') {
 		requireString(config.s3?.access_key_id, 'FLUXER_S3_ACCESS_KEY_ID');
 		requireString(config.s3?.secret_access_key, 'FLUXER_S3_SECRET_ACCESS_KEY');
+		validateDualStoreConfig(config);
 		return;
 	}
 	requireString(storage.root, 'FLUXER_STORAGE_ROOT');
@@ -593,6 +599,28 @@ function validateStorageConfig(config: MasterConfig): void {
 		throw new Error('FLUXER_STORAGE_ROOT must be an absolute path');
 	}
 	parseUploadsTtlMs(storage.uploads_ttl);
+}
+
+function validateDualStoreConfig(config: MasterConfig): void {
+	const s3 = config.s3;
+	if (!s3) return;
+	assertBoolean(s3.dual_store_enabled, 'FLUXER_S3_DUAL_STORE_ENABLED');
+	assertBoolean(s3.fallback_reads_enabled, 'FLUXER_S3_FALLBACK_READS_ENABLED');
+	requireString(s3.store_id, 'FLUXER_S3_STORE_ID');
+	if (!s3.dual_store_enabled) return;
+	const fallback = s3.fallback;
+	if (!fallback) {
+		throw new Error('FLUXER_S3_DUAL_STORE_ENABLED needs FLUXER_S3_FALLBACK_* settings');
+	}
+	requireString(fallback.store_id, 'FLUXER_S3_FALLBACK_STORE_ID');
+	requireString(fallback.endpoint, 'FLUXER_S3_FALLBACK_ENDPOINT');
+	requireString(fallback.region, 'FLUXER_S3_FALLBACK_REGION');
+	requireString(fallback.access_key_id, 'FLUXER_S3_FALLBACK_ACCESS_KEY_ID');
+	requireString(fallback.secret_access_key, 'FLUXER_S3_FALLBACK_SECRET_ACCESS_KEY');
+	requireString(fallback.bucket_map, 'FLUXER_S3_FALLBACK_BUCKET_MAP');
+	if (fallback.store_id === s3.store_id) {
+		throw new Error('FLUXER_S3_FALLBACK_STORE_ID must differ from FLUXER_S3_STORE_ID');
+	}
 }
 
 function validateKVConfig(config: MasterConfig): void {
@@ -620,6 +648,28 @@ function validateStorageChangeFeedConfig(config: MasterConfig): void {
 		throw new Error(
 			'FLUXER_API_STORAGE_CHANGE_FEED_STREAM must be letters, digits, underscores or hyphens when the storage change feed is enabled',
 		);
+	}
+}
+
+function validateCassandraWriteCaptureConfig(config: MasterConfig): void {
+	const capture = config.services.api?.cassandra_write_capture;
+	if (capture?.mode === undefined) {
+		return;
+	}
+	assertOneOf(capture.mode, ['off', 'behind'], 'FLUXER_CASSANDRA_CAPTURE_MODE');
+	if (capture.mode === 'off') {
+		return;
+	}
+	if (config.database.backend !== 'cassandra') {
+		throw new Error('FLUXER_CASSANDRA_CAPTURE_MODE needs FLUXER_DATABASE_BACKEND=cassandra');
+	}
+	if (!capture.nats_url) {
+		throw new Error(
+			`FLUXER_CASSANDRA_CAPTURE_NATS_URL is required when FLUXER_CASSANDRA_CAPTURE_MODE is ${capture.mode}`,
+		);
+	}
+	if (capture.stream !== undefined && !/^[A-Za-z0-9_-]+$/u.test(capture.stream)) {
+		throw new Error('FLUXER_CASSANDRA_CAPTURE_STREAM must be letters, digits, underscores or hyphens');
 	}
 }
 
@@ -811,6 +861,7 @@ function normalizeConfig(config: MasterConfig): MasterConfig {
 	validateStorageConfig(config);
 	validateApiWorkerConfig(config);
 	validateStorageChangeFeedConfig(config);
+	validateCassandraWriteCaptureConfig(config);
 	validateReportRetentionConfig(config);
 	validateCachePurgeConfig(config);
 	validateStoreBillingConfig(config);
@@ -900,7 +951,14 @@ function applyPublicPort(config: MasterConfig, endpoints: DerivedEndpoints): Mas
 			public_origin: buildUrl(config.domain.public_scheme, base_domain, public_port),
 		},
 		endpoints: normalizedEndpoints,
-		s3: config.s3 && {...config.s3, presigned_url_base: normalizeOptional(config.s3.presigned_url_base)},
+		s3: config.s3 && {
+			...config.s3,
+			presigned_url_base: normalizeOptional(config.s3.presigned_url_base),
+			fallback: config.s3.fallback && {
+				...config.s3.fallback,
+				presigned_url_base: normalizeOptional(config.s3.fallback.presigned_url_base),
+			},
+		},
 		services: {
 			...config.services,
 			media_proxy: {

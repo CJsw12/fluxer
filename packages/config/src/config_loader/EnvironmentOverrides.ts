@@ -38,6 +38,8 @@ const NAMED_FLUXER_ENV_OVERRIDES: Record<string, NamedEnvOverride> = {
 	FLUXER_CASSANDRA_PORT: {path: ['database', 'cassandra', 'port'], parse: parseInteger},
 	FLUXER_CASSANDRA_KEYSPACE: {path: ['database', 'cassandra', 'keyspace']},
 	FLUXER_CASSANDRA_LOCAL_DC: {path: ['database', 'cassandra', 'local_dc']},
+	FLUXER_CASSANDRA_CONSISTENCY: {path: ['database', 'cassandra', 'consistency']},
+	FLUXER_CASSANDRA_SERIAL_CONSISTENCY: {path: ['database', 'cassandra', 'serial_consistency']},
 	FLUXER_CASSANDRA_USERNAME: {path: ['database', 'cassandra', 'username']},
 	FLUXER_CASSANDRA_PASSWORD: {path: ['database', 'cassandra', 'password']},
 	FLUXER_POSTGRES_URL: {path: ['database', 'postgres', 'url']},
@@ -71,6 +73,17 @@ const NAMED_FLUXER_ENV_OVERRIDES: Record<string, NamedEnvOverride> = {
 	FLUXER_S3_BUCKET_UPLOADS: {path: ['s3', 'buckets', 'uploads']},
 	FLUXER_S3_BUCKET_REPORTS: {path: ['s3', 'buckets', 'reports']},
 	FLUXER_S3_BUCKET_HARVESTS: {path: ['s3', 'buckets', 'harvests']},
+	FLUXER_S3_STORE_ID: {path: ['s3', 'store_id']},
+	FLUXER_S3_DUAL_STORE_ENABLED: {path: ['s3', 'dual_store_enabled'], parse: parseBoolean},
+	FLUXER_S3_FALLBACK_READS_ENABLED: {path: ['s3', 'fallback_reads_enabled'], parse: parseBoolean},
+	FLUXER_S3_FALLBACK_STORE_ID: {path: ['s3', 'fallback', 'store_id']},
+	FLUXER_S3_FALLBACK_ENDPOINT: {path: ['s3', 'fallback', 'endpoint']},
+	FLUXER_S3_FALLBACK_PUBLIC_ENDPOINT: {path: ['s3', 'fallback', 'presigned_url_base']},
+	FLUXER_S3_FALLBACK_FORCE_PATH_STYLE: {path: ['s3', 'fallback', 'force_path_style'], parse: parseBoolean},
+	FLUXER_S3_FALLBACK_REGION: {path: ['s3', 'fallback', 'region']},
+	FLUXER_S3_FALLBACK_ACCESS_KEY_ID: {path: ['s3', 'fallback', 'access_key_id']},
+	FLUXER_S3_FALLBACK_SECRET_ACCESS_KEY: {path: ['s3', 'fallback', 'secret_access_key']},
+	FLUXER_S3_FALLBACK_BUCKET_MAP: {path: ['s3', 'fallback', 'bucket_map']},
 	FLUXER_NATS_URL: {path: ['services', 'nats', 'core_url']},
 	FLUXER_NATS_JETSTREAM_URL: {path: ['services', 'nats', 'jetstream_url']},
 	FLUXER_NATS_AUTH_TOKEN: {path: ['services', 'nats', 'auth_token']},
@@ -120,6 +133,13 @@ const NAMED_FLUXER_ENV_OVERRIDES: Record<string, NamedEnvOverride> = {
 		path: ['services', 'api', 'storage_change_feed', 'skip_buckets'],
 		parse: parseBucketList,
 	},
+	FLUXER_CASSANDRA_CAPTURE_MODE: {
+		path: ['services', 'api', 'cassandra_write_capture', 'mode'],
+		parse: parseCaptureMode,
+	},
+	FLUXER_CASSANDRA_CAPTURE_NATS_URL: {path: ['services', 'api', 'cassandra_write_capture', 'nats_url']},
+	FLUXER_CASSANDRA_CAPTURE_AUTH_TOKEN: {path: ['services', 'api', 'cassandra_write_capture', 'auth_token']},
+	FLUXER_CASSANDRA_CAPTURE_STREAM: {path: ['services', 'api', 'cassandra_write_capture', 'stream']},
 	FLUXER_API_UNFURL_IGNORED_HOSTS: {path: ['services', 'api', 'unfurl_ignored_hosts'], parse: parseCsv},
 	FLUXER_APP_ORIGIN_ALIASES: {path: ['services', 'api', 'app_origin_aliases'], parse: parseCsv},
 	FLUXER_API_DISCOVERY_PUBLIC_ENDPOINT: {path: ['services', 'api', 'discovery_public_endpoint']},
@@ -483,6 +503,12 @@ function parseTagStyle(raw: string): string {
 	const value = raw.trim().toLowerCase();
 	if (value === 'none' || value === 'random') return value;
 	throw new Error('must be none or random');
+}
+
+function parseCaptureMode(raw: string): string {
+	const value = raw.trim().toLowerCase();
+	if (value === 'off' || value === 'behind') return value;
+	throw new Error('must be off or behind');
 }
 
 function parseSmtpTlsMode(raw: string): string {

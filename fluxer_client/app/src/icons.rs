@@ -55,7 +55,7 @@ pub enum AppIcon {
     SpeakerHigh,
     SpeakerSlash,
     Star,
-    StarOutline,
+    StarBold,
     Sticker,
     Trash,
     Tray,
@@ -67,6 +67,13 @@ pub enum AppIcon {
     Wrench,
     X,
     XCircle,
+    AnnouncementChannel,
+    Chats,
+    ForumChannel,
+    Inbox,
+    LinkChannel,
+    TextChannel,
+    VoiceChannel,
 }
 
 impl AppIcon {
@@ -111,7 +118,7 @@ impl AppIcon {
         Self::SpeakerHigh,
         Self::SpeakerSlash,
         Self::Star,
-        Self::StarOutline,
+        Self::StarBold,
         Self::Sticker,
         Self::Trash,
         Self::Tray,
@@ -123,6 +130,13 @@ impl AppIcon {
         Self::Wrench,
         Self::X,
         Self::XCircle,
+        Self::AnnouncementChannel,
+        Self::Chats,
+        Self::ForumChannel,
+        Self::Inbox,
+        Self::LinkChannel,
+        Self::TextChannel,
+        Self::VoiceChannel,
     ];
 
     pub const fn asset_path(self) -> &'static str {
@@ -167,7 +181,7 @@ impl AppIcon {
             Self::SpeakerHigh => "icons/phosphor/speaker-high.svg",
             Self::SpeakerSlash => "icons/phosphor/speaker-slash.svg",
             Self::Star => "icons/phosphor/star.svg",
-            Self::StarOutline => "icons/phosphor/star-outline.svg",
+            Self::StarBold => "icons/phosphor/star-bold.svg",
             Self::Sticker => "icons/phosphor/sticker.svg",
             Self::Trash => "icons/phosphor/trash.svg",
             Self::Tray => "icons/phosphor/tray.svg",
@@ -179,6 +193,13 @@ impl AppIcon {
             Self::Wrench => "icons/phosphor/wrench.svg",
             Self::X => "icons/phosphor/x.svg",
             Self::XCircle => "icons/phosphor/x-circle.svg",
+            Self::AnnouncementChannel => "icons/phosphor/announcement-channel.svg",
+            Self::Chats => "icons/phosphor/chats.svg",
+            Self::ForumChannel => "icons/phosphor/forum-channel.svg",
+            Self::Inbox => "icons/phosphor/inbox.svg",
+            Self::LinkChannel => "icons/phosphor/link-channel.svg",
+            Self::TextChannel => "icons/phosphor/text-channel.svg",
+            Self::VoiceChannel => "icons/phosphor/voice-channel.svg",
         }
     }
 
@@ -224,7 +245,7 @@ impl AppIcon {
             Self::SpeakerHigh => include_bytes!("../assets/icons/speaker-high.svg"),
             Self::SpeakerSlash => include_bytes!("../assets/icons/speaker-slash.svg"),
             Self::Star => include_bytes!("../assets/icons/star.svg"),
-            Self::StarOutline => include_bytes!("../assets/icons/star-outline.svg"),
+            Self::StarBold => include_bytes!("../assets/icons/star-bold.svg"),
             Self::Sticker => include_bytes!("../assets/icons/sticker.svg"),
             Self::Trash => include_bytes!("../assets/icons/trash.svg"),
             Self::Tray => include_bytes!("../assets/icons/tray.svg"),
@@ -236,6 +257,13 @@ impl AppIcon {
             Self::Wrench => include_bytes!("../assets/icons/wrench.svg"),
             Self::X => include_bytes!("../assets/icons/x.svg"),
             Self::XCircle => include_bytes!("../assets/icons/x-circle.svg"),
+            Self::AnnouncementChannel => include_bytes!("../assets/icons/announcement-channel.svg"),
+            Self::Chats => include_bytes!("../assets/icons/chats.svg"),
+            Self::ForumChannel => include_bytes!("../assets/icons/forum-channel.svg"),
+            Self::Inbox => include_bytes!("../assets/icons/inbox.svg"),
+            Self::LinkChannel => include_bytes!("../assets/icons/link-channel.svg"),
+            Self::TextChannel => include_bytes!("../assets/icons/text-channel.svg"),
+            Self::VoiceChannel => include_bytes!("../assets/icons/voice-channel.svg"),
         }
     }
 }
@@ -347,10 +375,9 @@ mod tests {
             };
             let text = std::str::from_utf8(&bytes).expect("valid utf-8 svg");
             assert!(text.starts_with("<svg"), "{icon:?} does not start with <svg");
-            assert!(
-                text.contains("viewBox=\"0 0 256 256\""),
-                "{icon:?} is not a Phosphor 256x256 SVG"
-            );
+            // Fluxer's own Inbox glyph uses a 24x24 viewBox.
+            let expected = if icon == AppIcon::Inbox { "viewBox=\"0 0 24 24\"" } else { "viewBox=\"0 0 256 256\"" };
+            assert!(text.contains(expected), "{icon:?} has an unexpected viewBox");
         }
 
         let used = [

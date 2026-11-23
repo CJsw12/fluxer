@@ -576,11 +576,12 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 .into_any_element()
         } else {
             let icon = match c.icon {
-                ChannelIcon::Voice => AppIcon::SpeakerHigh,
-                ChannelIcon::Announcement => AppIcon::Megaphone,
-                ChannelIcon::Forum | ChannelIcon::Thread => AppIcon::ChatsCircle,
-                ChannelIcon::Link => AppIcon::LinkSimple,
-                _ => AppIcon::Hash,
+                ChannelIcon::Voice => AppIcon::VoiceChannel,
+                ChannelIcon::Announcement => AppIcon::AnnouncementChannel,
+                ChannelIcon::Forum => AppIcon::ForumChannel,
+                ChannelIcon::Thread => AppIcon::Chats,
+                ChannelIcon::Link => AppIcon::LinkChannel,
+                _ => AppIcon::TextChannel,
             };
             div()
                 .size(px(20.))

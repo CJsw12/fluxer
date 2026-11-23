@@ -49,7 +49,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .gap(px(12.))
                 .when(!glyph.is_empty(), |d| {
                     if glyph == "#" {
-                        d.child(Icon::new(AppIcon::Hash).with_size(px(24.)).text_color(theme.muted_foreground))
+                        d.child(Icon::new(AppIcon::TextChannel).with_size(px(24.)).text_color(theme.muted_foreground))
                     } else {
                         d.child(
                             div()
@@ -140,7 +140,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 .ghost()
                                 .with_size(px(32.))
                                 .rounded(px(16.))
-                                .icon(hdr_icon(AppIcon::ChatsCircle, theme.muted_foreground))
+                                .icon(hdr_icon(AppIcon::Chats, theme.muted_foreground))
                                 .tooltip(l10n::tr("Threads"))
                                 .accessibility_label(l10n::tr("Threads"))
                                 .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx))),
@@ -164,7 +164,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 .ghost()
                                 .with_size(px(32.))
                                 .rounded(px(16.))
-                                .icon(hdr_icon(AppIcon::StarOutline, theme.muted_foreground))
+                                .icon(hdr_icon(AppIcon::StarBold, theme.muted_foreground))
                                 .tooltip(l10n::tr("Add to Favorites"))
                                 .accessibility_label(l10n::tr("Add to Favorites")),
                         ),
@@ -231,7 +231,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             .ghost()
                             .with_size(px(32.))
                             .rounded(px(16.))
-                            .icon(hdr_icon(AppIcon::Tray, theme.muted_foreground))
+                            .icon(hdr_icon(AppIcon::Inbox, theme.muted_foreground))
                             .tooltip(l10n::tr("Inbox"))
                             .accessibility_label(l10n::tr("Inbox"))
                             .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx))),
@@ -241,5 +241,5 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
 }
 
 fn hdr_icon(icon: AppIcon, color: gpui_kit::Hsla) -> Icon {
-    Icon::new(icon).text_color(color)
+    Icon::new(icon).with_size(px(24.)).text_color(color)
 }

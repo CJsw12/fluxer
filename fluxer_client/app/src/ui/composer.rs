@@ -34,6 +34,9 @@ pub fn render_with(
     let paste_view = cx.weak_entity();
     let field = Input::new(&view.composer)
         .appearance(false)
+        // Official composer text and placeholder: 16px / 22px line (`flx-channel-textarea-composer`).
+        .text_size(px(16.))
+        .line_height(px(22.))
         .disabled(!view.can_send)
         .on_paste(move |item, _, cx| paste_view.update(cx, |v, cx| v.paste(item, cx)).unwrap_or(false));
     let tray = view
@@ -45,7 +48,7 @@ pub fn render_with(
                 .ghost()
                 .with_size(px(32.))
                 .rounded(px(6.))
-                .icon(AppIcon::Plus)
+                .icon(composer_icon(AppIcon::Plus, theme))
                 .tooltip(l10n::tr("Upload a file"))
                 .on_click(cx.listener(|v, _, _, cx| v.pick_files(cx))),
         )
@@ -56,7 +59,7 @@ pub fn render_with(
                 .ghost()
                 .with_size(px(32.))
                 .rounded(px(6.))
-                .icon(AppIcon::Image)
+                .icon(composer_icon(AppIcon::Image, theme))
                 .tooltip(l10n::tr("GIFs & media"))
                 .accessibility_label(l10n::tr("GIFs & media"))
                 .on_click(cx.listener(|v, _, _, cx| v.pick_files(cx))),
@@ -68,7 +71,7 @@ pub fn render_with(
                 .ghost()
                 .with_size(px(32.))
                 .rounded(px(6.))
-                .icon(AppIcon::Sticker)
+                .icon(composer_icon(AppIcon::Sticker, theme))
                 .tooltip(l10n::tr("Stickers"))
                 .accessibility_label(l10n::tr("Stickers"))
                 .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
@@ -86,7 +89,7 @@ pub fn render_with(
             .ghost()
             .with_size(px(32.))
             .rounded(px(6.))
-            .icon(AppIcon::Smiley)
+            .icon(composer_icon(AppIcon::Smiley, theme))
             .tooltip(l10n::tr("Add emoji"))
             .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
                 v.open_emoji_picker(crate::ui::emoji_picker::sections::PickerTarget::Composer, ev.position(), window, cx);
@@ -678,4 +681,10 @@ mod tests {
         assert_eq!(value(cx), "draft");
         assert!(cx.update(|_, cx| harness.read(cx).controller.mode() == &ComposerMode::Normal));
     }
+}
+
+/// Official textarea buttons draw 22px icons in `--text-primary-muted` (rgb(206,203,212) dark);
+/// gpui-component's Button would otherwise recolour them with its own foreground.
+fn composer_icon(icon: AppIcon, theme: &Theme) -> gpui_kit::component::Icon {
+    gpui_kit::component::Icon::new(icon).with_size(px(22.)).text_color(theme.muted_foreground)
 }

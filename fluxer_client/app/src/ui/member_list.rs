@@ -123,12 +123,7 @@ pub fn status_label(status: Status) -> String {
 
 /// Status dot colors (`StatusConstants`: online green, idle yellow, dnd red).
 pub fn status_color(status: Status, theme: &Theme) -> Hsla {
-    match status {
-        Status::Online => theme.status_online,
-        Status::Idle => rgb(0xf0b232).into(),
-        Status::Dnd => rgb(0xf23f43).into(),
-        Status::Invisible | Status::Offline => theme.status_offline,
-    }
+    super::status_indicator::color(status, theme)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -263,6 +258,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .flex_none()
         .w(px(theme.sizes.member_list_width))
         .h_full()
+        .rounded_tl(px(14.))
+        .overflow_hidden()
         .bg(theme.background_secondary_lighter)
         .flx("channel.member-list-container.member-list-container")
         .child(

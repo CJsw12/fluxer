@@ -13,7 +13,9 @@ use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 
 const SURFACE: u32 = 0x2a2730;
-const ARROW_W: f32 = 6.;
+const ARROW_W: f32 = 7.;
+/// `--tooltip-border-color` (`--background-modifier-accent`, ~8% white over the surface).
+const BORDER: u32 = 0x3d3a44;
 
 /// Rail slot width (72) plus the official `8px` gap, relative to a full-width slot.
 pub(crate) const TOOLTIP_LEFT: f32 = 80.;
@@ -23,20 +25,26 @@ fn arrow() -> impl IntoElement {
     canvas(
         |_, _, _| (),
         move |bounds, (), window: &mut Window, _| {
-            let mut b = PathBuilder::fill();
             let (l, t, r, bt) = (bounds.left(), bounds.top(), bounds.right(), bounds.bottom());
             let mid: Pixels = t + (bt - t) / 2.;
-            b.move_to(point(l, mid));
-            b.line_to(point(r, t));
-            b.line_to(point(r, bt));
-            b.close();
-            if let Ok(path) = b.build() {
-                window.paint_path(path, color);
-            }
+            let border: Hsla = rgb(BORDER).into();
+            // Outer triangle in the border colour, inner one inset by 1px in the surface colour.
+            let mut tri = |inset: f32, fill: Hsla| {
+                let mut b = PathBuilder::fill();
+                b.move_to(point(l + px(inset * 1.4), mid));
+                b.line_to(point(r + px(1.), t + px(inset * 0.6)));
+                b.line_to(point(r + px(1.), bt - px(inset * 0.6)));
+                b.close();
+                if let Ok(path) = b.build() {
+                    window.paint_path(path, fill);
+                }
+            };
+            tri(0., border);
+            tri(1., color);
         },
     )
     .absolute()
-    .left(px(-ARROW_W))
+    .left(px(-ARROW_W - 1.))
     .top(px(0.))
     .w(px(ARROW_W))
     .h_full()
@@ -50,6 +58,8 @@ fn shell(content: impl IntoElement, centered: bool) -> impl IntoElement {
         .when(centered, |d| d.items_center())
         .rounded(px(8.))
         .bg(rgb(SURFACE))
+        .border_1()
+        .border_color(rgb(BORDER))
         .shadow_lg()
         .whitespace_nowrap()
         .child(arrow())

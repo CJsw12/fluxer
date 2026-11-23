@@ -11,7 +11,6 @@ use gpui_kit::{
     prelude::*, px, rgb,
 };
 
-use super::member_list::status_color;
 use crate::format::{DEFAULT_AVATAR_COLORS, default_avatar_index, initials};
 use crate::theme::Theme;
 
@@ -89,19 +88,21 @@ pub fn render_avatar(spec: AvatarSpec, theme: &Theme) -> AnyElement {
         return picture;
     };
 
-    let dot_size = status_dot_size(size, theme);
-    let offset = if size >= 48. { 0. } else { -2. };
+    let (dot_size, cut_r, center) = status_geometry(size);
     let border_bg = spec.status_border_bg.unwrap_or(theme.background);
+    // Official masks cut a `cut_r` hole around the indicator; the ring approximates it.
     let dot = div()
         .debug_selector(|| "avatar-status-dot".to_owned())
         .absolute()
-        .right(px(offset))
-        .bottom(px(offset))
-        .size(px(dot_size))
+        .left(px(center - cut_r))
+        .top(px(center - cut_r))
+        .size(px(cut_r * 2.))
         .rounded_full()
-        .border_2()
-        .border_color(border_bg)
-        .bg(status_color(status, theme));
+        .bg(border_bg)
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(super::status_indicator::themed(status, dot_size, theme));
 
     div()
         .relative()
@@ -112,14 +113,40 @@ pub fn render_avatar(spec: AvatarSpec, theme: &Theme) -> AnyElement {
         .into_any_element()
 }
 
-fn status_dot_size(avatar_size: f32, theme: &Theme) -> f32 {
-    if avatar_size <= 24. {
-        8.
-    } else if avatar_size <= 44. {
-        theme.sizes.status_dot + 2.
-    } else {
-        (avatar_size * 0.24).clamp(14., 22.)
+/// `(status size, cutout radius, cutout centre)` from `GenerateAvatarMasks.ts` `STATUS_CONFIG`,
+/// interpolated between neighbouring sizes and scaled past the largest one.
+pub(crate) fn status_geometry(avatar: f32) -> (f32, f32, f32) {
+    const TABLE: [(f32, f32, f32, f32); 11] = [
+        (16., 10., 5., 13.),
+        (20., 10., 6., 17.),
+        (24., 10., 7., 20.),
+        (32., 10., 8., 27.),
+        (36., 10., 8., 30.),
+        (40., 12., 9., 34.),
+        (44., 14., 10., 38.),
+        (48., 14., 10., 42.),
+        (56., 16., 11., 49.),
+        (80., 16., 16. / 2. + 16. * 0.2, 68.),
+        (120., 24., 24. / 2. + 24. * 0.2, 100.),
+    ];
+    let first = TABLE[0];
+    let last = TABLE[TABLE.len() - 1];
+    if avatar <= first.0 {
+        return (first.1, first.2, first.3);
     }
+    if avatar >= last.0 {
+        let k = avatar / last.0;
+        return (last.1 * k, last.2 * k, last.3 * k);
+    }
+    for w in TABLE.windows(2) {
+        let (lo, hi) = (w[0], w[1]);
+        if avatar <= hi.0 {
+            let t = (avatar - lo.0) / (hi.0 - lo.0);
+            let l = |a: f32, b: f32| a + (b - a) * t;
+            return (l(lo.1, hi.1), l(lo.2, hi.2), l(lo.3, hi.3));
+        }
+    }
+    (last.1, last.2, last.3)
 }
 
 fn default_avatar_color(index: usize) -> Hsla {

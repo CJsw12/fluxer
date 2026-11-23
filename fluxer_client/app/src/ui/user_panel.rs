@@ -78,10 +78,13 @@ fn render_control_icon_button(
 
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> impl IntoElement {
     let sizes = theme.sizes;
-    let (dot, label): (_, SharedString) = match view.connection {
-        Connection::Online => (status_color(view.own_status, theme), status_label(view.own_status).into()),
-        Connection::Connecting => (theme.status_connecting, view.status.clone()),
-        Connection::Offline => (theme.status_offline, l10n::tr("Offline").into()),
+    let (dot, label): ((Status, Hsla), SharedString) = match view.connection {
+        Connection::Online => (
+            (view.own_status, status_color(view.own_status, theme)),
+            status_label(view.own_status).into(),
+        ),
+        Connection::Connecting => ((Status::Idle, theme.status_connecting), view.status.clone()),
+        Connection::Offline => ((Status::Offline, theme.status_offline), l10n::tr("Offline").into()),
     };
     let (picture, name) = match &view.user {
         Some(user) => (
@@ -104,7 +107,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         ),
     };
     let self_id = view.user.as_ref().map(|u| u.id);
-    let dot_size = sizes.status_dot;
+    let (dot_size, cut_r, cut_c) = super::avatar::status_geometry(sizes.user_panel_avatar);
     let status_aria_label = format!("{}: {}", l10n::tr("Status"), label);
 
     let effective_muted = view.voice.effective_muted();
@@ -148,7 +151,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .flex_col()
         .flex_none()
         .rounded(px(8.))
-        .bg(theme.background_secondary)
+        // Official card: srgb(0.124 0.116 0.142) = `--background-secondary-lighter`, no border.
+        .bg(theme.background_secondary_lighter)
         .overflow_hidden()
         .children(voice_panel::render(view, theme, cx))
         .child(
@@ -199,13 +203,15 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                         this.cycle_status(cx);
                                     }))
                                     .absolute()
-                                    .right(px(-1.))
-                                    .bottom(px(-1.))
-                                    .size(px(dot_size))
+                                    .left(px(cut_c - cut_r))
+                                    .top(px(cut_c - cut_r))
+                                    .size(px(cut_r * 2.))
                                     .rounded_full()
-                                    .border_2()
-                                    .border_color(theme.background_secondary)
-                                    .bg(dot),
+                                    .bg(theme.background_secondary_lighter)
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .child(super::status_indicator::status_indicator(dot.0, dot_size, dot.1)),
                             ),
                         )
                         .child(
@@ -439,7 +445,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(div().size(px(18.)).rounded_full().bg(status_color(status, theme))),
+                .child(super::status_indicator::themed(status, 18., theme)),
         );
 
     let content = div()
@@ -556,7 +562,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
         .child(
             action_row("user-area-status-row", "app.floating.user-area-popout.action-button")
                 .on_hover(hover_submenu(Some(UserAreaSubmenu::Status), cx))
-                .child(icon_box(div().size(px(14.)).rounded_full().bg(status_color(status, theme)).into_any_element()))
+                .child(icon_box(super::status_indicator::themed(status, 14., theme).into_any_element()))
                 .child(action_label(status_label(status)))
                 .child(chevron(secondary)),
         )
@@ -713,7 +719,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                             .flex()
                             .items_center()
                             .justify_center()
-                            .child(div().size(px(14.)).rounded_full().bg(status_color(st, theme))),
+                            .child(super::status_indicator::themed(st, 14., theme)),
                     )
                     .child(
                         div()

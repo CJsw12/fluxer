@@ -173,7 +173,19 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .rounded(px(if active { GUILD_RADIUS } else { theme.sizes.rail_button / 2. }))
                 .object_fit(ObjectFit::Cover)
                 .into_any_element(),
-            None => div().text_color(initials_fg).child(g.initials.clone()).into_any_element(),
+            None => {
+                // `GuildAcronymUtils.ts`: font sizes by acronym length, scaled from a 48px icon.
+                const SIZES: [f32; 6] = [18., 18., 16., 14., 12., 10.];
+                let len = g.initials.chars().count().clamp(1, SIZES.len());
+                let font = (SIZES[len - 1] * theme.sizes.rail_button / 48.).floor().max(8.);
+                div()
+                    .text_size(px(font))
+                    .line_height(px(font))
+                    .font_weight(FontWeight::NORMAL)
+                    .text_color(initials_fg)
+                    .child(g.initials.clone())
+                    .into_any_element()
+            }
         };
         rail = rail.child(rail_item(
             format!("guild-{}", id.0),

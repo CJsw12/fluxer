@@ -157,6 +157,12 @@ async function candidates(within) {
 	});
 }
 
+const SVG_DUMP = `[...document.querySelectorAll('svg')].map(s => { const r = s.getBoundingClientRect();
+  if (r.width < 6 || r.height < 6 || r.bottom < 0 || r.top > innerHeight) return null;
+  const host = s.closest('[data-flx]');
+  return {flx: (s.getAttribute('data-flx') || (host && host.getAttribute('data-flx')) || ''), rect: [r.x, r.y, r.width, r.height].map(Math.round),
+    viewBox: s.getAttribute('viewBox'), d: [...s.querySelectorAll('path')].map(p => p.getAttribute('d') || '').join('|')}; }).filter(Boolean)`;
+
 const target = (c) => `[...document.querySelectorAll('[data-flx="${c.flx.replace(/"/g, '\\"')}"]')][${c.idx}]`;
 
 await loadRoute();
@@ -210,6 +216,8 @@ async function explore(path, within, depth) {
 		const id = String(states.length + 1).padStart(3, '0');
 		await shot(join(OUT, 'states', `${id}.png`));
 		writeFileSync(join(OUT, 'states', `${id}.dom.json`), JSON.stringify(after));
+		// Icon originals visible in this state (identified later against the Phosphor set).
+		writeFileSync(join(OUT, 'states', `${id}.svgs.json`), JSON.stringify(await cdp.eval(SVG_DUMP)));
 		const state = {
 			id, trail, route_after: route, layer: isLayer, toggle_reverted: !isLayer && route === ROUTE,
 			added, removed_count: removed.length, also_opened_by: [],

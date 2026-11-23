@@ -2910,6 +2910,25 @@ impl Render for ClientView {
                     )
             }))
             .children(right_panel)
+            // `OutlineFrame.module.css`: 1px `rgba(255,255,255,0.035)` border with a 14px
+            // top-left radius around everything right of the 72px rail.
+            .child(
+                div()
+                    .absolute()
+                    .top(px(0.))
+                    .left(px(theme.sizes.rail_width))
+                    .right(px(0.))
+                    .bottom(px(0.))
+                    .rounded_tl(px(14.))
+                    .border_t_1()
+                    .border_l_1()
+                    .border_color(if theme.background.l < 0.5 {
+                        gpui_kit::hsla(0., 0., 1., 0.035)
+                    } else {
+                        theme.border
+                    })
+                    .flx("app.outline-frame.frame"),
+            )
             .children(overlay)
     }
 }

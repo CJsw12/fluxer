@@ -38,6 +38,7 @@ pub mod composer_text;
 pub mod overlay;
 pub mod quick_switcher;
 pub mod rail_tooltip;
+pub mod status_indicator;
 pub mod embed;
 
 use gpui_kit::{div, prelude::*, px};

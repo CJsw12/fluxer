@@ -4,7 +4,8 @@ by `data-flx` id and report geometry/text deltas plus an overlay image.
     python -I tools/parity_lab/compare.py OFFICIAL.dom.json RUST_inspect.json OUT_DIR
         [--official-png A.png --rust-png B.png] [--tol 2]
 
-Matching: ids are compared without the official `--N` de-dup suffix. Repeated ids are paired by
+Matching: exact `data-flx` literal first (the official `--N` suffix marks a distinct source site),
+then the base id without the suffix. Repeated ids are paired by
 identical text first, then by reading order (top-to-bottom, left-to-right).
 Only ids the Rust side has tagged are scored for geometry; `coverage` lists every official id in
 the scene so untagged/missing UI is visible as a number, not a guess.
@@ -30,7 +31,7 @@ def load_official(path: Path, offset: tuple[int, int] = (0, 0)) -> dict[str, lis
     out: dict[str, list[dict]] = defaultdict(list)
     for e in json.loads(path.read_text(encoding="utf-8")):
         x, y, w, h = e["rect"]
-        out[base(e["flx"])].append({"rect": [x + offset[0], y + offset[1], w, h], "text": (e.get("text") or e.get("label") or "").strip(), "style": e.get("style", {})})
+        out[e["flx"]].append({"rect": [x + offset[0], y + offset[1], w, h], "text": (e.get("text") or e.get("label") or "").strip(), "style": e.get("style", {})})
     return out
 
 
@@ -39,7 +40,7 @@ def load_rust(path: Path) -> dict[str, list[dict]]:
     data = json.loads(path.read_text(encoding="utf-8"))
     for e in data["elements"]:
         text = (e.get("text") or "").strip()
-        out[base(e["flx"])].append({"rect": [round(v) for v in e["rect"]], "text": "" if text == "derived" else text, "derived": text == "derived"})
+        out[e["flx"]].append({"rect": [round(v) for v in e["rect"]], "text": "" if text == "derived" else text, "derived": text == "derived"})
     return out
 
 
@@ -69,7 +70,10 @@ def compare(official: dict, rust: dict, tol: int) -> dict:
     rows, scored = [], 0
     ok = 0
     for flx in sorted(rust):
-        for o, r in pair(official.get(flx, []), rust[flx]):
+        # `--N` marks a distinct source site in the official codemod, so exact literals win; a Rust
+        # tag without the suffix falls back to every official site sharing the base id.
+        off = official.get(flx) or [e for k, v in official.items() if base(k) == flx for e in v]
+        for o, r in pair(off, rust[flx]):
             if o is None:
                 rows.append({"flx": flx, "status": "extra_in_rust", "rust": r["rect"], "text": r["text"]})
                 continue
@@ -89,7 +93,7 @@ def compare(official: dict, rust: dict, tol: int) -> dict:
     coverage = {
         "official_ids": len(official),
         "rust_tagged_ids": len(rust),
-        "tagged_and_present": len([f for f in rust if f in official]),
+        "tagged_and_present": len([f for f in rust if f in official or any(base(k) == f for k in official)]),
     }
     return {"score": {"pairs": scored, "within_tol": ok, "tol_px": tol}, "coverage": coverage, "rows": rows}
 

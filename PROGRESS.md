@@ -37,8 +37,9 @@
 9. **M8 — 화면 단위 픽셀 · CSS 레이아웃 · 아이콘 1:1 수렴 (`docs/UI_PARITY_ROADMAP.md#m8`) [완료]:**
    - 좌측 열 통합·`56px` 경계 정렬, 공식 Phosphor 아이콘 5종, 호버 전용 관리·계정 버튼, 친구 탭 스타일, 검은 통화 스테이지·`17px` 코너 배지, 설정 프로필 배너 헤더를 반영했다. 감사 184/184, 워크스페이스 693 + `voice_worker` 10 통과, 릴리스 패키징 경고 0건.
    - **검증 방법 결함 발견:** M8 로그인 실기 재캡처는 하네스가 존재하지 않는 CA 파일을 `SSL_CERT_FILE`로 넘겨 32장 모두 `Reconnecting…` 상태의 같은 화면이었는데도 종료 코드 0으로 끝났다. 장면 성공 여부를 판정하지 않는 캡처는 검증으로 인정하지 않는다. 후속은 10번의 Parity Lab이다.
-10. **Parity Lab — 공식 앱 DOM 기준 자동 비교·탐색 체계 (`docs/PARITY_LAB.md`) [진행 중]:**
-   - 공식 데스크톱 앱(Electron, `--remote-debugging-port`)과 공식 웹을 CDP로 구동해 `data-flx` 요소의 위치·계산 스타일·텍스트와 접근성 트리를 기준값으로 추출하고, Rust 앱은 같은 `data-flx` ID를 단 요소의 경계를 내보내 1:1 조인 비교한다. 모든 버튼 클릭으로 열리는 팝아웃·모달을 자동 탐색해 양쪽 상태를 대조한다.
+10. **Parity Lab — 공식 앱 DOM 기준 자동 비교·탐색 체계 (`docs/PARITY_LAB.md`) [도구 완성, 수렴 진행]:**
+   - `82bed49a3`: CDP 기준값 추출(`web_capture.mjs`), 클릭 크롤러(`crawl.mjs`), 조인 비교기(`compare.py`), Rust 패리티 프로브(`FLUXER_PARITY_PROBE=1`, IPC `probe_inspect/resize/click/hover/key`), 재생 러너(`replay.py`).
+   - 첫 실측(#markdown): 태그 요소 기하 3/49만 ±2px 이내, 공식 버튼 상태 25개 중 트리거 미태그 15·창 구조 미일치 10. 다음은 `docs/PARITY_LAB.md` 8장 순서(같은 계정 맞추기 → 영역별 `.flx` 태깅 확대 → 보고서 기반 영역별 수정 루프)다.
 11. **후속 하드웨어 실기 검증(사람 개입 필요):**
    - 자체 시험 서버에서 최신 릴리스(`dist/fluxer_client/fluxer_client.exe`)로 실제 Windows Hello/FIDO2 패스키 등록·로그인, 실기기 양방향 음성·화면 공유, 한글 IME 조합, OS 알림·소리, 장시간 부하를 확인한 뒤 확인된 항목만 `docs/progress/progress.json` `done`으로 승격하고 `python -I scripts/progress_svg.py`로 배지·README를 갱신한다.
 

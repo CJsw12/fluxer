@@ -98,7 +98,15 @@ export function helpers(cdp) {
 			await cdp.send('Input.dispatchKeyEvent', {type, key, code: key, windowsVirtualKeyCode: vk});
 		}
 	}
-	return {waitFor, realClickExpr, realClick, pressKey};
+	// Deepest visible element whose trimmed text (or aria-label) matches `pattern`, clicked through its
+	// nearest interactive ancestor. Pattern/flags are passed as data, so no escaping pitfalls.
+	const byText = (pattern, flags = 'i') => `(() => { const re = new RegExp(${JSON.stringify(pattern)}, ${JSON.stringify(flags)});
+	  const vis = (e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+	  const hits = [...document.querySelectorAll('body *')].filter(e => vis(e) && (re.test((e.innerText || '').trim()) || re.test(e.getAttribute('aria-label') || '')));
+	  const leaf = hits.filter(e => !hits.some(o => o !== e && e.contains(o))).pop();
+	  return leaf ? (leaf.closest('button,a,[role="button"],[role="menuitem"],[role="tab"],[role="option"],[tabindex]') ?? leaf) : null; })()`;
+	const clickText = (pattern, flags) => realClickExpr(byText(pattern, flags));
+	return {waitFor, realClickExpr, realClick, pressKey, byText, clickText};
 }
 
 // Official build stamp ("Stable Desktop …, Web …") so every capture records which version it is

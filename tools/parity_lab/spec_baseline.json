@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "note": "Ignored deltas are pinned to reference-copy artifacts: the native titlebar wordmark width differs because the reference copy is named Fluxer Dev, and the channel header icon x differs because a join shift comes from the official-only update icon.",
+  "note": "Ignored deltas are pinned to reference-copy artifacts: the native titlebar wordmark width differs because the reference copy is named Fluxer Dev, and the channel header icon x differs because a join shift comes from the official-only update icon. Scene-set ignores use '<slug>|<flx>|<prop>' and are compared per slug after the set's own ignore list. The 'more' scene set keeps an empty max on purpose: it must be initialised with '--update --allow-raise' on a live run before its gate can pass.",
   "scenes": {
     "markdown": {
       "spec": "target/parity-tmp/md.1280.spec.json",
@@ -11,6 +11,54 @@
         "channel.channel-header-components.channel-header-icon.button-icon|x"
       ],
       "updated": "2026-11-25"
+    }
+  },
+  "scene_sets": {
+    "popouts": {
+      "scenes": "tools/parity_lab/spec_scenes.json",
+      "spec_dir": "target/parity-tmp/scenes",
+      "max": {
+        "channel-notification-settings": {
+          "deltas": 0,
+          "missing": 5
+        },
+        "composer-plus-menu": {
+          "deltas": 0,
+          "missing": 6
+        },
+        "emoji-picker": {
+          "deltas": 0,
+          "missing": 7
+        },
+        "inbox": {
+          "deltas": 1,
+          "missing": 9
+        },
+        "pinned-messages": {
+          "deltas": 0,
+          "missing": 5
+        },
+        "settings-modal": {
+          "deltas": 0,
+          "missing": 6
+        },
+        "threads": {
+          "deltas": 3,
+          "missing": 10
+        },
+        "user-area-popout": {
+          "deltas": 7,
+          "missing": 18
+        }
+      },
+      "ignore": [],
+      "updated": "2026-11-25"
+    },
+    "more": {
+      "scenes": "tools/parity_lab/spec_scenes_more.json",
+      "spec_dir": "target/parity-tmp/more/spec",
+      "max": {},
+      "ignore": []
     }
   }
 }

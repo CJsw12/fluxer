@@ -159,6 +159,9 @@ impl ClientView {
             self.expression_picker_select_tab(tab, window, cx);
             return;
         }
+        // Official ResizablePane: right edge 32px past the clicked toggle's centre
+        // (toggle right edge + 16), bottom 8px above the toggle (centre - 24).
+        let anchor = point(anchor.x + px(32.), anchor.y - px(24.));
         self.open_expression_picker(PickerTarget::Composer, tab, anchor, window, cx);
     }
 

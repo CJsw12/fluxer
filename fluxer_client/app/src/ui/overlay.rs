@@ -190,6 +190,7 @@ pub fn settings_modal(
         .max_w(px(theme.sizes.settings_modal_max_width))
         .h_full()
         .max_h(px(1248.))
+        .mx(px(1.))
         .rounded(px(12.))
         .border_1()
         .border_color(modal_border)
@@ -209,7 +210,11 @@ pub fn settings_modal(
         .top_0()
         .left_0()
         .size_full()
-        .p(px(28.))
+        // Modal.module.css `.layerFullscreen` at >=1024px: pad-x = 6% of the layer width,
+        // pad-y = 2.5vh = 20px at 800px (percent padding is width-relative in GPUI); the
+        // measured modal root is inset a further 1px per side.
+        .px(gpui_kit::relative(0.06))
+        .py(px(20.))
         .flex()
         .items_center()
         .justify_center()

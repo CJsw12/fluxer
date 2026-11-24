@@ -30,7 +30,7 @@ pub const EMOJI_PICKER_WIDTH_DEFAULT: u16 = 592;
 pub const EMOJI_PICKER_WIDTH_STEP: u16 = 48;
 pub const EMOJI_PICKER_HEIGHT_MIN: u16 = 360;
 pub const EMOJI_PICKER_HEIGHT_MAX: u16 = 1040;
-pub const EMOJI_PICKER_HEIGHT_DEFAULT: u16 = 686;
+pub const EMOJI_PICKER_HEIGHT_DEFAULT: u16 = 690;
 
 /// Snaps `raw` emoji picker width to official 48px grid track steps (`400 + 48 * k`), clamped within `max_w`.
 pub fn snap_emoji_picker_width(raw: f32, max_w: f32) -> u16 {
@@ -925,7 +925,7 @@ mod tests {
                 sidebar_width: if theme == ThemeKind::Light { 260 } else { 320 },
                 voice_call_height: if theme == ThemeKind::Darker { 420 } else { 320 },
                 emoji_picker_width: if theme == ThemeKind::Black { 640 } else { 592 },
-                emoji_picker_height: if theme == ThemeKind::Light { 500 } else { 686 },
+                emoji_picker_height: if theme == ThemeKind::Light { 500 } else { 690 },
             };
             store.save().expect("save");
             let loaded = PrefsStore::open(path.clone());

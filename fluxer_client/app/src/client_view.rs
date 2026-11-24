@@ -582,7 +582,11 @@ impl ClientView {
         self.sidebar_width = self.prefs.data.sidebar_width as f32;
         self.voice_call_height = self.prefs.data.voice_call_height as f32;
         self.emoji_picker_width = self.prefs.data.emoji_picker_width as f32;
-        self.emoji_picker_height = self.prefs.data.emoji_picker_height as f32;
+        // 686 was the previous default; the official default is 690.
+        self.emoji_picker_height = match self.prefs.data.emoji_picker_height {
+            686 => EMOJI_PICKER_HEIGHT_DEFAULT as f32,
+            h => h as f32,
+        };
         if let crate::ui::overlay::Overlay::EmojiPicker(picker) = &mut self.overlay {
             picker.set_width(self.emoji_picker_width);
         }
@@ -2556,6 +2560,12 @@ impl ClientView {
     fn on_escape(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         if self.composing(window, cx) {
             self.composer.update(cx, |s, cx| s.unmark_text(window, cx));
+            return true;
+        }
+        if self.user_area_popout_open {
+            self.user_area_popout_open = false;
+            self.user_area_submenu = None;
+            cx.notify();
             return true;
         }
         if self.autocomplete.take().is_some() {

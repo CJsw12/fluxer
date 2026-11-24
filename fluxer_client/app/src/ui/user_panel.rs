@@ -425,10 +425,9 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
     let avatar = div()
         .id("user-area-popout-avatar")
         .absolute()
-        .left(px(12.))
-        .top(px(57.))
+        .left(px(10.))
+        .top(px(55.))
         .size(px(86.))
-        .p(px(3.))
         .rounded_full()
         .bg(rgb(CARD_BG))
         .cursor_pointer()
@@ -437,7 +436,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
             this.user_area_popout_open = false;
             this.open_profile(uid, None, ev.position(), window, cx);
         }))
-        .child(render_avatar(
+        .child(div().absolute().left(px(3.)).top(px(3.)).child(render_avatar(
             AvatarSpec {
                 user_id: uid,
                 avatar_url: card.avatar_url.clone().map(SharedString::from),
@@ -447,7 +446,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                 status_border_bg: None,
             },
             theme,
-        ))
+        )))
         .child(
             div()
                 .absolute()

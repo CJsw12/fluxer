@@ -7,7 +7,7 @@ use gpui_kit::component::input::{Enter, Escape, Input, MoveDown, MoveLeft, MoveR
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
     AnyElement, Context, FontWeight, KeyDownEvent, MouseButton, MouseDownEvent, ObjectFit, Pixels, Role, SharedString,
-    Size, div, img, prelude::*, px, rgb, rgba, uniform_list,
+    Size, div, img, prelude::*, px, rgba, uniform_list,
 };
 
 use super::sections::{PickerTarget, SKIN_TONES, SectionKind};
@@ -358,7 +358,7 @@ pub fn render(
     .cursor_nwse_resize();
 
     let dark = theme.background.l < 0.5;
-    let tab_active_bg: gpui_kit::Hsla = if dark { rgb(0x3a3644).into() } else { theme.accent };
+    let tab_active_bg: gpui_kit::Hsla = if dark { rgba(0xffffff1a).into() } else { theme.accent };
     let tab_hover_bg: gpui_kit::Hsla = if dark { rgba(0xffffff12).into() } else { theme.hover_bg };
 
     let tab_bar = (picker.target == PickerTarget::Composer).then(|| {
@@ -370,13 +370,12 @@ pub fn render(
         div()
             .flex_none()
             .h(px(40.))
+            .pt(px(12.))
             .px_3()
             .flex()
             .flex_row()
-            .items_center()
+            .items_start()
             .gap(px(8.))
-            .border_b_1()
-            .border_color(theme.border)
             .children(tabs.into_iter().map(|(tab, label)| {
                 let active = picker.active_tab == tab;
                 let text = l10n::tr(label);
@@ -385,12 +384,13 @@ pub fn render(
                     .debug_selector(move || format!("expression-tab-{label}"))
                     .role(Role::Button)
                     .aria_selected(active)
-                    .px_3()
+                    .px_2()
                     .py_1()
                     .rounded(px(6.))
                     .cursor_pointer()
                     .text_sm()
-                    .font_weight(if active { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM })
+                    .line_height(px(20.))
+                    .font_weight(FontWeight::SEMIBOLD)
                     .text_color(if active { theme.foreground } else { theme.muted_foreground })
                     .when(active, |d| d.bg(tab_active_bg))
                     .when(!active, |d| d.hover(move |s| s.bg(tab_hover_bg)))

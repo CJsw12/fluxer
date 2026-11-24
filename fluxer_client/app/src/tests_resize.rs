@@ -259,7 +259,7 @@ fn emoji_picker_resize_snaps_columns_clamps_resets_and_prefs(cx: &mut TestAppCon
     // 592 -> 400 by dragging the left edge right.
     let handle = cx.debug_bounds("emoji-resize-left").expect("left handle drawn").center();
     drag(cx, handle, point(handle.x + px(192.), handle.y));
-    assert_eq!(emoji_metrics(&view, cx), (400.0, 686.0, 7));
+    assert_eq!(emoji_metrics(&view, cx), (400.0, 690.0, 7));
     view.read_with(cx, |v, _| {
         assert_eq!(v.prefs.data.emoji_picker_width, EMOJI_PICKER_WIDTH_MIN);
         assert_eq!(v.prefs.data.emoji_picker_height, EMOJI_PICKER_HEIGHT_DEFAULT);
@@ -268,19 +268,19 @@ fn emoji_picker_resize_snaps_columns_clamps_resets_and_prefs(cx: &mut TestAppCon
     // 400 -> 592 by dragging the left edge left.
     let handle = cx.debug_bounds("emoji-resize-left").expect("left handle drawn").center();
     drag(cx, handle, point(handle.x - px(192.), handle.y));
-    assert_eq!(emoji_metrics(&view, cx), (592.0, 686.0, 11));
+    assert_eq!(emoji_metrics(&view, cx), (592.0, 690.0, 11));
     view.read_with(cx, |v, _| assert_eq!(v.prefs.data.emoji_picker_width, 592));
 
     // 592 -> 640.
     let handle = cx.debug_bounds("emoji-resize-left").expect("left handle drawn").center();
     drag(cx, handle, point(handle.x - px(48.), handle.y));
-    assert_eq!(emoji_metrics(&view, cx), (640.0, 686.0, 12));
+    assert_eq!(emoji_metrics(&view, cx), (640.0, 690.0, 12));
     view.read_with(cx, |v, _| assert_eq!(v.prefs.data.emoji_picker_width, 640));
 
     // 640 -> 736.
     let handle = cx.debug_bounds("emoji-resize-left").expect("left handle drawn").center();
     drag(cx, handle, point(handle.x - px(96.), handle.y));
-    assert_eq!(emoji_metrics(&view, cx), (736.0, 686.0, 14));
+    assert_eq!(emoji_metrics(&view, cx), (736.0, 690.0, 14));
     view.read_with(cx, |v, _| assert_eq!(v.prefs.data.emoji_picker_width, 736));
 
     // Drag the top edge down to clamp at the 360px minimum height.
@@ -293,7 +293,7 @@ fn emoji_picker_resize_snaps_columns_clamps_resets_and_prefs(cx: &mut TestAppCon
     let handle = cx.debug_bounds("emoji-resize-top").expect("top handle drawn").center();
     drag(cx, handle, point(handle.x, px(1.)));
     assert_eq!(emoji_metrics(&view, cx), (736.0, 686.0, 14));
-    view.read_with(cx, |v, _| assert_eq!(v.prefs.data.emoji_picker_height, EMOJI_PICKER_HEIGHT_DEFAULT));
+    view.read_with(cx, |v, _| assert_eq!(v.prefs.data.emoji_picker_height, 686));
 
     // Keyboard resizes when the resize handle holds focus rather than moving the grid selection.
     let handle = cx.debug_bounds("emoji-resize-left").expect("left handle drawn").center();
@@ -304,7 +304,7 @@ fn emoji_picker_resize_snaps_columns_clamps_resets_and_prefs(cx: &mut TestAppCon
     cx.simulate_keystrokes("down");
     assert_eq!(emoji_metrics(&view, cx), (688.0, 670.0, 13));
     cx.simulate_keystrokes("enter");
-    assert_eq!(emoji_metrics(&view, cx), (592.0, 686.0, 11));
+    assert_eq!(emoji_metrics(&view, cx), (592.0, 690.0, 11));
 
     // Double-click the top-left corner resets both dimensions after resizing.
     let handle = cx.debug_bounds("emoji-resize-left").expect("left handle drawn").center();

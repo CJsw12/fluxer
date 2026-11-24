@@ -8,8 +8,8 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
-    Anchor, AnyElement, Context, Entity, Focusable as _, FontWeight, MouseButton, Pixels, Point, Role, SharedString,
-    Size, Window, anchored, div, prelude::*, px, rgb, rgba,
+    Anchor, AnyElement, Context, Div, Entity, Focusable as _, FontWeight, MouseButton, Pixels, Point, Role, SharedString,
+    Size, Stateful, Window, anchored, div, prelude::*, px, rgb, rgba,
 };
 
 use crate::client_view::ClientView;
@@ -268,26 +268,34 @@ pub fn render(
     cx: &mut Context<ClientView>,
 ) -> AnyElement {
     let dark = theme.background.l < 0.5;
-    let bg: gpui_kit::Hsla = if dark { rgb(0x2a2730).into() } else { theme.background_secondary };
+    let bg_for_kind = |kind: &ChannelPopoutKind| -> gpui_kit::Hsla {
+        if !dark {
+            theme.background_secondary
+        } else if matches!(kind, ChannelPopoutKind::Threads { .. }) {
+            // ThreadBrowser.module.css .container uses --background-secondary
+            rgb(0x1a181e).into()
+        } else {
+            rgb(0x2a2730).into()
+        }
+    };
+    let bg = bg_for_kind(&pop.kind);
     let border: gpui_kit::Hsla = if dark { rgba(0xc9c5d326).into() } else { theme.border };
     let hover_bg: gpui_kit::Hsla = if dark { rgba(0xffffff12).into() } else { theme.hover_bg };
     let active_bg: gpui_kit::Hsla = if dark { rgb(0x3a3644).into() } else { theme.accent };
 
     let key = pop.kind.key();
-    let (width, height, flx, body, above): (f32, f32, &'static str, AnyElement, bool) = match &pop.kind {
+    let (width, height, flx, body): (f32, f32, &'static str, AnyElement) = match &pop.kind {
         ChannelPopoutKind::NotificationSettings { channel_id } => (
             208.,
             207.,
             "ui.action-menu.context-menu.popup",
             render_notification_settings(view, *channel_id, theme, hover_bg, cx),
-            false,
         ),
         ChannelPopoutKind::Threads { channel_id, tab, query, .. } => (
             480.,
             576.,
             "threads.thread-browser.container",
             render_threads(view, *channel_id, *tab, query, theme, active_bg, hover_bg, cx),
-            false,
         ),
         ChannelPopoutKind::PinnedMessages {
             loading,
@@ -299,21 +307,18 @@ pub fn render(
             640.,
             "channel.channel-pins-popout.container",
             render_pins(*loading, items, error.as_deref(), theme, hover_bg, cx),
-            false,
         ),
         ChannelPopoutKind::Inbox { tab } => (
             600.,
-            728.,
+            736.,
             "messaging.inbox-popout.container",
             render_inbox(view, *tab, theme, active_bg, hover_bg, cx),
-            false,
         ),
         ChannelPopoutKind::ComposerPlusMenu => (
-            264.,
-            193.,
+            208.,
+            161.,
             "ui.action-menu.context-menu.popup",
-            render_composer_plus(theme, hover_bg, cx),
-            true,
+            render_composer_plus(!composer_text::wire_text(view.composer.read(cx)).trim().is_empty(), theme, hover_bg, cx),
         ),
     };
 
@@ -321,17 +326,14 @@ pub fn render(
     let vh = f32::from(viewport.height);
     let ax = f32::from(pop.anchor.x);
     let ay = f32::from(pop.anchor.y);
-    let left = match &pop.kind {
-        ChannelPopoutKind::Inbox { .. } => (vw - width - 16.).max(16.),
-        ChannelPopoutKind::ComposerPlusMenu => (ax - 12.).clamp(16., (vw - width - 16.).max(16.)),
-        _ => (ax - width * 0.5).clamp(16., (vw - width - 16.).max(16.)),
-    };
-    let top = if above {
-        (ay - height - 18.).clamp(44., (vh - height - 16.).max(44.))
-    } else if matches!(pop.kind, ChannelPopoutKind::Inbox { .. }) {
-        60.0_f32.clamp(44., (vh - height - 16.).max(44.))
-    } else {
-        (ay + 18.).clamp(44., (vh - height - 16.).max(44.))
+    // Official anchoring (spec rects): header-button popouts are right-aligned to the
+    // trigger button (32px, anchor = click point at its centre) and sit 8px below it;
+    // the inbox keeps its fixed 52px / right-16px slot; the composer menu opens upward
+    // from the trigger's left edge with a 4px gap.
+    let (anchor_corner, left, top) = match &pop.kind {
+        ChannelPopoutKind::Inbox { .. } => (Anchor::TopLeft, (vw - width - 16.).max(16.), 52.0_f32.min((vh - height - 12.).max(44.))),
+        ChannelPopoutKind::ComposerPlusMenu => (Anchor::BottomLeft, (ax - 16.).clamp(16., (vw - width - 16.).max(16.)), ay - 20.),
+        _ => (Anchor::TopRight, (ax + 16.).clamp(width + 16., vw - 16.), (ay + 24.).clamp(44., (vh - height - 16.).max(44.))),
     };
 
     let weak_dismiss = cx.weak_entity();
@@ -369,7 +371,7 @@ pub fn render(
         .absolute()
         .top_0()
         .left_0()
-        .child(anchored().position(gpui_kit::point(px(left), px(top))).anchor(Anchor::TopLeft).child(panel))
+        .child(anchored().position(gpui_kit::point(px(left), px(top))).anchor(anchor_corner).child(panel))
         .into_any_element()
 }
 
@@ -421,75 +423,85 @@ fn render_notification_settings(
         (2, l10n::tr("Nothing"), None),
     ];
 
+    let mut options = options.into_iter();
+    let default_option = options.next();
+    let radio_row = |(opt_val, label, sub): (u8, String, Option<String>)| {
+        let selected = level == opt_val;
+        let radio_border = if selected { theme.accent } else { theme.muted_foreground };
+        context_menu_item(format!("notif-level-{opt_val}"), hover_bg)
+            .aria_selected(selected)
+            .flx_text("ui.action-menu.context-menu.selectable-menu-item.radio-item", label.clone())
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.set_channel_notification_level(channel_id, opt_val, cx);
+                this.close_overlay(window, cx);
+            }))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(div().h(px(18.)).text_size(px(13.)).text_color(theme.foreground).child(label))
+                    .children(sub.map(|s| {
+                        div().h(px(17.)).text_size(px(12.)).line_height(px(16.)).text_color(theme.muted_foreground).child(s)
+                    })),
+            )
+            .child(
+                div()
+                    .size(px(16.))
+                    .rounded_full()
+                    .border_1()
+                    .border_color(radio_border)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .when(selected, |d| d.child(div().size(px(6.)).rounded_full().bg(theme.accent))),
+            )
+    };
+    let separator = || div().mx(px(2.)).my(px(4.)).h(px(1.)).w_full().flex_none().bg(theme.border);
+
     div()
         .p(px(6.))
         .flex()
         .flex_col()
-        .gap(px(2.))
         .child(
-            div()
-                .id("notif-popout-mute")
-                .debug_selector(|| "notif-popout-mute".to_owned())
-                .role(Role::Button)
-                .px_2p5()
-                .py_1p5()
-                .rounded(px(5.))
-                .cursor_pointer()
-                .hover(move |s| s.bg(hover_bg))
-                .flex()
-                .flex_row()
-                .items_center()
-                .justify_between()
+            context_menu_item("notif-popout-mute".to_owned(), hover_bg)
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.toggle_channel_mute(cx);
                     this.close_overlay(window, cx);
                 }))
-                .child(div().text_sm().font_weight(FontWeight::MEDIUM).text_color(theme.foreground).child(mute_label))
+                .child(div().h(px(18.)).text_size(px(13.)).text_color(theme.foreground).child(mute_label))
                 .child(Icon::new(AppIcon::CaretRight).with_size(px(14.)).text_color(theme.muted_foreground)),
         )
-        .child(div().my(px(4.)).h(px(1.)).w_full().bg(theme.border))
-        .children(options.into_iter().map(|(opt_val, label, sub)| {
-            let selected = level == opt_val;
-            let radio_border = if selected { theme.accent } else { theme.muted_foreground };
-            div()
-                .id(SharedString::from(format!("notif-level-{opt_val}")))
-                .debug_selector(move || format!("notif-level-{opt_val}"))
-                .role(Role::Button)
-                .aria_selected(selected)
-                .px_2p5()
-                .py_1()
-                .rounded(px(5.))
-                .cursor_pointer()
-                .hover(move |s| s.bg(hover_bg))
-                .flex()
-                .flex_row()
-                .items_center()
-                .justify_between()
-                .flx_text("ui.action-menu.context-menu.selectable-menu-item.radio-item", label.clone())
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.set_channel_notification_level(channel_id, opt_val, cx);
-                    this.close_overlay(window, cx);
-                }))
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .child(div().text_sm().text_color(theme.foreground).child(label))
-                        .children(sub.map(|s| div().text_xs().text_color(theme.muted_foreground).child(s))),
-                )
-                .child(
-                    div()
-                        .size(px(16.))
-                        .rounded_full()
-                        .border_2()
-                        .border_color(radio_border)
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .when(selected, |d| d.child(div().size(px(8.)).rounded_full().bg(theme.accent))),
-                )
-        }))
+        .child(separator())
+        .children(default_option.map(radio_row))
+        .child(separator())
+        .children(options.map(radio_row))
         .into_any_element()
+}
+
+/// Shared context-menu row (ContextMenu.module.css `.item`): 1px transparent border,
+/// 5px/8px padding, 6px radius, 13px/18px text, 32px minimum height.
+fn context_menu_item(id: String, hover_bg: gpui_kit::Hsla) -> Stateful<Div> {
+    let selector = id.clone();
+    div()
+        .id(SharedString::from(id))
+        .debug_selector(move || selector.clone())
+        .role(Role::Button)
+        .min_h(px(32.))
+        .px(px(8.))
+        .py(px(5.))
+        .border_1()
+        .border_color(gpui_kit::Hsla::transparent_black())
+        .rounded(px(6.))
+        .cursor_pointer()
+        .hover(move |s| s.bg(hover_bg))
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_between()
+        .gap(px(8.))
+        .text_size(px(13.))
+        .line_height(px(18.))
+        .font_weight(FontWeight::MEDIUM)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -529,14 +541,14 @@ fn render_threads(
     ];
 
     div()
-        .h(px(576.))
+        .h(px(574.))
         .flex()
         .flex_col()
         .child(
             div()
                 .flex_none()
-                .px_4()
-                .py_3()
+                .px(px(12.))
+                .py(px(8.))
                 .border_b_1()
                 .border_color(theme.border)
                 .flex()
@@ -559,7 +571,7 @@ fn render_threads(
                         ),
                 )
                 .child(
-                    div().debug_selector(|| "threads-create-btn".to_owned()).flx("threads.thread-browser.button.create").child(
+                    div().debug_selector(|| "threads-create-btn".to_owned()).flx("threads.thread-browser.button.create").h(px(34.)).flex().items_center().child(
                         Button::new("threads-create-btn-inner")
                             .primary()
                             .small()
@@ -677,7 +689,7 @@ fn render_pins(
     cx: &mut Context<ClientView>,
 ) -> AnyElement {
     div()
-        .h(px(640.))
+        .h(px(638.))
         .flex()
         .flex_col()
         .child(
@@ -812,6 +824,7 @@ fn render_inbox(
     hover_bg: gpui_kit::Hsla,
     cx: &mut Context<ClientView>,
 ) -> AnyElement {
+    let tab_active_bg: gpui_kit::Hsla = if theme.background.l < 0.5 { rgba(0xffffff1a).into() } else { active_bg };
     let tabs = [
         (InboxTab::Unread, AppIcon::Bell, "Unread"),
         (InboxTab::Bookmarks, AppIcon::Star, "Bookmarks"),
@@ -1031,12 +1044,12 @@ fn render_inbox(
     };
 
     div()
-        .h(px(728.))
+        .h(px(734.))
         .flex()
         .flex_row()
         .child(
             div()
-                .w(px(44.))
+                .w(px(46.))
                 .h_full()
                 .py_2()
                 .border_r_1()
@@ -1054,13 +1067,13 @@ fn render_inbox(
                         .role(Role::Button)
                         .aria_label(tr_label.clone())
                         .aria_selected(active)
-                        .size(px(32.))
+                        .size(px(30.))
                         .rounded(px(6.))
                         .cursor_pointer()
                         .flex()
                         .items_center()
                         .justify_center()
-                        .when(active, |d| d.bg(active_bg))
+                        .when(active, |d| d.bg(tab_active_bg))
                         .when(!active, |d| d.hover(move |s| s.bg(hover_bg)))
                         .flx_text(
                             "messaging.inbox-popout.render-tab-button.sidebar-tab.set-active-tab.button",
@@ -1124,26 +1137,17 @@ fn render_inbox(
         .into_any_element()
 }
 
-fn render_composer_plus(theme: &Theme, hover_bg: gpui_kit::Hsla, cx: &mut Context<ClientView>) -> AnyElement {
-    let item_row = |id: &'static str, icon: AppIcon, label: String, trailing: Option<AnyElement>| {
-        div()
-            .id(id)
-            .debug_selector(move || id.to_owned())
-            .role(Role::Button)
-            .px_2p5()
-            .py_1p5()
-            .rounded(px(5.))
-            .cursor_pointer()
-            .hover(move |s| s.bg(hover_bg))
-            .flex()
-            .flex_row()
-            .items_center()
-            .justify_between()
-            .gap_2()
-            .child(div().text_sm().text_color(theme.foreground).child(label.clone()))
+fn render_composer_plus(has_text: bool, theme: &Theme, hover_bg: gpui_kit::Hsla, cx: &mut Context<ClientView>) -> AnyElement {
+    let item_row = |id: &'static str, icon: AppIcon, label: String, hint: Option<AnyElement>| {
+        context_menu_item(id.to_owned(), hover_bg)
             .child(
-                trailing.unwrap_or_else(|| Icon::new(icon).with_size(px(16.)).text_color(theme.muted_foreground).into_any_element()),
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(div().h(px(18.)).text_color(theme.foreground).child(label.clone()))
+                    .children(hint),
             )
+            .child(Icon::new(icon).with_size(px(18.)).text_color(theme.muted_foreground))
     };
     let upload_lbl = l10n::tr("Upload file");
     let as_file_lbl = l10n::tr("Upload your message as a file");
@@ -1155,7 +1159,6 @@ fn render_composer_plus(theme: &Theme, hover_bg: gpui_kit::Hsla, cx: &mut Contex
         .p(px(6.))
         .flex()
         .flex_col()
-        .gap(px(2.))
         .child(
             item_row("composer-menu-upload", AppIcon::LinkSimple, upload_lbl.clone(), None)
                 .flx_text("ui.action-menu.context-menu.menu-item.item", upload_lbl)
@@ -1164,13 +1167,13 @@ fn render_composer_plus(theme: &Theme, hover_bg: gpui_kit::Hsla, cx: &mut Contex
                     this.pick_files(cx);
                 })),
         )
-        .child(
+        .children(has_text.then(|| {
             item_row("composer-menu-upload-text", AppIcon::Plus, as_file_lbl.clone(), None)
                 .flx_text("ui.action-menu.context-menu.menu-item.item", as_file_lbl)
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.upload_composer_text_as_file(window, cx);
-                })),
-        )
+                }))
+        }))
         .child(
             item_row("composer-menu-create-thread", AppIcon::Chats, thread_lbl.clone(), None)
                 .flx_text("ui.action-menu.context-menu.menu-item.item", thread_lbl)
@@ -1190,17 +1193,16 @@ fn render_composer_plus(theme: &Theme, hover_bg: gpui_kit::Hsla, cx: &mut Contex
                         .flex_row()
                         .items_center()
                         .gap_1()
-                        .child(div().px_1().rounded(px(3.)).bg(theme.background).text_xs().text_color(theme.muted_foreground).child("CTRL"))
-                        .child(div().px_1().rounded(px(3.)).bg(theme.background).text_xs().text_color(theme.muted_foreground).child("ALT"))
-                        .child(div().px_1().rounded(px(3.)).bg(theme.background).text_xs().text_color(theme.muted_foreground).child("V"))
-                        .child(Icon::new(AppIcon::Microphone).with_size(px(14.)).text_color(theme.muted_foreground))
+                        .h(px(20.))
+                        .children(["CTRL", "ALT", "V"].map(|k| {
+                            div().px_1().rounded(px(3.)).bg(theme.background).text_size(px(11.)).text_color(theme.muted_foreground).child(k)
+                        }))
                         .into_any_element(),
                 ),
             )
             .flx_text("ui.action-menu.context-menu.menu-item.item", voice_lbl)
             .on_click(cx.listener(|this, _, window, cx| this.close_overlay(window, cx))),
         )
-        .child(div().my(px(2.)).h(px(1.)).w_full().bg(theme.border))
         .child(
             item_row("composer-menu-customize", AppIcon::CaretRight, custom_lbl.clone(), None)
                 .flx_text("ui.action-menu.context-menu.sub-menu.trigger", custom_lbl)

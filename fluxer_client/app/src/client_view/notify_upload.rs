@@ -95,6 +95,19 @@ impl ClientView {
         self.refresh(cx);
     }
 
+    /// Sets per-channel `message_notifications` (`0` = All messages, `1` = Only mentions,
+    /// `2` = Nothing, `3` = Community default) via `PATCH /users/@me/guilds/{g|@me}/settings`.
+    pub(crate) fn set_channel_notification_level(
+        &mut self,
+        channel_id: Snowflake,
+        level: u8,
+        cx: &mut Context<Self>,
+    ) {
+        let guild_id = self.backend.state().channels.get(&channel_id).and_then(|c| c.guild_id);
+        self.backend.set_channel_notification_level(guild_id, channel_id, level);
+        self.refresh(cx);
+    }
+
     /// Queues files for the open channel; an error replaces the error line.
     /// Without ATTACH_FILES nothing is queued (`UploadManager.tsx`'s
     /// permission modal), so a send cannot fail with 403 after the tray

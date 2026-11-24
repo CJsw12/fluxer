@@ -38,10 +38,10 @@
   - **수락 기준:** 목록이 생성되고 누락 항목마다 작업 항목이 생긴다.
 - [x] **M9.2 상태 행렬 캡처** — 완료(2026-11-24, `8f49ada84`): `state_official.mjs` + `state_matrix.py`로 기본·호버·음성(음소거/스피커 끔/음성 무대) 상태의 DOM·툴팁·음성 영역 실측 대조를 구축했고, 실기 `state_matrix.py --voice`에서 헤더·사용자 영역 툴팁(`tips=3`)·액션 바·음성 패널(`delta=[0,0,0,0]`) 일치를 검증했다.
 - [x] **M9.3 끌기 비교 (`probe_drag`)** — 완료(2026-11-24): 프로브에 `probe_drag`·`probe_dblclick`을 추가하고 `measure_resize.mjs` 실측 기준(`resize_spec.json`)에 맞춰 사이드바 폭(`200..=480`, 기본 `320`), 이모지 피커(`48px` 그리드 스냅 `400..=976` × `360..=686`, 기본 `592×686`), 분할 음성 통화 높이(`320..=590`, ±16px)의 드래그·더블클릭·키보드·환경설정 영속화를 구현·검증했다. (고정 메시지·받은 편지함 팝오버와 스레드 측면 패널은 아직 Rust 별도 화면이 없으므로 추후 이식 시 `resizable_popover`와 크기 조절 손잡이를 적용한다.)
-- [ ] **M9.4 팝오버·모달 내용 비교를 작업 목록으로 연결**
-  - 크롤 그래프의 모든 상태에 대해 `replay.py` 결과(`trigger_missing`/`opened_partial`)를 상태별 작업 항목으로 자동 생성한다.
-  - 각 항목에는 공식 스크린샷·DOM·트리거 경로를 붙인다. 첫 대상은 왼쪽 아래 사용자 영역 팝오버(공식 프로필 카드 [12,304,305,432]: 배너·아바타·이름·맞춤 상태·`Online ▸`·`Switch accounts ▸`·`Copy user ID`·`Edit profile`)다.
-  - 크롤은 쓰기 가드를 켠 상태로만 실행하고, 끝나면 `docs/PARITY_LAB.md` 10.5 복구 점검을 한다.
+- [x] **M9.4 팝오버·모달 내용 비교를 작업 목록으로 연결** — 완료(2026-11-24):
+  - `tools/parity_lab/replay.py`에 깔끔한 Rust 기준선 캡처, `toggle_reverted` 복원, 깊이 1 `duplicate_screen` 중복 화면 검출(`--strict-no-duplicates`), 추가 팝오버 프로브(`extra_user_area_popout` 5/5·`extra_settings_modal` 2/2), 상태별 작업 목록(`backlog.json`·`backlog.md`) 생성을 구현해 59개 크롤 상태(`duplicate_screen 0`, `trigger_missing 27`, `opened_partial 32`)를 분류했다.
+  - 복붙 핸들러 대신 공식 UI 흐름에 맞춰 길드 헤더 팝오버(`007`), 채널 알림 설정(`013`), 스레드(`014`), 고정 메시지(`017`), 받은 편지함(`025`), 작성창 `+` 메뉴(`043`)를 구현하고 릴리스 실기 검증(`replay.py --strict-no-duplicates`·`check_surface_parity.py` 10/10·`state_matrix.py --strict`·`check_resize.py` 25/25)과 `cargo test --workspace` 709개를 통과했다.
+  - 크롤은 쓰기 가드를 켠 상태로만 실행하고, 끝나면 `docs/PARITY_LAB.md` 10.5 복구 점검을 한다. 남은 미구현/부분 항목(`trigger_missing` 27·`opened_partial` 32)은 생성된 작업 목록의 우선순위에 따라 후속 단계에서 구현한다.
 - [ ] **M9.5 기능 자동 시험(사람 개입 없이)** — 1차 완료(2026-11-24): `tools/parity_lab/share_check.py` + `voice_official.mjs`로 양방향 화면 공유를 자동 시험한다(두 앱 음소거 참가 → Rust 공유 → 공식 시청·프레임 확인 → 공식이 Rust 창 공유 → Rust 시청·색·프레임 확인 → 정리). 결과: Rust→공식 2560×1440·약 14fps 통과. 공식→Rust는 수신 색이 틀어지는 결함(워커가 libyuv `RGBA`를 RGBA 바이트로 오인, `ABGR`이 맞음)을 찾아 고친 뒤 통과(붉은 기운 0.15→0.002). 남은 항목:
   - 화면 공유 품질 설정(해상도·FPS·코덱·비트레이트)이 워커에 전달되지 않는다(`SetScreenShare`는 켜기/소리만). 실제 송출은 720p·약 14fps.
   - Rust에는 공유 대상 선택 창(응용 프로그램/전체 화면/장치, 스트림 설정)이 없고 항상 주 모니터를 공유한다.

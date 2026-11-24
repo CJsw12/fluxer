@@ -47,10 +47,11 @@ fn existing_channel_overrides(raw: Option<&Value>) -> Map<String, Value> {
 
 /// Builds the full `channel_overrides` map sent to `PATCH /users/@me/guilds/{g|@me}/settings`
 /// (the server replaces the whole map, so siblings and existing channel flags must be preserved).
-pub(crate) fn build_channel_mute_patch(
+pub(crate) fn build_channel_override_patch(
     existing: Option<&UserGuildSettings>,
     channel_id: Snowflake,
-    muted: bool,
+    muted: Option<bool>,
+    message_notifications: Option<u8>,
 ) -> GuildSettingsPatch {
     let mut patch_overrides = BTreeMap::new();
     if let Some(settings) = existing {
@@ -73,13 +74,29 @@ pub(crate) fn build_channel_mute_patch(
     }
     let key = channel_id.to_string();
     let mut target = patch_overrides.get(&key).cloned().unwrap_or_default();
-    target.muted = Some(muted);
-    target.mute_config = Some(None);
+    target.collapsed.get_or_insert(false);
+    target.muted.get_or_insert(false);
+    if let Some(m) = muted {
+        target.muted = Some(m);
+        target.mute_config = Some(None);
+    }
+    if let Some(level) = message_notifications {
+        target.message_notifications = Some(level);
+    }
     patch_overrides.insert(key, target);
     GuildSettingsPatch {
         channel_overrides: Some(Some(patch_overrides)),
         ..Default::default()
     }
+}
+
+#[cfg(test)]
+pub(crate) fn build_channel_mute_patch(
+    existing: Option<&UserGuildSettings>,
+    channel_id: Snowflake,
+    muted: bool,
+) -> GuildSettingsPatch {
+    build_channel_override_patch(existing, channel_id, Some(muted), None)
 }
 
 /// Reverts only `channel_id` inside `channel_overrides` so concurrent gateway
@@ -149,6 +166,30 @@ impl Backend {
     /// Optimistically mutes or unmutes `channel_id` (inside `guild_id` or `@me`
     /// for DMs), then calls `PATCH /users/@me/guilds/{g|@me}/settings`.
     pub fn set_channel_muted(&self, guild_id: Option<Snowflake>, channel_id: Snowflake, muted: bool) {
+        self.update_channel_override(guild_id, channel_id, Some(muted), None, "Could not update channel mute");
+    }
+
+    /// Optimistically updates `message_notifications` (`0`=all, `1`=mentions,
+    /// `2`=nothing, `3`=community default) for `channel_id` via
+    /// `PATCH /users/@me/guilds/{g|@me}/settings`.
+    pub fn set_channel_notification_level(&self, guild_id: Option<Snowflake>, channel_id: Snowflake, level: u8) {
+        self.update_channel_override(
+            guild_id,
+            channel_id,
+            None,
+            Some(level),
+            "Could not update notification settings",
+        );
+    }
+
+    fn update_channel_override(
+        &self,
+        guild_id: Option<Snowflake>,
+        channel_id: Snowflake,
+        muted: Option<bool>,
+        message_notifications: Option<u8>,
+        err_prefix: &'static str,
+    ) {
         let seq = {
             let mut map = self.guild_settings_seq.lock().unwrap_or_else(PoisonError::into_inner);
             let entry = map.entry(guild_id).or_insert(0);
@@ -157,7 +198,8 @@ impl Backend {
         };
         let (patch, previous_entry) = {
             let mut state = self.state();
-            let patch = build_channel_mute_patch(state.guild_settings.get(&guild_id), channel_id, muted);
+            let patch =
+                build_channel_override_patch(state.guild_settings.get(&guild_id), channel_id, muted, message_notifications);
             let mut merged = existing_channel_overrides(state.guild_settings.get(&guild_id).map(|s| &s.raw));
             let key = channel_id.to_string();
             let previous_entry = merged.get(&key).cloned();
@@ -167,8 +209,16 @@ impl Backend {
                 .cloned()
                 .unwrap_or_default();
             entry.insert("channel_id".to_owned(), Value::String(key.clone()));
-            entry.insert("muted".to_owned(), Value::Bool(muted));
-            entry.insert("mute_config".to_owned(), Value::Null);
+            if let Some(m) = muted {
+                entry.insert("muted".to_owned(), Value::Bool(m));
+                entry.insert("mute_config".to_owned(), Value::Null);
+            } else {
+                entry.entry("muted".to_owned()).or_insert(Value::Bool(false));
+            }
+            if let Some(level) = message_notifications {
+                entry.insert("message_notifications".to_owned(), Value::from(level));
+            }
+            entry.entry("collapsed".to_owned()).or_insert(Value::Bool(false));
             merged.insert(key, Value::Object(entry));
 
             let payload = json!({
@@ -214,7 +264,7 @@ impl Backend {
                     if seq_matches() {
                         apply_channel_mute_rollback(&mut lock(&state), guild_id, channel_id, previous_entry);
                         let _ = events.send(UiEvent::ActionFailed {
-                            error: format!("Could not update channel mute: {err}"),
+                            error: format!("{err_prefix}: {err}"),
                         });
                         let _ = events.send(UiEvent::StateChanged);
                     }
@@ -227,6 +277,46 @@ impl Backend {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn channel_notification_level_patch_preserves_muted_collapsed_and_siblings() {
+        let mut state = ClientState::new();
+        let guild = Snowflake(1);
+        let target = Snowflake(11);
+        let sibling = Snowflake(12);
+        state.apply(&Dispatch {
+            t: "USER_GUILD_SETTINGS_UPDATE".to_owned(),
+            s: 1,
+            d: json!({
+                "guild_id": guild.to_string(),
+                "channel_overrides": {
+                    target.to_string(): {
+                        "channel_id": target.to_string(),
+                        "collapsed": false,
+                        "message_notifications": 0,
+                        "muted": true
+                    },
+                    sibling.to_string(): {
+                        "channel_id": sibling.to_string(),
+                        "collapsed": true,
+                        "message_notifications": 2,
+                        "muted": false
+                    }
+                }
+            }),
+        });
+
+        let patch = build_channel_override_patch(state.guild_settings.get(&Some(guild)), target, None, Some(1));
+        let overrides = patch.channel_overrides.flatten().expect("overrides map");
+        assert_eq!(overrides.len(), 2);
+        let target_ov = overrides.get(&target.to_string()).expect("target override");
+        assert_eq!(target_ov.message_notifications, Some(1));
+        assert_eq!(target_ov.muted, Some(true));
+        assert_eq!(target_ov.collapsed, Some(false));
+        let sibling_ov = overrides.get(&sibling.to_string()).expect("sibling override");
+        assert_eq!(sibling_ov.message_notifications, Some(2));
+        assert_eq!(sibling_ov.muted, Some(false));
+    }
 
     #[test]
     fn channel_mute_patch_preserves_siblings_and_target_fields() {

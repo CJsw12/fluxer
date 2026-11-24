@@ -3,7 +3,7 @@
 
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Icon, Sizable as _};
-use gpui_kit::{AnyElement, Context, FontWeight, MouseButton, Role, SharedString, div, prelude::*, px};
+use gpui_kit::{AnyElement, Context, FontWeight, MouseButton, Role, SharedString, div, prelude::*, px, rgb, rgba};
 
 use super::avatar::{AvatarSpec, render_avatar};
 use super::{access::Scope, badge};
@@ -124,18 +124,22 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .flx("app.guild-header.caret-icon"),
                 );
 
+            let dark = theme.background.l < 0.5;
+            let popout_bg: gpui_kit::Hsla = if dark { rgb(0x2a2730).into() } else { theme.background_secondary };
+            let popout_border: gpui_kit::Hsla = if dark { rgba(0xc9c5d326).into() } else { theme.border };
             let popout = menu_open.then(|| {
                 div()
                     .id("guild-header-popout")
                     .debug_selector(|| "guild-header-popout".to_owned())
+                    .flx("guild.guild-header-popout.container")
                     .mx_2()
                     .mt_1()
                     .mb_1()
                     .p_1p5()
                     .rounded(px(8.))
                     .border_1()
-                    .border_color(theme.border)
-                    .bg(theme.background_secondary)
+                    .border_color(popout_border)
+                    .bg(popout_bg)
                     .flex()
                     .flex_col()
                     .gap_0p5()
@@ -144,6 +148,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             div()
                                 .id("guild-popout-create-channel")
                                 .debug_selector(|| "guild-popout-create-channel".to_owned())
+                                .flx("guild.guild-header-popout.guild-header-popout-item.item-button.select")
                                 .px_2()
                                 .py_1p5()
                                 .rounded(px(5.))
@@ -166,6 +171,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             div()
                                 .id("guild-popout-roles")
                                 .debug_selector(|| "guild-popout-roles".to_owned())
+                                .flx("guild.guild-header-popout.guild-header-popout-item.item-button.select")
                                 .px_2()
                                 .py_1p5()
                                 .rounded(px(5.))
@@ -188,6 +194,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             div()
                                 .id("guild-popout-bans")
                                 .debug_selector(|| "guild-popout-bans".to_owned())
+                                .flx("guild.guild-header-popout.guild-header-popout-item.item-button.select")
                                 .px_2()
                                 .py_1p5()
                                 .rounded(px(5.))
@@ -210,6 +217,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             div()
                                 .id("guild-popout-leave")
                                 .debug_selector(|| "guild-popout-leave".to_owned())
+                                .flx("guild.guild-header-popout.guild-header-popout-item.item-button.select")
                                 .px_2()
                                 .py_1p5()
                                 .rounded(px(5.))

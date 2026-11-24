@@ -6,6 +6,7 @@ pub mod account_switcher;
 pub mod avatar;
 pub mod channel_list;
 pub mod channel_modal;
+pub mod channel_popouts;
 pub mod composer;
 pub mod emoji_picker;
 pub mod friends;

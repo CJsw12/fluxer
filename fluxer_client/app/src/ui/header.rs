@@ -161,7 +161,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         cx.listener(|this, hovered: &bool, _, cx| {
                             this.set_header_hover(HeaderHoverTarget::Mute, *hovered, cx);
                         }),
-                        cx.listener(|this, _, _, cx| this.toggle_channel_mute(cx)),
+                        cx.listener(|this, ev: &gpui_kit::ClickEvent, window, cx| {
+                            this.toggle_channel_notification_popout(ev.position(), window, cx);
+                        }),
                     ))
                     .child(render_header_icon_button(
                         "header-threads-btn",
@@ -177,7 +179,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         cx.listener(|this, hovered: &bool, _, cx| {
                             this.set_header_hover(HeaderHoverTarget::Threads, *hovered, cx);
                         }),
-                        cx.listener(|this, _, window, cx| this.toggle_search(window, cx)),
+                        cx.listener(|this, ev: &gpui_kit::ClickEvent, window, cx| {
+                            this.toggle_threads_popout(ev.position(), window, cx);
+                        }),
                     ))
                     .child(render_header_icon_button(
                         "header-pins-btn",
@@ -193,7 +197,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         cx.listener(|this, hovered: &bool, _, cx| {
                             this.set_header_hover(HeaderHoverTarget::Pins, *hovered, cx);
                         }),
-                        cx.listener(|this, _, window, cx| this.toggle_search(window, cx)),
+                        cx.listener(|this, ev: &gpui_kit::ClickEvent, window, cx| {
+                            this.toggle_pins_popout(ev.position(), window, cx);
+                        }),
                     ))
                     .child(render_header_icon_button(
                         "header-favorite-btn",
@@ -284,7 +290,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     cx.listener(|this, hovered: &bool, _, cx| {
                         this.set_header_hover(HeaderHoverTarget::Inbox, *hovered, cx);
                     }),
-                    cx.listener(|this, _, window, cx| this.toggle_search(window, cx)),
+                    cx.listener(|this, ev: &gpui_kit::ClickEvent, window, cx| {
+                        this.toggle_inbox_popout(ev.position(), window, cx);
+                    }),
                 )),
         )
 }

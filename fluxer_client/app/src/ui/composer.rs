@@ -44,15 +44,22 @@ pub fn render_with(
         .selected_channel
         .and_then(|channel_id| crate::ui::attachments::tray::render(view.attachments.files(channel_id), theme, cx));
     let upload = view.can_send.then(|| {
-        div().flex_none().flx("channel.lexical-channel-textarea-content.plus-button-above-backdrop.clear-slash-command").child(
-            Button::new("composer-upload")
-                .ghost()
-                .with_size(px(32.))
-                .rounded(px(6.))
-                .icon(composer_icon(AppIcon::Plus, theme))
-                .tooltip(l10n::tr("Upload a file"))
-                .on_click(cx.listener(|v, _, _, cx| v.pick_files(cx))),
-        )
+        div()
+            .flex_none()
+            .debug_selector(|| "composer-upload".to_owned())
+            .flx("channel.lexical-channel-textarea-content.plus-button-above-backdrop.clear-slash-command")
+            .child(
+                Button::new("composer-upload-btn")
+                    .ghost()
+                    .with_size(px(32.))
+                    .rounded(px(6.))
+                    .icon(composer_icon(AppIcon::Plus, theme))
+                    .tooltip(l10n::tr("Open menu"))
+                    .accessibility_label(l10n::tr("Open menu"))
+                    .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
+                        v.toggle_composer_plus_menu(ev.position(), window, cx);
+                    })),
+            )
     });
     let gif_btn = view.can_send.then(|| {
         div()

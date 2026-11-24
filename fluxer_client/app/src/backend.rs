@@ -11,8 +11,8 @@ use anyhow::{Context as _, Result};
 use fluxer_client_core::gateway::{self, Compression, GatewayConfig, GatewayEvent, GatewayHandle, IdentifyProperties};
 use fluxer_client_core::rest::{
     AckRequest, ClientIdentity, DiscoveryOptions, Endpoints, GuildBanEntry, MessageQuery, MessageSearchOutcome,
-    RestClient, RestConfig, SecretToken, SendMessageRequest, TransportPolicy, UserProfileFull, WebAuthnCredential,
-    discover_with,
+    PinsQuery, RestClient, RestConfig, SecretToken, SendMessageRequest, TransportPolicy, UserProfileFull,
+    WebAuthnCredential, discover_with,
 };
 #[cfg(test)]
 use fluxer_client_core::rest::{GuildSettingsPatch, MessageSearchRequest, UserSettingsPatch};
@@ -91,6 +91,8 @@ pub enum UiEvent {
     WebAuthnCredentialsLoaded { result: Result<Vec<WebAuthnCredential>, String> },
     /// Passkey registration or deletion finished (`error: None` means success).
     WebAuthnMutationFinished { status: Option<String>, error: Option<String> },
+    /// `GET /channels/{channel_id}/messages/pins` finished.
+    PinsLoaded { seq: u64, channel_id: Snowflake, result: Result<Vec<Message>, String> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -783,6 +785,40 @@ impl Backend {
             gateway.close();
         }
     }
+
+    /// Fetches `GET /channels/{channel_id}/messages/pins` and emits `UiEvent::PinsLoaded`.
+    pub fn load_pins(&self, seq: u64, channel_id: Snowflake) {
+        let rest = self.rest.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            let query = PinsQuery { limit: Some(50), before: None };
+            let result = rest
+                .get_pins(&channel_id.to_string(), &query)
+                .await
+                .map(|body| parse_pins_body(&body))
+                .map_err(|err| err.to_string());
+            let _ = events.send(UiEvent::PinsLoaded { seq, channel_id, result });
+        });
+    }
+}
+
+fn parse_pins_body(body: &Value) -> Vec<Message> {
+    if let Some(items) = body.get("items").and_then(Value::as_array) {
+        return items
+            .iter()
+            .filter_map(|item| {
+                let raw = item.get("message").unwrap_or(item);
+                match serde_json::from_value::<Message>(raw.clone()) {
+                    Ok(msg) => Some(msg),
+                    Err(err) => {
+                        tracing::debug!(%err, "skipping malformed pinned message");
+                        None
+                    }
+                }
+            })
+            .collect();
+    }
+    parse_messages(body)
 }
 
 /// Skips entries that do not parse instead of failing the whole page.

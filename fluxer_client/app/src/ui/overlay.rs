@@ -16,6 +16,7 @@ use crate::ui::l10n;
 use crate::ui::account_switcher::AccountSwitcherModal;
 use crate::ui::access::AccessModal;
 use crate::ui::channel_modal::{CreateChannelModal, EditChannelModal};
+use crate::ui::channel_popouts::ChannelPopout;
 use crate::ui::emoji_picker::EmojiPicker;
 use crate::ui::group_dm::{CreateGroupDmModal, LeaveGroupDmModal};
 use crate::ui::guild_modal::{JoinGuildModal, LeaveGuildModal};
@@ -33,6 +34,7 @@ pub enum Overlay {
     None,
     QuickSwitcher(QuickSwitcher),
     EmojiPicker(EmojiPicker),
+    ChannelPopout(ChannelPopout),
     Profile(ProfilePopout),
     Settings(SettingsModal),
     AccountSwitcher(AccountSwitcherModal),

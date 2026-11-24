@@ -12,7 +12,7 @@
 ## 현재 상태 (2026-11-24)
 
 - **Baseline:** 브랜치 `desktop-rs`(작업), `main` = `upstream/main`. 주력은 `fluxer_client/`(Rust GPUI + gpui-kit). 음성·화면 공유는 별도 헬퍼 `fluxer_client/voice_worker`(LiveKit, 정적 CRT) 프로세스. `fluxer_desktop_rs/`는 WebView2 전환기 셸.
-- **Done(최근):** M9.2 상태 행렬·호버·툴팁·음성 영역 1:1 수렴(`8f49ada84`), M9.3 앱 내부 크기 조절·프로브 `probe_drag`/`probe_dblclick` 구현 및 실기 25/25 검증(`fc6c1d245`), 1차 UI 결함 3건 수정(`bdf396dba`, 프로필 선 겹침·멤버 목록 모서리·설정 모달 스타일), Parity Lab 게이트 보강(`compare.py` `diff_heatmap.png`·모서리/미태그 모달 리포트, `state_matrix.py --strict`, `check_surface_parity.py`) 및 2차 UI 결함 3건 수정(채널/길드/계정 전환 숨은 호버 버튼 제거, 작성창 `Media | Stickers | Emojis` 탭 분리, `cargo test --workspace` 707개·실기 `check_surface_parity` 10/10·`state_matrix --strict`·`check_resize` 25/25 통과), 화면 공유 양방향 자동 시험과 수신 색 결함 수정(`ac638a6a3`, M9.5 1차), 업스트림 2026-11-23 병합(`3cc9d8ffb`). 상세는 `docs/PARITY_LAB.md` 7.1, 커밋 `82bed49a3`..`7ddeff5ed`.
+- **Done(최근):** M9.2 상태 행렬·호버·툴팁·음성 영역 1:1 수렴(`8f49ada84`), M9.3 앱 내부 크기 조절·프로브 `probe_drag`/`probe_dblclick` 구현 및 실기 25/25 검증(`fc6c1d245`), 1차 UI 결함 3건 수정(`bdf396dba`, 프로필 선 겹침·멤버 목록 모서리·설정 모달 스타일), Parity Lab 게이트 보강(`compare.py` `diff_heatmap.png`·모서리/미태그 모달 리포트, `state_matrix.py --strict`, `check_surface_parity.py`) 및 2차 UI 결함 3건 수정(채널/길드/계정 전환 숨은 호버 버튼 제거, 작성창 `Media | Stickers | Emojis` 탭 분리), M9.4 팝오버·모달 작업 목록 자동 생성(`replay.py --strict-no-duplicates`, 중복 화면 0건) 및 채널 알림·스레드·고정 메시지·받은 편지함·작성창 `+` 팝오버 구현(`cargo test --workspace` 709개·실기 `replay.py --strict-no-duplicates`·`check_surface_parity` 10/10·`state_matrix --strict`·`check_resize` 25/25 통과), 화면 공유 양방향 자동 시험과 수신 색 결함 수정(`ac638a6a3`, M9.5 1차), 업스트림 2026-11-23 병합(`3cc9d8ffb`). 상세는 `docs/PARITY_LAB.md` 7.1, 커밋 `82bed49a3`..`7ddeff5ed`.
 - **Decisions:**
   - 1:1 판정은 공식 데스크톱 앱 실측이 기준이다. 정규식 감사(`scripts/audit_ui_parity.py`)와 합성 갤러리는 보조다.
   - 비교 기준 앱은 포터블 공식 데스크톱 사본(Web 2026.1120, 다크, tester2)이다. 사용자 개인 공식 앱은 조작하지 않는다.
@@ -29,7 +29,7 @@
 > 2026-11-24 완료: 화면 공유 1차(`ac638a6a3`), 업스트림 병합(`3cc9d8ffb`), 프로필 카드·레일 호버(`8a44b5429`), 아이콘 원본 1~3차(`eb81a2d8c`·`e69b04c1c`·`cfc69a1e4`, 125곳 중 68곳 검증), 상태 아이콘 모양·외곽선·이니셜(`8bdf0c860`), 길드 툴팁 인원·음성 배지(`f4a58f66f`), M9.2 상태 행렬(`8f49ada84`), M9.3 크기 조절·`probe_drag`, 개발 루프 `tools/parity_lab/cycle.py`. 다음 순서와 운영 메모는 `Logs/handoff/OPERATIONS.md`.
 
 1. **M9 검증 사각지대 보완(`docs/UI_PARITY_ROADMAP.md` M9).** 사용자가 지적한 7건은 지금까지의 방법으로 잡지 못했다.
-   - 남은 핵심 순서: M9.4 팝오버·모달 내용 비교(`replay.py` → 작업 목록) → M9.9 아이콘 원본 수확 마무리 → M9.8 테두리·모서리 속성 비교 → M9.7 요소 픽셀 비교 → M9.1 조작 요소 목록 → M9.11·M9.12 → M9.6·M9.10·M9.13.
+   - 남은 핵심 순서: M9.9 아이콘 원본 수확 마무리 → M9.8 테두리·모서리 속성 비교 → M9.7 요소 픽셀 비교 → M9.1 조작 요소 목록 → M9.11·M9.12 → M9.6·M9.10·M9.13.
 2. **메시지 영역 마감.**
    - 바닥 여백 → 메시지 높이 순서로 맞춘다. ①·③ 메시지 본문 아래 여분과 코드 블록 9px의 원인이 미확정이다.
    - 스포일러 상자, 컬러 이모지, 코드 블록 테두리, 목록 글머리를 맞춘다.

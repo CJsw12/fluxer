@@ -299,6 +299,9 @@ pub struct ClientView {
     pub(crate) user_area_popout_open: bool,
     /// Expression picker tab closed on the current `MouseDown` outside click so repeat clicks toggle instead of reopening.
     pub(crate) dismissed_expression_tab: Option<(crate::ui::emoji_picker::sections::PickerTarget, crate::ui::emoji_picker::ExpressionTab)>,
+    /// Header/composer popout key closed on the current `MouseDown` outside click so repeat clicks toggle cleanly.
+    pub(crate) dismissed_channel_popout: Option<&'static str>,
+    pub(crate) pins_seq: u64,
     /// Hovered `UserAreaPopout` submenu (status / expiry / accounts).
     pub(crate) user_area_submenu: Option<crate::ui::user_panel::UserAreaSubmenu>,
     /// When true, the Guild Header dropdown menu (`GuildHeaderPopout.tsx`) is open below the guild header.
@@ -515,6 +518,8 @@ impl ClientView {
             voice_stage_expanded: true,
             user_area_popout_open: false,
             dismissed_expression_tab: None,
+            dismissed_channel_popout: None,
+            pins_seq: 0,
             user_area_submenu: None,
             guild_header_popout_open: false,
             hovered_rail_item: None,
@@ -606,6 +611,7 @@ impl ClientView {
             self.overlay,
             Overlay::QuickSwitcher(_)
                 | Overlay::EmojiPicker(_)
+                | Overlay::ChannelPopout(_)
                 | Overlay::AccountSwitcher(_)
                 | Overlay::JoinGuild(_)
                 | Overlay::LeaveGuild(_)
@@ -1006,6 +1012,30 @@ impl ClientView {
                         if error.is_none() {
                             modal.passkey_loading = true;
                             self.backend.load_webauthn_credentials();
+                        }
+                    }
+                }
+                UiEvent::PinsLoaded { seq, channel_id, result } => {
+                    if let Overlay::ChannelPopout(pop) = &mut self.overlay
+                        && let crate::ui::channel_popouts::ChannelPopoutKind::PinnedMessages {
+                            channel_id: pop_ch,
+                            seq: pop_seq,
+                            loading,
+                            items,
+                            error: pop_err,
+                        } = &mut pop.kind
+                        && *pop_seq == seq
+                        && *pop_ch == channel_id
+                    {
+                        *loading = false;
+                        match result {
+                            Ok(msgs) => {
+                                *items = msgs;
+                                *pop_err = None;
+                            }
+                            Err(err) => {
+                                *pop_err = Some(err);
+                            }
                         }
                     }
                 }
@@ -3209,6 +3239,9 @@ impl Render for ClientView {
             Overlay::EmojiPicker(picker) => {
                 Some(ui::emoji_picker::render(self, picker, self.backend.media(), window.viewport_size(), &theme, cx))
             }
+            Overlay::ChannelPopout(pop) => {
+                Some(ui::channel_popouts::render(self, pop, window.viewport_size(), &theme, cx))
+            }
             Overlay::Profile(pop) => Some(ui::profile_popout::render(pop, &theme, cx)),
             Overlay::Settings(modal) => Some(ui::settings::render(self, modal, &theme, cx)),
             Overlay::AccountSwitcher(modal) => Some(ui::account_switcher::render(self, modal, &theme, cx)),
@@ -3246,6 +3279,7 @@ impl Render for ClientView {
             .text_size(px(theme.sizes.text))
             .capture_any_mouse_down(cx.listener(|v, _, _, _| {
                 v.dismissed_expression_tab = None;
+                v.dismissed_channel_popout = None;
             }))
             .on_mouse_move(cx.listener(Self::handle_resize_move))
             .on_mouse_up(MouseButton::Left, cx.listener(|v, _, _, cx| v.finish_resize(cx)))

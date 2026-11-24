@@ -78,8 +78,9 @@ pub fn render(_title: SharedString, theme: &Theme) -> AnyElement {
                 .child(
                     div()
                         .truncate()
+                        .h(px(13.))
                         .text_size(px(11.))
-                        .line_height(px(13.))
+                        .line_height(px(16.))
                         .font_weight(FontWeight::EXTRA_BOLD)
                         .text_color(theme.muted_foreground.opacity(0.8))
                         .flx_text("app.native-titlebar.wordmark", display_title.to_string())

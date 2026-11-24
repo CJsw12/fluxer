@@ -3354,6 +3354,8 @@ impl Render for ClientView {
                     .flex_1()
                     .min_w_0()
                     .h_full()
+                    // OutlineFrame.module.css: the pane sits inside the 1px frame border.
+                    .pt(px(1.))
                     // Files dropped anywhere on the message pane go to the tray.
                     .on_drop(cx.listener(|v, paths: &ExternalPaths, _, cx| v.add_paths(paths.paths(), cx)))
                     .child(ui::header::render(self, &theme, cx))

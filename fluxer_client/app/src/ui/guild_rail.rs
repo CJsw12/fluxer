@@ -150,10 +150,10 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .debug_selector(|| "rail-separator".to_owned())
                 .w(px(32.))
                 .h(px(2.))
-                .my(px(1.))
+                .mt(px(3.)).mb(px(-1.))
                 .flex_none()
                 .rounded(px(1.))
-                .bg(theme.border)
+                .bg(theme.hover_bg)
                 .flx("app.guilds-layout.guild-list-divider.guild-divider"),
         );
 

@@ -76,6 +76,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
 
     div()
         .h(px(theme.sizes.header_height))
+        .mr(px(-1.))
         .flex_none()
         .flex()
         .flex_row()

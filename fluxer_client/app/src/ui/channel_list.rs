@@ -440,7 +440,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
             .flex()
             .flex_row()
             .items_center()
-            .gap(px(6.))
+            .gap(px(4.))
             .mx_2()
             .px_2()
             .mt(px(3.))
@@ -526,7 +526,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         .gap(px(6.))
         .mx_2()
         .pl_2()
-        .pr(px(if selected { 30. } else { 14. }))
+        .pr_2()
         .min_h(px(32.))
         .py(px(6.))
         .text_size(px(16.))
@@ -593,7 +593,9 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 .truncate()
                 .flx_text("app.channel-item-content.channel-name", c.name.to_string())
                 .child(c.name.clone()),
-        );
+        )
+        // Official trailing slot: gap plus reserved icon space (16px when selected).
+        .child(div().flex_none().w(px(if selected { 16. } else { 0. })));
     if c.muted {
         row = row.child(Icon::new(AppIcon::BellSlash).xsmall());
     }

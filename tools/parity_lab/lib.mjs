@@ -87,7 +87,7 @@ export function helpers(cdp) {
 	}
 	// Clicks the element returned by a page expression with real input events (React handlers that
 	// ignore synthetic .click() still fire). Returns false when the element is missing.
-	async function realClickExpr(elementExpr) {
+	async function realClickExpr(elementExpr, button = 'left') {
 		const pt = await cdp.eval(`(() => { const el = ${elementExpr};
 		  if (!el) return null; el.scrollIntoView({block: 'nearest'}); const r = el.getBoundingClientRect();
 		  return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
@@ -95,11 +95,11 @@ export function helpers(cdp) {
 		const [x, y] = pt;
 		await cdp.send('Input.dispatchMouseEvent', {type: 'mouseMoved', x, y});
 		for (const type of ['mousePressed', 'mouseReleased']) {
-			await cdp.send('Input.dispatchMouseEvent', {type, x, y, button: 'left', clickCount: 1});
+			await cdp.send('Input.dispatchMouseEvent', {type, x, y, button, clickCount: 1});
 		}
 		return true;
 	}
-	const realClick = (selector) => realClickExpr(`document.querySelector(${JSON.stringify(selector)})`);
+	const realClick = (selector, button) => realClickExpr(`document.querySelector(${JSON.stringify(selector)})`, button);
 	async function pressKey(key, vk) {
 		for (const type of ['keyDown', 'keyUp']) {
 			await cdp.send('Input.dispatchKeyEvent', {type, key, code: key, windowsVirtualKeyCode: vk});
@@ -115,6 +115,14 @@ export function helpers(cdp) {
 	const clickText = (pattern, flags) => realClickExpr(byText(pattern, flags));
 	return {waitFor, realClickExpr, realClick, pressKey, byText, clickText};
 }
+
+// Every visible <svg> with its nearest data-flx host, rendered rect, viewBox and path data
+// (identified against Phosphor originals by tools/parity_lab/icon_sites.py / harvest_icons.mjs).
+export const SVG_DUMP = `[...document.querySelectorAll('svg')].map(s => { const r = s.getBoundingClientRect();
+  if (r.width < 6 || r.height < 6 || r.bottom < 0 || r.top > innerHeight) return null;
+  const host = s.closest('[data-flx]');
+  return {flx: (s.getAttribute('data-flx') || (host && host.getAttribute('data-flx')) || ''), rect: [r.x, r.y, r.width, r.height].map(Math.round),
+    viewBox: s.getAttribute('viewBox'), d: [...s.querySelectorAll('path')].map(p => p.getAttribute('d') || '').join('|')}; }).filter(Boolean)`;
 
 // Official build stamp ("Stable Desktop …, Web …") so every capture records which version it is
 // ground truth for; comparisons against a different fluxer_app commit are flagged, not trusted.

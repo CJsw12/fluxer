@@ -10,7 +10,7 @@
 // (reactions, pins, settings). States and the click log are written as they are found.
 import {mkdirSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {Cdp, DOM_DUMP, clientInfo, helpers, pageWsUrl, sleep} from './lib.mjs';
+import {Cdp, DOM_DUMP, SVG_DUMP, clientInfo, helpers, pageWsUrl, sleep} from './lib.mjs';
 
 const rawArgs = process.argv.slice(2);
 const HOVER = rawArgs.includes('--hover');
@@ -165,13 +165,6 @@ async function candidates(within) {
 		return !DENY.test(`${c.flx} ${c.label} ${c.text}`);
 	});
 }
-
-const SVG_DUMP = `[...document.querySelectorAll('svg')].map(s => { const r = s.getBoundingClientRect();
-  if (r.width < 6 || r.height < 6 || r.bottom < 0 || r.top > innerHeight) return null;
-  const host = s.closest('[data-flx]');
-  return {flx: (s.getAttribute('data-flx') || (host && host.getAttribute('data-flx')) || ''), rect: [r.x, r.y, r.width, r.height].map(Math.round),
-    viewBox: s.getAttribute('viewBox'), d: [...s.querySelectorAll('path')].map(p => p.getAttribute('d') || '').join('|')}; }).filter(Boolean)`;
-
 const target = (c) => `[...document.querySelectorAll('[data-flx="${c.flx.replace(/"/g, '\\"')}"]')][${c.idx}]`;
 
 await loadRoute();

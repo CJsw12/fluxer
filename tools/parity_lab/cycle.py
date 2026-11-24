@@ -17,7 +17,8 @@ import sys
 import time
 from pathlib import Path
 
-import rust_probe as rp
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # `python -I` drops the script dir
+import rust_probe as rp  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 TARGET = REPO / "target" / "fc-root"

@@ -12,7 +12,7 @@
 import {spawn} from 'node:child_process';
 import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {Cdp, DOM_DUMP, clientInfo, helpers, pageWsUrl, sleep} from './lib.mjs';
+import {Cdp, DOM_DUMP, SVG_DUMP, clientInfo, helpers, pageWsUrl, sleep} from './lib.mjs';
 
 const args = Object.fromEntries(
 	process.argv.slice(2).reduce((acc, v, i, a) => (v.startsWith('--') ? [...acc, [v.slice(2), a[i + 1]]] : acc), []),
@@ -136,11 +136,18 @@ for (const scene of scenes) {
 		await sleep(250);
 		ready = await cdp.eval(`!!document.querySelector(${JSON.stringify(waitSel)})`).catch(() => false);
 	}
-	// Scene actions: [{click: css}] | [{click_text: regex, within?: css}] | [{key: 'Escape'}] | [{wait_ms}]
+	// Scene actions: [{click: css}] | [{context: css}] (right click) | [{hover: css}] | [{click_text: regex, within?: css}]
+	// | [{key: 'Escape'}] | [{wait_ms}]
 	for (const act of scene.actions ?? []) {
-		if (act.click) {
-			const ok = await waitFor(`!!document.querySelector(${JSON.stringify(act.click)})`, 8000);
-			if (!ok || !(await realClick(act.click))) ready = false;
+		if (act.click || act.context) {
+			const sel = act.click ?? act.context;
+			const ok = await waitFor(`!!document.querySelector(${JSON.stringify(sel)})`, 8000);
+			if (!ok || !(await realClick(sel, act.context ? 'right' : 'left'))) ready = false;
+		} else if (act.hover) {
+			const pt = await cdp.eval(`(() => { const e = document.querySelector(${JSON.stringify(act.hover)}); if (!e) return null;
+			  const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+			if (pt) await cdp.send('Input.dispatchMouseEvent', {type: 'mouseMoved', x: pt[0], y: pt[1]});
+			else ready = false;
 		} else if (act.click_text) {
 			if (!(await realClickExpr(BUTTON_BY_TEXT(act.click_text, act.within ?? 'body')))) ready = false;
 		} else if (act.key) {
@@ -165,6 +172,7 @@ for (const scene of scenes) {
 	writeFileSync(join(OUT, `${scene.slug}.dom.json`), JSON.stringify(dom, null, 1));
 	const ax = await axDump(cdp);
 	writeFileSync(join(OUT, `${scene.slug}.ax.json`), JSON.stringify(ax, null, 1));
+	writeFileSync(join(OUT, `${scene.slug}.svgs.json`), JSON.stringify(await cdp.eval(SVG_DUMP)));
 	manifest.push({slug: scene.slug, path: scene.path, theme, ready, dom: dom.length, ax: ax.length});
 	console.log(`${scene.slug}: ready=${ready} dom=${dom.length} ax=${ax.length}`);
 }

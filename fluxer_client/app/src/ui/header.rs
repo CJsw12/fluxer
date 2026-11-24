@@ -56,7 +56,11 @@ fn render_header_icon_button(
                 .flex()
                 .items_center()
                 .justify_center()
-                .flx("channel.channel-header-components.channel-header-icon.button-icon")
+                .flx(if flx.ends_with("toggle-favorite") {
+                    "channel.channel-header.button-icon"
+                } else {
+                    "channel.channel-header-components.channel-header-icon.button-icon"
+                })
                 .child(hdr_icon(icon, color)),
         )
         .when(hovered, |d| {
@@ -99,7 +103,13 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .gap(px(12.))
                 .when(!glyph.is_empty(), |d| {
                     if glyph == "#" {
-                        d.child(Icon::new(AppIcon::TextChannel).with_size(px(24.)).text_color(theme.muted_foreground))
+                        d.child(
+                            div()
+                                .flex_none()
+                                .size(px(24.))
+                                .flx("channel.channel-utils.get-icon.text-channel-icon")
+                                .child(Icon::new(AppIcon::TextChannel).with_size(px(24.)).text_color(theme.muted_foreground)),
+                        )
                     } else {
                         d.child(
                             div()
@@ -265,7 +275,13 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .gap_2()
                         .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx)))
                         .flx("channel.message-search-bar.message-search-bar.input-container")
-                        .child(Icon::new(AppIcon::MagnifyingGlass).with_size(px(16.)).text_color(theme.muted_foreground))
+                        .child(
+                            div()
+                                .flex_none()
+                                .size(px(16.))
+                                .flx("channel.message-search-bar.message-search-bar.search-icon")
+                                .child(Icon::new(AppIcon::MagnifyingGlass).with_size(px(16.)).text_color(theme.muted_foreground)),
+                        )
                         .child(
                             div()
                                 .flex_1()

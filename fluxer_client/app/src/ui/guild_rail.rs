@@ -86,7 +86,13 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(Icon::new(AppIcon::ChatCircleFill).with_size(px(RAIL_ICON)).text_color(home_fg))
+                .child(
+                    div()
+                        .flex_none()
+                        .size(px(RAIL_ICON))
+                        .flx("app.sidebar-nav.fluxer-button.message-bubble-icon")
+                        .child(Icon::new(AppIcon::ChatCircleFill).with_size(px(RAIL_ICON)).text_color(home_fg)),
+                )
                 .into_any_element(),
             l10n::tr("Direct messages"),
             home_selected,
@@ -130,7 +136,13 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     .flex()
                     .items_center()
                     .justify_center()
-                    .child(Icon::new(AppIcon::Star).with_size(px(RAIL_ICON)).text_color(fav_fg))
+                    .child(
+                        div()
+                            .flex_none()
+                            .size(px(RAIL_ICON))
+                            .flx("app.sidebar-nav.favorites-button.favorites-icon")
+                            .child(Icon::new(AppIcon::Star).with_size(px(RAIL_ICON)).text_color(fav_fg)),
+                    )
                     .into_any_element(),
                 l10n::tr("Favorites"),
                 fav_selected,
@@ -187,6 +199,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     .line_height(px(font))
                     .font_weight(FontWeight::NORMAL)
                     .text_color(initials_fg)
+                    .flx("guild.guild-acronym.text")
                     .child(g.initials.clone())
                     .into_any_element()
             }
@@ -255,7 +268,14 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 this.set_rail_hover(RailHoverTarget::Discover, *hovered, cx);
             }))
             .on_click(cx.listener(|this, _, window, cx| this.open_join_guild(window, cx)))
-            .child(Icon::new(AppIcon::Compass).with_size(px(20.)).text_color(discover_fg)),
+            .flx("app.sidebar-nav.discovery-button.div--2")
+            .child(
+                div()
+                    .flex_none()
+                    .size(px(20.))
+                    .flx("app.sidebar-nav.discovery-button.icon-text")
+                    .child(Icon::new(AppIcon::Compass).with_size(px(20.)).text_color(discover_fg)),
+            ),
         discover_hovered.then(|| rail_tooltip::text(l10n::tr("Explore communities"), theme, 76.)),
     ))
     .child(slot(4., 68., 44., "app.sidebar-nav.add-guild-button.button.add-guild",
@@ -282,7 +302,14 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 this.set_rail_hover(RailHoverTarget::Join, *hovered, cx);
             }))
             .on_click(cx.listener(|this, _, window, cx| this.open_join_guild(window, cx)))
-            .child(Icon::new(AppIcon::Plus).with_size(px(20.)).text_color(if join_hovered { theme.foreground } else { theme.muted_foreground })),
+            .flx("app.sidebar-nav.add-guild-button.div--2")
+            .child(
+                div()
+                    .flex_none()
+                    .size(px(20.))
+                    .flx("app.sidebar-nav.add-guild-button.icon-text")
+                    .child(Icon::new(AppIcon::Plus).with_size(px(20.)).text_color(if join_hovered { theme.foreground } else { theme.muted_foreground })),
+            ),
         join_hovered.then(|| rail_tooltip::create_or_join(l10n::tr("Create or join a community"), theme, 76.)),
     ))
 }

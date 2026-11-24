@@ -50,6 +50,7 @@ pub fn render_with(
             .debug_selector(|| "composer-upload".to_owned())
             .flx("channel.lexical-channel-textarea-content.plus-button-above-backdrop.clear-slash-command")
             .child(crate::ui::channel_popouts::track_trigger("composer-upload-btn"))
+            .children(composer_icon_slot())
             .child(
                 Button::new("composer-upload-btn")
                     .ghost()
@@ -68,6 +69,7 @@ pub fn render_with(
             .debug_selector(|| "composer-gif".to_owned())
             .flx("channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--2")
             .child(crate::ui::channel_popouts::track_trigger("composer-gif-btn"))
+            .children(composer_icon_slot())
             .child(
                 Button::new("composer-gif-btn")
                     .ghost()
@@ -86,6 +88,7 @@ pub fn render_with(
             .debug_selector(|| "composer-sticker".to_owned())
             .flx("channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--3")
             .child(crate::ui::channel_popouts::track_trigger("composer-sticker-btn"))
+            .children(composer_icon_slot())
             .child(
                 Button::new("composer-sticker-btn")
                     .ghost()
@@ -104,6 +107,7 @@ pub fn render_with(
             .debug_selector(|| "composer-emoji".to_owned())
             .flx("channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--4")
             .child(crate::ui::channel_popouts::track_trigger("composer-emoji-btn"))
+            .children(composer_icon_slot())
             .child(
                 Button::new("composer-emoji-btn")
                     .ghost()
@@ -704,6 +708,14 @@ mod tests {
         assert_eq!(value(cx), "draft");
         assert!(cx.update(|_, cx| harness.read(cx).controller.mode() == &ComposerMode::Normal));
     }
+}
+
+/// Invisible box matching the 22px icon centred in the 32px button; carries the icon's flx tag
+/// because gpui-component's Button owns the real icon element.
+/// Probe-only (absent unless FLUXER_PARITY_PROBE=1).
+fn composer_icon_slot() -> Option<gpui_kit::Div> {
+    crate::parity_probe::enabled()
+        .then(|| div().absolute().top(px(5.)).left(px(5.)).size(px(22.)).flx("channel.textarea.textarea-button.icon"))
 }
 
 /// Official textarea buttons draw 22px icons in `--text-primary-muted` (rgb(206,203,212) dark);

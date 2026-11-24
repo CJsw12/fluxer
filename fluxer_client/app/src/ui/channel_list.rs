@@ -500,7 +500,13 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 )
             })
             .children(permissions)
-            .child(div().flex_none().child(Icon::new(AppIcon::CaretDown).with_size(px(12.)).text_color(muted_fg)))
+            .child(
+                div()
+                    .flex_none()
+                    .size(px(12.))
+                    .flx("app.channel-item.category-icon")
+                    .child(Icon::new(AppIcon::CaretDown).with_size(px(12.)).text_color(muted_fg)),
+            )
             .into_any_element();
     }
     let is_voice = c.icon == ChannelIcon::Voice;
@@ -582,7 +588,16 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(Icon::new(icon).with_size(px(20.)).text_color(if selected { fg } else { muted_fg }))
+                .child(
+                    div()
+                        .flex_none()
+                        .size(px(20.))
+                        .flx(match c.icon {
+                            ChannelIcon::Voice => "channel.channel-utils.get-icon.voice-channel-icon",
+                            _ => "channel.channel-utils.get-icon.text-channel-icon",
+                        })
+                        .child(Icon::new(icon).with_size(px(20.)).text_color(if selected { fg } else { muted_fg })),
+                )
                 .flx("app.channel-item-content.div")
                 .into_any_element()
         })

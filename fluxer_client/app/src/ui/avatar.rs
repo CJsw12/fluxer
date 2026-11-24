@@ -12,6 +12,7 @@ use gpui_kit::{
 };
 
 use crate::format::{DEFAULT_AVATAR_COLORS, default_avatar_index, initials};
+use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 
 /// Input specification for [`render_avatar`].
@@ -27,6 +28,13 @@ pub struct AvatarSpec {
 
 /// Renders a circular user avatar with optional bottom-right presence dot.
 pub fn render_avatar(spec: AvatarSpec, theme: &Theme) -> AnyElement {
+    render_avatar_tagged(spec, theme, &[])
+}
+
+/// [`render_avatar`] whose picture box (equal to the official `BaseAvatar` image box) carries
+/// the given parity-probe tags.
+pub fn render_avatar_tagged(spec: AvatarSpec, theme: &Theme, flx_tags: &'static [&'static str]) -> AnyElement {
+    let tag = |d: gpui_kit::Div| flx_tags.iter().fold(d, |d, f| d.flx(f));
     let size = spec.size.max(12.);
     let default_index = default_avatar_index(spec.user_id);
     let user_initials: SharedString = initials(&spec.display_name).into();
@@ -59,12 +67,12 @@ pub fn render_avatar(spec: AvatarSpec, theme: &Theme) -> AnyElement {
     };
 
     let picture = match spec.avatar_url.filter(|url| !url.is_empty()) {
-        Some(url) => div()
+        Some(url) => tag(div()
             .size(px(size))
             .flex_none()
             .rounded_full()
             .overflow_hidden()
-            .debug_selector(|| "avatar-image".to_owned())
+            .debug_selector(|| "avatar-image".to_owned()))
             .child(
                 img(url)
                     .size(px(size))
@@ -74,12 +82,12 @@ pub fn render_avatar(spec: AvatarSpec, theme: &Theme) -> AnyElement {
                     .with_fallback(fallback),
             )
             .into_any_element(),
-        None => div()
+        None => tag(div()
             .size(px(size))
             .flex_none()
             .rounded_full()
             .overflow_hidden()
-            .debug_selector(|| "avatar-default".to_owned())
+            .debug_selector(|| "avatar-default".to_owned()))
             .child(fallback())
             .into_any_element(),
     };
@@ -102,7 +110,15 @@ pub fn render_avatar(spec: AvatarSpec, theme: &Theme) -> AnyElement {
         .flex()
         .items_center()
         .justify_center()
-        .child(super::status_indicator::themed(status, dot_size, theme));
+        .child(
+            div()
+                .size(px(dot_size))
+                .flex_none()
+                .when(!flx_tags.is_empty(), |d| {
+                    d.flx("ui.base-avatar.status-indicator-svg.svg").flx("ui.base-avatar.status-indicator-svg.rect")
+                })
+                .child(super::status_indicator::themed(status, dot_size, theme)),
+        );
 
     div()
         .relative()

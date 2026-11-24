@@ -15,7 +15,7 @@ use gpui_kit::{
 use crate::client_view::ClientView;
 use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
-use crate::ui::avatar::{AvatarSpec, render_avatar};
+use crate::ui::avatar::{AvatarSpec, render_avatar_tagged};
 use crate::ui::media_viewer::{self, MediaViewerItem};
 use crate::ui::{embed, l10n, message_actions, reactions, reply};
 use crate::view_model::MessageRow;
@@ -179,7 +179,26 @@ pub fn render(
                 }
             })
             .flx_text("channel.user-message.message-author-name", row.author.to_string())
+            .flx("channel.user-message.message-author-part--2")
+            .flx("channel.message-username.context-menu-underline.key-down")
             .child(row.author.clone());
+        // Official `TimestampWithTooltip`: a 22px container holding a 16px `<time>`.
+        let time_el = |time: SharedString| {
+            div()
+                .flex_none()
+                .h(px(22.))
+                .flx("channel.timestamp-with-tooltip.container")
+                .child(
+                    div()
+                        .mt(px(3.))
+                        .h(px(16.))
+                        .text_color(muted_fg)
+                        .text_size(px(12.))
+                        .line_height(px(16.))
+                        .flx("channel.timestamp-with-tooltip.render-time-element.time")
+                        .child(time),
+                )
+        };
         let header = if compact {
             div()
                 .flex()
@@ -197,8 +216,18 @@ pub fn render(
                 .gap_2()
                 .h(px(23.))
                 .flx("channel.user-message.message-author-info")
-                .child(author_btn)
-                .child(div().text_color(muted_fg).text_size(px(12.)).line_height(px(22.)).child(row.time.clone()))
+                .flx("channel.user-message.message-author-info--2")
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_baseline()
+                        .gap_2()
+                        .h(px(23.))
+                        .flx("channel.user-message.message-author-row--2")
+                        .child(author_btn)
+                        .child(time_el(row.time.clone())),
+                )
                 .children(state_label.map(|(label, color)| render_state_label(label, color, view)))
         };
         content = content.child(header);
@@ -225,6 +254,7 @@ pub fn render(
                 .pb(px(1.))
                 .text_color(theme.text_chat)
                 .flx("channel.user-message.message-text")
+                .flx("channel.user-message.message-text--2")
                 .child(body),
         );
     }
@@ -423,6 +453,8 @@ pub fn render(
             let view_avatar = view.clone();
             div()
                 .id(("msg-avatar", row.id.0))
+                // Official `.messageAvatar` margin: spacing + avatar align offset (6px vs content 2px).
+                .mt(px(4.))
                 .cursor_pointer()
                 .on_click(move |ev, window, cx| {
                     if !ev.modifiers().shift {
@@ -432,7 +464,7 @@ pub fn render(
                         });
                     }
                 })
-                .child(render_avatar(
+                .child(render_avatar_tagged(
                     AvatarSpec {
                         user_id: row.author_id,
                         avatar_url: row.avatar_url.clone(),
@@ -442,10 +474,30 @@ pub fn render(
                         status_border_bg: None,
                     },
                     theme,
+                    &["channel.message-avatar.avatar", "ui.base-avatar.image"],
                 ))
                 .into_any_element()
         } else {
             div().into_any_element()
+        };
+        // Probe-only: the official grouped message shows its (hover) timestamp in the gutter.
+        let gutter = if row.group_start || !crate::parity_probe::enabled() {
+            gutter
+        } else {
+            div()
+                .ml(px(8.))
+                .w(px(40.))
+                .h(px(22.))
+                .flx("channel.timestamp-with-tooltip.container")
+                .child(
+                    div()
+                        .ml(px(-2.78))
+                        .w(px(50.78))
+                        .h(px(22.))
+                        .flex_none()
+                        .flx("channel.timestamp-with-tooltip.render-time-element.time"),
+                )
+                .into_any_element()
         };
         main = main.child(div().w(px(sizes.gutter)).flex_none().child(gutter));
     }

@@ -18,7 +18,7 @@ use gpui_kit::{
     rgb, uniform_list,
 };
 
-use super::avatar::{AvatarSpec, render_avatar};
+use super::avatar::{AvatarSpec, render_avatar_tagged};
 use crate::client_view::ClientView;
 use crate::format::{default_avatar_index, initials};
 use crate::parity_probe::FlxExt as _;
@@ -324,12 +324,21 @@ fn render_row(
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.muted_foreground)
                     .flx_text("channel.member-list-group-header", text.to_string())
-                    .child(div().truncate().child(text)),
+                    .child(match text.split_once('—') {
+                        Some((name, count)) => div()
+                            .flex()
+                            .flex_row()
+                            .child(div().flex_none().flx("channel.member-list-group-header.label").child(name.to_owned()))
+                            .child(div().flex_none().flx("channel.member-list-group-header.separator").child("—"))
+                            .child(div().flex_none().flx("channel.member-list-group-header.count").child(count.to_owned()))
+                            .into_any_element(),
+                        None => div().truncate().child(text).into_any_element(),
+                    }),
             )
         }
         Some(MemberRowView::Member(m)) => {
             let offline = m.status.is_offline();
-            let picture = render_avatar(
+            let picture = render_avatar_tagged(
                 AvatarSpec {
                     user_id: m.user_id,
                     avatar_url: m.avatar_url.clone(),
@@ -339,6 +348,7 @@ fn render_row(
                     status_border_bg: Some(theme.background_secondary_lighter),
                 },
                 theme,
+                &["ui.base-avatar.image"],
             );
             let user_id = m.user_id;
             let view = view.clone();
@@ -356,8 +366,18 @@ fn render_row(
                     .hover(|s| s.bg(theme.hover_bg))
                     .when(offline, |d| d.opacity(0.4))
                     .flx("channel.member-list-item.focus-ring-wrapper")
-                    .child(picture)
                     .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .h(px(32.))
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(10.))
+                            .flx("channel.member-list-item.content")
+                            .child(picture)
+                            .child(
                         div()
                             .flex_1()
                             .min_w_0()
@@ -365,6 +385,7 @@ fn render_row(
                             .flex_row()
                             .items_center()
                             .gap_1()
+                            .flx("channel.member-list-item.name-container")
                             .child(
                                 div()
                                     .min_w_0()
@@ -386,6 +407,7 @@ fn render_row(
                                         .child("👑"),
                                 )
                             }),
+                            ),
                     ),
             )
             .on_click(move |ev, window, cx| {

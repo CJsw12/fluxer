@@ -229,6 +229,7 @@ fn channel_start(name: &SharedString, theme: &Theme) -> AnyElement {
                 .bg(theme.border)
                 .text_color(theme.foreground)
                 .text_size(px(36.))
+                .flx("channel.channel-welcome-section.pointer-events-none")
                 .child(glyph),
         )
         .child(
@@ -237,12 +238,17 @@ fn channel_start(name: &SharedString, theme: &Theme) -> AnyElement {
                 .text_size(px(30.))
                 .line_height(px(45.))
                 .font_weight(FontWeight::SEMIBOLD)
+                .flx("channel.channel-welcome-section.heading")
                 .child(l10n::tr_args("Welcome to {channelDisplayName}", &[("channelDisplayName", name.as_ref())])),
         )
-        .child(div().text_color(theme.muted_foreground).text_size(px(18.)).line_height(px(27.)).child(l10n::tr_args(
-            "This is the start of {channelDisplayName}.",
-            &[("channelDisplayName", name.as_ref())],
-        )))
+        .child(
+            div()
+                .text_color(theme.muted_foreground)
+                .text_size(px(18.))
+                .line_height(px(27.))
+                .flx("channel.channel-welcome-section.description")
+                .child(l10n::tr_args("This is the start of {channelDisplayName}.", &[("channelDisplayName", name.as_ref())])),
+        )
         .into_any_element()
 }
 
@@ -294,9 +300,9 @@ fn dm_start(
 /// Date separator (`ChannelDivider`) and/or the red "NEW" divider.
 fn divider(label: Option<SharedString>, new: bool, theme: &Theme) -> AnyElement {
     let line_color = if new { theme.danger } else { gpui_kit::hsla(252. / 360., 0.17, 0.80, 0.15) };
-    let line = move || div().flex_1().h(px(2.)).bg(line_color);
+    let line = move |id: &'static str| div().flex_1().h(px(2.)).bg(line_color).flx(id);
     // `ChannelDivider.container`: 20px tall, 0 1.25rem padding, text padding 0 0.75rem.
-    let mut row = div().flex().flex_row().items_center().mx(px(20.)).h(px(20.)).child(line());
+    let mut row = div().flex().flex_row().items_center().mx(px(20.)).h(px(20.)).child(line("channel.divider.line"));
     if let Some(label) = label {
         row = row
             .child(
@@ -309,7 +315,7 @@ fn divider(label: Option<SharedString>, new: bool, theme: &Theme) -> AnyElement 
                     .flx_text("channel.divider.text", label.to_string())
                     .child(label),
             )
-            .child(line());
+            .child(line("channel.divider.line--2"));
     }
     if new {
         row = row.child(

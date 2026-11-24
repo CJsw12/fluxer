@@ -12,7 +12,7 @@ use gpui_kit::{
     prelude::*, px, rgb, rgba,
 };
 
-use super::avatar::{AvatarSpec, render_avatar};
+use super::avatar::{AvatarSpec, render_avatar, render_avatar_tagged};
 use super::member_list::{status_color, status_label};
 use super::settings::SettingsTab;
 use crate::profile::build_profile_card;
@@ -53,6 +53,12 @@ fn render_control_icon_button(
         "user-panel-settings" => Some("app.user-area.user-area-inner.control-button.settings-click"),
         _ => None,
     };
+    let icon_flx = match id {
+        "user-panel-mute" => Some("app.user-area.user-area-inner.control-icon"),
+        "user-panel-deafen" => Some("app.user-area.user-area-inner.control-icon--4"),
+        "user-panel-settings" => Some("app.user-area.user-area-inner.control-icon--5"),
+        _ => None,
+    };
     let tip_text = label.clone();
     div()
         .id(id)
@@ -80,7 +86,13 @@ fn render_control_icon_button(
                 })
                 .on_click(on_click)
         })
-        .child(Icon::new(icon).with_size(px(20.)).text_color(icon_color))
+        .child(
+            div()
+                .flex_none()
+                .size(px(20.))
+                .when_some(icon_flx, |d, f| d.flx(f))
+                .child(Icon::new(icon).with_size(px(20.)).text_color(icon_color)),
+        )
         .when(hovered, |d| {
             d.child(rail_tooltip::above(tip_text, tooltip_keys, theme))
         })
@@ -99,7 +111,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     };
     let (picture, name) = match &view.user {
         Some(user) => (
-            render_avatar(
+            render_avatar_tagged(
                 AvatarSpec {
                     user_id: user.id,
                     avatar_url: user.avatar_url.clone(),
@@ -109,6 +121,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     status_border_bg: None,
                 },
                 theme,
+                &["ui.base-avatar.image"],
             ),
             user.name.clone(),
         ),
@@ -219,7 +232,14 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                     .flex()
                                     .items_center()
                                     .justify_center()
-                                    .child(super::status_indicator::status_indicator(dot.0, dot_size, dot.1)),
+                                    .child(
+                                        div()
+                                            .size(px(dot_size))
+                                            .flex_none()
+                                            .flx("ui.base-avatar.status-indicator-svg.svg")
+                                            .flx("ui.base-avatar.status-indicator-svg.rect")
+                                            .child(super::status_indicator::status_indicator(dot.0, dot_size, dot.1)),
+                                    ),
                             ),
                         )
                         .child(
@@ -228,6 +248,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 .flex_col()
                                 .flex_1()
                                 .min_w_0()
+                                .flx("app.user-area.user-area-inner.user-info-text")
                                 .child(
                                     div()
                                         .truncate()
@@ -523,12 +544,19 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                 .items_center()
                 .gap(px(3.))
                 .flx("app.floating.user-area-popout.custom-status-row")
-                .child(Icon::new(AppIcon::SmileyRegular).with_size(px(14.)).text_color(secondary))
+                .child(
+                    div()
+                        .size(px(14.))
+                        .flex_none()
+                        .flx("app.floating.user-area-popout.custom-status-placeholder-icon")
+                        .child(Icon::new(AppIcon::SmileyRegular).with_size(px(14.)).text_color(secondary)),
+                )
                 .child(
                     div()
                         .text_size(px(12.))
                         .line_height(px(16.))
                         .text_color(secondary)
+                        .flx("app.floating.user-area-popout.custom-status-placeholder-text")
                         .child(l10n::tr("Set a custom status")),
                 ),
         );
@@ -556,10 +584,17 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
             .line_height(px(16.25))
             .font_weight(FontWeight::MEDIUM)
             .text_color(primary)
+            .flx("app.floating.user-area-popout.action-button.action-label")
             .child(text)
     };
-    let chevron = |color: Hsla| Icon::new(AppIcon::CaretRight).with_size(px(14.)).text_color(color);
-    let divider = || div().mx(px(12.)).h(px(1.)).flex_none().bg(rgb(GROUP_DIVIDER));
+    let chevron = |color: Hsla| {
+        div()
+            .size(px(14.))
+            .flex_none()
+            .flx("app.floating.user-area-popout.action-button.action-chevron")
+            .child(Icon::new(AppIcon::CaretRight).with_size(px(14.)).text_color(color))
+    };
+    let divider = |id: &'static str| div().mx(px(12.)).h(px(1.)).flex_none().bg(rgb(GROUP_DIVIDER)).flx(id);
     let icon_box =
         |child: AnyElement| div().size(px(22.)).flex_none().flex().items_center().justify_center().child(child);
 
@@ -579,7 +614,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                 .child(action_label(status_label(status)))
                 .child(chevron(secondary)),
         )
-        .child(divider())
+        .child(divider("app.floating.user-area-popout.action-divider"))
         .child(
             action_row(
                 "user-area-switch-accounts",
@@ -590,11 +625,17 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                 this.user_area_popout_open = false;
                 this.open_account_switcher(window, cx);
             }))
-            .child(icon_box(Icon::new(AppIcon::UsersThree).with_size(px(16.)).text_color(icon_color).into_any_element()))
+            .child(icon_box(
+                div()
+                    .size(px(16.))
+                    .flx("app.floating.user-area-popout.users-three-icon")
+                    .child(Icon::new(AppIcon::UsersThree).with_size(px(16.)).text_color(icon_color))
+                    .into_any_element(),
+            ))
             .child(action_label(l10n::tr("Switch accounts")))
             .child(chevron(secondary)),
         )
-        .child(divider())
+        .child(divider("app.floating.user-area-popout.action-divider--2"))
         .child(
             action_row("user-area-copy-user-id", "app.floating.user-area-popout.action-button.copy-user-id")
                 .on_hover(hover_submenu(None, cx))
@@ -604,7 +645,11 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                     cx.notify();
                 }))
                 .child(icon_box(
-                    Icon::new(AppIcon::IdentificationBadge).with_size(px(16.)).text_color(icon_color).into_any_element(),
+                    div()
+                        .size(px(16.))
+                        .flx("app.floating.user-area-popout.identification-badge-icon")
+                        .child(Icon::new(AppIcon::IdentificationBadge).with_size(px(16.)).text_color(icon_color))
+                        .into_any_element(),
                 ))
                 .child(action_label(l10n::tr("Copy user ID"))),
         );
@@ -635,7 +680,13 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
             }
             this.select_settings_tab(SettingsTab::Profile, cx);
         }))
-        .child(Icon::new(AppIcon::PencilBold).with_size(px(16.)).text_color(theme.on_fill))
+        .child(
+            div()
+                .size(px(16.))
+                .flex_none()
+                .flx("app.floating.user-area-popout.pencil-icon")
+                .child(Icon::new(AppIcon::PencilBold).with_size(px(16.)).text_color(theme.on_fill)),
+        )
         .child(
             div()
                 .text_size(px(13.))

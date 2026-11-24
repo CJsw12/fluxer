@@ -481,7 +481,7 @@ fn render_notification_settings(
     let default_option = options.next();
     let radio_row = |(opt_val, label, sub): (u8, String, Option<String>)| {
         let selected = level == opt_val;
-        let radio_border = if selected { theme.accent } else { theme.muted_foreground };
+        let radio_border = if selected { theme.brand } else { gpui_kit::Hsla::from(rgba(0xc9c5d326)) };
         context_menu_item(format!("notif-level-{opt_val}"), hover_bg)
             .aria_selected(selected)
             .flx_text("ui.action-menu.context-menu.selectable-menu-item.radio-item", label.clone())
@@ -491,26 +491,57 @@ fn render_notification_settings(
             }))
             .child(
                 div()
+                    .flex_1()
+                    .min_w_0()
                     .flex()
-                    .flex_col()
-                    .child(div().h(px(18.)).text_size(px(13.)).text_color(theme.foreground).child(label))
-                    .children(sub.map(|s| {
-                        div().h(px(17.)).text_size(px(12.)).line_height(px(16.)).text_color(theme.muted_foreground).child(s)
-                    })),
+                    .flex_row()
+                    .flx("ui.action-menu.menu-item-radio.item-label")
+                    .child(
+                        div()
+                            .flex_none()
+                            .flex()
+                            .flex_col()
+                            .flx("ui.action-menu.menu-item-radio.div")
+                            .flx("ui.action-menu.menu-item-radio.span--2")
+                            .child(div().h(px(18.)).text_size(px(13.)).text_color(theme.foreground).child(label))
+                            .children(sub.map(|s| {
+                                div().h(px(17.)).text_size(px(12.)).line_height(px(16.)).text_color(theme.muted_foreground).child(s)
+                            })),
+                    ),
             )
             .child(
                 div()
-                    .size(px(16.))
-                    .rounded_full()
-                    .border_1()
-                    .border_color(radio_border)
+                    .size(px(18.))
+                    .flex_none()
                     .flex()
                     .items_center()
                     .justify_center()
-                    .when(selected, |d| d.child(div().size(px(6.)).rounded_full().bg(theme.accent))),
+                    .flx("ui.action-menu.menu-item-radio.checkbox-indicator")
+                    .child(
+                        div()
+                            .size(px(16.))
+                            .rounded_full()
+                            .border_1()
+                            .border_color(radio_border)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .flx("ui.action-menu.menu-item-radio.div")
+                            .when(selected, |d| {
+                                d.child(
+                                    div()
+                                        .size(px(6.))
+                                        .rounded_full()
+                                        .bg(gpui_kit::Hsla::from(rgb(0xffffff)))
+                                        .flx("ui.action-menu.menu-item-radio.div--2"),
+                                )
+                            }),
+                    ),
             )
     };
-    let separator = || div().mx(px(2.)).my(px(4.)).h(px(1.)).w_full().flex_none().bg(theme.border);
+    let separator = || {
+        div().mx(px(2.)).my(px(4.)).h(px(1.)).w_full().flex_none().bg(gpui_kit::Hsla::from(rgba(0xc9c5d326))).flx("ui.action-menu.context-menu.separator")
+    };
 
     div()
         .p(px(6.))
@@ -522,8 +553,25 @@ fn render_notification_settings(
                     this.toggle_channel_mute(cx);
                     this.close_overlay(window, cx);
                 }))
-                .child(div().h(px(18.)).text_size(px(13.)).text_color(theme.foreground).child(mute_label))
-                .child(Icon::new(AppIcon::CaretRight).with_size(px(14.)).text_color(theme.muted_foreground)),
+                .flx("ui.action-menu.context-menu.sub-menu.trigger")
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .h(px(18.))
+                        .text_size(px(13.))
+                        .text_color(theme.foreground)
+                        .flx("ui.action-menu.context-menu.sub-menu.item-label-container")
+                        .flx("ui.action-menu.context-menu.sub-menu.item-label-text")
+                        .child(mute_label),
+                )
+                .child(
+                    div()
+                        .size(px(14.))
+                        .flex_none()
+                        .flx("ui.action-menu.context-menu.sub-menu.submenu-caret")
+                        .child(Icon::new(AppIcon::CaretRight).with_size(px(14.)).text_color(theme.muted_foreground)),
+                ),
         )
         .child(separator())
         .children(default_option.map(radio_row))
@@ -605,6 +653,7 @@ fn render_threads(
                 .py(px(8.))
                 .border_b_1()
                 .border_color(theme.border)
+                .flx("threads.thread-browser.header")
                 .flex()
                 .flex_row()
                 .items_center()
@@ -615,12 +664,20 @@ fn render_threads(
                         .flex_row()
                         .items_center()
                         .gap_2()
-                        .child(Icon::new(AppIcon::Chats).with_size(px(18.)).text_color(theme.foreground))
+                        .child(
+                            div()
+                                .size(px(20.))
+                                .flex_none()
+                                .flx("threads.thread-browser.header-icon")
+                                .child(Icon::new(AppIcon::Chats).with_size(px(20.)).text_color(theme.foreground)),
+                        )
                         .child(
                             div()
                                 .text_base()
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme.foreground)
+                                .line_height(px(20.))
+                                .flx("threads.thread-browser.title")
                                 .child(l10n::tr("Threads")),
                         ),
                 )
@@ -715,18 +772,27 @@ fn render_threads(
                 .justify_center()
                 .gap_2()
                 .flx("threads.thread-browser.empty")
-                .child(Icon::new(AppIcon::Chats).with_size(px(36.)).text_color(theme.muted_foreground))
+                .child(
+                    div()
+                        .size(px(40.))
+                        .flex_none()
+                        .flx("threads.thread-browser.empty-state.icon")
+                        .child(Icon::new(AppIcon::Chats).with_size(px(40.)).text_color(theme.muted_foreground)),
+                )
                 .child(
                     div()
                         .text_base()
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme.foreground)
+                        .line_height(px(20.))
+                        .flx("threads.thread-browser.empty-state.title")
                         .child(l10n::tr("There are no threads")),
                 )
                 .child(
                     div()
                         .text_sm()
                         .text_color(theme.muted_foreground)
+                        .flx("threads.thread-browser.empty-state.hint")
                         .child(l10n::tr("Stay focused on a conversation with a thread, a temporary text channel.")),
                 )
                 .into_any_element()
@@ -757,12 +823,20 @@ fn render_pins(
                 .flex_row()
                 .items_center()
                 .gap_2()
-                .child(Icon::new(AppIcon::PushPin).with_size(px(18.)).text_color(theme.foreground))
+                .child(
+                    div()
+                        .size(px(24.))
+                        .flex_none()
+                        .flx("channel.channel-pins-popout.icon-large")
+                        .child(Icon::new(AppIcon::PushPin).with_size(px(24.)).text_color(theme.foreground)),
+                )
                 .child(
                     div()
                         .text_base()
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme.foreground)
+                        .line_height(px(20.))
+                        .flx("channel.channel-pins-popout.title")
                         .child(l10n::tr("Pinned messages")),
                 ),
         )
@@ -1108,6 +1182,7 @@ fn render_inbox(
                 .py_2()
                 .border_r_1()
                 .border_color(theme.border)
+                .flx("messaging.inbox-popout.sidebar")
                 .flex()
                 .flex_col()
                 .items_center()
@@ -1134,9 +1209,19 @@ fn render_inbox(
                             tr_label,
                         )
                         .child(
-                            Icon::new(icon)
-                                .with_size(px(18.))
-                                .text_color(if active { theme.foreground } else { theme.muted_foreground }),
+                            div()
+                                .size(px(16.))
+                                .flex_none()
+                                .flx(match t {
+                                    InboxTab::Unread => "messaging.inbox-popout.icon-small",
+                                    InboxTab::Bookmarks => "messaging.inbox-popout.icon-small--2",
+                                    InboxTab::Mentions => "messaging.inbox-popout.icon-small--3",
+                                })
+                                .child(
+                                    Icon::new(icon)
+                                        .with_size(px(16.))
+                                        .text_color(if active { theme.foreground } else { theme.muted_foreground }),
+                                ),
                         )
                         .on_click(cx.listener(move |this, _, _, cx| this.set_inbox_popout_tab(t, cx)))
                 })),
@@ -1193,15 +1278,41 @@ fn render_inbox(
 
 fn render_composer_plus(has_text: bool, theme: &Theme, hover_bg: gpui_kit::Hsla, cx: &mut Context<ClientView>) -> AnyElement {
     let item_row = |id: &'static str, icon: AppIcon, label: String, hint: Option<AnyElement>| {
+        let has_hint = hint.is_some();
         context_menu_item(id.to_owned(), hover_bg)
             .child(
                 div()
+                    .flex_1()
+                    .min_w_0()
                     .flex()
                     .flex_col()
-                    .child(div().h(px(18.)).text_color(theme.foreground).child(label.clone()))
-                    .children(hint),
+                    .when(id != "composer-menu-customize", |d| d.flx("ui.action-menu.context-menu.menu-item.item-label"))
+                    .when(id == "composer-menu-customize", |d| {
+                        d.flx("ui.action-menu.context-menu.sub-menu.item-label-container")
+                            .flx("ui.action-menu.context-menu.sub-menu.item-label-text")
+                    })
+                    .child(
+                        div()
+                            .h(px(18.))
+                            .text_color(theme.foreground)
+                            .when(has_hint, |d| d.flx("ui.action-menu.context-menu.menu-item.item-label-text"))
+                            .child(label.clone()),
+                    )
+                    .children(hint.map(|h| div().flx("ui.action-menu.context-menu.menu-item.item-hint").child(h))),
             )
-            .child(Icon::new(icon).with_size(px(18.)).text_color(theme.muted_foreground))
+            .child(if id == "composer-menu-customize" {
+                div()
+                    .size(px(14.))
+                    .flex_none()
+                    .flx("ui.action-menu.context-menu.sub-menu.submenu-caret")
+                    .child(Icon::new(icon).with_size(px(14.)).text_color(theme.muted_foreground))
+            } else {
+                div()
+                    .size(px(18.))
+                    .flex_none()
+                    .when(icon == AppIcon::Chats, |d| d.flx("ui.action-menu.context-menu-icons.create-thread-icon.chats-icon"))
+                    .child(Icon::new(icon).with_size(px(18.)).text_color(theme.muted_foreground))
+            })
     };
     let upload_lbl = l10n::tr("Upload file");
     let as_file_lbl = l10n::tr("Upload your message as a file");

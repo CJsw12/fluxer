@@ -40,7 +40,17 @@ fn control_button(
         .cursor_pointer()
         .hover(move |s| s.bg(hover_bg).text_color(hover_fg))
         .window_control_area(area)
-        .child(Icon::new(icon).with_size(px(CONTROL_ICON)));
+        .child(
+            div()
+                .flex_none()
+                .size(px(CONTROL_ICON))
+                .flx(match area {
+                    WindowControlArea::Min => "app.native-titlebar.minus-icon",
+                    WindowControlArea::Max => "app.native-titlebar.toggle-maximize-icon",
+                    _ => "app.native-titlebar.x-icon",
+                })
+                .child(Icon::new(icon).with_size(px(CONTROL_ICON))),
+        );
     #[cfg(not(target_os = "windows"))]
     let d = d.on_click(move |_, window, _| match area {
         WindowControlArea::Min => window.minimize_window(),

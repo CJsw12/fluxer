@@ -57,8 +57,46 @@
     "more": {
       "scenes": "tools/parity_lab/spec_scenes_more.json",
       "spec_dir": "target/parity-tmp/more/spec",
-      "max": {},
-      "ignore": []
+      "max": {
+        "dm-conversation": {
+          "deltas": 77,
+          "missing": 95
+        },
+        "dm-home": {
+          "deltas": 6,
+          "missing": 40
+        },
+        "explore": {
+          "deltas": 0,
+          "missing": 36
+        },
+        "settings-appearance": {
+          "deltas": 14,
+          "missing": 48
+        },
+        "settings-keybinds": {
+          "deltas": 3,
+          "missing": 67
+        },
+        "settings-language": {
+          "deltas": 9,
+          "missing": 62
+        },
+        "settings-my-account": {
+          "deltas": 16,
+          "missing": 61
+        },
+        "settings-notifications": {
+          "deltas": 9,
+          "missing": 52
+        },
+        "settings-voice-video": {
+          "deltas": 13,
+          "missing": 67
+        }
+      },
+      "ignore": [],
+      "updated": "2026-11-25"
     }
   }
 }

@@ -101,6 +101,9 @@ def main(argv: list[str]) -> int:
     proc = launch_rust_same_desktop(Path(exe)) if exe else None
     checks: list[dict] = []
     joined_voice = False
+    # The voice step force-mutes before joining (no live audio); remember the user's state so
+    # it can be restored afterwards (docs/PARITY_LAB.md 10.5: mic stays on between runs).
+    was_muted = "Unmute microphone" in json.dumps(rp.send("probe_inspect").get("a11y", ""))
 
     try:
         rp.send("probe_resize", w=1280.0, h=800.0)
@@ -205,6 +208,8 @@ def main(argv: list[str]) -> int:
             try:
                 rp.deep_link("fluxer://scene/voice-leave")
                 time.sleep(0.8)
+                rp.deep_link(f"fluxer://scene/voice-mute/{'on' if was_muted else 'off'}")
+                time.sleep(0.3)
                 rp.deep_link(f"fluxer://channels/{GUILD}/{CHANNEL}")
                 time.sleep(0.5)
             except Exception:

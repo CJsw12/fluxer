@@ -2695,6 +2695,16 @@ impl ClientView {
             MessageAction::SuppressEmbeds => {
                 self.backend.toggle_suppress_embeds(channel_id, message_id);
             }
+            MessageAction::More => self.open_message_menu(target.clone(), window, cx),
+            // The items below have no Rust feature yet; each only leaves the menu closed.
+            MessageAction::Forward => {} // TODO(backlog): forward modal
+            MessageAction::CreateThread => {} // TODO(backlog): create a thread from a message
+            MessageAction::Translate => {} // TODO(backlog): translation submenu
+            MessageAction::Pin => {} // TODO(backlog): pin/unpin message
+            MessageAction::Bookmark => {} // TODO(backlog): bookmark message
+            MessageAction::MarkUnread => {} // TODO(backlog): mark as unread
+            MessageAction::CopyLink => {} // TODO(backlog): copy message link (needs the web origin)
+            MessageAction::Speak => {} // TODO(backlog): text-to-speech
         }
     }
 

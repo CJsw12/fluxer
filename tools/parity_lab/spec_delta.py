@@ -433,6 +433,10 @@ def run_scenes(argv: list[str]) -> int:
                     r = rp.send("probe_click", flx=act["click"], **({"index": act["index"]} if "index" in act else {}))
                     if not r.get("ok", False):
                         raise RuntimeError(f"rust click failed: {act['click']}: {r}")
+                elif "hover" in act:
+                    r = rp.send("probe_hover", flx=act["hover"], **({"index": act["index"]} if "index" in act else {}))
+                    if not r.get("ok", False):
+                        raise RuntimeError(f"rust hover failed: {act['hover']}: {r}")
                 elif "key" in act:
                     rp.send("probe_key", keystroke=act["key"])
                 elif "link" in act:

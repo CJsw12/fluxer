@@ -51,7 +51,8 @@ function pageSpec(props) {
 		const flx = el.getAttribute('data-flx');
 		const cs = getComputedStyle(el);
 		const r = el.getBoundingClientRect();
-		const rendered = el.getClientRects().length > 0 && cs.display !== 'none';
+		// scenes with `drop_hidden` (hover bars exist hidden on every message) skip visibility:hidden subtrees
+		const rendered = el.getClientRects().length > 0 && cs.display !== 'none' && !(window.__dropHidden && cs.visibility === 'hidden');
 		let idx = null;
 		if (rendered) {
 			idx = counts.get(flx) ?? 0;
@@ -363,11 +364,19 @@ async function runScenes() {
 			for (const act of sc.official ?? []) {
 				if (act.click || act.context) {
 					const sel = act.click ?? act.context;
-					const label = await cdp.eval(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); return e ? [e.getAttribute('aria-label'), e.innerText, e.getAttribute('data-flx')].filter(Boolean).join(' ') : null; })()`);
+					const nth = Number(act.index ?? 0);
+					const label = await cdp.eval(`(() => { const e = document.querySelectorAll(${JSON.stringify(sel)})[${nth}]; return e ? [e.getAttribute('aria-label'), e.innerText, e.getAttribute('data-flx')].filter(Boolean).join(' ') : null; })()`);
 					if (label === null) throw new Error(`target not found: ${sel}`);
 					if (DENY.test(label)) throw new Error(`write-guard deny label: ${label.slice(0, 60)}`);
-					const ok = await realClickExpr(`document.querySelector(${JSON.stringify(sel)})`, act.context ? 'right' : 'left');
+					const ok = await realClickExpr(`document.querySelectorAll(${JSON.stringify(sel)})[${nth}]`, act.context ? 'right' : 'left');
 					if (!ok) throw new Error(`click failed: ${sel}`);
+				} else if (act.hover) {
+					// real CDP mouseMoved to the element centre (kept through capture); `index` picks the nth match
+					const pt = await cdp.eval(`(() => { const e = document.querySelectorAll(${JSON.stringify(act.hover)})[${Number(act.index ?? 0)}];
+					  if (!e) return null; e.scrollIntoView({block: 'nearest'}); const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+					if (!pt) throw new Error(`hover target not found: ${act.hover}`);
+					await cdp.send('Input.dispatchMouseEvent', {type: 'mouseMoved', x: pt[0] - 1, y: pt[1] - 1});
+					await cdp.send('Input.dispatchMouseEvent', {type: 'mouseMoved', x: pt[0], y: pt[1]});
 				} else if (act.click_text) {
 					// click the element matching `sel` whose trimmed first line equals `click_text` (same deny list)
 					if (DENY.test(act.click_text)) throw new Error(`write-guard deny label: ${act.click_text}`);
@@ -381,6 +390,7 @@ async function runScenes() {
 			}
 			if (sc.expect_flx && !(await waitFor(shown(sc.expect_flx), 4000))) throw new Error(`expect_flx not shown: ${sc.expect_flx}`);
 			await sleep(500); // let open animations settle
+			await cdp.eval(`window.__dropHidden = ${sc.drop_hidden ? 'true' : 'false'}`);
 			const spec = await capture([]);
 			spec.scene = sc.slug;
 			rec.elements = spec.elements.length;
@@ -397,6 +407,7 @@ async function runScenes() {
 				await sleep(700);
 			} catch {}
 		}
+		if ((sc.official ?? []).some((a) => a.hover)) await cdp.send('Input.dispatchMouseEvent', {type: 'mouseMoved', x: 640, y: 4}).catch(() => {});
 		// restore: Escape until the state is gone, then verify the base route
 		const stillOpen = () => (sc.expect_flx ? cdp.eval(shown(sc.expect_flx)) : false);
 		for (let k = 0; k < 3 && (await stillOpen()); k++) {

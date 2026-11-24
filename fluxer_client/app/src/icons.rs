@@ -92,6 +92,10 @@ pub enum AppIcon {
     UserPlusFill,
     SmileyRegular,
     Snowflake,
+    ArrowBendUpRight,
+    BookmarkSimple,
+    EnvelopeOpen,
+    LinkBold,
 }
 
 impl AppIcon {
@@ -173,6 +177,10 @@ impl AppIcon {
         Self::UserPlusFill,
         Self::SmileyRegular,
         Self::Snowflake,
+        Self::ArrowBendUpRight,
+        Self::BookmarkSimple,
+        Self::EnvelopeOpen,
+        Self::LinkBold,
     ];
 
     pub const fn asset_path(self) -> &'static str {
@@ -254,6 +262,10 @@ impl AppIcon {
             Self::UserPlusFill => "icons/phosphor/user-plus-fill.svg",
             Self::SmileyRegular => "icons/phosphor/smiley-regular.svg",
             Self::Snowflake => "icons/phosphor/snowflake.svg",
+            Self::ArrowBendUpRight => "icons/phosphor/arrow-bend-up-right.svg",
+            Self::BookmarkSimple => "icons/phosphor/bookmark-simple.svg",
+            Self::EnvelopeOpen => "icons/phosphor/envelope-open.svg",
+            Self::LinkBold => "icons/phosphor/link-bold.svg",
         }
     }
 
@@ -336,6 +348,10 @@ impl AppIcon {
             Self::UserPlusFill => include_bytes!("../assets/icons/user-plus-fill.svg"),
             Self::SmileyRegular => include_bytes!("../assets/icons/smiley-regular.svg"),
             Self::Snowflake => include_bytes!("../assets/icons/snowflake.svg"),
+            Self::ArrowBendUpRight => include_bytes!("../assets/icons/arrow-bend-up-right.svg"),
+            Self::BookmarkSimple => include_bytes!("../assets/icons/bookmark-simple.svg"),
+            Self::EnvelopeOpen => include_bytes!("../assets/icons/envelope-open.svg"),
+            Self::LinkBold => include_bytes!("../assets/icons/link-bold.svg"),
         }
     }
 }

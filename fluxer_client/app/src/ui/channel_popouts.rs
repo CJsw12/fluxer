@@ -2,7 +2,7 @@
 //! `PinnedMessages`, `Inbox`, and composer `+` action menu).
 
 use fluxer_client_core::state::{
-    ClientState, Message, Snowflake, message_notifications,
+    ClientState, Message, PartialEmoji, Snowflake, message_notifications,
 };
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
@@ -19,6 +19,7 @@ use crate::client_view::ClientView;
 use crate::icons::AppIcon;
 use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
+use crate::ui::message_actions::{self, ActionTarget, MessageAction};
 use crate::ui::overlay::Overlay;
 use crate::ui::{attachments, composer_text, l10n};
 
@@ -108,6 +109,10 @@ pub enum ChannelPopoutKind {
         tab: InboxTab,
     },
     ComposerPlusMenu,
+    /// The message "More" menu, opened from the hover bar's More button.
+    MessageMenu {
+        target: ActionTarget,
+    },
 }
 
 pub struct ChannelPopout {
@@ -123,6 +128,7 @@ impl ChannelPopoutKind {
             Self::PinnedMessages { .. } => "pinned-messages",
             Self::Inbox { .. } => "inbox",
             Self::ComposerPlusMenu => "composer-plus-menu",
+            Self::MessageMenu { .. } => "message-menu",
         }
     }
 }
@@ -283,6 +289,21 @@ impl ClientView {
         cx.notify();
     }
 
+    /// Opens the message menu anchored to the hover bar's More button.
+    pub(crate) fn open_message_menu(&mut self, target: ActionTarget, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.toggle_channel_popout_key("message-menu", window, cx) {
+            return;
+        }
+        let anchor = match trigger_rect(message_actions::MORE_TRIGGER) {
+            Some(b) => gpui_kit::point(b.left(), b.top()),
+            None => gpui_kit::point(px(0.), px(0.)),
+        };
+        self.prepare_overlay_replace(cx);
+        self.autocomplete = None;
+        self.overlay = Overlay::ChannelPopout(ChannelPopout { kind: ChannelPopoutKind::MessageMenu { target }, anchor });
+        cx.notify();
+    }
+
     pub(crate) fn set_threads_popout_tab(&mut self, tab: ThreadsTab, cx: &mut Context<Self>) {
         if let Overlay::ChannelPopout(pop) = &mut self.overlay
             && let ChannelPopoutKind::Threads { tab: active, .. } = &mut pop.kind
@@ -374,6 +395,12 @@ pub fn render(
             "ui.action-menu.context-menu.popup",
             render_composer_plus(!composer_text::wire_text(view.composer.read(cx)).trim().is_empty(), theme, hover_bg, cx),
         ),
+        ChannelPopoutKind::MessageMenu { target } => (
+            208.,
+            message_menu_height(target),
+            "ui.action-menu.context-menu.popup",
+            render_message_menu(target, theme, hover_bg, cx),
+        ),
     };
 
     let vw = f32::from(viewport.width);
@@ -386,6 +413,11 @@ pub fn render(
     // from the trigger's left edge with a 4px gap.
     let (anchor_corner, left, top) = match &pop.kind {
         ChannelPopoutKind::Inbox { .. } => (Anchor::TopLeft, (vw - width - 16.).max(16.), 52.0_f32.min((vh - height - 12.).max(44.))),
+        // The message menu opens left of the More button (8px gap), top-aligned to it and
+        // pushed up to stay 12px inside the window.
+        ChannelPopoutKind::MessageMenu { .. } => {
+            (Anchor::TopRight, (ax - 8.).max(width + 16.), ay.min(vh - height - 12.).max(12.))
+        }
         ChannelPopoutKind::ComposerPlusMenu => (Anchor::BottomLeft, ax.clamp(16., (vw - width - 16.).max(16.)), ay - 4.),
         _ => (Anchor::TopRight, ax.clamp(width + 16., vw - 16.), (ay + 8.).clamp(44., (vh - height - 16.).max(44.))),
     };
@@ -427,6 +459,149 @@ pub fn render(
         .left_0()
         .child(anchored().position(gpui_kit::point(px(left), px(top))).anchor(anchor_corner).child(panel))
         .into_any_element()
+}
+
+/// Height of the message menu popup: 1px border + 6px padding each side, 52.5px
+/// quick-reaction section, 32px items, 9px between groups (4px margins + 1px line).
+pub(crate) fn message_menu_height(target: &ActionTarget) -> f32 {
+    let groups = message_actions::menu_groups(target);
+    let items: f32 = groups
+        .iter()
+        .flatten()
+        .map(|item| match item {
+            message_actions::MenuItem::QuickReactions => 52.5,
+            message_actions::MenuItem::Action(_) => 32.,
+        })
+        .sum();
+    14. + items + 9. * groups.len().saturating_sub(1) as f32
+}
+
+/// The message "More" menu (`MessageContextMenu.tsx`). Each item calls
+/// `ClientView::message_action` with its own [`MessageAction`]; items without a
+/// Rust feature yet only close the menu there.
+fn render_message_menu(
+    target: &ActionTarget,
+    theme: &Theme,
+    hover_bg: gpui_kit::Hsla,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
+    let danger: gpui_kit::Hsla = rgb(0xe8605f).into();
+    let separator = || {
+        div().mx(px(2.)).my(px(4.)).h(px(1.)).w(px(190.)).flex_none().bg(gpui_kit::Hsla::from(rgba(0xc9c5d326))).flx("ui.action-menu.context-menu.separator")
+    };
+    let mut body = div().flex().flex_col().flx("ui.action-menu.context-menu.menu-scroller");
+    for (gi, group) in message_actions::menu_groups(target).into_iter().enumerate() {
+        if gi > 0 {
+            body = body.child(separator());
+        }
+        let mut col = div().flex().flex_col().flx("ui.action-menu.context-menu.menu-group.group");
+        for item in group {
+            col = col.child(match item {
+                message_actions::MenuItem::QuickReactions => {
+                    let key = target.message_id.0;
+                    let (channel_id, message_id) = (target.channel_id, target.message_id);
+                    div()
+                        .px(px(6.))
+                        .pt(px(4.))
+                        .pb(px(6.))
+                        .flex()
+                        .flex_row()
+                        .gap(px(4.))
+                        .flx("ui.action-menu.message-context-menu.render-reactions-header.aria-menu-section")
+                        .children(message_actions::MENU_QUICK_EMOJI.iter().map(|name| {
+                            let emoji = PartialEmoji { id: None, name: (*name).to_owned(), animated: false };
+                            div()
+                                .id(SharedString::from(format!("msg-menu-react-{key}-{name}")))
+                                .role(Role::Button)
+                                .flex_1()
+                                .h(px(42.5))
+                                .rounded(px(6.))
+                                .bg(gpui_kit::Hsla::from(rgba(0xffffff1a)))
+                                .cursor_pointer()
+                                .hover(move |s| s.bg(hover_bg))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .flx("ui.action-menu.message-context-menu.quick-reaction-context-menu-item.aria-menu-item")
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.close_overlay(window, cx);
+                                    this.pick_reaction(channel_id, message_id, emoji.clone(), cx);
+                                }))
+                                .child(
+                                    div()
+                                        .size(px(24.))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .text_size(px(20.))
+                                        .line_height(px(24.))
+                                        .flx("ui.action-menu.message-context-menu.quick-reaction-context-menu-item.quick-reaction-emoji")
+                                        .child(*name),
+                                )
+                        }))
+                        .into_any_element()
+                }
+                message_actions::MenuItem::Action(action) => {
+                    let label = message_actions::tooltip(action, target);
+                    let color = if action == MessageAction::Delete { danger } else { theme.foreground };
+                    let icon_color = if action == MessageAction::Delete { danger } else { theme.muted_foreground };
+                    let t = target.clone();
+                    let row = context_menu_item(format!("msg-menu-{action:?}"), hover_bg)
+                        .text_color(color)
+                        .on_click(cx.listener(move |this, _, window, cx| {
+                            this.close_overlay(window, cx);
+                            this.message_action(action, &t, window, cx);
+                        }));
+                    if action == MessageAction::React {
+                        // A submenu trigger (emoji picker) in the official app.
+                        row.flx_text("ui.action-menu.context-menu.sub-menu.trigger", label.clone())
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .h(px(18.))
+                                    .flx("ui.action-menu.context-menu.sub-menu.item-label-container")
+                                    .flx("ui.action-menu.context-menu.sub-menu.item-label-text")
+                                    .child(label),
+                            )
+                            .child(
+                                div()
+                                    .size(px(14.))
+                                    .flex_none()
+                                    .flx("ui.action-menu.context-menu.sub-menu.submenu-caret")
+                                    .child(Icon::new(AppIcon::CaretRight).with_size(px(14.)).text_color(theme.muted_foreground)),
+                            )
+                            .into_any_element()
+                    } else {
+                        row.flx_text("ui.action-menu.context-menu.menu-item.item", label.clone())
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .h(px(18.))
+                                    .flx("ui.action-menu.context-menu.menu-item.item-label")
+                                    .child(label),
+                            )
+                            .child(
+                                div()
+                                    .size(px(18.))
+                                    .flex_none()
+                                    .flx("ui.action-menu.context-menu.menu-item.item-icon")
+                                    .child(
+                                        div()
+                                            .size(px(18.))
+                                            .flx(message_actions::menu_icon_flx(action))
+                                            .child(Icon::new(message_actions::icon(action, target)).with_size(px(18.)).text_color(icon_color)),
+                                    ),
+                            )
+                            .into_any_element()
+                    }
+                }
+            });
+        }
+        body = body.child(col);
+    }
+    div().p(px(6.)).child(body).into_any_element()
 }
 
 fn channel_notification_state(state: &ClientState, channel_id: Snowflake) -> (bool, u8, i8) {

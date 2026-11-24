@@ -1,6 +1,6 @@
 //! The action bar shown over a hovered message (`MessageActionBar.tsx`):
-//! react, reply, edit (own), delete (own or Manage Messages, confirmed),
-//! copy text, copy id. Buttons emit [`MessageAction`]s through a callback;
+//! quick emoji, react, edit (own) or reply, forward, create thread, and More,
+//! which opens the message menu (`MessageContextMenu.tsx`: copy, delete, id). Buttons emit [`MessageAction`]s through a callback;
 //! the copy actions are done by [`copy_to_clipboard`]. React opens
 //! [`quick_reactions`] in place of the bar (there is no emoji picker yet).
 
@@ -12,15 +12,17 @@ use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::button::ButtonVariant;
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
-    AnyElement, App, ClipboardItem, ElementId, Hsla, IntoElement, Pixels, Point, Role, SharedString, Window, div,
+    AnyElement, App, BoxShadow, ClipboardItem, ElementId, Hsla, IntoElement, Pixels, Point, Role, SharedString, Window, div,
     prelude::*, px, rgb, rgba,
 };
 
 use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
+use crate::ui::channel_popouts::track_trigger;
 use crate::ui::l10n;
 
-/// What a button of the action bar asks for.
+/// What a button of the action bar or an item of its "More" menu asks for.
+/// Every button/item has its own variant, so each gets its own handler.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MessageAction {
     /// Open the reaction choices ([`quick_reactions`]).
@@ -39,6 +41,16 @@ pub enum MessageAction {
     CopyId,
     /// Toggle SUPPRESS_EMBEDS (`MessageCommands.toggleSuppressEmbeds`).
     SuppressEmbeds,
+    /// Open the "More" menu ([`menu_groups`]) of the hovered message.
+    More,
+    Forward,
+    CreateThread,
+    Translate,
+    Pin,
+    Bookmark,
+    MarkUnread,
+    CopyLink,
+    Speak,
 }
 
 /// The message the bar acts on.
@@ -62,6 +74,10 @@ pub struct ActionTarget {
     pub can_suppress_embeds: bool,
     /// SUPPRESS_EMBEDS is set: the button offers to show them again.
     pub embeds_suppressed: bool,
+    /// Manage Messages in the channel (`canPinMessage`).
+    pub can_pin: bool,
+    /// Guild channel (threads are not offered in DMs).
+    pub can_create_thread: bool,
 }
 
 impl ActionTarget {
@@ -85,32 +101,92 @@ impl ActionTarget {
             content: message.content.clone().into(),
             can_suppress_embeds: has_embeds && (own || (manage && !in_dm)),
             embeds_suppressed,
+            can_pin: manage,
+            can_create_thread: !in_dm,
         }
     }
 }
 
-/// The buttons offered for `target`, in bar order.
-pub fn available_actions(target: &ActionTarget) -> Vec<MessageAction> {
+/// The inline hover-bar buttons for `target`, in bar order (after the quick
+/// emoji): Add Reaction, Edit (own) or Reply, Forward, Create Thread, More.
+/// A failed local message gets Retry and Delete instead.
+pub fn bar_actions(target: &ActionTarget) -> Vec<MessageAction> {
     let mut actions = Vec::new();
     if target.sent {
-        actions.extend([MessageAction::React, MessageAction::Reply]);
-        if target.own {
-            actions.push(MessageAction::Edit);
+        actions.push(MessageAction::React);
+        actions.push(if target.own { MessageAction::Edit } else { MessageAction::Reply });
+        actions.push(MessageAction::Forward);
+        if target.can_create_thread {
+            actions.push(MessageAction::CreateThread);
         }
-    } else if target.can_retry {
-        actions.push(MessageAction::Retry);
-    }
-    if target.sent && target.can_suppress_embeds {
-        actions.push(MessageAction::SuppressEmbeds);
-    }
-    if !target.content.is_empty() {
-        actions.push(MessageAction::CopyText);
-    }
-    if target.sent {
-        actions.push(MessageAction::CopyId);
-    }
-    if target.can_delete || !target.sent {
+        actions.push(MessageAction::More);
+    } else {
+        if target.can_retry {
+            actions.push(MessageAction::Retry);
+        }
         actions.push(MessageAction::Delete);
+    }
+    actions
+}
+
+/// One row of the "More" menu: the quick-reaction header, or an action item.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MenuItem {
+    QuickReactions,
+    Action(MessageAction),
+}
+
+/// The "More" menu of a sent message (`MessageContextMenu.tsx`): groups in
+/// order, separators between them. Empty for unsent messages.
+pub fn menu_groups(target: &ActionTarget) -> Vec<Vec<MenuItem>> {
+    use MessageAction as A;
+    if !target.sent {
+        return Vec::new();
+    }
+    let has_text = !target.content.is_empty();
+    // "Add reaction" is a submenu trigger under the quick-reaction row; Translate has its own group.
+    let reactions = vec![MenuItem::QuickReactions, MenuItem::Action(A::React)];
+    let translate: Vec<MessageAction> = if has_text { vec![A::Translate] } else { Vec::new() };
+    let mut interact = Vec::new();
+    if target.own {
+        interact.push(A::Edit);
+    }
+    interact.extend([A::Reply, A::Forward]);
+    if target.can_create_thread {
+        interact.push(A::CreateThread);
+    }
+    let mut utility = Vec::new();
+    if has_text {
+        utility.push(A::CopyText);
+    }
+    if target.can_pin {
+        utility.push(A::Pin);
+    }
+    utility.extend([A::Bookmark, A::MarkUnread, A::CopyLink]);
+    if has_text {
+        utility.push(A::Speak);
+    }
+    if target.can_suppress_embeds {
+        utility.push(A::SuppressEmbeds);
+    }
+    let danger: Vec<MessageAction> = if target.can_delete { vec![A::Delete] } else { Vec::new() };
+    let to_items = |v: Vec<MessageAction>| v.into_iter().map(MenuItem::Action).collect::<Vec<_>>();
+    [reactions, to_items(translate), to_items(interact), to_items(utility), to_items(danger), vec![MenuItem::Action(A::CopyId)]]
+        .into_iter()
+        .filter(|g| !g.is_empty())
+        .collect()
+}
+
+/// Every action offered for `target`, bar first, then the menu.
+#[cfg(test)]
+pub fn available_actions(target: &ActionTarget) -> Vec<MessageAction> {
+    let mut actions = bar_actions(target);
+    for item in menu_groups(target).into_iter().flatten() {
+        if let MenuItem::Action(a) = item
+            && !actions.contains(&a)
+        {
+            actions.push(a);
+        }
     }
     actions
 }
@@ -127,20 +203,64 @@ pub fn copy_to_clipboard(action: MessageAction, target: &ActionTarget, cx: &mut 
     true
 }
 
-/// The floating bar of icon buttons. Place it with [`with_hover_actions`].
+/// Emoji of the three quick-reaction buttons of the bar (`useQuickReactionEmojis`
+/// without history: :grinning:, :smiley:, :thumbsup:).
+pub const BAR_QUICK_EMOJI: [&str; 3] = ["\u{1F600}", "\u{1F603}", "\u{1F44D}"];
+/// Emoji of the quick-reaction row of the menu (the bar's three plus :no_mouth:).
+pub const MENU_QUICK_EMOJI: [&str; 4] = ["\u{1F600}", "\u{1F603}", "\u{1F44D}", "\u{1F636}"];
+
+/// Trigger id under which the hovered row's More button records its bounds
+/// (only one bar exists at a time), so the menu anchors to it.
+pub const MORE_TRIGGER: &str = "message-more-btn";
+
+/// The floating bar of buttons (`MessageActionBar.tsx`): the quick-reaction
+/// emoji, then one 28px slot per action with a 20px icon. Place it with
+/// [`with_hover_actions`].
 pub fn action_bar(
     target: &ActionTarget,
     theme: &Theme,
+    on_react: impl Fn(PartialEmoji, &mut Window, &mut App) + 'static,
     on_action: impl Fn(MessageAction, &mut Window, &mut App) + 'static,
 ) -> AnyElement {
     let on_action = Rc::new(on_action);
+    let on_react = Rc::new(on_react);
     let key = target.message_id.0;
     let dark = theme.background.l < 0.5;
     let bar_bg: Hsla = if dark { rgb(0x2a2730).into() } else { theme.background };
     let bar_border: Hsla = if dark { rgba(0xc9c5d326).into() } else { theme.border };
     let hover_bg = theme.hover_bg;
     let icon_color = theme.muted_foreground;
-    let buttons = available_actions(target).into_iter().map(|action| {
+    let quick_names: &[&str] = if target.sent { &BAR_QUICK_EMOJI } else { &[] };
+    let quick = quick_names.iter().map(|name| {
+        let on_react = on_react.clone();
+        let emoji = PartialEmoji { id: None, name: (*name).to_owned(), animated: false };
+        div()
+            .id(SharedString::from(format!("msg-quick-{key}-{name}")))
+            .role(Role::Button)
+            .aria_label(format!("React with {name}"))
+            .size(px(28.))
+            .rounded(px(6.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .cursor_pointer()
+            .hover(move |s| s.bg(hover_bg))
+            .flx("channel.message-action-bar.button.click")
+            .on_click(move |_, window, cx| on_react(emoji.clone(), window, cx))
+            .child(
+                div()
+                    .size(px(20.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .text_size(px(17.))
+                    .line_height(px(20.))
+                    .flx("channel.message-action-bar.emoji-image")
+                    .child(*name),
+            )
+            .into_any_element()
+    });
+    let buttons = bar_actions(target).into_iter().map(|action| {
         let on_action = on_action.clone();
         let id = SharedString::from(format!("msg-action-{key}-{action:?}"));
         let label = tooltip(action, target);
@@ -149,13 +269,14 @@ pub fn action_bar(
             .role(Role::Button)
             .aria_label(label)
             .size(px(28.))
-            .rounded(px(4.))
+            .rounded(px(6.))
             .flex()
             .items_center()
             .justify_center()
             .cursor_pointer()
             .hover(move |s| s.bg(hover_bg))
             .flx("channel.message-action-bar.message-action-bar-button.button.click")
+            .when(action == MessageAction::More, |d| d.child(track_trigger(MORE_TRIGGER)))
             .on_click(move |event, window, cx| {
                 let action = if action == MessageAction::Delete && event.modifiers().shift {
                     MessageAction::DeleteNow
@@ -167,6 +288,7 @@ pub fn action_bar(
             .child(
                 div()
                     .flx("channel.message-action-bar.message-action-bar-button.action-bar-icon")
+                    .when_some(bar_icon_flx(action), |d, id| d.flx(id))
                     .flex()
                     .items_center()
                     .justify_center()
@@ -179,33 +301,51 @@ pub fn action_bar(
         .flex()
         .flex_row()
         .items_center()
-        .p(px(3.))
+        .p(px(2.))
         .rounded(px(8.))
         .border_1()
         .border_color(bar_border)
         .bg(bar_bg)
-        .shadow_md()
+        .shadow(vec![BoxShadow {
+            color: rgba(0x0000002e).into(),
+            offset: gpui_kit::point(px(0.), px(6.)),
+            blur_radius: px(14.),
+            spread_radius: px(0.),
+            inset: false,
+        }])
         .flx("channel.message-action-bar.message-action-bar-core.action-bar")
+        .children(quick)
         .children(buttons)
         .into_any_element()
 }
 
-fn tooltip(action: MessageAction, target: &ActionTarget) -> String {
+/// Tooltip / accessible label of an action.
+pub fn tooltip(action: MessageAction, target: &ActionTarget) -> String {
     match action {
         MessageAction::SuppressEmbeds if target.embeds_suppressed => l10n::tr("Unsuppress embeds"),
         MessageAction::SuppressEmbeds => l10n::tr("Suppress embeds"),
         MessageAction::React => l10n::tr("Add reaction"),
         MessageAction::Reply => l10n::tr("Reply"),
-        MessageAction::Edit => l10n::tr("Edit"),
+        MessageAction::Edit => l10n::tr("Edit message"),
         MessageAction::Retry => l10n::tr("Try again"),
-        MessageAction::Delete | MessageAction::DeleteNow => l10n::tr("Delete"),
+        MessageAction::Delete | MessageAction::DeleteNow => l10n::tr("Delete message"),
         MessageAction::CopyText => l10n::tr("Copy text"),
         MessageAction::CopyId => l10n::tr("Copy message ID"),
+        MessageAction::More => l10n::tr("More"),
+        MessageAction::Forward => l10n::tr("Forward"),
+        MessageAction::CreateThread => l10n::tr("Create thread"),
+        MessageAction::Translate => l10n::tr("Translate"),
+        MessageAction::Pin => l10n::tr("Pin message"),
+        MessageAction::Bookmark => l10n::tr("Bookmark message"),
+        MessageAction::MarkUnread => l10n::tr("Mark as unread"),
+        MessageAction::CopyLink => l10n::tr("Copy message link"),
+        MessageAction::Speak => l10n::tr("Speak message"),
     }
 }
 
-/// The icon of each button (`icons::AppAssets` serves them).
-fn icon(action: MessageAction, target: &ActionTarget) -> AppIcon {
+/// The icon of each button/item (`icons::AppAssets` serves them); weights
+/// follow `ContextMenuIcons.tsx`.
+pub fn icon(action: MessageAction, target: &ActionTarget) -> AppIcon {
     match action {
         MessageAction::SuppressEmbeds if target.embeds_suppressed => AppIcon::Eye,
         MessageAction::SuppressEmbeds => AppIcon::EyeSlash,
@@ -216,6 +356,51 @@ fn icon(action: MessageAction, target: &ActionTarget) -> AppIcon {
         MessageAction::CopyText => AppIcon::Copy,
         MessageAction::CopyId => AppIcon::Snowflake,
         MessageAction::Delete | MessageAction::DeleteNow => AppIcon::Trash,
+        MessageAction::More => AppIcon::DotsThreeBold,
+        MessageAction::Forward => AppIcon::ArrowBendUpRight,
+        MessageAction::CreateThread => AppIcon::Chats,
+        MessageAction::Translate => AppIcon::Translate,
+        MessageAction::Pin => AppIcon::PushPin,
+        MessageAction::Bookmark => AppIcon::BookmarkSimple,
+        MessageAction::MarkUnread => AppIcon::EnvelopeOpen,
+        MessageAction::CopyLink => AppIcon::LinkBold,
+        MessageAction::Speak => AppIcon::SpeakerHigh,
+    }
+}
+
+/// Official flx id carried by the 20px icon of a bar button (the bar reuses the
+/// `ContextMenuIcons` components).
+fn bar_icon_flx(action: MessageAction) -> Option<&'static str> {
+    match action {
+        MessageAction::React => Some("ui.action-menu.context-menu-icons.add-reaction-icon.smiley-icon"),
+        MessageAction::Edit => Some("ui.action-menu.context-menu-icons.edit-message-icon.pencil-simple-icon"),
+        MessageAction::Reply => Some("ui.action-menu.context-menu-icons.reply-icon.arrow-bend-up-left-icon"),
+        MessageAction::Forward => Some("ui.action-menu.context-menu-icons.forward-icon.arrow-bend-up-right-icon"),
+        MessageAction::CreateThread => Some("ui.action-menu.context-menu-icons.create-thread-icon.chats-icon"),
+        MessageAction::More => Some("ui.action-menu.context-menu-icons.more-icon.dots-three-icon"),
+        MessageAction::Delete => Some("ui.action-menu.context-menu-icons.delete-icon.trash-icon"),
+        _ => None,
+    }
+}
+
+/// Official flx id of the 18px icon of a menu item (`ContextMenuIcons`).
+pub fn menu_icon_flx(action: MessageAction) -> &'static str {
+    match action {
+        MessageAction::Translate => "ui.action-menu.context-menu-icons.translate-icon.phosphor-translate-icon",
+        MessageAction::Edit => "ui.action-menu.context-menu-icons.edit-message-icon.pencil-simple-icon",
+        MessageAction::Reply => "ui.action-menu.context-menu-icons.reply-icon.arrow-bend-up-left-icon",
+        MessageAction::Forward => "ui.action-menu.context-menu-icons.forward-icon.arrow-bend-up-right-icon",
+        MessageAction::CreateThread => "ui.action-menu.context-menu-icons.create-thread-icon.chats-icon",
+        MessageAction::CopyText => "ui.action-menu.context-menu-icons.copy-message-text-icon.phosphor-copy-icon",
+        MessageAction::Pin => "ui.action-menu.context-menu-icons.pin-icon.push-pin-icon",
+        MessageAction::Bookmark => "ui.action-menu.context-menu-icons.bookmark-icon.bookmark-simple-icon",
+        MessageAction::MarkUnread => "ui.action-menu.context-menu-icons.mark-as-unread-icon.envelope-open-icon",
+        MessageAction::CopyLink => "ui.action-menu.context-menu-icons.copy-link-icon.link-icon",
+        MessageAction::Speak => "ui.action-menu.context-menu-icons.speak-message-icon.speaker-high-icon",
+        MessageAction::SuppressEmbeds => "ui.action-menu.context-menu-icons.suppress-embeds-icon.eye-slash-icon",
+        MessageAction::Delete | MessageAction::DeleteNow => "ui.action-menu.context-menu-icons.delete-icon.trash-icon",
+        MessageAction::CopyId => "ui.action-menu.context-menu-icons.copy-id-icon.snowflake-icon",
+        MessageAction::React | MessageAction::Retry | MessageAction::More => "ui.action-menu.context-menu-icons.icon",
     }
 }
 
@@ -307,8 +492,11 @@ pub fn with_hover_actions(
             // behind nor the list's leave check takes the bar away.
             div()
                 .absolute()
-                .top(px(-20.))
-                .right(px(16.))
+                .top(px(-24.))
+                .right(px(0.))
+                .pl(px(32.))
+                .pr(px(14.))
+                .pb(px(6.))
                 .debug_selector(move || bar_selector)
                 .flx("channel.message-action-bar.message-action-bar-core.action-bar-container")
                 .on_mouse_move(move |_, window, cx| {
@@ -370,29 +558,72 @@ mod tests {
             content: content.to_owned().into(),
             can_suppress_embeds: false,
             embeds_suppressed: false,
+            can_pin: false,
+            can_create_thread: true,
         }
     }
 
+    fn menu_actions(t: &ActionTarget) -> Vec<Vec<MenuItem>> {
+        menu_groups(t)
+    }
+
     #[test]
-    fn actions_depend_on_ownership() {
+    fn bar_holds_only_inline_buttons() {
         use MessageAction::*;
-        assert_eq!(available_actions(&target(true, true, true, "hi")), vec![React, Reply, Edit, CopyText, CopyId, Delete]);
-        assert_eq!(available_actions(&target(false, false, true, "hi")), vec![React, Reply, CopyText, CopyId]);
-        assert_eq!(available_actions(&target(false, true, true, "")), vec![React, Reply, CopyId, Delete]);
-        // A failed local message can be retried (when retryable), copied or discarded.
-        assert_eq!(available_actions(&target(true, true, false, "x")), vec![CopyText, Delete]);
+        assert_eq!(bar_actions(&target(true, true, true, "hi")), vec![React, Edit, Forward, CreateThread, More]);
+        assert_eq!(bar_actions(&target(false, false, true, "hi")), vec![React, Reply, Forward, CreateThread, More]);
+        let dm = ActionTarget { can_create_thread: false, ..target(false, false, true, "hi") };
+        assert_eq!(bar_actions(&dm), vec![React, Reply, Forward, More]);
+        // A failed local message can be retried (when retryable) or discarded.
+        assert_eq!(bar_actions(&target(true, true, false, "x")), vec![Delete]);
         let retryable = ActionTarget { can_retry: true, ..target(true, true, false, "x") };
-        assert_eq!(available_actions(&retryable), vec![Retry, CopyText, Delete]);
-        // Suppress Embeds sits before the copy actions, only when sent.
-        let with_embeds = ActionTarget { can_suppress_embeds: true, ..target(true, true, true, "hi") };
+        assert_eq!(bar_actions(&retryable), vec![Retry, Delete]);
+    }
+
+    #[test]
+    fn menu_follows_the_official_order() {
+        use MenuItem::{Action, QuickReactions};
+        use MessageAction::*;
+        let own = menu_actions(&target(true, true, true, "hi"));
         assert_eq!(
-            available_actions(&with_embeds),
-            vec![React, Reply, Edit, SuppressEmbeds, CopyText, CopyId, Delete]
+            own,
+            vec![
+                vec![QuickReactions, Action(React)],
+                vec![Action(Translate)],
+                vec![Action(Edit), Action(Reply), Action(Forward), Action(CreateThread)],
+                vec![Action(CopyText), Action(Bookmark), Action(MarkUnread), Action(CopyLink), Action(Speak)],
+                vec![Action(Delete)],
+                vec![Action(CopyId)],
+            ]
         );
-        let pending = ActionTarget { can_suppress_embeds: true, ..target(true, true, false, "hi") };
-        assert!(!available_actions(&pending).contains(&SuppressEmbeds));
-        let suppressed = ActionTarget { embeds_suppressed: true, ..with_embeds };
+        // Others' messages: no Edit/Delete; pin and suppress embeds only with the right.
+        let mut other = target(false, false, true, "hi");
+        other.can_pin = true;
+        other.can_suppress_embeds = true;
+        let groups = menu_actions(&other);
+        assert_eq!(groups[2], vec![Action(Reply), Action(Forward), Action(CreateThread)]);
+        assert_eq!(
+            groups[3],
+            vec![Action(CopyText), Action(Pin), Action(Bookmark), Action(MarkUnread), Action(CopyLink), Action(Speak), Action(SuppressEmbeds)]
+        );
+        assert_eq!(groups.len(), 5, "no delete group");
+        assert!(menu_actions(&target(true, true, false, "hi")).is_empty(), "unsent messages have no menu");
+        // No text: no Translate, Copy Text or Speak.
+        let empty = menu_actions(&target(false, true, true, ""));
+        assert_eq!(empty[0], vec![QuickReactions, Action(React)]);
+        assert!(!empty.concat().contains(&Action(Translate)));
+        assert!(!empty.concat().contains(&Action(CopyText)));
+        let suppressed = ActionTarget { embeds_suppressed: true, ..target(true, true, true, "hi") };
         assert_eq!(tooltip(SuppressEmbeds, &suppressed), "Unsuppress embeds");
+    }
+
+    #[test]
+    fn available_actions_cover_bar_and_menu() {
+        use MessageAction::*;
+        let all = available_actions(&target(true, true, true, "hi"));
+        for a in [React, Edit, Forward, CreateThread, More, Translate, CopyText, Bookmark, MarkUnread, CopyLink, Speak, Delete, CopyId] {
+            assert!(all.contains(&a), "{a:?}");
+        }
     }
 
     struct Empty;

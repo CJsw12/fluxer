@@ -1,0 +1,51 @@
+[
+ {
+  "slug": "message-hover",
+  "official": [
+   {
+    "hover": "[data-flx=\"channel.message.article.alt-click\"]",
+    "index": 2
+   }
+  ],
+  "rust": [
+   {
+    "hover": "channel.message.article.alt-click",
+    "index": 2
+   }
+  ],
+  "scope": [
+   "channel.message-action-bar."
+  ],
+  "drop_hidden": true
+ },
+ {
+  "slug": "message-more-menu",
+  "official": [
+   {
+    "hover": "[data-flx=\"channel.message.article.alt-click\"]",
+    "index": 2
+   },
+   {
+    "click": "button[aria-label=\"More\"]",
+    "index": 2
+   }
+  ],
+  "rust": [
+   {
+    "hover": "channel.message.article.alt-click",
+    "index": 3
+   },
+   {
+    "click": "channel.message-action-bar.message-action-bar-button.button.click",
+    "index": 4
+   }
+  ],
+  "expect_flx": "ui.action-menu.context-menu.popup",
+  "scope": [
+   "ui.action-menu.",
+   "channel.message-action-bar."
+  ],
+  "drop_hidden": true,
+  "note": "Official app is tester2 (own message = article 2); the Rust app is tester1, whose own message is article 3."
+ }
+]

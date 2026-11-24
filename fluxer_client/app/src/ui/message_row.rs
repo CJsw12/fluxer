@@ -613,11 +613,19 @@ pub fn render(
             ))
         }
         RowBar::Actions => {
+            let view_react = view.clone();
             let view = view.clone();
             let target = row.actions.clone();
-            Some(message_actions::action_bar(&row.actions, theme, move |action, window, cx| {
-                let _ = view.update(cx, |v, cx| v.message_action(action, &target, window, cx));
-            }))
+            Some(message_actions::action_bar(
+                &row.actions,
+                theme,
+                move |emoji, _, cx| {
+                    let _ = view_react.update(cx, |v, cx| v.pick_reaction(channel_id, message_id, emoji, cx));
+                },
+                move |action, window, cx| {
+                    let _ = view.update(cx, |v, cx| v.message_action(action, &target, window, cx));
+                },
+            ))
         }
     };
     let view = view.clone();

@@ -1,27 +1,32 @@
 // Extracts a per-element machine-readable spec of the official app's current screen: geometry,
 // resolved style, paint order, floating state, matched CSS-module rules (raw values, var() kept)
 // and icon path signature for every [data-flx] element. Consumed by spec_delta.py.
-// Strictly read-only: no clicks, navigation or storage writes. :hover forced via
+// Single-screen mode is strictly read-only: no clicks, navigation or storage writes. --scenes mode
+// opens read-only states (popouts, modals, pickers) with real CDP input, captures each into
+// <out-dir>/<slug>.spec.json and closes it again (write guard + deny-label list). :hover forced via
 // CSS.forcePseudoState is always reverted (also on error).
 //   node spec_official.mjs --attach 9334 --out <spec.json> [--hover <flx>]... [--viewport 1280x800]
-import {mkdirSync, readdirSync, statSync, writeFileSync} from 'node:fs';
+import {mkdirSync, readdirSync, readFileSync, statSync, writeFileSync} from 'node:fs';
 import {dirname, join, relative, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {Cdp, clientInfo, pageWsUrl} from './lib.mjs';
+import {Cdp, clientInfo, helpers, pageWsUrl, sleep} from './lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
 const argv = process.argv.slice(2);
-const opts = {attach: null, out: null, viewport: null, hover: []};
+const opts = {attach: null, out: null, viewport: null, hover: [], scenes: null, outDir: null};
 for (let i = 0; i < argv.length; i++) {
 	const a = argv[i];
 	if (a === '--attach') opts.attach = Number(argv[++i]);
 	else if (a === '--out') opts.out = argv[++i];
 	else if (a === '--viewport') opts.viewport = argv[++i];
 	else if (a === '--hover') opts.hover.push(argv[++i]);
+	else if (a === '--scenes') opts.scenes = argv[++i];
+	else if (a === '--out-dir') opts.outDir = argv[++i];
 }
-if (!opts.attach || !opts.out) {
+if (!opts.attach || !(opts.out || (opts.scenes && opts.outDir))) {
 	console.error('usage: node spec_official.mjs --attach <port> --out <spec.json> [--hover <flx>]... [--viewport 1280x800]');
+	console.error('   or: node spec_official.mjs --attach <port> --scenes <scenes.json> --out-dir <dir> [--viewport 1280x800]');
 	process.exit(2);
 }
 
@@ -186,13 +191,9 @@ const cdp = new Cdp(await pageWsUrl(opts.attach));
 await cdp.open();
 const forced = new Set();
 let exitCode = 0;
-try {
-	if (opts.viewport) {
-		const [w, h] = opts.viewport.split('x').map(Number);
-		await cdp.send('Emulation.setDeviceMetricsOverride', {width: w, height: h, deviceScaleFactor: 1, mobile: false});
-	}
-	await cdp.send('DOM.enable');
-	await cdp.send('CSS.enable');
+const modules = indexModules();
+
+async function capture(hoverList) {
 	const page = await cdp.eval(`(${pageSpec.toString()})(${JSON.stringify(PROPS)})`);
 	const rows = page.rows;
 
@@ -218,7 +219,6 @@ try {
 	const q = await cdp.send('DOM.querySelectorAll', {nodeId: root.root.nodeId, selector: '[data-flx]'});
 	if (q.nodeIds.length !== rows.length) throw new Error(`DOM/page flx count mismatch ${q.nodeIds.length} vs ${rows.length}`);
 
-	const modules = indexModules();
 	const matchedAll = await Promise.all(
 		q.nodeIds.map((id, i) =>
 			rows[i].rendered ? cdp.send('CSS.getMatchedStylesForNode', {nodeId: id}).catch(() => null) : null,
@@ -264,7 +264,7 @@ try {
 		});
 		return r.result.value ?? {};
 	};
-	for (const flx of opts.hover) {
+	for (const flx of hoverList) {
 		const q1 = JSON.stringify(flx);
 		const chain = [];
 		for (let up = 0; up <= 3; up++) {
@@ -319,13 +319,110 @@ try {
 		client_info: await clientInfo(cdp),
 		theme_class: page.theme,
 		viewport: page.viewport,
-		hover_requests: opts.hover,
+		hover_requests: hoverList,
 		hover_errors: Object.fromEntries(Object.entries(hovers).filter(([, h]) => h.error).map(([k, h]) => [k, h.error])),
 		elements,
 	};
-	mkdirSync(dirname(resolve(opts.out)), {recursive: true});
-	writeFileSync(opts.out, JSON.stringify(spec, null, 1), 'utf8');
-	console.log(`spec: ${elements.length} elements -> ${opts.out}`);
+	return spec;
+}
+
+// ---- scene mode helpers
+const DENY = /\b(delete|leave|remove|ban|kick|mute|pin|unpin|report|block|send|favorite|favourite|logout|log-out|sign-out)\b/i;
+const WRITE_GUARD = `(() => {
+  if (window.__specGuard) return; window.__specGuard = true; window.__specBlocked = [];
+  const isApi = (u) => String(u).includes('/api/') || String(u).includes('%2Fapi');
+  const deny = (m, u) => { window.__specBlocked.push(m + ' ' + String(u).slice(-80)); return new TypeError('parity write guard'); };
+  const f = window.fetch, open = XMLHttpRequest.prototype.open, send = XMLHttpRequest.prototype.send, beacon = navigator.sendBeacon;
+  window.__parityUnguard = () => { window.fetch = f; XMLHttpRequest.prototype.open = open; XMLHttpRequest.prototype.send = send; if (beacon) navigator.sendBeacon = beacon; window.__specGuard = false; };
+  window.fetch = function (input, init) {
+    const url = typeof input === 'string' ? input : input && input.url;
+    const method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+    if (isApi(url) && !['GET', 'HEAD', 'OPTIONS'].includes(method)) return Promise.reject(deny(method, url));
+    return f.apply(this, arguments);
+  };
+  XMLHttpRequest.prototype.open = function (m, u) { this.__pm = String(m).toUpperCase(); this.__pu = u; return open.apply(this, arguments); };
+  XMLHttpRequest.prototype.send = function () {
+    if (isApi(this.__pu) && !['GET', 'HEAD', 'OPTIONS'].includes(this.__pm)) { deny(this.__pm, this.__pu); throw new TypeError('parity write guard'); }
+    return send.apply(this, arguments);
+  };
+  if (navigator.sendBeacon) navigator.sendBeacon = (u) => { if (isApi(u)) { deny('BEACON', u); return false; } return true; };
+})()`;
+
+async function runScenes() {
+	const scenes = JSON.parse(readFileSync(opts.scenes, 'utf8'));
+	const {realClickExpr, pressKey, waitFor} = helpers(cdp);
+	await cdp.eval(WRITE_GUARD);
+	const shown = (flx) => `[...document.querySelectorAll('[data-flx]')].some((e) => e.getAttribute('data-flx') === ${JSON.stringify(flx)} && e.getClientRects().length > 0)`;
+	const route = () => cdp.eval('location.pathname + location.search');
+	const baseRoute = await route();
+	mkdirSync(resolve(opts.outDir), {recursive: true});
+	const report = [];
+	for (const sc of scenes) {
+		const rec = {slug: sc.slug, status: 'ok', error: null, elements: 0};
+		try {
+			for (const act of sc.official ?? []) {
+				if (act.click || act.context) {
+					const sel = act.click ?? act.context;
+					const label = await cdp.eval(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); return e ? [e.getAttribute('aria-label'), e.innerText, e.getAttribute('data-flx')].filter(Boolean).join(' ') : null; })()`);
+					if (label === null) throw new Error(`target not found: ${sel}`);
+					if (DENY.test(label)) throw new Error(`write-guard deny label: ${label.slice(0, 60)}`);
+					const ok = await realClickExpr(`document.querySelector(${JSON.stringify(sel)})`, act.context ? 'right' : 'left');
+					if (!ok) throw new Error(`click failed: ${sel}`);
+				} else if (act.key) {
+					await pressKey(act.key, {Escape: 27, Enter: 13}[act.key] ?? 0);
+				} else if (act.wait_ms) await sleep(act.wait_ms);
+				else throw new Error(`unknown action ${JSON.stringify(act)}`);
+				await sleep(250);
+			}
+			if (sc.expect_flx && !(await waitFor(shown(sc.expect_flx), 4000))) throw new Error(`expect_flx not shown: ${sc.expect_flx}`);
+			await sleep(500); // let open animations settle
+			const spec = await capture([]);
+			spec.scene = sc.slug;
+			rec.elements = spec.elements.length;
+			writeFileSync(join(resolve(opts.outDir), `${sc.slug}.spec.json`), JSON.stringify(spec, null, 1), 'utf8');
+		} catch (e) {
+			rec.status = 'failed';
+			rec.error = String(e?.message ?? e);
+		}
+		// restore: Escape until the state is gone, then verify the base route
+		const stillOpen = () => (sc.expect_flx ? cdp.eval(shown(sc.expect_flx)) : false);
+		for (let k = 0; k < 3 && (await stillOpen()); k++) {
+			await pressKey('Escape', 27);
+			await sleep(400);
+		}
+		if (await stillOpen()) {
+			rec.status = 'failed';
+			rec.error = (rec.error ? rec.error + '; ' : '') + 'state did not close';
+		}
+		const r = await route();
+		if (r !== baseRoute) {
+			rec.status = 'failed';
+			rec.error = (rec.error ? rec.error + '; ' : '') + `route changed ${baseRoute} -> ${r}`;
+		}
+		console.log(`${rec.status.padEnd(6)} ${sc.slug} (${rec.elements} elements)${rec.error ? ' - ' + rec.error : ''}`);
+		report.push(rec);
+	}
+	const blockedList = await cdp.eval('window.__specBlocked || []').catch(() => []);
+	await cdp.eval('window.__parityUnguard && window.__parityUnguard()').catch(() => {});
+	writeFileSync(join(resolve(opts.outDir), 'scenes.report.json'), JSON.stringify({base_route: baseRoute, blocked_writes: blockedList, scenes: report}, null, 1), 'utf8');
+	if (blockedList.length) console.log(`blocked writes: ${blockedList.join('; ')}`);
+	if (report.some((r) => r.status !== 'ok')) exitCode = 1;
+}
+
+try {
+	if (opts.viewport) {
+		const [w, h] = opts.viewport.split('x').map(Number);
+		await cdp.send('Emulation.setDeviceMetricsOverride', {width: w, height: h, deviceScaleFactor: 1, mobile: false});
+	}
+	await cdp.send('DOM.enable');
+	await cdp.send('CSS.enable');
+	if (opts.scenes) await runScenes();
+	else {
+		const spec = await capture(opts.hover);
+		mkdirSync(dirname(resolve(opts.out)), {recursive: true});
+		writeFileSync(opts.out, JSON.stringify(spec, null, 1), 'utf8');
+		console.log(`spec: ${spec.elements.length} elements -> ${opts.out}`);
+	}
 } catch (e) {
 	console.error(String(e?.stack ?? e));
 	exitCode = 1;

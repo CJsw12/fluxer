@@ -1,0 +1,145 @@
+[
+ {
+  "slug": "channel-notification-settings",
+  "official": [
+   {
+    "click": "[data-flx=\"channel.channel-header-components.channel-notification-settings-button.channel-header-icon.click\"]"
+   }
+  ],
+  "rust": [
+   {
+    "click": "channel.channel-header-components.channel-notification-settings-button.channel-header-icon.click"
+   }
+  ],
+  "expect_flx": "ui.action-menu.context-menu.popup",
+  "scope": [
+   "ui.action-menu."
+  ]
+ },
+ {
+  "slug": "threads",
+  "official": [
+   {
+    "click": "[data-flx=\"threads.threads-button.channel-header-icon\"]"
+   }
+  ],
+  "rust": [
+   {
+    "click": "threads.threads-button.channel-header-icon"
+   }
+  ],
+  "expect_flx": "threads.thread-browser.container",
+  "scope": [
+   "threads.",
+   "ui.popover."
+  ]
+ },
+ {
+  "slug": "pinned-messages",
+  "official": [
+   {
+    "click": "[data-flx=\"channel.channel-header-components.channel-pins-button.channel-header-icon\"]"
+   }
+  ],
+  "rust": [
+   {
+    "click": "channel.channel-header-components.channel-pins-button.channel-header-icon"
+   }
+  ],
+  "expect_flx": "channel.channel-pins-popout.container",
+  "scope": [
+   "channel.channel-pins-popout.",
+   "ui.popover."
+  ]
+ },
+ {
+  "slug": "inbox",
+  "official": [
+   {
+    "click": "[data-flx=\"channel.channel-header.inbox-button\"]"
+   }
+  ],
+  "rust": [
+   {
+    "click": "channel.channel-header.inbox-button"
+   }
+  ],
+  "expect_flx": "messaging.inbox-popout.container",
+  "scope": [
+   "messaging.inbox-popout.",
+   "ui.popover."
+  ]
+ },
+ {
+  "slug": "composer-plus-menu",
+  "official": [
+   {
+    "click": "[data-flx=\"channel.lexical-channel-textarea-content.plus-button-above-backdrop.clear-slash-command\"]"
+   }
+  ],
+  "rust": [
+   {
+    "click": "channel.lexical-channel-textarea-content.plus-button-above-backdrop.clear-slash-command"
+   }
+  ],
+  "expect_flx": "ui.action-menu.context-menu.popup",
+  "scope": [
+   "ui.action-menu."
+  ]
+ },
+ {
+  "slug": "emoji-picker",
+  "official": [
+   {
+    "click": "[data-flx=\"channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--4\"]"
+   }
+  ],
+  "rust": [
+   {
+    "click": "channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--4"
+   }
+  ],
+  "expect_flx": "expressions.expression-picker-popout.container",
+  "scope": [
+   "expressions.",
+   "ui.popover."
+  ]
+ },
+ {
+  "slug": "user-area-popout",
+  "official": [
+   {
+    "click": "[data-flx=\"app.user-area.user-area-inner.focus-ring-wrapper\"]"
+   }
+  ],
+  "rust": [
+   {
+    "click": "app.user-area.user-area-inner.focus-ring-wrapper"
+   }
+  ],
+  "expect_flx": "app.floating.user-area-popout.container",
+  "scope": [
+   "app.floating.user-area-popout.",
+   "user.profile.",
+   "ui.popover."
+  ]
+ },
+ {
+  "slug": "settings-modal",
+  "official": [
+   {
+    "click": "[data-flx=\"app.user-area.user-area-inner.control-button.settings-click\"]"
+   }
+  ],
+  "rust": [
+   {
+    "click": "app.user-area.user-area-inner.control-button.settings-click"
+   }
+  ],
+  "expect_flx": "user.user-settings-modal.modal-root",
+  "scope": [
+   "user.user-settings-modal.",
+   "app.modal."
+  ]
+ }
+]

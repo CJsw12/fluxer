@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "note": "Ignored deltas are pinned to reference-copy artifacts: the native titlebar wordmark width differs because the reference copy is named Fluxer Dev, and the channel header icon x differs because a join shift comes from the official-only update icon.",
+  "scenes": {
+    "markdown": {
+      "spec": "target/parity-tmp/md.1280.spec.json",
+      "max_deltas": 15,
+      "max_missing": 197,
+      "ignore": [
+        "app.native-titlebar.wordmark|width",
+        "channel.channel-header-components.channel-header-icon.button-icon|x"
+      ],
+      "updated": "2026-11-25"
+    }
+  }
+}

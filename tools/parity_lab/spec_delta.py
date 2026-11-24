@@ -2,6 +2,9 @@
 
     python -I tools/parity_lab/spec_delta.py <spec.json> [--rust <inspect.json> | --live]
         [--scope <flx-prefix>]... [--out-md f] [--out-json f] [--max N]
+    python -I tools/parity_lab/spec_delta.py --scenes <scenes.json> --spec-dir <dir> --live [--out-dir <dir>]
+        (opened states: per scene drives the Rust client via rust_probe, diffs against
+         <spec-dir>/<slug>.spec.json from `spec_official.mjs --scenes`, writes <slug>.md/.json + summary.md)
 
 Join key is (flx, occurrence index). A property is compared only when BOTH sides declare it:
 official = a CSS-module/inline rule sets it (rect is always a box metric); Rust = key present in
@@ -385,8 +388,105 @@ def _load_rust(args: list[str]) -> list[dict]:
     return data["elements"] if isinstance(data, dict) else data
 
 
+BASE_LINK = "fluxer://channels/1572284491404148736/1572284491404148743"
+
+
+def _flx_set(elements: list[dict]) -> set[str]:
+    return {e["flx"] for e in elements}
+
+
+def run_scenes(argv: list[str]) -> int:
+    """Drives the Rust client through each scene's `rust` actions and diffs the open state."""
+    import time  # noqa: PLC0415
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import rust_probe as rp  # noqa: PLC0415
+
+    opt = lambda k: argv[argv.index(k) + 1] if k in argv else None  # noqa: E731
+    scenes = json.loads(Path(opt("--scenes")).read_text(encoding="utf-8"))
+    spec_dir = Path(opt("--spec-dir"))
+    out_dir = Path(opt("--out-dir") or spec_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    def inspect() -> list[dict]:
+        data = rp.send("probe_inspect")
+        return data["elements"] if isinstance(data, dict) else data
+
+    def reset() -> None:
+        rp.deep_link(BASE_LINK)
+        time.sleep(0.6)
+        rp.send("probe_key", keystroke="escape")
+        time.sleep(0.4)
+
+    rows = []
+    for sc in scenes:
+        slug, expect = sc["slug"], sc.get("expect_flx")
+        row = {"scene": slug, "joined": 0, "deltas": 0, "missing": 0, "status": "ok", "error": None, "top": []}
+        spec_file = spec_dir / f"{slug}.spec.json"
+        try:
+            if not spec_file.exists():
+                raise RuntimeError("no official spec (scene failed or not captured)")
+            spec = json.loads(spec_file.read_text(encoding="utf-8"))
+            reset()
+            for act in sc.get("rust", []):
+                if "click" in act:
+                    r = rp.send("probe_click", flx=act["click"], **({"index": act["index"]} if "index" in act else {}))
+                    if not r.get("ok", False):
+                        raise RuntimeError(f"rust click failed: {act['click']}: {r}")
+                elif "key" in act:
+                    rp.send("probe_key", keystroke=act["key"])
+                elif "link" in act:
+                    rp.deep_link(act["link"])
+                elif "wait_ms" in act:
+                    time.sleep(act["wait_ms"] / 1000)
+                else:
+                    raise RuntimeError(f"unknown rust action {act}")
+                time.sleep(0.3)
+            elements: list[dict] = []
+            for _ in range(20):
+                elements = inspect()
+                if not expect or expect in _flx_set(elements):
+                    break
+                time.sleep(0.25)
+            else:
+                raise RuntimeError(f"expect_flx not shown in Rust: {expect}")
+            res = spec_delta(spec, elements, sc.get("scope"))
+            row.update(joined=res["joined"], deltas=res["delta_count"], missing=len(res["missing_in_rust"]))
+            row["top"] = [delta_line(d) for d in res["deltas"][:3]]
+            (out_dir / f"{slug}.md").write_text(render_md(res, spec), encoding="utf-8")
+            (out_dir / f"{slug}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+        except Exception as e:  # noqa: BLE001 - one broken scene must not stop the run
+            row.update(status="failed", error=str(e))
+        finally:
+            try:
+                rp.send("probe_key", keystroke="escape")
+                time.sleep(0.3)
+                # Escape does not close every Rust layer (user-area popout): toggle the trigger instead.
+                first = next((a for a in sc.get("rust", []) if "click" in a), None)
+                if expect and first and expect in _flx_set(inspect()):
+                    row["escape_closes"] = False
+                    rp.send("probe_click", flx=first["click"], **({"index": first["index"]} if "index" in first else {}))
+                    time.sleep(0.4)
+            except Exception:  # noqa: BLE001
+                pass
+        rows.append(row)
+        print(f"{row['status']:6} {slug}: joined={row['joined']} deltas={row['deltas']} missing={row['missing']} {row['error'] or ''}")
+    try:
+        reset()
+    except Exception:  # noqa: BLE001
+        pass
+    lines = ["# Scene spec delta summary", "", "| scene | joined | deltas | missing-in-Rust | status |", "|---|---|---|---|---|"]
+    for r in rows:
+        lines.append(f"| {r['scene']} | {r['joined']} | {r['deltas']} | {r['missing']} | {r['status']}{': ' + r['error'] if r['error'] else ''} |")
+    (out_dir / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (out_dir / "summary.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
+    return 0 if all(r["status"] == "ok" for r in rows) else 1
+
+
 def main(argv: list[str]) -> int:
     sys.stdout.reconfigure(encoding="utf-8")
+    if "--scenes" in argv and "--live" in argv and "--spec-dir" in argv:
+        return run_scenes(argv)
     if not argv or argv[0].startswith("--") or ("--live" not in argv and "--rust" not in argv):
         print(__doc__)
         return 2

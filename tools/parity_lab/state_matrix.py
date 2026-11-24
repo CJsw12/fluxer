@@ -54,6 +54,21 @@ def box_l1_diff(a_png: Path, b_png: Path, rect: list[int]) -> float | None:
     return round(sum(ImageStat.Stat(diff).mean) / 3.0, 2)
 
 
+def box_changed_pixels(a_png: Path, b_png: Path, rect: list[int], thresh: int = 28) -> int:
+    """Counts pixels inside `rect` whose RGB L1 delta exceeds `thresh` (ignores subtle bg tint)."""
+    from PIL import Image, ImageChops  # noqa: PLC0415
+
+    a = Image.open(a_png).convert("RGB")
+    b = Image.open(b_png).convert("RGB")
+    x, y, w, h = rect
+    box = (max(0, x), max(0, y), min(a.width, b.width, x + w), min(a.height, b.height, y + h))
+    if box[2] <= box[0] or box[3] <= box[1]:
+        return 0
+    diff = ImageChops.difference(a.crop(box), b.crop(box))
+    pxs = diff.get_flattened_data() if hasattr(diff, "get_flattened_data") else diff.getdata()
+    return sum(1 for r, g, bl in pxs if (r + g + bl) / 3.0 > thresh)
+
+
 def is_red_active(png: Path, rect: list[int]) -> bool:
     stats = box_stats(png, rect)
     if not stats:
@@ -128,7 +143,8 @@ def ensure_rust_muted(out_dir: Path) -> str:
 def main(argv: list[str]) -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     voice = "--voice" in argv
-    clean_args = [a for a in argv if a != "--voice"]
+    strict = "--strict" in argv
+    clean_args = [a for a in argv if a not in ("--voice", "--strict")]
     opts = dict(zip(clean_args[0::2], clean_args[1::2]))
     out = Path(opts.get("--out", "Logs/parity/m92_baseline"))
     attach = int(opts.get("--attach", 9334))
@@ -174,8 +190,14 @@ def main(argv: list[str]) -> int:
             time.sleep(0.35)
             hits = [e for e in rest_data.get("elements", []) if e.get("flx") == flx]
             if idx < len(hits):
-                r_hover = rp.send("probe_hover", flx=flx, index=idx)
-                method = "flx"
+                if target.get("offset"):
+                    r0 = hits[idx]["rect"]
+                    ox, oy = target["offset"]
+                    r_hover = rp.send("probe_hover", x=float(r0[0] + ox), y=float(r0[1] + oy))
+                    method = "flx_offset"
+                else:
+                    r_hover = rp.send("probe_hover", flx=flx, index=idx)
+                    method = "flx"
             else:
                 cx, cy = target["center"]
                 r_hover = rp.send("probe_hover", x=float(cx), y=float(cy))
@@ -251,6 +273,7 @@ def main(argv: list[str]) -> int:
 
         rep = compare.compare(compare.load_official(off_dom_path), compare.load_rust(rs_json_path), tol=2)
         compare.sample_colors(rep, off_png_path, rs_png_path, max_delta=18.0)
+        compare.sample_visual_anomalies(rep, off_png_path, rs_png_path, s_cmp_dir / "diff_heatmap.png" if slug == "rest" else None)
         compare.overlay(rep, off_png_path, rs_png_path, s_cmp_dir / "overlay.png")
         (s_cmp_dir / "report.json").write_text(json.dumps(rep, ensure_ascii=False, indent=1), encoding="utf-8")
 
@@ -259,6 +282,7 @@ def main(argv: list[str]) -> int:
         rs_added = sorted({compare.base(e["flx"]) for e in rust_states[slug]["data"].get("elements", [])} - rust_rest_ids)
 
         extra: dict = {}
+        strict_failures: list[str] = []
         if slug.startswith("hover_") and "target" in st:
             t_rect = st["target"]["rect"]
             rs_rect = find_flx_rect(rust_states["rest"]["data"], st["target"]["flx"], st["target"]["idx"]) or t_rect
@@ -272,6 +296,26 @@ def main(argv: list[str]) -> int:
             extra["rust_box_delta"] = box_l1_diff(rust_states["rest"]["png"], rs_png_path, rs_rect)
             extra["official_box_mean"] = [box_stats(off_dir / "rest.png", t_rect), box_stats(off_png_path, t_rect)]
             extra["rust_box_mean"] = [box_stats(rust_states["rest"]["png"], rs_rect), box_stats(rs_png_path, rs_rect)]
+            cflx = st.get("container_flx")
+            if cflx:
+                off_cr = st.get("container_rect")
+                rs_cr = find_flx_rect(rust_states["rest"]["data"], cflx, 0) or off_cr
+                if off_cr and rs_cr:
+                    off_chg = box_changed_pixels(off_dir / "rest.png", off_png_path, off_cr, thresh=28)
+                    rs_chg = box_changed_pixels(rust_states["rest"]["png"], rs_png_path, rs_cr, thresh=28)
+                    phantom = rs_chg > max(off_chg * 2.5 + 220, 350)
+                    extra["container_flx"] = cflx
+                    extra["container_bright_changed_off"] = off_chg
+                    extra["container_bright_changed_rust"] = rs_chg
+                    extra["phantom_hover_ui"] = phantom
+                    if phantom:
+                        strict_failures.append(f"{slug}: phantom_hover_ui (bright px rust={rs_chg} off={off_chg} in {cflx})")
+            if extra["official_tooltips"] and not rs_added:
+                strict_failures.append(f"{slug}: missing rust tooltip")
+        elif slug.startswith("voice_"):
+            for rrow in rep["rows"]:
+                if rrow["flx"] == "app.user-area.user-area-inner.section" and any(abs(v) > 4 for v in rrow.get("delta", [])):
+                    strict_failures.append(f"{slug}: user-area delta {rrow['delta']}")
 
         ok_cnt = rep["score"]["pairs"] - sum(1 for r in rep["rows"] if r["status"] == "mismatch")
         row = {
@@ -279,20 +323,23 @@ def main(argv: list[str]) -> int:
             "pairs_ok": f"{ok_cnt}/{rep['score']['pairs']}",
             "official_added": off_added,
             "rust_added": rs_added,
+            "strict_failures": strict_failures,
             "mismatches": [
-                {"flx": r["flx"], "delta": r.get("delta"), "color_delta": r.get("color_delta")}
+                {"flx": r["flx"], "delta": r.get("delta"), "color_delta": r.get("color_delta"), "edge_p95": r.get("edge_p95")}
                 for r in rep["rows"] if r["status"] == "mismatch"
             ][:15],
             **extra,
         }
         summary_rows.append(row)
 
+    all_strict_failures = [msg for r in summary_rows for msg in r.get("strict_failures", [])]
     report = {
         "official_client": manifest.get("client"),
         "channels": manifest.get("channels", []),
         "initial_audio": manifest.get("initial_audio"),
         "voice_states": manifest.get("voice_states"),
         "blocked_writes": manifest.get("blocked_writes", []),
+        "strict_failures": all_strict_failures,
         "states": summary_rows,
     }
     (out / "matrix_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -304,12 +351,19 @@ def main(argv: list[str]) -> int:
             continue
         extra_str = ""
         if "official_box_delta" in r:
-            extra_str = f" | boxΔ off={r['official_box_delta']} rust={r['rust_box_delta']} tips={len(r['official_tooltips'])} styleΔ={list(r['official_style_diff'])}"
+            phantom_str = f" cpx={r['container_bright_changed_off']}->{r['container_bright_changed_rust']}" if "container_bright_changed_rust" in r else ""
+            if r.get("phantom_hover_ui"):
+                phantom_str += " [PHANTOM!]"
+            extra_str = f" | boxΔ off={r['official_box_delta']} rust={r['rust_box_delta']} tips={len(r['official_tooltips'])}{phantom_str} styleΔ={list(r['official_style_diff'])}"
         print(f"{r['slug']:22} {r['pairs_ok']:8} +off={len(r['official_added']):2} +rust={len(r['rust_added']):2}{extra_str}")
         if r["official_added"] != r["rust_added"]:
             print(f"    +off : {r['official_added'][:8]}")
             print(f"    +rust: {r['rust_added'][:8]}")
-    return 0
+    if all_strict_failures:
+        print("\nSTRICT FAILURES:")
+        for msg in all_strict_failures:
+            print(f"  - {msg}")
+    return 1 if (strict and all_strict_failures) else 0
 
 
 if __name__ == "__main__":

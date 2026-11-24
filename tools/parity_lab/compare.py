@@ -90,12 +90,97 @@ def compare(official: dict, rust: dict, tol: int) -> dict:
                 "delta": d, "text_official": o["text"], "text_rust": r["text"], "derived": r.get("derived", False),
                 "official_style": {k: o["style"].get(k) for k in ("fontSize", "fontWeight", "color", "backgroundColor", "borderRadius") if o["style"].get(k)},
             })
+    untapped = sorted(
+        (
+            {"flx": f, "rect": items[0]["rect"], "area": items[0]["rect"][2] * items[0]["rect"][3]}
+            for f, items in official.items()
+            if f not in rust and base(f) not in rust and items and items[0]["rect"][2] * items[0]["rect"][3] >= 20000
+        ),
+        key=lambda x: -x["area"],
+    )[:10]
     coverage = {
         "official_ids": len(official),
         "rust_tagged_ids": len(rust),
         "tagged_and_present": len([f for f in rust if f in official or any(base(k) == f for k in official)]),
+        "top_untagged_official": untapped,
     }
     return {"score": {"pairs": scored, "within_tol": ok, "tol_px": tol}, "coverage": coverage, "rows": rows}
+
+
+def sample_visual_anomalies(
+    report: dict,
+    official_png: Path,
+    rust_png: Path,
+    out_heatmap: Path | None = None,
+    diff_thresh: int = 12,
+) -> dict:
+    """Computes full-box edge P95 and 16x16 corner pixel diffs (catching crossing lines & border radii)
+    and optionally renders `diff_heatmap.png` highlighting every shifted pixel in bright magenta.
+    """
+    from PIL import Image, ImageChops  # noqa: PLC0415
+
+    a = Image.open(official_png).convert("RGB")
+    b = Image.open(rust_png).convert("RGB")
+    ox, oy = report.get("official_offset", [0, 0])
+    if ox or oy:
+        shifted = Image.new("RGB", (a.width + ox, a.height + oy), (0, 0, 0))
+        shifted.paste(a, (ox, oy))
+        a = shifted
+
+    cw, ch = min(a.width, b.width), min(a.height, b.height)
+    a_c, b_c = a.crop((0, 0, cw, ch)), b.crop((0, 0, cw, ch))
+    full_diff = ImageChops.difference(a_c, b_c)
+
+    flagged = []
+    for row in report["rows"]:
+        if "official" not in row or "rust" not in row:
+            continue
+        x, y, w, h = row["rust"]
+        x0, y0 = max(0, x), max(0, y)
+        x1, y1 = min(cw, x + w), min(ch, y + h)
+        if x1 - x0 < 4 or y1 - y0 < 4:
+            continue
+        crop = full_diff.crop((x0, y0, x1, y1))
+        pxs = sorted(sum(rgb) / 3.0 for rgb in (crop.get_flattened_data() if hasattr(crop, "get_flattened_data") else crop.getdata()))
+        edge_p95 = round(pxs[int(0.95 * (len(pxs) - 1))], 1)
+        row["edge_p95"] = edge_p95
+        if (x1 - x0) >= 48 and (y1 - y0) >= 48:
+            patches = [
+                (x0, y0, min(x1, x0 + 16), min(y1, y0 + 16)),
+                (max(x0, x1 - 16), y0, x1, min(y1, y0 + 16)),
+                (x0, max(y0, y1 - 16), min(x1, x0 + 16), y1),
+                (max(x0, x1 - 16), max(y0, y1 - 16), x1, y1),
+            ]
+            c_vals = []
+            for pbox in patches:
+                pc = full_diff.crop(pbox)
+                ppx = sorted(sum(rgb) / 3.0 for rgb in (pc.get_flattened_data() if hasattr(pc, "get_flattened_data") else pc.getdata()))
+                c_vals.append(round(ppx[int(0.95 * (len(ppx) - 1))], 1))
+            row["corner_tl_p95"] = c_vals[0]
+            row["corner_max_p95"] = max(c_vals)
+        if edge_p95 > 24.0:
+            flagged.append({"flx": row["flx"], "edge_p95": edge_p95, "corner_tl_p95": row.get("corner_tl_p95")})
+
+    if out_heatmap is not None:
+        base_gray = b_c.convert("L").convert("RGB")
+        # Dim Rust image and paint pixels with L1 > diff_thresh bright magenta
+        b_data = list(base_gray.get_flattened_data() if hasattr(base_gray, "get_flattened_data") else base_gray.getdata())
+        d_data = list(full_diff.get_flattened_data() if hasattr(full_diff, "get_flattened_data") else full_diff.getdata())
+        heat_data = [
+            (255, 40, 210) if (dr + dg + db) / 3.0 > diff_thresh else (r // 2, g // 2, bl // 2)
+            for (r, g, bl), (dr, dg, db) in zip(b_data, d_data)
+        ]
+        heat = Image.new("RGB", (cw, ch))
+        heat.putdata(heat_data)
+        panel = Image.new("RGB", (cw * 3, ch), (0, 0, 0))
+        panel.paste(a_c, (0, 0))
+        panel.paste(b_c, (cw, 0))
+        panel.paste(heat, (cw * 2, 0))
+        panel.save(out_heatmap)
+
+    anomalies = {"flagged_edge_boxes": sorted(flagged, key=lambda r: -r["edge_p95"])[:12]}
+    report["visual_anomalies"] = anomalies
+    return anomalies
 
 
 def sample_colors(report: dict, official_png: Path, rust_png: Path, max_delta: float) -> None:
@@ -177,10 +262,15 @@ def main(argv: list[str]) -> int:
     (out / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     if "--official-png" in opts and "--rust-png" in opts:
         sample_colors(report, Path(opts["--official-png"]), Path(opts["--rust-png"]), float(opts.get("--color-tol", 18)))
+        sample_visual_anomalies(report, Path(opts["--official-png"]), Path(opts["--rust-png"]), out / "diff_heatmap.png")
         (out / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
         overlay(report, Path(opts["--official-png"]), Path(opts["--rust-png"]), out / "overlay.png")
     s, c = report["score"], report["coverage"]
     print(f"geometry: {s['within_tol']}/{s['pairs']} within {s['tol_px']}px | coverage: rust tags {c['rust_tagged_ids']} ids, official scene {c['official_ids']} ids")
+    if c.get("top_untagged_official"):
+        print(f"untagged official large surfaces: {[u['flx'] for u in c['top_untagged_official'][:5]]}")
+    for anom in report.get("visual_anomalies", {}).get("flagged_edge_boxes", [])[:5]:
+        print(f"  EDGE_ANOMALY {anom['flx'][:60]:60} edge_p95={anom['edge_p95']} corner_tl={anom.get('corner_tl_p95')}")
     for row in report["rows"]:
         if row["status"] == "ok":
             continue

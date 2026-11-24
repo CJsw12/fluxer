@@ -162,7 +162,13 @@ const HOVER_TARGETS = [
 	{slug: 'hover_rail_guild', expr: `document.querySelector('[data-flx="app.sidebar-nav.guild-list-item-presentation.guild-list-item.click"]')`},
 	{slug: 'hover_rail_discover', expr: `document.querySelector('[data-flx="app.sidebar-nav.discovery-button.button.click"]')`},
 	{slug: 'hover_rail_add', expr: `document.querySelector('[data-flx="app.sidebar-nav.add-guild-button.button.add-guild"]')`},
-	{slug: 'hover_guild_header', expr: `document.querySelector('[data-flx="app.guild-header.header-wrapper"]')`},
+	{slug: 'hover_guild_header', container: 'app.guild-header.header-wrapper', expr: `document.querySelector('[data-flx="app.guild-header.header-wrapper"]')`},
+	{
+		slug: 'hover_channel_header',
+		container: 'channel.channel-header.header-wrapper',
+		offset: [120, 28],
+		expr: `document.querySelector('[data-flx="channel.channel-header.header-wrapper"]')`,
+	},
 	{
 		slug: 'hover_channel_row',
 		expr: `[...document.querySelectorAll('[data-flx="app.generic-channel-item.long-pressable.click"]')].find(e => {
@@ -170,13 +176,14 @@ const HOVER_TARGETS = [
 		  return /,\\s*channel\\b/i.test(l) && !/selected/i.test(l) && !/category/i.test(l) && !/voice channel/i.test(l);
 		})`,
 	},
-	{slug: 'hover_header_mute', expr: `document.querySelector('[data-flx="channel.channel-header-components.channel-notification-settings-button.channel-header-icon.click"]')`},
-	{slug: 'hover_header_members', expr: `document.querySelector('[data-flx="channel.channel-header.channel-header-icon.toggle-members"]')`},
-	{slug: 'hover_header_inbox', expr: `document.querySelector('[data-flx="channel.channel-header.inbox-button"]')`},
+	{slug: 'hover_header_mute', container: 'channel.channel-header.header-wrapper', expr: `document.querySelector('[data-flx="channel.channel-header-components.channel-notification-settings-button.channel-header-icon.click"]')`},
+	{slug: 'hover_header_members', container: 'channel.channel-header.header-wrapper', expr: `document.querySelector('[data-flx="channel.channel-header.channel-header-icon.toggle-members"]')`},
+	{slug: 'hover_header_inbox', container: 'channel.channel-header.header-wrapper', expr: `document.querySelector('[data-flx="channel.channel-header.inbox-button"]')`},
 	{slug: 'hover_message_row', expr: `document.querySelector('[data-flx="channel.message.article.alt-click"]')`},
-	{slug: 'hover_user_mute', expr: `document.querySelector('${MUTE_SEL}')`},
-	{slug: 'hover_user_deafen', expr: `document.querySelector('${DEAFEN_SEL}')`},
-	{slug: 'hover_user_settings', expr: `document.querySelector('[data-flx="app.user-area.user-area-inner.control-button.settings-click"]')`},
+	{slug: 'hover_user_profile', container: 'app.user-area.user-area-inner.section', expr: `document.querySelector('[data-flx="app.user-area.user-area-inner.focus-ring-wrapper"]')`},
+	{slug: 'hover_user_mute', container: 'app.user-area.user-area-inner.section', expr: `document.querySelector('${MUTE_SEL}')`},
+	{slug: 'hover_user_deafen', container: 'app.user-area.user-area-inner.section', expr: `document.querySelector('${DEAFEN_SEL}')`},
+	{slug: 'hover_user_settings', container: 'app.user-area.user-area-inner.section', expr: `document.querySelector('[data-flx="app.user-area.user-area-inner.control-button.settings-click"]')`},
 ];
 
 const results = [];
@@ -209,6 +216,8 @@ try {
 
 	for (const t of HOVER_TARGETS) {
 		await park();
+		const ptOffset = t.offset || null;
+		const cSelector = t.container || '';
 		const info = await cdp.eval(`(() => {
 		  const el = ${t.expr};
 		  if (!el) return null;
@@ -217,8 +226,16 @@ try {
 		  const idx = flx ? [...document.querySelectorAll('[data-flx="' + CSS.escape(flx) + '"]')].indexOf(el) : 0;
 		  const cs = getComputedStyle(el);
 		  const before = {}; for (const k of ${JSON.stringify(STYLE_KEYS)}) before[k] = cs[k];
+		  const off = ${JSON.stringify(ptOffset)};
+		  const cx = off ? Math.round(r.left + off[0]) : Math.round(r.left + r.width / 2);
+		  const cy = off ? Math.round(r.top + off[1]) : Math.round(r.top + r.height / 2);
+		  let crect = null;
+		  if (${JSON.stringify(cSelector)}) {
+		    const cel = document.querySelector('[data-flx="' + ${JSON.stringify(cSelector)} + '"]');
+		    if (cel) { const cr = cel.getBoundingClientRect(); crect = [Math.round(cr.left), Math.round(cr.top), Math.round(cr.width), Math.round(cr.height)]; }
+		  }
 		  return {flx, idx, label: el.getAttribute('aria-label') || '', rect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)],
-		    cx: Math.round(r.left + r.width / 2), cy: Math.round(r.top + r.height / 2), before};
+		    cx, cy, offset: off, container_flx: ${JSON.stringify(cSelector)} || null, container_rect: crect, before};
 		})()`);
 		if (!info) {
 			console.log(`${t.slug}: target missing`);
@@ -239,7 +256,9 @@ try {
 			if (info.before[k] !== after[k]) styleDiff[k] = [info.before[k], after[k]];
 		}
 		results.push(await saveState(t.slug, {
-			target: {flx: info.flx, idx: info.idx, label: info.label, rect: info.rect, center: [info.cx, info.cy]},
+			target: {flx: info.flx, idx: info.idx, label: info.label, rect: info.rect, center: [info.cx, info.cy], offset: info.offset},
+			container_flx: info.container_flx,
+			container_rect: info.container_rect,
 			style_diff: styleDiff,
 		}));
 	}

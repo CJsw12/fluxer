@@ -195,6 +195,7 @@ Git Bash에서는 `/channels/...` 인자가 Windows 경로로 바뀌지 않도�
 - **에이전트 보고를 그대로 믿음** → 미검증 수치·추측이 섞임. 예방: 루트가 빌드 후 실측으로 다시 판정한다.
 - **Git Bash 경로 변환·키 경로 공백·백그라운드 2시간 제한** → 도구 실패. 예방: 위 "Tool quick reference"와 상시 실행 구성 항목 참고.
 - **개인 정보 커밋 위험** → 예방: 커밋 전 IP·키 경로·사용자 경로·계정 문자열을 검색하고, `Logs/`와 `*.local.md`는 커밋하지 않는다.
+- **전체 박스·모서리·미태그 모달·컨테이너 호버·의미 차이 누락(2026-11-24 추가 발견 6건)** → ① `sample_colors`가 박스 중앙 50%만 봐서 1px 관통 선(하단 프로필 위 외곽선)과 모서리 반경(멤버 목록 14px 둥근 모서리)을 놓침 ② `.flx` 태그 없는 모달(설정 창)은 `coverage` 숫자만 찍히고 게이트에 걸리지 않음 ③ `state_matrix.py`가 호버 시 대상 작은 박스(32×32) 안쪽만 비교하고 주변 컨테이너 전체를 보지 않았으며 exit 0만 반환해 헤더·사용자 영역 숨은 호버 버튼(채널 설정 기어·길드 액션·계정 전환 버튼)을 놓침 ④ `replay.py`·`composer.rs`가 버튼 클릭 뒤 "서로 다른 화면이 열리는지"를 검사하지 않아 스티커 버튼이 이모지 피커를 여는 결함을 놓침. **예방:** `compare.py`에 전체 박스 `edge_p95`·모서리 16×16 패치·`diff_heatmap.png`·`top_untagged_official`를 넣고, `state_matrix.py --strict`가 컨테이너 밝은 픽셀 변화(`phantom_hover_ui`)와 툴팁 누락 시 실패하도록 바꾸며, `check_surface_parity.py`가 미디어/스티커/이모지 분리·숨은 호버 부재·프레임 이음매·설정 명암을 검증한다.
 
 ### 10.7 도구 빠른 참조 (PowerShell·Git Bash 공통)
 Run everything from the repo root. In **PowerShell** there is no MSYS path mangling (ignore `MSYS_NO_PATHCONV`); in **Git Bash** prefix commands that pass `/channels/...` with `MSYS_NO_PATHCONV=1`. Python always `python -I`. Long jobs (builds, crawls) as background tasks with completion notification; never poll with sleep loops.
@@ -213,7 +214,8 @@ Run everything from the repo root. In **PowerShell** there is no MSYS path mangl
 - Voice helpers: `node tools/parity_lab/voice_official.mjs --attach 9334 join|watch|share|stop|leave [--guild G --channel C]`.
 **Loops and checks**
 - Dev loop: `python -I tools/parity_lab/cycle.py [--release] [--worker] [--skip-tests] [--check OFFICIAL.dom.json OFFICIAL.png <link> OUT]`.
-- Scene diff: `python -I tools/parity_lab/check_scene.py OFFICIAL.dom.json OFFICIAL.png <link> OUT [--official-offset 0,32]`; generic join: `compare.py`; replay crawl graph on Rust: `replay.py GRAPH_DIR OUT --link <link>`.
+- Scene diff: `python -I tools/parity_lab/check_scene.py OFFICIAL.dom.json OFFICIAL.png <link> OUT [--official-offset 0,32]`; generic join: `compare.py` (writes `diff_heatmap.png`); replay crawl graph on Rust: `replay.py GRAPH_DIR OUT --link <link>`.
+- State & surface gates: `python -I tools/parity_lab/state_matrix.py --strict --launch-rust dist/fluxer_client/fluxer_client.exe --out OUT` (blocks `phantom_hover_ui` spikes and missing tooltips); `python -I tools/parity_lab/check_surface_parity.py --launch-rust dist/fluxer_client/fluxer_client.exe --out OUT` (seam, member corner, hover phantom UI, Media/Stickers/Emojis split, settings contrast).
 - Screen share both ways: `python -I tools/parity_lab/share_check.py --guild G --channel C --out OUT` (needs release client with worker).
 - Icons: `python -I tools/parity_lab/check_icons.py` (manifest + originals, must be 0 errors); ground truth list `tools/parity_lab/official_icons.json`.
 - Tests: `cd fluxer_client; $env:CARGO_TARGET_DIR="<repo>\target\fc-root"; cargo test --workspace -j 4 -- --test-threads=2`; voice_worker: `cd fluxer_client\voice_worker; $env:CARGO_TARGET_DIR="<repo>\target\vw"; cargo test --release -j 4`.

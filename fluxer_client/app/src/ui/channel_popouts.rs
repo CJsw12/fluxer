@@ -109,9 +109,11 @@ pub enum ChannelPopoutKind {
         tab: InboxTab,
     },
     ComposerPlusMenu,
-    /// The message "More" menu, opened from the hover bar's More button.
+    /// The message "More" / right-click menu.
     MessageMenu {
         target: ActionTarget,
+        at_cursor: bool,
+        translate_submenu: bool,
     },
 }
 
@@ -258,6 +260,9 @@ impl ClientView {
         if !self.toggle_channel_popout_key("inbox", window, cx) {
             return;
         }
+        if !self.backend.state().saved_messages_loaded {
+            self.backend.load_saved_messages();
+        }
         self.prepare_overlay_replace(cx);
         self.autocomplete = None;
         self.overlay = Overlay::ChannelPopout(ChannelPopout {
@@ -300,8 +305,50 @@ impl ClientView {
         };
         self.prepare_overlay_replace(cx);
         self.autocomplete = None;
-        self.overlay = Overlay::ChannelPopout(ChannelPopout { kind: ChannelPopoutKind::MessageMenu { target }, anchor });
+        self.overlay = Overlay::ChannelPopout(ChannelPopout {
+            kind: ChannelPopoutKind::MessageMenu {
+                target,
+                at_cursor: false,
+                translate_submenu: false,
+            },
+            anchor,
+        });
         cx.notify();
+    }
+
+    /// Opens the message context menu at cursor coordinates (right click on a message row).
+    pub(crate) fn open_message_menu_at(
+        &mut self,
+        target: ActionTarget,
+        anchor: Point<Pixels>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !target.sent {
+            return;
+        }
+        self.dismissed_channel_popout = None;
+        self.prepare_overlay_replace(cx);
+        self.autocomplete = None;
+        self.overlay = Overlay::ChannelPopout(ChannelPopout {
+            kind: ChannelPopoutKind::MessageMenu {
+                target,
+                at_cursor: true,
+                translate_submenu: false,
+            },
+            anchor,
+        });
+        cx.notify();
+    }
+
+    pub(crate) fn set_message_menu_translate_submenu(&mut self, open: bool, cx: &mut Context<Self>) {
+        if let Overlay::ChannelPopout(pop) = &mut self.overlay
+            && let ChannelPopoutKind::MessageMenu { translate_submenu, .. } = &mut pop.kind
+            && *translate_submenu != open
+        {
+            *translate_submenu = open;
+            cx.notify();
+        }
     }
 
     pub(crate) fn set_threads_popout_tab(&mut self, tab: ThreadsTab, cx: &mut Context<Self>) {
@@ -318,6 +365,9 @@ impl ClientView {
             && let ChannelPopoutKind::Inbox { tab: active } = &mut pop.kind
         {
             *active = tab;
+            if tab == InboxTab::Bookmarks && !self.backend.state().saved_messages_loaded {
+                self.backend.load_saved_messages();
+            }
             cx.notify();
         }
     }
@@ -395,11 +445,11 @@ pub fn render(
             "ui.action-menu.context-menu.popup",
             render_composer_plus(!composer_text::wire_text(view.composer.read(cx)).trim().is_empty(), theme, hover_bg, cx),
         ),
-        ChannelPopoutKind::MessageMenu { target } => (
+        ChannelPopoutKind::MessageMenu { target, .. } => (
             208.,
             message_menu_height(target),
             "ui.action-menu.context-menu.popup",
-            render_message_menu(target, theme, hover_bg, cx),
+            render_message_menu(view, target, theme, hover_bg, cx),
         ),
     };
 
@@ -413,9 +463,13 @@ pub fn render(
     // from the trigger's left edge with a 4px gap.
     let (anchor_corner, left, top) = match &pop.kind {
         ChannelPopoutKind::Inbox { .. } => (Anchor::TopLeft, (vw - width - 16.).max(16.), 52.0_f32.min((vh - height - 12.).max(44.))),
+        // Right-click message menu opens at cursor clamped within viewport.
+        ChannelPopoutKind::MessageMenu { at_cursor: true, .. } => {
+            (Anchor::TopLeft, ax.clamp(12., (vw - width - 12.).max(12.)), ay.clamp(12., (vh - height - 12.).max(12.)))
+        }
         // The message menu opens left of the More button (8px gap), top-aligned to it and
         // pushed up to stay 12px inside the window.
-        ChannelPopoutKind::MessageMenu { .. } => {
+        ChannelPopoutKind::MessageMenu { at_cursor: false, .. } => {
             (Anchor::TopRight, (ax - 8.).max(width + 16.), ay.min(vh - height - 12.).max(12.))
         }
         ChannelPopoutKind::ComposerPlusMenu => (Anchor::BottomLeft, ax.clamp(16., (vw - width - 16.).max(16.)), ay - 4.),
@@ -423,7 +477,21 @@ pub fn render(
     };
 
     let weak_dismiss = cx.weak_entity();
-    let panel = div()
+    let dismiss_out = move |_: &gpui_kit::MouseDownEvent, window: &mut Window, cx: &mut gpui_kit::App| {
+        let _ = weak_dismiss.update(cx, |v, cx| {
+            v.dismissed_channel_popout = Some(key);
+            v.close_overlay(window, cx);
+        });
+    };
+    let translate_sub_content = match &pop.kind {
+        ChannelPopoutKind::MessageMenu { target, translate_submenu: true, .. }
+            if !target.content.trim().is_empty() =>
+        {
+            Some(target.content.clone())
+        }
+        _ => None,
+    };
+    let mut panel = div()
         .id(SharedString::from(format!("channel-popout-{key}")))
         .debug_selector(move || format!("channel-popout-{key}"))
         .key_context(POPOUT_CONTEXT)
@@ -444,20 +512,40 @@ pub fn render(
             this.close_overlay(window, cx);
         }))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-        .on_mouse_down_out(move |_, window, cx| {
-            let _ = weak_dismiss.update(cx, |v, cx| {
-                v.dismissed_channel_popout = Some(key);
-                v.close_overlay(window, cx);
-            });
-        })
         .flx(flx)
         .child(body);
+
+    let (final_anchor, final_left, anchored_child): (Anchor, f32, AnyElement) = match translate_sub_content {
+        Some(content) => {
+            let panel_left = if matches!(anchor_corner, Anchor::TopRight) { left - width } else { left };
+            let sub_on_right = panel_left + width + 190. <= vw - 12.;
+            let sub_col = div()
+                .pt(px(64.))
+                .child(render_translate_submenu(&content, theme, bg, border, hover_bg, cx));
+            let wrap = div()
+                .id("channel-popout-submenu-wrap")
+                .flex()
+                .flex_row()
+                .items_start()
+                .gap_1()
+                .on_mouse_down_out(dismiss_out);
+            if sub_on_right {
+                (Anchor::TopLeft, panel_left, wrap.child(panel).child(sub_col).into_any_element())
+            } else {
+                (Anchor::TopRight, panel_left + width, wrap.child(sub_col).child(panel).into_any_element())
+            }
+        }
+        None => {
+            panel = panel.on_mouse_down_out(dismiss_out);
+            (anchor_corner, left, panel.into_any_element())
+        }
+    };
 
     div()
         .absolute()
         .top_0()
         .left_0()
-        .child(anchored().position(gpui_kit::point(px(left), px(top))).anchor(anchor_corner).child(panel))
+        .child(anchored().position(gpui_kit::point(px(final_left), px(top))).anchor(final_anchor).child(anchored_child))
         .into_any_element()
 }
 
@@ -476,15 +564,16 @@ pub(crate) fn message_menu_height(target: &ActionTarget) -> f32 {
     14. + items + 9. * groups.len().saturating_sub(1) as f32
 }
 
-/// The message "More" menu (`MessageContextMenu.tsx`). Each item calls
-/// `ClientView::message_action` with its own [`MessageAction`]; items without a
-/// Rust feature yet only close the menu there.
+/// The message "More" / right-click menu (`MessageContextMenu.tsx`). Each item calls
+/// `ClientView::message_action` with its own [`MessageAction`].
 fn render_message_menu(
+    view: &ClientView,
     target: &ActionTarget,
     theme: &Theme,
     hover_bg: gpui_kit::Hsla,
     cx: &mut Context<ClientView>,
 ) -> AnyElement {
+    let speaking = view.tts.is_speaking();
     let danger: gpui_kit::Hsla = rgb(0xe8605f).into();
     let separator = || {
         div().mx(px(2.)).my(px(4.)).h(px(1.)).w(px(190.)).flex_none().bg(gpui_kit::Hsla::from(rgba(0xc9c5d326))).flx("ui.action-menu.context-menu.separator")
@@ -508,6 +597,7 @@ fn render_message_menu(
                         .flex_row()
                         .gap(px(4.))
                         .flx("ui.action-menu.message-context-menu.render-reactions-header.aria-menu-section")
+                        .on_mouse_move(cx.listener(|this, _, _, cx| this.set_message_menu_translate_submenu(false, cx)))
                         .children(message_actions::MENU_QUICK_EMOJI.iter().map(|name| {
                             let emoji = PartialEmoji { id: None, name: (*name).to_owned(), animated: false };
                             div()
@@ -542,15 +632,36 @@ fn render_message_menu(
                         .into_any_element()
                 }
                 message_actions::MenuItem::Action(action) => {
-                    let label = message_actions::tooltip(action, target);
+                    let label = if action == MessageAction::Speak && speaking {
+                        l10n::tr("Stop speaking")
+                    } else {
+                        message_actions::tooltip(action, target)
+                    };
+                    let item_icon = if action == MessageAction::Speak && speaking {
+                        AppIcon::SpeakerSlash
+                    } else {
+                        message_actions::icon(action, target)
+                    };
                     let color = if action == MessageAction::Delete { danger } else { theme.foreground };
                     let icon_color = if action == MessageAction::Delete { danger } else { theme.muted_foreground };
                     let t = target.clone();
                     let row = context_menu_item(format!("msg-menu-{action:?}"), hover_bg)
                         .text_color(color)
-                        .on_click(cx.listener(move |this, _, window, cx| {
+                        .on_mouse_move(cx.listener(move |this, _, _, cx| {
+                            this.set_message_menu_translate_submenu(action == MessageAction::Translate, cx);
+                        }))
+                        .on_click(cx.listener(move |this, ev: &gpui_kit::ClickEvent, window, cx| {
+                            let dispatched = if ev.modifiers().shift {
+                                match action {
+                                    MessageAction::Delete => MessageAction::DeleteNow,
+                                    MessageAction::Pin => MessageAction::PinNow,
+                                    other => other,
+                                }
+                            } else {
+                                action
+                            };
                             this.close_overlay(window, cx);
-                            this.message_action(action, &t, window, cx);
+                            this.message_action(dispatched, &t, window, cx);
                         }));
                     if action == MessageAction::React {
                         // A submenu trigger (emoji picker) in the official app.
@@ -591,7 +702,7 @@ fn render_message_menu(
                                         div()
                                             .size(px(18.))
                                             .flx(message_actions::menu_icon_flx(action))
-                                            .child(Icon::new(message_actions::icon(action, target)).with_size(px(18.)).text_color(icon_color)),
+                                            .child(Icon::new(item_icon).with_size(px(18.)).text_color(icon_color)),
                                     ),
                             )
                             .into_any_element()
@@ -602,6 +713,43 @@ fn render_message_menu(
         body = body.child(col);
     }
     div().p(px(6.)).child(body).into_any_element()
+}
+
+fn render_translate_submenu(
+    content: &SharedString,
+    theme: &Theme,
+    bg: gpui_kit::Hsla,
+    border: gpui_kit::Hsla,
+    hover_bg: gpui_kit::Hsla,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
+    div()
+        .id("message-translate-submenu")
+        .debug_selector(|| "message-translate-submenu".to_owned())
+        .w(px(186.))
+        .p(px(6.))
+        .rounded(px(8.))
+        .border_1()
+        .border_color(border)
+        .bg(bg)
+        .shadow_lg()
+        .occlude()
+        .flex()
+        .flex_col()
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .children(message_actions::TRANSLATION_PROVIDERS.iter().map(|(id, name, _)| {
+            let provider_id = *id;
+            let text = content.clone();
+            context_menu_item(format!("translate-provider-{provider_id}"), hover_bg)
+                .text_color(theme.foreground)
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.close_overlay(window, cx);
+                    this.translate_message(provider_id, &text, window, cx);
+                }))
+                .child(div().flex_1().min_w_0().truncate().child(*name))
+                .child(Icon::new(AppIcon::ArrowSquareOut).with_size(px(14.)).text_color(theme.muted_foreground))
+        }))
+        .into_any_element()
 }
 
 fn channel_notification_state(state: &ClientState, channel_id: Snowflake) -> (bool, u8, i8) {
@@ -1221,31 +1369,133 @@ fn render_inbox(
                     .into_any_element()
             }
         }
-        InboxTab::Bookmarks => div()
-            .flex_1()
-            .min_h_0()
-            .px_8()
-            .flex()
-            .flex_col()
-            .items_center()
-            .justify_center()
-            .gap_2()
-            .flx("messaging.inbox-popout.empty")
-            .child(Icon::new(AppIcon::Star).with_size(px(36.)).text_color(theme.muted_foreground))
-            .child(
+        InboxTab::Bookmarks => {
+            let bookmarks: Vec<(Snowflake, Snowflake, String, String)> = {
+                let state = view.backend.state();
+                let mut list: Vec<_> = state
+                    .saved_messages
+                    .values()
+                    .map(|entry| {
+                        let (author, content) = match &entry.message {
+                            Some(m) => {
+                                let author = m.author.global_name.clone().unwrap_or_else(|| m.author.username.clone());
+                                let body = if m.content.trim().is_empty() {
+                                    l10n::tr("(attachment)")
+                                } else {
+                                    m.content.clone()
+                                };
+                                (author, body)
+                            }
+                            None => (l10n::tr("Message"), l10n::tr("Message preview unavailable.")),
+                        };
+                        (entry.channel_id, entry.message_id, author, content)
+                    })
+                    .collect();
+                list.sort_by(|a, b| b.1.cmp(&a.1));
+                list
+            };
+            if bookmarks.is_empty() {
                 div()
-                    .text_base()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(theme.foreground)
-                    .child(l10n::tr("No bookmarks yet")),
-            )
-            .child(
+                    .flex_1()
+                    .min_h_0()
+                    .px_8()
+                    .flex()
+                    .flex_col()
+                    .items_center()
+                    .justify_center()
+                    .gap_2()
+                    .flx("messaging.inbox-popout.empty")
+                    .child(Icon::new(AppIcon::Star).with_size(px(36.)).text_color(theme.muted_foreground))
+                    .child(
+                        div()
+                            .text_base()
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(theme.foreground)
+                            .child(l10n::tr("No bookmarks yet")),
+                    )
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(theme.muted_foreground)
+                            .child(l10n::tr("Bookmark messages to find them here later.")),
+                    )
+                    .into_any_element()
+            } else {
                 div()
-                    .text_sm()
-                    .text_color(theme.muted_foreground)
-                    .child(l10n::tr("Bookmark messages to find them here later.")),
-            )
-            .into_any_element(),
+                    .id("inbox-bookmarks-scroll")
+                    .flex_1()
+                    .min_h_0()
+                    .overflow_y_scroll()
+                    .p_3()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .children(bookmarks.into_iter().map(|(ch_id, msg_id, author, content)| {
+                        div()
+                            .id(SharedString::from(format!("inbox-bookmark-{}", msg_id.0)))
+                            .debug_selector(move || format!("inbox-bookmark-{}", msg_id.0))
+                            .p_2p5()
+                            .rounded(px(8.))
+                            .bg(theme.background)
+                            .border_1()
+                            .border_color(theme.border)
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .justify_between()
+                                    .child(
+                                        div()
+                                            .text_sm()
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(theme.foreground)
+                                            .child(author),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_row()
+                                            .items_center()
+                                            .gap_1()
+                                            .child(
+                                                div()
+                                                    .debug_selector(move || format!("bookmark-jump-{}", msg_id.0))
+                                                    .child(
+                                                        Button::new(SharedString::from(format!("bookmark-jump-{}", msg_id.0)))
+                                                            .ghost()
+                                                            .small()
+                                                            .label(l10n::tr("Jump"))
+                                                            .on_click(cx.listener(move |this, _, window, cx| {
+                                                                this.jump_to_message(ch_id, msg_id, cx);
+                                                                this.close_overlay(window, cx);
+                                                            })),
+                                                    ),
+                                            )
+                                            .child(
+                                                div()
+                                                    .debug_selector(move || format!("bookmark-remove-{}", msg_id.0))
+                                                    .child(
+                                                        Button::new(SharedString::from(format!("bookmark-remove-{}", msg_id.0)))
+                                                            .ghost()
+                                                            .small()
+                                                            .label(l10n::tr("Remove"))
+                                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                                this.backend.toggle_bookmark(ch_id, msg_id);
+                                                                this.refresh(cx);
+                                                            })),
+                                                    ),
+                                            ),
+                                    ),
+                            )
+                            .child(div().text_sm().text_color(theme.muted_foreground).child(content))
+                    }))
+                    .into_any_element()
+            }
+        }
         InboxTab::Mentions => {
             let my_id = view.user.as_ref().map(|u| u.id);
             let mentions: Vec<(Snowflake, Snowflake, String, String)> = {

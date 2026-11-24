@@ -27,6 +27,16 @@ impl Snowflake {
         Snowflake(ms.saturating_sub(FLUXER_EPOCH_MS) << TIMESTAMP_SHIFT)
     }
 
+    /// Smallest snowflake 1 ms earlier (`SnowflakeUtils.atPreviousMillisecond`).
+    pub fn at_previous_millisecond(self) -> Self {
+        let ms = self.timestamp_ms();
+        if ms <= FLUXER_EPOCH_MS {
+            Snowflake(0)
+        } else {
+            Self::from_unix_ms(ms - 1)
+        }
+    }
+
     /// Parses a decimal snowflake string.
     pub fn parse(s: &str) -> Option<Self> {
         s.parse::<u64>().ok().map(Snowflake)
@@ -86,5 +96,22 @@ pub(crate) mod bitfield_str {
 
     pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u64, D::Error> {
         deserializer.deserialize_any(U64Visitor)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn at_previous_millisecond_steps_back_or_clamps_to_zero() {
+        let base_ms = FLUXER_EPOCH_MS + 5_000;
+        let id = Snowflake((base_ms - FLUXER_EPOCH_MS) << TIMESTAMP_SHIFT | 0x3FF);
+        let prev = id.at_previous_millisecond();
+        assert_eq!(prev.timestamp_ms(), base_ms - 1);
+        assert!(prev < id);
+
+        assert_eq!(Snowflake(0).at_previous_millisecond(), Snowflake(0));
+        assert_eq!(Snowflake(123).at_previous_millisecond(), Snowflake(0));
     }
 }

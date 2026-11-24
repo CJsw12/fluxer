@@ -13,8 +13,10 @@ mod notes;
 mod reactions;
 mod read_states;
 mod relationships;
+mod saved_messages;
 mod search;
 mod settings;
+mod threads;
 mod typing;
 mod users;
 
@@ -37,6 +39,10 @@ pub(in crate::rest) use messages::message_body;
 pub use messages::{EditMessageRequest, MessageQuery, MessageReference, PinsQuery, SendMessageRequest};
 pub use reactions::{ReactionEmoji, ReactionUsersQuery, encode_uri_component};
 pub use read_states::AckRequest;
+pub use saved_messages::SavedMessagesQuery;
+pub use threads::{
+    CreateThreadFromMessageRequest, MAX_THREAD_NAME_UTF16, THREAD_AUTO_ARCHIVE_DURATIONS, validate_thread_name,
+};
 pub use typing::{
     TYPING_IMMEDIATE_SEND_IDLE, TYPING_SEND_DELAY, TYPING_THROTTLE, TypingCooldown, TypingPlan, TypingThrottle,
 };

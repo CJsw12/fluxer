@@ -3,6 +3,7 @@
     python -I tools/parity_lab/rust_probe.py inspect > out.json
     python -I tools/parity_lab/rust_probe.py resize 1280 800
     python -I tools/parity_lab/rust_probe.py click <flx> [index]
+    python -I tools/parity_lab/rust_probe.py right-click <flx> [index]
     python -I tools/parity_lab/rust_probe.py dblclick <flx> [index]
     python -I tools/parity_lab/rust_probe.py drag <flx> <to_x> <to_y> [index] [steps]
     python -I tools/parity_lab/rust_probe.py key escape
@@ -78,6 +79,8 @@ def main(argv: list[str]) -> int:
         r = send("probe_resize", w=float(rest[0]), h=float(rest[1]))
     elif cmd == "click":
         r = send("probe_click", flx=rest[0], **({"index": int(rest[1])} if len(rest) > 1 else {}))
+    elif cmd in ("right-click", "rclick"):
+        r = send("probe_right_click", flx=rest[0], **({"index": int(rest[1])} if len(rest) > 1 else {}))
     elif cmd == "dblclick":
         r = send("probe_dblclick", flx=rest[0], **({"index": int(rest[1])} if len(rest) > 1 else {}))
     elif cmd == "drag":

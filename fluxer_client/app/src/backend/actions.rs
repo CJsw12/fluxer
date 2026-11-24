@@ -10,11 +10,16 @@ use std::time::Instant;
 
 use fluxer_client_core::Dispatch;
 use fluxer_client_core::rest::{
-    EditMessageRequest, MessageReference, ReactionEmoji, RestError, SendMessageRequest, TypingPlan, TypingThrottle,
+    EditMessageRequest, MessageReference, ReactionEmoji, RestError, SavedMessagesQuery, SendMessageRequest,
+    TypingPlan, TypingThrottle,
 };
-use fluxer_client_core::state::{ClientState, MessageState, PartialEmoji, Snowflake, toggled_suppress_embeds};
+use fluxer_client_core::state::{
+    ClientState, Message, MessageState, PartialEmoji, SavedMessageEntry, Snowflake, toggled_suppress_embeds,
+};
 use serde_json::{Value, json};
 
+#[cfg(test)]
+use super::lock_sent;
 use super::{Backend, UiEvent, lock};
 
 /// Paces `POST /channels/{c}/typing` for one composer
@@ -326,6 +331,214 @@ impl Backend {
             }
         });
     }
+
+    /// Pins or unpins a sent message optimistically (`ChannelPinsCommands`),
+    /// rolling back `pinned` on REST error.
+    pub fn toggle_pin(&self, channel_id: Snowflake, message_id: Snowflake, pin: bool) -> bool {
+        let already = {
+            let mut state = self.state();
+            let Some(message) = state.messages.message(channel_id, message_id) else {
+                return false;
+            };
+            if message.state != MessageState::Sent || message.pinned == pin {
+                return false;
+            }
+            state.apply(&pin_patch(channel_id, message_id, pin));
+            pin
+        };
+        let _ = self.events.send(UiEvent::StateChanged);
+        let rest = self.rest.clone();
+        let state = self.state.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            let (ch, msg) = (channel_id.to_string(), message_id.to_string());
+            let result = if already {
+                rest.pin_message(&ch, &msg).await
+            } else {
+                rest.unpin_message(&ch, &msg).await
+            };
+            if let Err(err) = result {
+                lock(&state).apply(&pin_patch(channel_id, message_id, !already));
+                let verb = if already { "pin" } else { "unpin" };
+                let _ = events.send(UiEvent::ActionFailed {
+                    error: format!("Could not {verb} the message: {err}"),
+                });
+                let _ = events.send(UiEvent::StateChanged);
+            }
+        });
+        true
+    }
+
+    /// Loads `GET /users/@me/saved-messages` and replaces `ClientState.saved_messages`.
+    pub fn load_saved_messages(&self) {
+        let rest = self.rest.clone();
+        let state = self.state.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            let query = SavedMessagesQuery { limit: Some(50), before: None };
+            let error = match rest.list_saved_messages(&query).await {
+                Ok(body) => {
+                    let entries = parse_saved_entries(&body);
+                    lock(&state).set_saved_messages(entries);
+                    let _ = events.send(UiEvent::StateChanged);
+                    None
+                }
+                Err(err) => Some(err.to_string()),
+            };
+            let _ = events.send(UiEvent::SavedMessagesLoaded { error });
+        });
+    }
+
+    /// Optimistically bookmarks or unbookmarks a sent message (`SavedMessageCommands`),
+    /// rolling back on REST failure.
+    pub fn toggle_bookmark(&self, channel_id: Snowflake, message_id: Snowflake) -> bool {
+        let (remove_existing, rollback) = {
+            let mut state = self.state();
+            if let Some(existing) = state.remove_local_saved_message(message_id) {
+                (true, Some(existing))
+            } else {
+                let message = state.messages.message(channel_id, message_id).cloned();
+                if message.as_ref().is_some_and(|m| m.state != MessageState::Sent) {
+                    return false;
+                }
+                let entry = SavedMessageEntry {
+                    id: message_id,
+                    channel_id,
+                    message_id,
+                    message,
+                };
+                state.apply_local_saved_message(entry);
+                (false, None)
+            }
+        };
+        let _ = self.events.send(UiEvent::StateChanged);
+        let rest = self.rest.clone();
+        let state = self.state.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            let result = if remove_existing {
+                rest.unsave_message(&message_id.to_string()).await
+            } else {
+                rest.save_message(&channel_id.to_string(), &message_id.to_string()).await
+            };
+            if let Err(err) = result {
+                let mut st = lock(&state);
+                if remove_existing {
+                    if let Some(entry) = rollback {
+                        st.apply_local_saved_message(entry);
+                    }
+                } else {
+                    st.remove_local_saved_message(message_id);
+                }
+                drop(st);
+                let verb = if remove_existing { "remove bookmark for" } else { "bookmark" };
+                let _ = events.send(UiEvent::ActionFailed {
+                    error: format!("Could not {verb} the message: {err}"),
+                });
+                let _ = events.send(UiEvent::StateChanged);
+            }
+        });
+        true
+    }
+
+    /// Forwards `message_id` from `source_channel_id` to every channel in `target_channels`
+    /// (`MessageCommands.forward`), optionally followed by a comment message.
+    pub fn forward_message(
+        &self,
+        seq: u64,
+        source_channel_id: Snowflake,
+        source_guild_id: Option<Snowflake>,
+        message_id: Snowflake,
+        target_channels: Vec<Snowflake>,
+        comment: Option<String>,
+    ) {
+        if target_channels.is_empty() {
+            return;
+        }
+        let trimmed_comment = comment
+            .map(|s| s.trim().to_owned())
+            .filter(|s| !s.is_empty());
+        let mut jobs: Vec<(Snowflake, SendMessageRequest, Option<SendMessageRequest>)> =
+            Vec::with_capacity(target_channels.len());
+        for &target in &target_channels {
+            let fwd_nonce = self.next_nonce();
+            let fwd_req = SendMessageRequest {
+                content: Some(String::new()),
+                nonce: fwd_nonce.to_string(),
+                message_reference: Some(MessageReference {
+                    message_id: message_id.to_string(),
+                    channel_id: Some(source_channel_id.to_string()),
+                    guild_id: source_guild_id.map(|g| g.to_string()),
+                    kind: Some(1),
+                }),
+                allowed_mentions: None,
+                flags: 0,
+            };
+            let comment_req = trimmed_comment.as_ref().map(|text| SendMessageRequest {
+                content: Some(text.clone()),
+                nonce: self.next_nonce().to_string(),
+                ..SendMessageRequest::default()
+            });
+            #[cfg(test)]
+            {
+                lock_sent(&self.sent).push((target, fwd_req.clone()));
+                if let Some(c) = &comment_req {
+                    lock_sent(&self.sent).push((target, c.clone()));
+                }
+            }
+            jobs.push((target, fwd_req, comment_req));
+        }
+
+        let rest = self.rest.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            let mut error = None;
+            for (target, fwd_req, comment_req) in jobs {
+                if let Err(err) = rest.send_message_request(&target.to_string(), &fwd_req).await {
+                    error = Some(err.to_string());
+                    break;
+                }
+                if let Some(c_req) = comment_req
+                    && let Err(err) = rest.send_message_request(&target.to_string(), &c_req).await
+                {
+                    error = Some(err.to_string());
+                    break;
+                }
+            }
+            let _ = events.send(UiEvent::MessageForwarded { seq, target_channels, error });
+        });
+    }
+}
+
+fn pin_patch(channel_id: Snowflake, message_id: Snowflake, pinned: bool) -> Dispatch {
+    local_dispatch(
+        "MESSAGE_UPDATE",
+        json!({ "id": message_id.to_string(), "channel_id": channel_id.to_string(), "pinned": pinned }),
+    )
+}
+
+fn parse_saved_entries(body: &Value) -> Vec<SavedMessageEntry> {
+    body.as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| {
+                    let message_id = item.get("message_id").and_then(Value::as_str).and_then(Snowflake::parse)?;
+                    let channel_id = item.get("channel_id").and_then(Value::as_str).and_then(Snowflake::parse)?;
+                    let id = item
+                        .get("id")
+                        .and_then(Value::as_str)
+                        .and_then(Snowflake::parse)
+                        .unwrap_or(message_id);
+                    let message = item
+                        .get("message")
+                        .filter(|v| !v.is_null())
+                        .and_then(|v| serde_json::from_value::<Message>(v.clone()).ok());
+                    Some(SavedMessageEntry { id, channel_id, message_id, message })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn log_typing_error(err: &RestError) {

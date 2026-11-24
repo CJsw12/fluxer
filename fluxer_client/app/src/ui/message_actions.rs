@@ -47,17 +47,71 @@ pub enum MessageAction {
     CreateThread,
     Translate,
     Pin,
+    /// Shift+click on pin/unpin: toggle without confirm dialog (TS behavior).
+    PinNow,
     Bookmark,
     MarkUnread,
     CopyLink,
     Speak,
 }
 
+/// Built-in translation URL templates (`Translation.ts:11-47`).
+pub const TRANSLATION_PROVIDERS: &[(&str, &str, &str)] = &[
+    (
+        "google_translate",
+        "Google Translate",
+        "https://translate.google.com/?sl=auto&tl=auto&text={query}&op=translate",
+    ),
+    (
+        "deepl",
+        "DeepL",
+        "https://www.deepl.com/translator#auto/auto/{query}",
+    ),
+    (
+        "bing_translator",
+        "Bing Translator",
+        "https://www.bing.com/translator/?text={query}",
+    ),
+    (
+        "yandex_translate",
+        "Yandex Translate",
+        "https://translate.yandex.com/?text={query}",
+    ),
+    (
+        "reverso",
+        "Reverso",
+        "https://www.reverso.net/text-translation#sl=auto&tl=eng&text={query}",
+    ),
+    (
+        "linguee",
+        "Linguee",
+        "https://www.linguee.com/english-german/search?source=auto&query={query}",
+    ),
+    (
+        "papago",
+        "Papago",
+        "https://papago.naver.com/?st={query}",
+    ),
+];
+
+/// Builds a translation URL for `provider_id` by percent-encoding `text`.
+pub fn build_translate_url(provider_id: &str, text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let (_, _, template) = TRANSLATION_PROVIDERS.iter().find(|(id, _, _)| *id == provider_id)?;
+    let encoded = fluxer_client_core::rest::encode_uri_component(trimmed);
+    Some(template.replace("{query}", &encoded))
+}
+
 /// The message the bar acts on.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ActionTarget {
     pub channel_id: Snowflake,
+    pub guild_id: Option<Snowflake>,
     pub message_id: Snowflake,
+    pub author: SharedString,
     /// Authored by the current user: edit is offered.
     pub own: bool,
     /// Own message, or Manage Messages in the channel.
@@ -74,8 +128,12 @@ pub struct ActionTarget {
     pub can_suppress_embeds: bool,
     /// SUPPRESS_EMBEDS is set: the button offers to show them again.
     pub embeds_suppressed: bool,
-    /// Manage Messages in the channel (`canPinMessage`).
+    /// Permission to pin/unpin messages in the channel (`canPinMessage`).
     pub can_pin: bool,
+    /// Message is currently pinned.
+    pub pinned: bool,
+    /// Message is currently bookmarked by the user.
+    pub bookmarked: bool,
     /// Guild channel (threads are not offered in DMs).
     pub can_create_thread: bool,
 }
@@ -83,17 +141,27 @@ pub struct ActionTarget {
 impl ActionTarget {
     pub fn of(state: &ClientState, message: &Message) -> Self {
         let own = state.current_user_id() == Some(message.author.id);
-        let manage = state.channel_permissions(message.channel_id) & bits::MANAGE_MESSAGES != 0;
-        let in_dm = state.channels.get(&message.channel_id).is_none_or(|c| c.guild_id.is_none());
+        let perms = state.channel_permissions(message.channel_id);
+        let manage = perms & bits::MANAGE_MESSAGES != 0;
+        let guild_id = state.channels.get(&message.channel_id).and_then(|c| c.guild_id);
+        let in_dm = guild_id.is_none();
+        let can_pin = in_dm || (perms & bits::PIN_MESSAGES != 0);
         let embeds_suppressed = message.suppresses_embeds();
         let has_embeds = embeds_suppressed || !message.embeds.is_empty();
         let can_retry = message.state == MessageState::Failed
             && message.nonce.is_some()
             && message.attachments.is_empty()
             && state.can_send_messages(message.channel_id);
+        let author = message
+            .author
+            .global_name
+            .clone()
+            .unwrap_or_else(|| message.author.username.clone());
         Self {
             channel_id: message.channel_id,
+            guild_id,
             message_id: message.id,
+            author: author.into(),
             own,
             can_delete: own || manage,
             sent: message.state == MessageState::Sent,
@@ -101,7 +169,9 @@ impl ActionTarget {
             content: message.content.clone().into(),
             can_suppress_embeds: has_embeds && (own || (manage && !in_dm)),
             embeds_suppressed,
-            can_pin: manage,
+            can_pin,
+            pinned: message.pinned,
+            bookmarked: state.is_message_saved(message.id),
             can_create_thread: !in_dm,
         }
     }
@@ -335,7 +405,9 @@ pub fn tooltip(action: MessageAction, target: &ActionTarget) -> String {
         MessageAction::Forward => l10n::tr("Forward"),
         MessageAction::CreateThread => l10n::tr("Create thread"),
         MessageAction::Translate => l10n::tr("Translate"),
-        MessageAction::Pin => l10n::tr("Pin message"),
+        MessageAction::Pin | MessageAction::PinNow if target.pinned => l10n::tr("Unpin message"),
+        MessageAction::Pin | MessageAction::PinNow => l10n::tr("Pin message"),
+        MessageAction::Bookmark if target.bookmarked => l10n::tr("Remove bookmark"),
         MessageAction::Bookmark => l10n::tr("Bookmark message"),
         MessageAction::MarkUnread => l10n::tr("Mark as unread"),
         MessageAction::CopyLink => l10n::tr("Copy message link"),
@@ -360,7 +432,7 @@ pub fn icon(action: MessageAction, target: &ActionTarget) -> AppIcon {
         MessageAction::Forward => AppIcon::ArrowBendUpRight,
         MessageAction::CreateThread => AppIcon::Chats,
         MessageAction::Translate => AppIcon::Translate,
-        MessageAction::Pin => AppIcon::PushPin,
+        MessageAction::Pin | MessageAction::PinNow => AppIcon::PushPin,
         MessageAction::Bookmark => AppIcon::BookmarkSimple,
         MessageAction::MarkUnread => AppIcon::EnvelopeOpen,
         MessageAction::CopyLink => AppIcon::LinkBold,
@@ -392,7 +464,7 @@ pub fn menu_icon_flx(action: MessageAction) -> &'static str {
         MessageAction::Forward => "ui.action-menu.context-menu-icons.forward-icon.arrow-bend-up-right-icon",
         MessageAction::CreateThread => "ui.action-menu.context-menu-icons.create-thread-icon.chats-icon",
         MessageAction::CopyText => "ui.action-menu.context-menu-icons.copy-message-text-icon.phosphor-copy-icon",
-        MessageAction::Pin => "ui.action-menu.context-menu-icons.pin-icon.push-pin-icon",
+        MessageAction::Pin | MessageAction::PinNow => "ui.action-menu.context-menu-icons.pin-icon.push-pin-icon",
         MessageAction::Bookmark => "ui.action-menu.context-menu-icons.bookmark-icon.bookmark-simple-icon",
         MessageAction::MarkUnread => "ui.action-menu.context-menu-icons.mark-as-unread-icon.envelope-open-icon",
         MessageAction::CopyLink => "ui.action-menu.context-menu-icons.copy-link-icon.link-icon",
@@ -539,6 +611,46 @@ pub fn confirm_delete(
     });
 }
 
+/// Opens the "Pin message" / "Unpin message" confirm dialog; `on_confirm` runs
+/// when the user confirms (`MessageActionUtils.tsx::requestMessagePin`).
+pub fn confirm_pin(
+    pinned: bool,
+    preview: SharedString,
+    window: &mut Window,
+    cx: &mut App,
+    on_confirm: impl Fn(&mut Window, &mut App) + 'static,
+) {
+    let on_confirm = Rc::new(on_confirm);
+    let title = if pinned { l10n::tr("Unpin message") } else { l10n::tr("Pin message") };
+    let body = if pinned {
+        l10n::tr("Unpin this message?")
+    } else {
+        l10n::tr("Pin this message to the channel for everyone to see.")
+    };
+    let ok_label = if pinned { l10n::tr("Unpin") } else { l10n::tr("Pin") };
+    let ok_variant = if pinned { ButtonVariant::Danger } else { ButtonVariant::Primary };
+    window.open_alert_dialog(cx, move |alert, _, _| {
+        let on_confirm = on_confirm.clone();
+        alert
+            .confirm()
+            .title(title.clone())
+            .description(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_2()
+                    .child(body.clone())
+                    .when(!preview.is_empty(), |d| d.child(div().italic().line_clamp(3).child(preview.clone()))),
+            )
+            .ok_text(ok_label.clone())
+            .ok_variant(ok_variant)
+            .on_ok(move |_, window, cx| {
+                on_confirm(window, cx);
+                true
+            })
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use std::cell::Cell;
@@ -550,7 +662,9 @@ mod tests {
     fn target(own: bool, can_delete: bool, sent: bool, content: &str) -> ActionTarget {
         ActionTarget {
             channel_id: Snowflake(11),
+            guild_id: Some(Snowflake(1)),
             message_id: Snowflake(42),
+            author: "Alice".into(),
             own,
             can_delete,
             sent,
@@ -559,6 +673,8 @@ mod tests {
             can_suppress_embeds: false,
             embeds_suppressed: false,
             can_pin: false,
+            pinned: false,
+            bookmarked: false,
             can_create_thread: true,
         }
     }
@@ -684,5 +800,37 @@ mod tests {
             assert!(!copy_to_clipboard(MessageAction::Reply, &t, cx));
         });
         assert_eq!(cx.read_from_clipboard().and_then(|c| c.text()).as_deref(), Some("42"));
+    }
+
+    #[gpui_kit::test]
+    fn pin_and_bookmark_labels_and_translate_urls(cx: &mut TestAppContext) {
+        let mut t = target(true, true, true, "hello world & more");
+        assert_eq!(tooltip(MessageAction::Pin, &t), "Pin message");
+        assert_eq!(tooltip(MessageAction::Bookmark, &t), "Bookmark message");
+        t.pinned = true;
+        t.bookmarked = true;
+        assert_eq!(tooltip(MessageAction::Pin, &t), "Unpin message");
+        assert_eq!(tooltip(MessageAction::Bookmark, &t), "Remove bookmark");
+
+        assert_eq!(TRANSLATION_PROVIDERS.len(), 7);
+        assert_eq!(
+            build_translate_url("google_translate", "hello & world").as_deref(),
+            Some("https://translate.google.com/?sl=auto&tl=auto&text=hello%20%26%20world&op=translate")
+        );
+        assert_eq!(build_translate_url("google_translate", "   "), None);
+        assert_eq!(build_translate_url("unknown", "hi"), None);
+
+        let cx = open(cx);
+        let confirmed = Rc::new(Cell::new(0));
+        cx.update(|window, cx| {
+            let confirmed = confirmed.clone();
+            confirm_pin(false, "hi".into(), window, cx, move |_, _| confirmed.set(confirmed.get() + 1));
+        });
+        cx.run_until_parked();
+        cx.update(|window, cx| { let _ = window.draw(cx); });
+        assert!(cx.update(|window, cx| window.has_active_dialog(cx)));
+        cx.simulate_keystrokes("enter");
+        cx.run_until_parked();
+        assert_eq!(confirmed.get(), 1);
     }
 }

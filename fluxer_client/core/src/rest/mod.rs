@@ -27,19 +27,22 @@ mod tests;
 pub use altcha::{ALTCHA_MAX_COUNTER, ALTCHA_SOLVE_TIMEOUT, solve_altcha_challenge};
 pub use api::{RolePatch, validate_role_name};
 pub use api::{
-    AckRequest, BanMemberRequest, ChannelOverride, CreateGuildChannelRequest, CreateInviteRequest, CustomStatus,
-    EditMessageRequest, GroupDmPatch, GuildBanEntry, GuildChannelPatch, GuildMemberPatch, GuildSettingsPatch,
-    MAX_AUDIT_LOG_REASON_UTF16, MAX_BAN_DELETE_MESSAGE_SECONDS, MAX_CHANNEL_NAME_UTF16,
-    MAX_CHANNEL_RATE_LIMIT_PER_USER, MAX_CHANNEL_TOPIC_UTF16, MAX_GROUP_DM_OTHER_RECIPIENTS, MAX_NICKNAME_UTF16,
-    MAX_TEMP_BAN_DURATION_SECONDS, MAX_TIMEOUT_DURATION_SECONDS, MIN_TEMP_BAN_DURATION_SECONDS, MemberQuery,
-    MessageContentType, MessageQuery, MessageReference, MessageSearchOutcome, MessageSearchPage,
-    MessageSearchRequest, MessageSearchScope, MessageSearchSortBy, MessageSearchSortOrder, MuteConfig, PinsQuery,
-    ProfileQuery, ReactionEmoji, ReactionUsersQuery, SendMessageRequest, TYPING_IMMEDIATE_SEND_IDLE,
-    TYPING_SEND_DELAY, TYPING_THROTTLE, TypingCooldown, TypingPlan, TypingThrottle, UserSettingsPatch,
-    VOICE_CHANNEL_BITRATE_DEFAULT, VOICE_CHANNEL_CONNECTION_LIMIT_DEFAULT, encode_uri_component,
-    normalize_audit_log_reason, parse_message_search_response, parse_user_tag, validate_audit_log_reason,
-    validate_ban_request, validate_create_guild_channel, validate_guild_channel_patch, validate_member_patch,
-    validate_search_request,
+    AckRequest, BanMemberRequest, ChannelOverride, CreateGuildChannelRequest, CreateInviteRequest,
+    CreateThreadFromMessageRequest, CustomStatus, EditMessageRequest, GroupDmPatch, GuildBanEntry,
+    GuildChannelPatch, GuildMemberPatch, GuildSettingsPatch, MAX_AUDIT_LOG_REASON_UTF16,
+    MAX_BAN_DELETE_MESSAGE_SECONDS, MAX_CHANNEL_NAME_UTF16, MAX_CHANNEL_RATE_LIMIT_PER_USER,
+    MAX_CHANNEL_TOPIC_UTF16, MAX_GROUP_DM_OTHER_RECIPIENTS, MAX_NICKNAME_UTF16,
+    MAX_TEMP_BAN_DURATION_SECONDS, MAX_THREAD_NAME_UTF16, MAX_TIMEOUT_DURATION_SECONDS,
+    MIN_TEMP_BAN_DURATION_SECONDS, MemberQuery, MessageContentType, MessageQuery, MessageReference,
+    MessageSearchOutcome, MessageSearchPage, MessageSearchRequest, MessageSearchScope,
+    MessageSearchSortBy, MessageSearchSortOrder, MuteConfig, PinsQuery, ProfileQuery, ReactionEmoji,
+    ReactionUsersQuery, SavedMessagesQuery, SendMessageRequest, THREAD_AUTO_ARCHIVE_DURATIONS,
+    TYPING_IMMEDIATE_SEND_IDLE, TYPING_SEND_DELAY, TYPING_THROTTLE, TypingCooldown, TypingPlan,
+    TypingThrottle, UserSettingsPatch, VOICE_CHANNEL_BITRATE_DEFAULT,
+    VOICE_CHANNEL_CONNECTION_LIMIT_DEFAULT, encode_uri_component, normalize_audit_log_reason,
+    parse_message_search_response, parse_user_tag, validate_audit_log_reason, validate_ban_request,
+    validate_create_guild_channel, validate_guild_channel_patch, validate_member_patch,
+    validate_search_request, validate_thread_name,
 };
 pub use auth::{LoginOutcome, LoginSuccess, MfaMethods, WebAuthnCredential};
 pub use client::{

@@ -23,7 +23,7 @@ mod visibility;
 #[cfg(test)]
 mod tests;
 
-pub use client::{ChannelTreeNode, ClientState, StateChange, Unread};
+pub use client::{ChannelTreeNode, ClientState, SavedMessageEntry, StateChange, Unread};
 pub use content::{
     ATTACHMENT_FLAG_ANIMATED, ATTACHMENT_FLAG_EXPLICIT, ATTACHMENT_FLAG_SPOILER, Attachment, AttachmentSummary,
     Embed, EmbedAuthor, EmbedField, EmbedFooter, EmbedMedia, EmbedProvider, EmbedSummary, MESSAGE_TYPE_REPLY,

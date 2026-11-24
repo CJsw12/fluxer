@@ -576,6 +576,8 @@ pub fn render(
     mention_bg.a = 0.10;
     let mention_border: Hsla = rgb(0xfaa61a).into();
     let is_hovered = !matches!(bar, RowBar::None);
+    let rclick_view = view.clone();
+    let rclick_target = row.actions.clone();
     let article = div()
         .flex()
         .flex_col()
@@ -589,6 +591,14 @@ pub fn render(
         })
         .when(is_hovered && !row.mentioned, |d| d.bg(theme.hover_bg))
         .when(!row.mentioned, |d| d.hover(|s| s.bg(theme.hover_bg)))
+        .when(row.actions.sent, |d| {
+            d.on_mouse_down(gpui_kit::MouseButton::Right, move |ev, window, cx| {
+                cx.stop_propagation();
+                let pos = ev.position;
+                let target = rclick_target.clone();
+                let _ = rclick_view.update(cx, |v, cx| v.open_message_menu_at(target, pos, window, cx));
+            })
+        })
         .when(row.group_start, |d| {
             d.child(div().absolute().top_0().bottom_0().left(px(16.)).right(px(16.)).flx("channel.message-group.group"))
         })

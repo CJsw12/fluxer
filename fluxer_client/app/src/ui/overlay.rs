@@ -17,7 +17,9 @@ use crate::ui::account_switcher::AccountSwitcherModal;
 use crate::ui::access::AccessModal;
 use crate::ui::channel_modal::{CreateChannelModal, EditChannelModal};
 use crate::ui::channel_popouts::ChannelPopout;
+use crate::ui::create_thread_modal::CreateThreadModal;
 use crate::ui::emoji_picker::EmojiPicker;
+use crate::ui::forward_modal::ForwardMessageModal;
 use crate::ui::group_dm::{CreateGroupDmModal, LeaveGroupDmModal};
 use crate::ui::guild_modal::{JoinGuildModal, LeaveGuildModal};
 use crate::ui::link_warning::LinkWarningModal;
@@ -49,6 +51,8 @@ pub enum Overlay {
     MemberModeration(MemberModerationModal),
     GuildBans(GuildBansModal),
     Access(AccessModal),
+    ForwardMessage(ForwardMessageModal),
+    CreateThread(CreateThreadModal),
 }
 
 impl Overlay {

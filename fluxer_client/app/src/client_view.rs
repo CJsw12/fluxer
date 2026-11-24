@@ -160,7 +160,7 @@ pub struct ClientView {
     pub(crate) has_more_after: bool,
     /// `ClientState::unread_anchor` of the selected channel when it was
     /// opened; places the "NEW" divider until another channel is opened.
-    unread_anchor: Option<Snowflake>,
+    pub(crate) unread_anchor: Option<Snowflake>,
     pub(crate) loading_history: bool,
     pub(crate) can_send: bool,
     pub(crate) guild_unavailable: bool,
@@ -279,6 +279,14 @@ pub struct ClientView {
     pub(crate) access_pending: Option<u64>,
     /// Sequence counter for guild member moderation / ban list responses.
     moderation_seq: u64,
+    /// Sequence counter for message forward requests.
+    forward_seq: u64,
+    /// Sequence counter for thread creation from a message.
+    thread_seq: u64,
+    /// Text-to-speech playback state for "Speak message".
+    pub(crate) tts: crate::tts::TtsPlayer,
+    /// Channel explicitly marked unread by the user; suppresses auto-ack until cleared.
+    pub(crate) manual_unread_channel: Option<Snowflake>,
     /// Snapshot of the open Group DM channel (members, owner, addable friends).
     pub(crate) group_dm: Option<ui::group_dm::GroupDmSnapshot>,
     /// Persistent inline Group DM rename input (reused across frames).
@@ -511,6 +519,10 @@ impl ClientView {
             channel_mgmt_seq: 0,
             access_pending: None,
             moderation_seq: 0,
+            forward_seq: 0,
+            thread_seq: 0,
+            tts: crate::tts::TtsPlayer::new(),
+            manual_unread_channel: None,
             group_dm: None,
             group_dm_rename,
             group_dm_adding: false,
@@ -633,6 +645,8 @@ impl ClientView {
                 | Overlay::MemberModeration(_)
                 | Overlay::GuildBans(_)
                 | Overlay::Access(_)
+                | Overlay::ForwardMessage(_)
+                | Overlay::CreateThread(_)
         );
         self.overlay = Overlay::None;
         if restore_composer {
@@ -683,6 +697,9 @@ impl ClientView {
                     if status == GatewayStatus::Ready {
                         self.member_subscriptions.reset_session();
                         connected = true;
+                        if !self.backend.state().saved_messages_loaded {
+                            self.backend.load_saved_messages();
+                        }
                     }
                     self.connection = match status {
                         GatewayStatus::Ready => Connection::Online,
@@ -1044,6 +1061,50 @@ impl ClientView {
                             }
                             Err(err) => {
                                 *pop_err = Some(err);
+                            }
+                        }
+                    }
+                }
+                UiEvent::SavedMessagesLoaded { error } => {
+                    if let Some(err) = error
+                        && matches!(
+                            &self.overlay,
+                            Overlay::ChannelPopout(pop)
+                                if matches!(pop.kind, crate::ui::channel_popouts::ChannelPopoutKind::Inbox { tab: crate::ui::channel_popouts::InboxTab::Bookmarks })
+                        )
+                    {
+                        self.error = Some(err.into());
+                    }
+                }
+                UiEvent::MessageForwarded { seq, target_channels: _, error } => {
+                    if matches!(&self.overlay, Overlay::ForwardMessage(m) if m.seq == seq) {
+                        match error {
+                            None => {
+                                self.overlay = Overlay::None;
+                                self.focus_composer_later(cx);
+                            }
+                            Some(err) => {
+                                if let Overlay::ForwardMessage(modal) = &mut self.overlay {
+                                    modal.submitting = false;
+                                    modal.error = Some(err);
+                                }
+                            }
+                        }
+                    }
+                }
+                UiEvent::ThreadCreated { seq, result } => {
+                    if matches!(&self.overlay, Overlay::CreateThread(m) if m.seq == seq) {
+                        match result {
+                            Ok(thread_id) => {
+                                self.overlay = Overlay::None;
+                                self.focus_composer_later(cx);
+                                self.select_channel(thread_id, cx);
+                            }
+                            Err(err) => {
+                                if let Overlay::CreateThread(modal) = &mut self.overlay {
+                                    modal.submitting = false;
+                                    modal.error = Some(err);
+                                }
                             }
                         }
                     }
@@ -1511,7 +1572,12 @@ impl ClientView {
             self.cancel_ack();
             return;
         };
-        if self.loading_history || self.pending_jump.is_some() || self.has_more_after || self.scroller.read(cx).is_scrolled_up() {
+        if self.manual_unread_channel == Some(channel_id)
+            || self.loading_history
+            || self.pending_jump.is_some()
+            || self.has_more_after
+            || self.scroller.read(cx).is_scrolled_up()
+        {
             self.cancel_ack();
             return;
         }
@@ -2352,6 +2418,7 @@ impl ClientView {
         self.hovered_message = None;
         // Replies and edits belong to the old channel; stash/restore plain + token drafts.
         if old_channel != Some(channel_id) {
+            self.manual_unread_channel = None;
             self.pending_jump = None;
             self.highlighted_message = None;
             let old_draft = self
@@ -2479,6 +2546,7 @@ impl ClientView {
     }
 
     pub(crate) fn after_send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.manual_unread_channel = None;
         self.set_composer(String::new(), window, cx);
         if let Some(id) = self.selected_channel {
             self.drafts.remove(&id);
@@ -2696,15 +2764,69 @@ impl ClientView {
                 self.backend.toggle_suppress_embeds(channel_id, message_id);
             }
             MessageAction::More => self.open_message_menu(target.clone(), window, cx),
-            // The items below have no Rust feature yet; each only leaves the menu closed.
-            MessageAction::Forward => {} // TODO(backlog): forward modal
-            MessageAction::CreateThread => {} // TODO(backlog): create a thread from a message
-            MessageAction::Translate => {} // TODO(backlog): translation submenu
-            MessageAction::Pin => {} // TODO(backlog): pin/unpin message
-            MessageAction::Bookmark => {} // TODO(backlog): bookmark message
-            MessageAction::MarkUnread => {} // TODO(backlog): mark as unread
-            MessageAction::CopyLink => {} // TODO(backlog): copy message link (needs the web origin)
-            MessageAction::Speak => {} // TODO(backlog): text-to-speech
+            MessageAction::Forward => self.open_forward_modal(target.clone(), window, cx),
+            MessageAction::CreateThread => self.open_create_thread_modal(target.clone(), window, cx),
+            MessageAction::Translate => self.translate_message("google_translate", &target.content, window, cx),
+            MessageAction::Pin => {
+                let pinned = target.pinned;
+                let view = cx.weak_entity();
+                message_actions::confirm_pin(pinned, target.content.clone(), window, cx, move |_, cx| {
+                    let _ = view.update(cx, |v, cx| {
+                        v.backend.toggle_pin(channel_id, message_id, !pinned);
+                        v.refresh(cx);
+                    });
+                });
+            }
+            MessageAction::PinNow => {
+                self.backend.toggle_pin(channel_id, message_id, !target.pinned);
+                self.refresh(cx);
+            }
+            MessageAction::Bookmark => {
+                self.backend.toggle_bookmark(channel_id, message_id);
+                self.refresh(cx);
+            }
+            MessageAction::MarkUnread => self.mark_message_unread(channel_id, message_id, cx),
+            MessageAction::CopyLink => {
+                let url = self.backend.message_link(target.guild_id, channel_id, message_id);
+                cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(url));
+            }
+            MessageAction::Speak => {
+                if self.tts.is_speaking() {
+                    self.tts.stop();
+                } else if let Err(err) = self.tts.speak(target.content.to_string()) {
+                    self.error = Some(err.into());
+                }
+                cx.notify();
+            }
+        }
+    }
+
+    pub(crate) fn mark_message_unread(
+        &mut self,
+        channel_id: Snowflake,
+        message_id: Snowflake,
+        cx: &mut Context<Self>,
+    ) {
+        self.cancel_ack();
+        let Some(ack_id) = self.backend.mark_message_unread(channel_id, message_id) else {
+            return;
+        };
+        self.manual_unread_channel = Some(channel_id);
+        if Some(channel_id) == self.selected_channel {
+            self.unread_anchor = Some(ack_id);
+        }
+        self.refresh(cx);
+    }
+
+    pub(crate) fn translate_message(
+        &mut self,
+        provider_id: &str,
+        content: &str,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(url) = message_actions::build_translate_url(provider_id, content) {
+            self.launch_external_url(&url, cx);
         }
     }
 
@@ -3191,6 +3313,16 @@ impl ClientView {
         self.moderation_seq
     }
 
+    pub(crate) fn next_forward_seq(&mut self) -> u64 {
+        self.forward_seq = self.forward_seq.saturating_add(1);
+        self.forward_seq
+    }
+
+    pub(crate) fn next_thread_seq(&mut self) -> u64 {
+        self.thread_seq = self.thread_seq.saturating_add(1);
+        self.thread_seq
+    }
+
     /// Leaves a historical `?around=` jump window and returns to the latest messages.
     pub(crate) fn jump_to_present(&mut self, cx: &mut Context<Self>) {
         if self.loading_history {
@@ -3326,6 +3458,8 @@ impl Render for ClientView {
             Overlay::MemberModeration(modal) => Some(ui::moderation_modal::render_action(modal, &theme, cx)),
             Overlay::GuildBans(modal) => Some(ui::moderation_modal::render_bans(modal, &theme, cx)),
             Overlay::Access(modal) => Some(ui::access::render(self, modal, &theme, cx)),
+            Overlay::ForwardMessage(modal) => Some(ui::forward_modal::render(self, modal, &theme, cx)),
+            Overlay::CreateThread(modal) => Some(ui::create_thread_modal::render(modal, &theme, cx)),
             Overlay::None => None,
         };
         // Every image below without its own cache (avatars, custom emoji,

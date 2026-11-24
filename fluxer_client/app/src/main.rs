@@ -38,6 +38,7 @@ mod single_instance;
 mod theme;
 mod tray;
 mod trusted_domains;
+mod tts;
 mod ui;
 mod updater;
 mod view_model;

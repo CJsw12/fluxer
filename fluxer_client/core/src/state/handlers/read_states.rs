@@ -57,4 +57,42 @@ impl ClientState {
         rs.known = true;
         vec![StateChange::ReadStateChanged { channel_id }]
     }
+
+    /// Manual ack ("Mark as unread"): sets the read cursor to `ack_message_id`
+    /// even when moving backward (`0` clears it) with the unread mention count.
+    pub fn local_manual_ack(
+        &mut self,
+        channel_id: Snowflake,
+        ack_message_id: Snowflake,
+        mention_count: u32,
+    ) -> Vec<StateChange> {
+        let rs = self.read_states.entry(channel_id).or_default();
+        rs.ack_message_id = (ack_message_id.0 != 0).then_some(ack_message_id);
+        rs.mention_count = mention_count;
+        rs.known = true;
+        vec![StateChange::ReadStateChanged { channel_id }]
+    }
+
+    /// Counts loaded messages after `ack_message_id` that mention the current user
+    /// (`ReadStates.getManualAckMentionCount`).
+    pub fn manual_ack_mention_count(&self, channel_id: Snowflake, ack_message_id: Snowflake) -> u32 {
+        let Some(channel) = self.channels.get(&channel_id) else {
+            return 0;
+        };
+        let Some(window) = self.messages.window(channel_id) else {
+            return 0;
+        };
+        let Some(me) = self.current_user_id() else {
+            return 0;
+        };
+        let is_private = channel.kind.is_private();
+        let guild_id = channel.guild_id;
+        window
+            .messages
+            .iter()
+            .filter(|m| m.id > ack_message_id && m.author.id != me && self.mentions_current_user(m, guild_id, is_private))
+            .count()
+            .try_into()
+            .unwrap_or(u32::MAX)
+    }
 }

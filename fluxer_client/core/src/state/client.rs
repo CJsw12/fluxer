@@ -17,7 +17,7 @@ use super::handlers::typing::Typer;
 use super::handlers::user_settings::{UserGuildSettings, UserSettings};
 use super::ids::Snowflake;
 use super::messages::MessageStore;
-use super::model::{Channel, ChannelKind, Guild, Member, ReadState, User, parse_timestamp_ms};
+use super::model::{Channel, ChannelKind, Guild, Member, Message, ReadState, User, parse_timestamp_ms};
 use super::permissions::{bits, compute_permissions, has, thread_view_permissions};
 use crate::Dispatch;
 
@@ -58,6 +58,17 @@ pub enum StateChange {
     EmojisChanged { guild_id: Snowflake },
     /// A lazy member list changed (`GUILD_MEMBER_LIST_UPDATE`).
     MemberListChanged { guild_id: Snowflake, list_id: String, channel_id: Option<Snowflake> },
+    /// Saved (bookmarked) messages changed (`SAVED_MESSAGE_CREATE`/`DELETE` or REST load).
+    SavedMessagesChanged,
+}
+
+/// One bookmarked message entry (`SavedMessageEntry.ts`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct SavedMessageEntry {
+    pub id: Snowflake,
+    pub channel_id: Snowflake,
+    pub message_id: Snowflake,
+    pub message: Option<Message>,
 }
 
 /// Unread indicator for a channel or guild.
@@ -116,6 +127,10 @@ pub struct ClientState {
     pub(super) guild_online_counts: BTreeMap<Snowflake, u64>,
     /// Lazy member lists (`GUILD_MEMBER_LIST_UPDATE`).
     pub member_lists: MemberLists,
+    /// Bookmarked messages keyed by `message_id`.
+    pub saved_messages: BTreeMap<Snowflake, SavedMessageEntry>,
+    /// True after `GET /users/@me/saved-messages` completed for this session.
+    pub saved_messages_loaded: bool,
 }
 
 /// `channelLayoutRank`: text-like channels, then voice, then the rest.
@@ -179,8 +194,8 @@ impl ClientState {
             "GUILD_MEMBER_REMOVE" => self.apply_member_remove(d, out_ref),
             "GUILD_MEMBER_LIST_UPDATE" => self.apply_member_list_update(d, out_ref),
             // handlers/channels.rs
-            "CHANNEL_CREATE" => self.apply_channel_create(d, out_ref),
-            "CHANNEL_UPDATE" => {
+            "CHANNEL_CREATE" | "THREAD_CREATE" => self.apply_channel_create(d, out_ref),
+            "CHANNEL_UPDATE" | "THREAD_UPDATE" => {
                 if dispatch.s != 0 && d.get("permission_overwrites").is_some()
                     && let Some(id) = d.get("id").and_then(|id| id.as_str()).and_then(Snowflake::parse)
                 {
@@ -189,7 +204,7 @@ impl ClientState {
                 self.apply_channel_update(d, out_ref);
             }
             "CHANNEL_UPDATE_BULK" => self.apply_channel_update_bulk(d, out_ref),
-            "CHANNEL_DELETE" => self.apply_channel_delete(d, out_ref),
+            "CHANNEL_DELETE" | "THREAD_DELETE" => self.apply_channel_delete(d, out_ref),
             "CHANNEL_RECIPIENT_ADD" => self.apply_channel_recipient_add(d, out_ref),
             "CHANNEL_RECIPIENT_REMOVE" => self.apply_channel_recipient_remove(d, out_ref),
             "PASSIVE_UPDATES" => self.apply_passive_updates(d, out_ref),
@@ -198,6 +213,8 @@ impl ClientState {
             "MESSAGE_UPDATE" => self.apply_message_update(d, out_ref),
             "MESSAGE_DELETE" => self.apply_message_delete(d, out_ref),
             "MESSAGE_DELETE_BULK" => self.apply_message_delete_bulk(d, out_ref),
+            "SAVED_MESSAGE_CREATE" => self.apply_saved_message_create(d, out_ref),
+            "SAVED_MESSAGE_DELETE" => self.apply_saved_message_delete(d, out_ref),
             // handlers/reactions.rs
             "MESSAGE_REACTION_ADD" => self.apply_reaction_add(d, out_ref),
             "MESSAGE_REACTION_ADD_MANY" => self.apply_reaction_add_many(d, out_ref),
@@ -443,6 +460,26 @@ impl ClientState {
             .and_then(|(g, me)| self.members.get(&g)?.get(&me))
             .is_some_and(|m| m.is_timed_out(now_ms));
         !timed_out
+    }
+
+    pub fn is_message_saved(&self, message_id: Snowflake) -> bool {
+        self.saved_messages.contains_key(&message_id)
+    }
+
+    pub fn set_saved_messages(&mut self, entries: Vec<SavedMessageEntry>) {
+        self.saved_messages.clear();
+        for entry in entries {
+            self.saved_messages.insert(entry.message_id, entry);
+        }
+        self.saved_messages_loaded = true;
+    }
+
+    pub fn apply_local_saved_message(&mut self, entry: SavedMessageEntry) {
+        self.saved_messages.insert(entry.message_id, entry);
+    }
+
+    pub fn remove_local_saved_message(&mut self, message_id: Snowflake) -> Option<SavedMessageEntry> {
+        self.saved_messages.remove(&message_id)
     }
 }
 

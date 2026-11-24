@@ -60,6 +60,8 @@ impl ClientState {
         self.read_states.remove(&id);
         self.messages.remove_channel(id);
         self.typing.remove(&id);
+        let before_saved = self.saved_messages.len();
+        self.saved_messages.retain(|_, e| e.channel_id != id);
         // Child threads go with their parent.
         let threads: Vec<Snowflake> = self
             .channels
@@ -72,7 +74,11 @@ impl ClientState {
             self.read_states.remove(&t);
             self.messages.remove_channel(t);
             self.typing.remove(&t);
+            self.saved_messages.retain(|_, e| e.channel_id != t);
             out.push(StateChange::ChannelRemoved { channel_id: t, guild_id: channel.guild_id });
+        }
+        if self.saved_messages.len() != before_saved {
+            out.push(StateChange::SavedMessagesChanged);
         }
         if channel.kind.is_category()
             && let Some(guild_id) = channel.guild_id

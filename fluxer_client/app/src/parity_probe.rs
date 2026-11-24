@@ -195,6 +195,7 @@ pub enum ProbeRequest {
     Inspect,
     Resize { w: f32, h: f32 },
     Click(Target),
+    RightClick(Target),
     DoubleClick(Target),
     Drag { from: Target, to: (f32, f32), steps: usize },
     Hover(Target),
@@ -221,6 +222,7 @@ pub fn parse_request(action: &str, val: &Value) -> Option<ProbeRequest> {
             ((200.0..=8192.0).contains(&w) && (200.0..=8192.0).contains(&h)).then_some(ProbeRequest::Resize { w, h })
         }
         "probe_click" => parse_target(val).map(ProbeRequest::Click),
+        "probe_right_click" => parse_target(val).map(ProbeRequest::RightClick),
         "probe_dblclick" => parse_target(val).map(ProbeRequest::DoubleClick),
         "probe_drag" => {
             let from = val.get("from").and_then(parse_target).or_else(|| parse_target(val))?;
@@ -324,6 +326,34 @@ pub fn execute(req: ProbeRequest, window: &mut Window, cx: &mut App, reply: Send
             window.dispatch_event(
                 PlatformInput::MouseUp(MouseUpEvent {
                     button: MouseButton::Left,
+                    position,
+                    modifiers: Modifiers::none(),
+                    click_count: 1,
+                }),
+                cx,
+            );
+            ack_next_frame(window, reply, x, y);
+        }
+        ProbeRequest::RightClick(target) => {
+            let Some((x, y)) = resolve(&target) else {
+                let _ = reply.send(error_reply("element not found"));
+                return;
+            };
+            dispatch_move(window, cx, x, y);
+            let position = point(px(x), px(y));
+            window.dispatch_event(
+                PlatformInput::MouseDown(MouseDownEvent {
+                    button: MouseButton::Right,
+                    position,
+                    modifiers: Modifiers::none(),
+                    click_count: 1,
+                    first_mouse: false,
+                }),
+                cx,
+            );
+            window.dispatch_event(
+                PlatformInput::MouseUp(MouseUpEvent {
+                    button: MouseButton::Right,
                     position,
                     modifiers: Modifiers::none(),
                     click_count: 1,
@@ -522,6 +552,14 @@ mod tests {
         assert_eq!(
             parse_request("probe_click", &v(r#"{"flx":"a.b","index":2}"#)),
             Some(ProbeRequest::Click(Target::Flx { flx: "a.b".into(), index: 2 }))
+        );
+        assert_eq!(
+            parse_request("probe_right_click", &v(r#"{"flx":"a.b","index":1}"#)),
+            Some(ProbeRequest::RightClick(Target::Flx { flx: "a.b".into(), index: 1 }))
+        );
+        assert_eq!(
+            parse_request("probe_right_click", &v(r#"{"x":10,"y":20}"#)),
+            Some(ProbeRequest::RightClick(Target::Point { x: 10.0, y: 20.0 }))
         );
         assert_eq!(
             parse_request("probe_dblclick", &v(r#"{"flx":"a.b"}"#)),

@@ -4,9 +4,9 @@
 use serde_json::Value;
 
 use super::{id_field, is_newer, parse, parse_list};
-use crate::state::client::{ClientState, StateChange};
+use crate::state::client::{ClientState, SavedMessageEntry, StateChange};
 use crate::state::ids::Snowflake;
-use crate::state::model::Message;
+use crate::state::model::{Message, overlay};
 
 /// What a reply's header shows (`ReplyPreview` in the TS message view).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -89,7 +89,7 @@ impl ClientState {
 
     /// `ReadStateEntry.shouldMentionFor` without block/mute/suppress
     /// settings: user mention, @everyone, a role of mine, or any DM message.
-    fn mentions_current_user(&self, message: &Message, guild_id: Option<Snowflake>, is_private: bool) -> bool {
+    pub(in crate::state) fn mentions_current_user(&self, message: &Message, guild_id: Option<Snowflake>, is_private: bool) -> bool {
         let Some(me) = self.current_user_id() else { return false };
         if message.mentions.iter().any(|u| u.id == me) || message.mention_everyone {
             return true;
@@ -104,6 +104,13 @@ impl ClientState {
         let (Some(channel_id), Some(id)) = (id_field(d, "channel_id"), id_field(d, "id")) else {
             return;
         };
+        if let Some(entry) = self.saved_messages.get_mut(&id)
+            && let Some(saved_msg) = entry.message.as_mut()
+            && let Ok(merged) = overlay(saved_msg, d)
+        {
+            *saved_msg = merged;
+            out.push(StateChange::SavedMessagesChanged);
+        }
         if self.messages.apply_update(channel_id, id, d) {
             out.push(StateChange::MessagesChanged { channel_id });
         } else if self.can_view_channel(channel_id)
@@ -121,6 +128,9 @@ impl ClientState {
         let (Some(channel_id), Some(id)) = (id_field(d, "channel_id"), id_field(d, "id")) else {
             return;
         };
+        if self.saved_messages.remove(&id).is_some() {
+            out.push(StateChange::SavedMessagesChanged);
+        }
         if self.messages.remove(channel_id, &[id]) {
             out.push(StateChange::MessagesChanged { channel_id });
         }
@@ -129,8 +139,38 @@ impl ClientState {
     pub(in crate::state) fn apply_message_delete_bulk(&mut self, d: &Value, out: &mut Vec<StateChange>) {
         let Some(channel_id) = id_field(d, "channel_id") else { return };
         let ids = parse_list::<Snowflake>(d.get("ids"), "ids");
+        let mut saved_changed = false;
+        for id in &ids {
+            saved_changed |= self.saved_messages.remove(id).is_some();
+        }
+        if saved_changed {
+            out.push(StateChange::SavedMessagesChanged);
+        }
         if self.messages.remove(channel_id, &ids) {
             out.push(StateChange::MessagesChanged { channel_id });
+        }
+    }
+
+    pub(in crate::state) fn apply_saved_message_create(&mut self, d: &Value, out: &mut Vec<StateChange>) {
+        let Some(message) = parse::<Message>(d, "SAVED_MESSAGE_CREATE") else {
+            return;
+        };
+        let entry = SavedMessageEntry {
+            id: message.id,
+            channel_id: message.channel_id,
+            message_id: message.id,
+            message: Some(message),
+        };
+        self.saved_messages.insert(entry.message_id, entry);
+        out.push(StateChange::SavedMessagesChanged);
+    }
+
+    pub(in crate::state) fn apply_saved_message_delete(&mut self, d: &Value, out: &mut Vec<StateChange>) {
+        let Some(message_id) = id_field(d, "message_id") else {
+            return;
+        };
+        if self.saved_messages.remove(&message_id).is_some() {
+            out.push(StateChange::SavedMessagesChanged);
         }
     }
 

@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 use fluxer_client_core::Dispatch;
-use fluxer_client_core::rest::{CreateGuildChannelRequest, GuildChannelPatch, RestClient, RestError};
+use fluxer_client_core::rest::{
+    CreateGuildChannelRequest, CreateThreadFromMessageRequest, GuildChannelPatch, RestClient, RestError,
+};
 use fluxer_client_core::state::{Channel, ClientState, PermissionOverwrite, Snowflake};
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
@@ -121,6 +123,42 @@ impl Backend {
                     UiEvent::ChannelDeleted { seq, channel_id, error: None }
                 }
                 Err(err) => UiEvent::ChannelDeleted { seq, channel_id, error: Some(err.to_string()) },
+            };
+            let _ = events.send(event);
+        });
+    }
+
+    /// `POST /channels/{channel_id}/messages/{message_id}/threads`, echoing `seq`.
+    pub fn create_thread_from_message(
+        &self,
+        seq: u64,
+        channel_id: Snowflake,
+        message_id: Snowflake,
+        request: CreateThreadFromMessageRequest,
+    ) {
+        #[cfg(test)]
+        lock_sent(&self.sent_thread_creates).push((channel_id, message_id, request.clone()));
+        let rest = self.rest.clone();
+        let state = self.state.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            let event = match rest
+                .create_thread_from_message(&channel_id.to_string(), &message_id.to_string(), &request)
+                .await
+            {
+                Ok(body) => match body.get("id").and_then(Value::as_str).and_then(Snowflake::parse) {
+                    Some(thread_id) => {
+                        let dispatch = Dispatch { t: "CHANNEL_CREATE".to_owned(), s: 0, d: body };
+                        lock(&state).apply(&dispatch);
+                        let _ = events.send(UiEvent::StateChanged);
+                        UiEvent::ThreadCreated { seq, result: Ok(thread_id) }
+                    }
+                    None => UiEvent::ThreadCreated {
+                        seq,
+                        result: Err("Could not create thread: bad response".to_owned()),
+                    },
+                },
+                Err(err) => UiEvent::ThreadCreated { seq, result: Err(err.to_string()) },
             };
             let _ = events.send(event);
         });

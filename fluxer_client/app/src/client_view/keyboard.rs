@@ -93,8 +93,10 @@ impl ClientView {
                 .and_then(|channel| channel.last_message_id)
         };
         if self.unread_anchor.take().is_none() && last.is_none() {
+            self.manual_unread_channel = None;
             return;
         }
+        self.manual_unread_channel = None;
         self.cancel_ack();
         if let Some(last) = last {
             self.backend.ack(channel_id, last);

@@ -459,3 +459,56 @@ async fn set_user_note_puts_the_note_body() {
     assert!(matches!(bad, Err(RestError::InvalidArgument(_))));
     assert_eq!(fixture.requests().len(), 3);
 }
+
+#[tokio::test]
+async fn saved_messages_and_threads_from_message_endpoints() {
+    let fixture = Fixture::start(|req, _| match (req.method.as_str(), req.target.as_str()) {
+        ("GET", _) => Resp::json(200, json!([])),
+        ("POST", t) if t.contains("/threads") => Resp::json(201, json!({ "id": MESSAGE, "type": 11 })),
+        _ => Resp::empty(204),
+    })
+    .await;
+    let client = authed(&fixture).await;
+    let query = SavedMessagesQuery { limit: Some(20), before: Some(MESSAGE.into()) };
+    client.list_saved_messages(&query).await.unwrap();
+    client.save_message(CHANNEL, MESSAGE).await.unwrap();
+    client.unsave_message(MESSAGE).await.unwrap();
+    let thread_req = CreateThreadFromMessageRequest {
+        name: "  Discussion  ".into(),
+        auto_archive_duration: Some(1440),
+    };
+    client.create_thread_from_message(CHANNEL, MESSAGE, &thread_req).await.unwrap();
+
+    let requests = fixture.requests();
+    assert_eq!(
+        requests.iter().map(line).collect::<Vec<_>>(),
+        vec![
+            expect("GET", format!("/api/v1/users/@me/saved-messages?limit=20&before={MESSAGE}")),
+            expect("POST", "/api/v1/users/@me/saved-messages"),
+            expect("DELETE", format!("/api/v1/users/@me/saved-messages/{MESSAGE}")),
+            expect("POST", format!("/api/v1/channels/{CHANNEL}/messages/{MESSAGE}/threads")),
+        ]
+    );
+    assert_eq!(requests[1].json(), json!({ "channel_id": CHANNEL, "message_id": MESSAGE }));
+    assert_eq!(requests[3].json(), json!({ "name": "Discussion", "auto_archive_duration": 1440 }));
+
+    assert!(matches!(
+        client.list_saved_messages(&SavedMessagesQuery { limit: Some(51), before: None }).await,
+        Err(RestError::InvalidArgument(_))
+    ));
+    assert!(matches!(client.save_message("bad", MESSAGE).await, Err(RestError::InvalidArgument(_))));
+    assert!(matches!(client.unsave_message("bad").await, Err(RestError::InvalidArgument(_))));
+    assert!(matches!(
+        client
+            .create_thread_from_message(CHANNEL, MESSAGE, &CreateThreadFromMessageRequest { name: "   ".into(), auto_archive_duration: None })
+            .await,
+        Err(RestError::InvalidArgument(_))
+    ));
+    assert!(matches!(
+        client
+            .create_thread_from_message(CHANNEL, MESSAGE, &CreateThreadFromMessageRequest { name: "ok".into(), auto_archive_duration: Some(123) })
+            .await,
+        Err(RestError::InvalidArgument(_))
+    ));
+    assert_eq!(fixture.requests().len(), 4);
+}

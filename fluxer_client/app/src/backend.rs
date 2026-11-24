@@ -93,6 +93,12 @@ pub enum UiEvent {
     WebAuthnMutationFinished { status: Option<String>, error: Option<String> },
     /// `GET /channels/{channel_id}/messages/pins` finished.
     PinsLoaded { seq: u64, channel_id: Snowflake, result: Result<Vec<Message>, String> },
+    /// `GET /users/@me/saved-messages` finished.
+    SavedMessagesLoaded { error: Option<String> },
+    /// Forward submission finished for `seq`.
+    MessageForwarded { seq: u64, target_channels: Vec<Snowflake>, error: Option<String> },
+    /// `POST /channels/{c}/messages/{m}/threads` finished.
+    ThreadCreated { seq: u64, result: Result<Snowflake, String> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -186,6 +192,8 @@ pub struct Backend {
     last_nonce: Arc<AtomicU64>,
     /// Instance media endpoint (avatars), from discovery.
     media: Option<Arc<str>>,
+    /// Web app origin for `Copy message link`.
+    webapp: Option<Arc<str>>,
     /// WebAuthn relying-party origin derived from discovery endpoints.
     webauthn_origin: Option<Arc<str>>,
     /// Hostnames belonging to the active Fluxer instance (trusted external links).
@@ -246,6 +254,9 @@ pub struct Backend {
     /// Recorded gateway opcode 4 VOICE_STATE_UPDATE payloads (tests).
     #[cfg(test)]
     pub(crate) sent_voice_states: Arc<Mutex<Vec<fluxer_client_core::gateway::VoiceStateUpdate>>>,
+    /// Recorded `POST /channels/{c}/messages/{m}/threads` payloads (tests).
+    #[cfg(test)]
+    pub(crate) sent_thread_creates: Arc<Mutex<Vec<(Snowflake, Snowflake, fluxer_client_core::rest::CreateThreadFromMessageRequest)>>>,
 }
 
 impl Backend {
@@ -277,6 +288,7 @@ impl Backend {
         };
         let (mut backend, rx) = Self::new(runtime, instance.rest, Some(gateway));
         backend.media = instance.endpoints.media.as_deref().map(Arc::from);
+        backend.webapp = derive_webapp_origin(&instance.endpoints).map(Arc::from);
         backend.webauthn_origin = crate::webauthn::derive_origin(&instance.endpoints).ok().map(Arc::from);
         let hosts = crate::trusted_domains::hosts_from_urls(
             [
@@ -322,6 +334,7 @@ impl Backend {
             gateway,
             last_nonce: Arc::new(AtomicU64::new(0)),
             media: None,
+            webapp: None,
             webauthn_origin: None,
             instance_hosts: Arc::from(Vec::new()),
             focus: Arc::default(),
@@ -361,6 +374,8 @@ impl Backend {
             sent_moderation: Arc::default(),
             #[cfg(test)]
             sent_voice_states: Arc::default(),
+            #[cfg(test)]
+            sent_thread_creates: Arc::default(),
         };
         (backend, rx)
     }
@@ -484,6 +499,27 @@ impl Backend {
     #[cfg(test)]
     pub(crate) fn set_media_for_test(&mut self, media: Option<String>) {
         self.media = media.map(Arc::from);
+    }
+
+    pub fn web_origin(&self) -> &str {
+        self.webapp.as_deref().unwrap_or("https://web.fluxer.app")
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_webapp_for_test(&mut self, webapp: Option<String>) {
+        self.webapp = webapp.map(|u| Arc::from(u.trim_end_matches('/')));
+    }
+
+    /// Canonical web URL for jumping to a message (`buildMessageJumpLink`).
+    pub fn message_link(
+        &self,
+        guild_id: Option<Snowflake>,
+        channel_id: Snowflake,
+        message_id: Snowflake,
+    ) -> String {
+        let base = self.web_origin().trim_end_matches('/');
+        let guild_seg = guild_id.map_or_else(|| "@me".to_owned(), |g| g.to_string());
+        format!("{base}/channels/{guild_seg}/{channel_id}/{message_id}")
     }
 
     /// Shared with the gateway task; the UI keeps it current.
@@ -837,6 +873,19 @@ fn parse_messages(body: &Value) -> Vec<Message> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn derive_webapp_origin(endpoints: &Endpoints) -> Option<String> {
+    if let Some(raw) = endpoints.webapp.as_deref() {
+        let trimmed = raw.trim().trim_end_matches('/');
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_owned());
+        }
+    }
+    let parsed = url::Url::parse(&endpoints.api).ok()?;
+    let host = parsed.host_str()?;
+    let port = parsed.port().map(|p| format!(":{p}")).unwrap_or_default();
+    Some(format!("{}://{}{}", parsed.scheme(), host, port))
 }
 
 fn now_ms() -> i64 {

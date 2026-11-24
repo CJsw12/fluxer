@@ -690,3 +690,51 @@ fn group_dm_owner_rename_and_recipient_dispatches() {
     assert_eq!(state.channels[&gdm].recipients.len(), 1);
     assert!(state.apply(&remove).is_empty());
 }
+
+#[test]
+fn saved_messages_threads_and_manual_ack() {
+    let mut state = loaded_state();
+    let msg_val = message_json(mid(9), GENERAL, OTHER, "save me");
+    assert_eq!(
+        state.apply(&dispatch("SAVED_MESSAGE_CREATE", msg_val)),
+        vec![StateChange::SavedMessagesChanged]
+    );
+    assert!(state.is_message_saved(mid(9)));
+
+    assert_eq!(
+        state.apply(&dispatch("SAVED_MESSAGE_DELETE", json!({ "message_id": mid(9).to_string() }))),
+        vec![StateChange::SavedMessagesChanged]
+    );
+    assert!(!state.is_message_saved(mid(9)));
+
+    // THREAD_CREATE inserts a thread channel whose permissions inherit from parent.
+    let thread_id = sf(9500);
+    let thread_create = dispatch(
+        "THREAD_CREATE",
+        json!({ "id": thread_id.to_string(), "guild_id": GUILD.to_string(), "parent_id": GENERAL.to_string(), "type": 11, "name": "subthread" }),
+    );
+    assert_eq!(
+        state.apply(&thread_create),
+        vec![StateChange::ChannelUpserted { channel_id: thread_id, guild_id: Some(sf(GUILD)) }]
+    );
+    assert!(state.channels.get(&thread_id).is_some_and(|c| c.kind.is_thread()));
+
+    // Manual ack can move backward and counts mentions after the ack cursor.
+    let mut mention_msg = message_json(mid(11), GENERAL, OTHER, "ping <@100>");
+    mention_msg["mentions"] = json!([user_json(ME, "me")]);
+    state.apply(&dispatch("MESSAGE_CREATE", mention_msg));
+    let mut after_ack = message_json(mid(12), GENERAL, OTHER, "later");
+    after_ack["mentions"] = json!([user_json(ME, "me")]);
+    state.apply(&dispatch("MESSAGE_CREATE", after_ack));
+    assert_eq!(state.channel_unread(sf(GENERAL)).mention_count, 3);
+
+    let count = state.manual_ack_mention_count(sf(GENERAL), mid(10));
+    assert_eq!(count, 2);
+    assert_eq!(
+        state.local_manual_ack(sf(GENERAL), mid(10), count),
+        vec![StateChange::ReadStateChanged { channel_id: sf(GENERAL) }]
+    );
+    assert_eq!(state.read_states[&sf(GENERAL)].ack_message_id, Some(mid(10)));
+    assert_eq!(state.channel_unread(sf(GENERAL)).mention_count, 2);
+    assert!(state.channel_unread(sf(GENERAL)).unread);
+}

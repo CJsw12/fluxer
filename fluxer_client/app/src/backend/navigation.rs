@@ -72,4 +72,42 @@ impl Backend {
             let _ = events.send(event);
         });
     }
+
+    /// Marks `message_id` (and newer messages) unread (`ReadStateCommands.markAsUnread`).
+    /// Updates local read state immediately to the previous loaded message (or
+    /// `at_previous_millisecond`), posts a manual ack, and returns the new ack id.
+    pub fn mark_message_unread(&self, channel_id: Snowflake, message_id: Snowflake) -> Option<Snowflake> {
+        let (ack_id, mention_count) = {
+            let mut state = self.state();
+            let ack_id = {
+                let window = state.messages.window(channel_id)?;
+                let idx = window.messages.iter().position(|m| m.id == message_id)?;
+                if idx > 0 {
+                    window.messages[idx - 1].id
+                } else {
+                    message_id.at_previous_millisecond()
+                }
+            };
+            if ack_id.0 == 0 {
+                return None;
+            }
+            let mention_count = state.manual_ack_mention_count(channel_id, ack_id);
+            state.local_manual_ack(channel_id, ack_id, mention_count);
+            (ack_id, mention_count)
+        };
+        let _ = self.events.send(UiEvent::StateChanged);
+        let rest = self.rest.clone();
+        self.runtime.spawn(async move {
+            let ack = AckRequest {
+                channel_id: channel_id.to_string(),
+                message_id: ack_id.to_string(),
+                mention_count: Some(mention_count),
+                manual: true,
+            };
+            if let Err(err) = rest.ack_message(&ack).await {
+                tracing::warn!(%err, %channel_id, %message_id, "manual unread ack failed");
+            }
+        });
+        Some(ack_id)
+    }
 }

@@ -9,9 +9,14 @@ use std::rc::Rc;
 use fluxer_client_core::state::{ClientState, Message, MessageState, PartialEmoji, Snowflake, bits};
 use crate::icons::AppIcon;
 use gpui_kit::component::WindowExt as _;
-use gpui_kit::component::button::{Button, ButtonVariant, ButtonVariants as _};
-use gpui_kit::{AnyElement, App, ClipboardItem, ElementId, IntoElement, Pixels, Point, SharedString, Window, div, prelude::*, px};
+use gpui_kit::component::button::ButtonVariant;
+use gpui_kit::component::{Icon, Sizable as _};
+use gpui_kit::{
+    AnyElement, App, ClipboardItem, ElementId, Hsla, IntoElement, Pixels, Point, Role, SharedString, Window, div,
+    prelude::*, px, rgb, rgba,
+};
 
+use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 use crate::ui::l10n;
 
@@ -130,12 +135,27 @@ pub fn action_bar(
 ) -> AnyElement {
     let on_action = Rc::new(on_action);
     let key = target.message_id.0;
+    let dark = theme.background.l < 0.5;
+    let bar_bg: Hsla = if dark { rgb(0x2a2730).into() } else { theme.background };
+    let bar_border: Hsla = if dark { rgba(0xc9c5d326).into() } else { theme.border };
+    let hover_bg = theme.hover_bg;
+    let icon_color = theme.muted_foreground;
     let buttons = available_actions(target).into_iter().map(|action| {
         let on_action = on_action.clone();
         let id = SharedString::from(format!("msg-action-{key}-{action:?}"));
-        let button = Button::new(id).ghost().compact().tooltip(tooltip(action, target));
-        let button = button.icon(icon(action, target));
-        button
+        let label = tooltip(action, target);
+        div()
+            .id(id)
+            .role(Role::Button)
+            .aria_label(label)
+            .size(px(28.))
+            .rounded(px(4.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .cursor_pointer()
+            .hover(move |s| s.bg(hover_bg))
+            .flx("channel.message-action-bar.message-action-bar-button.button.click")
             .on_click(move |event, window, cx| {
                 let action = if action == MessageAction::Delete && event.modifiers().shift {
                     MessageAction::DeleteNow
@@ -144,19 +164,28 @@ pub fn action_bar(
                 };
                 on_action(action, window, cx);
             })
+            .child(
+                div()
+                    .flx("channel.message-action-bar.message-action-bar-button.action-bar-icon")
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(Icon::new(icon(action, target)).with_size(px(20.)).text_color(icon_color)),
+            )
             .into_any_element()
     });
     div()
+        .h(px(34.))
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(2.))
-        .p(px(2.))
-        .rounded(px(6.))
+        .p(px(3.))
+        .rounded(px(8.))
         .border_1()
-        .border_color(theme.border)
-        .bg(theme.background)
-        .shadow_sm()
+        .border_color(bar_border)
+        .bg(bar_bg)
+        .shadow_md()
+        .flx("channel.message-action-bar.message-action-bar-core.action-bar")
         .children(buttons)
         .into_any_element()
 }
@@ -203,6 +232,9 @@ pub fn quick_reactions(
     on_more: impl Fn(Point<Pixels>, &mut Window, &mut App) + 'static,
 ) -> AnyElement {
     let on_pick = Rc::new(on_pick);
+    let dark = theme.background.l < 0.5;
+    let bar_bg: Hsla = if dark { rgb(0x2a2730).into() } else { theme.background };
+    let bar_border: Hsla = if dark { rgba(0xc9c5d326).into() } else { theme.border };
     let buttons = QUICK_REACTIONS.iter().map(|name| {
         let on_pick = on_pick.clone();
         let emoji = PartialEmoji { id: None, name: (*name).to_owned(), animated: false };
@@ -212,7 +244,7 @@ pub fn quick_reactions(
             .px_1()
             .rounded(px(4.))
             .cursor_pointer()
-            .hover(|s| s.bg(theme.muted))
+            .hover(|s| s.bg(theme.hover_bg))
             .child(*name)
             .on_click(move |_, window, cx| on_pick(emoji.clone(), window, cx))
             .into_any_element()
@@ -224,7 +256,7 @@ pub fn quick_reactions(
         .rounded(px(4.))
         .cursor_pointer()
         .text_color(theme.muted_foreground)
-        .hover(|s| s.bg(theme.muted))
+        .hover(|s| s.bg(theme.hover_bg))
         .child("+")
         .on_click(move |ev, window, cx| on_more(ev.position(), window, cx));
     div()
@@ -232,12 +264,12 @@ pub fn quick_reactions(
         .flex_row()
         .items_center()
         .gap(px(2.))
-        .p(px(2.))
-        .rounded(px(6.))
+        .p(px(3.))
+        .rounded(px(8.))
         .border_1()
-        .border_color(theme.border)
-        .bg(theme.background)
-        .shadow_sm()
+        .border_color(bar_border)
+        .bg(bar_bg)
+        .shadow_md()
         .children(buttons)
         .child(more)
         .into_any_element()
@@ -275,9 +307,10 @@ pub fn with_hover_actions(
             // behind nor the list's leave check takes the bar away.
             div()
                 .absolute()
-                .top(px(-12.))
+                .top(px(-20.))
                 .right(px(16.))
                 .debug_selector(move || bar_selector)
+                .flx("channel.message-action-bar.message-action-bar-core.action-bar-container")
                 .on_mouse_move(move |_, window, cx| {
                     on_bar(window, cx);
                     cx.stop_propagation();

@@ -1,11 +1,14 @@
-//! Guild rail hover tooltip (`Tooltip.tsx` / `Tooltip.module.css` + `GuildListItemTooltip.tsx`):
-//! right-placed, `8px` from the rail, vertically centred on the button, with a left-pointing
-//! arrow. Drawn through `deferred` so the rail's scroll clip does not cut it off.
+//! Hover tooltips (`Tooltip.tsx` / `Tooltip.module.css` + `GuildListItemTooltip.tsx`
+//! + `KeybindHint.tsx`):
+//! - Right-placed for guild rail buttons (`TOOLTIP_LEFT = 80`), with left-pointing arrow.
+//! - Below-placed for channel header buttons (`below`), with up-pointing arrow.
+//! - Above-placed for bottom user-area control buttons (`above`), with down-pointing arrow.
+//! Drawn through `deferred` so scroll/overflow clips do not cut them off.
 
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
     AnyElement, FontWeight, Hsla, PathBuilder, Pixels, SharedString, Window, canvas, deferred, div, point, prelude::*,
-    px, rgb,
+    px, rgb, rgba,
 };
 
 use crate::icons::AppIcon;
@@ -13,71 +16,190 @@ use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 
 const SURFACE: u32 = 0x2a2730;
-const ARROW_W: f32 = 7.;
-/// `--tooltip-border-color` (`--background-modifier-accent`, ~8% white over the surface).
-const BORDER: u32 = 0x3d3a44;
+const ARROW_LEN: f32 = 7.;
+const ARROW_SPAN: f32 = 14.;
+/// `--tooltip-border-color`: measured `rgba(201, 197, 211, 0.15)`.
+const BORDER_RGBA: u32 = 0xc9c5d326;
 
 /// Rail slot width (72) plus the official `8px` gap, relative to a full-width slot.
 pub(crate) const TOOLTIP_LEFT: f32 = 80.;
 
-fn arrow() -> impl IntoElement {
-    let color: Hsla = rgb(SURFACE).into();
-    canvas(
-        |_, _, _| (),
-        move |bounds, (), window: &mut Window, _| {
-            let (l, t, r, bt) = (bounds.left(), bounds.top(), bounds.right(), bounds.bottom());
-            let mid: Pixels = t + (bt - t) / 2.;
-            let border: Hsla = rgb(BORDER).into();
-            // Outer triangle in the border colour, inner one inset by 1px in the surface colour.
-            let mut tri = |inset: f32, fill: Hsla| {
-                let mut b = PathBuilder::fill();
-                b.move_to(point(l + px(inset * 1.4), mid));
-                b.line_to(point(r + px(1.), t + px(inset * 0.6)));
-                b.line_to(point(r + px(1.), bt - px(inset * 0.6)));
-                b.close();
-                if let Ok(path) = b.build() {
-                    window.paint_path(path, fill);
+#[derive(Clone, Copy)]
+enum PointerSide {
+    Left,
+    Up { right_inset: Option<f32> },
+    Down,
+}
+
+fn pointer(side: PointerSide) -> impl IntoElement {
+    let fill: Hsla = rgb(SURFACE).into();
+    let border: Hsla = rgba(BORDER_RGBA).into();
+    let paint_tri = move |side: PointerSide| {
+        canvas(
+            |_, _, _| (),
+            move |bounds, (), window: &mut Window, _| {
+                let (l, t, r, b) = (bounds.left(), bounds.top(), bounds.right(), bounds.bottom());
+                let mut draw = |pts: [(Pixels, Pixels); 3], color: Hsla| {
+                    let mut pb = PathBuilder::fill();
+                    pb.move_to(point(pts[0].0, pts[0].1));
+                    pb.line_to(point(pts[1].0, pts[1].1));
+                    pb.line_to(point(pts[2].0, pts[2].1));
+                    pb.close();
+                    if let Ok(path) = pb.build() {
+                        window.paint_path(path, color);
+                    }
+                };
+                match side {
+                    PointerSide::Left => {
+                        let mid = t + (b - t) / 2.;
+                        draw([(l, mid), (r + px(1.), t), (r + px(1.), b)], border);
+                        draw([(l + px(1.4), mid), (r + px(1.), t + px(0.6)), (r + px(1.), b - px(0.6))], fill);
+                    }
+                    PointerSide::Up { .. } => {
+                        let mid = l + (r - l) / 2.;
+                        draw([(mid, t), (r, b + px(1.)), (l, b + px(1.))], border);
+                        draw([(mid, t + px(1.4)), (r - px(0.6), b + px(1.)), (l + px(0.6), b + px(1.))], fill);
+                    }
+                    PointerSide::Down => {
+                        let mid = l + (r - l) / 2.;
+                        draw([(l, t - px(1.)), (r, t - px(1.)), (mid, b)], border);
+                        draw([(l + px(0.6), t - px(1.)), (r - px(0.6), t - px(1.)), (mid, b - px(1.4))], fill);
+                    }
                 }
-            };
-            tri(0., border);
-            tri(1., color);
-        },
-    )
-    .absolute()
-    .left(px(-ARROW_W - 1.))
-    .top(px(0.))
-    .w(px(ARROW_W))
-    .h_full()
+            },
+        )
+    };
+    let tri_box = div()
+        .w(px(if matches!(side, PointerSide::Left) { ARROW_LEN } else { ARROW_SPAN }))
+        .h(px(if matches!(side, PointerSide::Left) { ARROW_SPAN } else { ARROW_LEN }))
+        .flx("ui.tooltip.tooltip.tooltip-container.tooltip-pointer")
+        .child(paint_tri(side).size_full());
+    match side {
+        PointerSide::Left => div()
+            .absolute()
+            .left(px(-ARROW_LEN - 1.))
+            .top_0()
+            .bottom_0()
+            .flex()
+            .items_center()
+            .child(tri_box)
+            .into_any_element(),
+        PointerSide::Up { right_inset: None } => div()
+            .absolute()
+            .top(px(-ARROW_LEN - 1.))
+            .left_0()
+            .right_0()
+            .flex()
+            .justify_center()
+            .child(tri_box)
+            .into_any_element(),
+        PointerSide::Up { right_inset: Some(right) } => div()
+            .absolute()
+            .top(px(-ARROW_LEN - 1.))
+            .right(px(right))
+            .child(tri_box)
+            .into_any_element(),
+        PointerSide::Down => div()
+            .absolute()
+            .bottom(px(-ARROW_LEN - 1.))
+            .left_0()
+            .right_0()
+            .flex()
+            .justify_center()
+            .child(tri_box)
+            .into_any_element(),
+    }
 }
 
-fn shell(content: impl IntoElement, centered: bool) -> impl IntoElement {
+fn shell(content: impl IntoElement, centered: bool, side: PointerSide) -> impl IntoElement {
     div()
-        .relative()
-        .flex()
-        .flex_col()
-        .when(centered, |d| d.items_center())
-        .rounded(px(8.))
-        .bg(rgb(SURFACE))
-        .border_1()
-        .border_color(rgb(BORDER))
-        .shadow_lg()
-        .whitespace_nowrap()
-        .child(arrow())
-        .child(content)
-        .flx("ui.tooltip.tooltip.tooltip-container.tooltip")
+        .flx("ui.tooltip.tooltip.tooltip")
+        .child(
+            div()
+                .relative()
+                .flex()
+                .flex_col()
+                .when(centered, |d| d.items_center())
+                .rounded(px(8.))
+                .bg(rgb(SURFACE))
+                .border_1()
+                .border_color(rgba(BORDER_RGBA))
+                .shadow_lg()
+                .whitespace_nowrap()
+                .child(pointer(side))
+                .child(
+                    div()
+                        .flx("ui.tooltip.tooltip.tooltip-container.tooltip-content")
+                        .child(content),
+                )
+                .flx("ui.tooltip.tooltip.tooltip-container.tooltip"),
+        )
 }
 
-fn label(text: impl Into<SharedString>, theme: &Theme, size: f32, bold: bool) -> impl IntoElement {
+fn label(text: impl Into<SharedString>, theme: &Theme, size: f32, line_h: f32, bold: bool) -> impl IntoElement {
     div()
         .text_size(px(size))
-        .line_height(px(size + 5.))
+        .line_height(px(line_h))
         .font_weight(if bold { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM })
         .text_color(theme.foreground)
         .child(text.into())
 }
 
+fn keybind_content(
+    text: impl Into<SharedString>,
+    keys: &[&'static str],
+    font_size: f32,
+    line_h: f32,
+    pad_x: f32,
+    pad_y: f32,
+    theme: &Theme,
+) -> impl IntoElement {
+    let chip = |t: &'static str| {
+        div()
+            .h(px(20.))
+            .min_w(px(20.))
+            .px(px(6.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .rounded(px(4.))
+            .bg(theme.background_secondary)
+            .text_size(px(11.))
+            .line_height(px(14.))
+            .font_weight(FontWeight::SEMIBOLD)
+            .text_color(theme.foreground)
+            .flx_text("ui.keybind-hint.keybind-hint.key-symbol", t)
+            .child(t)
+    };
+    div()
+        .px(px(pad_x))
+        .py(px(pad_y))
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap(px(6.))
+        .flx("ui.keybind-hint.keybind-hint.tooltip-with-keybind.tooltip-content")
+        .child(
+            div()
+                .flx("ui.keybind-hint.keybind-hint.tooltip-with-keybind.label")
+                .child(label(text, theme, font_size, line_h, false)),
+        )
+        .when(!keys.is_empty(), |d| {
+            let mut row = div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap(px(4.))
+                .flx("ui.keybind-hint.keybind-hint.keybind-hint");
+            for &k in keys {
+                row = row.child(chip(k));
+            }
+            d.child(row)
+        })
+}
+
 /// Position the tooltip beside a rail slot (`left` is relative to the slot, which must be `relative`).
-fn place(tooltip: impl IntoElement, left: f32) -> AnyElement {
+fn place_side(tooltip: impl IntoElement, left: f32) -> AnyElement {
     deferred(
         div()
             .absolute()
@@ -92,20 +214,41 @@ fn place(tooltip: impl IntoElement, left: f32) -> AnyElement {
     .into_any_element()
 }
 
-/// One-line tooltip (`Direct messages`, `Favorites`, `Explore communities`): height 42.
+/// One-line rail tooltip (`Direct messages`, `Favorites`, `Explore communities`): height 42.
 pub(crate) fn text(text: impl Into<SharedString>, theme: &Theme, left: f32) -> AnyElement {
-    place(shell(div().px(px(20.)).py(px(12.)).child(label(text, theme, 13., false)), false), left)
+    place_side(
+        shell(
+            div().px(px(14.)).py(px(10.)).child(label(text, theme, 15., 20., false)),
+            false,
+            PointerSide::Left,
+        ),
+        left,
+    )
 }
 
 /// Guild tooltip: bold name row, plus the `online / members` row when counts are known.
 pub(crate) fn guild(name: impl Into<SharedString>, counts: Option<(u32, u32)>, theme: &Theme) -> AnyElement {
-    let stat = |dot: Hsla, text: String| {
+    let stat = |dot: Hsla, text: String, count_flx: &'static str| {
         div()
             .flex()
             .items_center()
             .gap(px(5.))
-            .child(div().size(px(8.)).rounded_full().bg(dot))
-            .child(div().text_size(px(13.)).line_height(px(16.)).text_color(theme.muted_foreground).child(text))
+            .flx("app.sidebar-nav.guild-list-item-tooltip.guild-tooltip-stat")
+            .child(
+                div()
+                    .size(px(8.))
+                    .rounded_full()
+                    .bg(dot)
+                    .flx("app.sidebar-nav.guild-list-item-tooltip.guild-tooltip-stat-dot"),
+            )
+            .child(
+                div()
+                    .text_size(px(13.))
+                    .line_height(px(16.))
+                    .text_color(theme.muted_foreground)
+                    .flx_text(count_flx, text.clone())
+                    .child(text),
+            )
     };
     let body = div()
         .flex()
@@ -113,44 +256,85 @@ pub(crate) fn guild(name: impl Into<SharedString>, counts: Option<(u32, u32)>, t
         .items_start()
         .gap(px(6.))
         .px(px(14.))
-        .py(px(12.))
-        .min_w(px(220.))
-        .child(label(name, theme, 16., true))
+        .py(px(10.))
+        .min_w(px(248.))
+        .flx("app.sidebar-nav.guild-list-item-tooltip.guild-tooltip-container")
+        .child(
+            div()
+                .flx("app.sidebar-nav.guild-list-item-tooltip.guild-tooltip-header")
+                .child(
+                    div()
+                        .flx("app.sidebar-nav.guild-list-item-tooltip.guild-tooltip-name")
+                        .child(label(name, theme, 15., 20., true)),
+                ),
+        )
         .children(counts.map(|(online, members)| {
             div()
                 .flex()
                 .items_center()
                 .gap(px(10.))
-                .child(stat(theme.status_online, format!("{online} online")))
-                .child(stat(theme.status_offline, format!("{members} {}", if members == 1 { "member" } else { "members" })))
+                .flx("app.sidebar-nav.guild-list-item-tooltip.guild-tooltip-stats")
+                .child(stat(
+                    theme.status_online,
+                    format!("{online} online"),
+                    "app.sidebar-nav.guild-list-item-tooltip.render-online-count.guild-tooltip-stat-text",
+                ))
+                .child(stat(
+                    theme.status_offline,
+                    format!("{members} {}", if members == 1 { "member" } else { "members" }),
+                    "app.sidebar-nav.guild-list-item-tooltip.render-member-count.guild-tooltip-stat-text",
+                ))
         }));
-    place(shell(body, false), TOOLTIP_LEFT)
+    place_side(shell(body, false, PointerSide::Left), TOOLTIP_LEFT)
 }
 
 /// `Create or join a community` tooltip with the `CTRL SHIFT N` key chips.
 pub(crate) fn create_or_join(label_text: impl Into<SharedString>, theme: &Theme, left: f32) -> AnyElement {
-    let chip = |t: &'static str| {
-        div()
-            .px(px(6.))
-            .py(px(2.))
-            .rounded(px(4.))
-            .bg(theme.muted)
-            .text_size(px(11.))
-            .line_height(px(14.))
-            .font_weight(FontWeight::SEMIBOLD)
-            .text_color(theme.foreground)
-            .child(t)
+    let body = keybind_content(label_text, &["CTRL", "SHIFT", "N"], 15., 20., 14., 10., theme);
+    place_side(shell(body, true, PointerSide::Left), left)
+}
+
+/// Header button tooltip placed below a `32x32` button with an `8px` gap (`top: 40`).
+pub(crate) fn below(
+    label_text: impl Into<SharedString>,
+    keys: &[&'static str],
+    align_right: bool,
+    theme: &Theme,
+) -> AnyElement {
+    let tip = shell(
+        keybind_content(label_text, keys, 13., 18., 10., 7., theme),
+        true,
+        PointerSide::Up {
+            right_inset: align_right.then_some(19.),
+        },
+    );
+    let container = if align_right {
+        div().absolute().top(px(40.)).right(px(-10.)).flex().justify_end().child(tip)
+    } else {
+        div().absolute().top(px(40.)).left(px(-104.)).w(px(240.)).flex().justify_center().child(tip)
     };
-    let body = div()
-        .flex()
-        .flex_col()
-        .items_center()
-        .gap(px(8.))
-        .px(px(20.))
-        .py(px(14.))
-        .child(label(label_text, theme, 13., false))
-        .child(div().flex().items_center().gap(px(4.)).child(chip("CTRL")).child(chip("SHIFT")).child(chip("N")));
-    place(shell(body, true), left)
+    deferred(container).with_priority(10).into_any_element()
+}
+
+/// User-area control tooltip placed above a `32x32` button with an `8px` gap (`bottom: 40`).
+pub(crate) fn above(label_text: impl Into<SharedString>, keys: &[&'static str], theme: &Theme) -> AnyElement {
+    let tip = shell(
+        keybind_content(label_text, keys, 13., 18., 10., 7., theme),
+        true,
+        PointerSide::Down,
+    );
+    deferred(
+        div()
+            .absolute()
+            .bottom(px(40.))
+            .left(px(-104.))
+            .w(px(240.))
+            .flex()
+            .justify_center()
+            .child(tip),
+    )
+    .with_priority(10)
+    .into_any_element()
 }
 
 /// Green voice-activity badge (`guildVoiceBadge`): 20px circle with a 3px rail-coloured ring.
@@ -173,8 +357,16 @@ pub(crate) fn voice_badge(theme: &Theme) -> AnyElement {
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(Icon::new(AppIcon::SpeakerHigh).with_size(px(12.)).text_color(theme.on_fill)),
+                .flx("app.sidebar-nav.voice-badge.div")
+                .child(
+                    div()
+                        .size(px(12.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .flx("app.sidebar-nav.voice-badge.get-voice-badge-icon.speaker-high-icon")
+                        .child(Icon::new(AppIcon::SpeakerHigh).with_size(px(12.)).text_color(theme.on_fill)),
+                ),
         )
-        .flx("app.sidebar-nav.guild-list-item-presentation.guild-list-item-badges.guild-badge")
         .into_any_element()
 }

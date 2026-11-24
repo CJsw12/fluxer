@@ -4,15 +4,66 @@
 //! `[Member List (Users)]`, `[Search messages pill]`, and `[Inbox (Tray)]`.
 
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::component::{Icon, Selectable as _, Sizable as _};
-use gpui_kit::{Context, FontWeight, Role, SharedString, div, prelude::*, px, rgb};
+use gpui_kit::component::{Icon, Sizable as _};
+use gpui_kit::{AnyElement, Context, FontWeight, Role, SharedString, div, prelude::*, px, rgb};
 
-use crate::client_view::ClientView;
+use crate::client_view::{ClientView, HeaderHoverTarget};
 use crate::icons::AppIcon;
 use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
-use crate::ui::l10n;
+use crate::ui::{l10n, rail_tooltip};
 use crate::view_model::Place;
+
+#[allow(clippy::too_many_arguments)]
+fn render_header_icon_button(
+    id: &'static str,
+    flx: &'static str,
+    icon: AppIcon,
+    aria_label: String,
+    tooltip_label: String,
+    tooltip_keys: &'static [&'static str],
+    align_right: bool,
+    selected: bool,
+    hovered: bool,
+    theme: &Theme,
+    on_hover: impl Fn(&bool, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
+    on_click: impl Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
+) -> AnyElement {
+    let color = if selected || hovered {
+        theme.foreground
+    } else {
+        theme.muted_foreground
+    };
+    div()
+        .id(id)
+        .role(Role::Button)
+        .aria_label(aria_label)
+        .aria_selected(selected)
+        .debug_selector(move || id.to_owned())
+        .relative()
+        .size(px(32.))
+        .rounded(px(16.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_pointer()
+        .on_hover(on_hover)
+        .on_click(on_click)
+        .flx(flx)
+        .child(
+            div()
+                .size(px(24.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .flx("channel.channel-header-components.channel-header-icon.button-icon")
+                .child(hdr_icon(icon, color)),
+        )
+        .when(hovered, |d| {
+            d.child(rail_tooltip::below(tooltip_label, tooltip_keys, align_right, theme))
+        })
+        .into_any_element()
+}
 
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> impl IntoElement {
     let glyph = view.channel_glyph;
@@ -121,54 +172,70 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         (false, true) => l10n::tr("Unmute channel"),
                         (false, false) => l10n::tr("Mute channel"),
                     };
-                    d.child(
-                        div().debug_selector(|| "toggle-channel-mute".to_owned()).flx("channel.channel-header-components.channel-notification-settings-button.channel-header-icon.click").child(
-                            Button::new("toggle-channel-mute")
-                                .ghost()
-                                .with_size(px(32.))
-                                .rounded(px(16.))
-                                .icon(hdr_icon(if channel_muted { AppIcon::BellSlash } else { AppIcon::Bell }, if channel_muted { theme.foreground } else { theme.muted_foreground }))
-                                .selected(channel_muted)
-                                .tooltip(label.clone())
-                                .accessibility_label(label)
-                                .on_click(cx.listener(|this, _, _, cx| this.toggle_channel_mute(cx))),
-                        ),
-                    )
-                    .child(
-                        div().debug_selector(|| "header-threads-btn".to_owned()).flx("threads.threads-button.channel-header-icon").child(
-                            Button::new("header-threads-btn")
-                                .ghost()
-                                .with_size(px(32.))
-                                .rounded(px(16.))
-                                .icon(hdr_icon(AppIcon::Chats, theme.muted_foreground))
-                                .tooltip(l10n::tr("Threads"))
-                                .accessibility_label(l10n::tr("Threads"))
-                                .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx))),
-                        ),
-                    )
-                    .child(
-                        div().debug_selector(|| "header-pins-btn".to_owned()).flx("channel.channel-header-components.channel-pins-button.channel-header-icon").child(
-                            Button::new("header-pins-btn")
-                                .ghost()
-                                .with_size(px(32.))
-                                .rounded(px(16.))
-                                .icon(hdr_icon(AppIcon::PushPin, theme.muted_foreground))
-                                .tooltip(l10n::tr("Pinned messages"))
-                                .accessibility_label(l10n::tr("Pinned messages"))
-                                .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx))),
-                        ),
-                    )
-                    .child(
-                        div().debug_selector(|| "header-favorite-btn".to_owned()).flx("channel.channel-header.icon-button.toggle-favorite").child(
-                            Button::new("header-favorite-btn")
-                                .ghost()
-                                .with_size(px(32.))
-                                .rounded(px(16.))
-                                .icon(hdr_icon(AppIcon::StarBold, theme.muted_foreground))
-                                .tooltip(l10n::tr("Add to Favorites"))
-                                .accessibility_label(l10n::tr("Add to Favorites")),
-                        ),
-                    )
+                    d.child(render_header_icon_button(
+                        "toggle-channel-mute",
+                        "channel.channel-header-components.channel-notification-settings-button.channel-header-icon.click",
+                        if channel_muted { AppIcon::BellSlash } else { AppIcon::Bell },
+                        label,
+                        l10n::tr("Notification settings"),
+                        &[],
+                        false,
+                        channel_muted,
+                        view.hovered_header_item == Some(HeaderHoverTarget::Mute),
+                        theme,
+                        cx.listener(|this, hovered: &bool, _, cx| {
+                            this.set_header_hover(HeaderHoverTarget::Mute, *hovered, cx);
+                        }),
+                        cx.listener(|this, _, _, cx| this.toggle_channel_mute(cx)),
+                    ))
+                    .child(render_header_icon_button(
+                        "header-threads-btn",
+                        "threads.threads-button.channel-header-icon",
+                        AppIcon::Chats,
+                        l10n::tr("Threads"),
+                        l10n::tr("Threads"),
+                        &[],
+                        false,
+                        false,
+                        view.hovered_header_item == Some(HeaderHoverTarget::Threads),
+                        theme,
+                        cx.listener(|this, hovered: &bool, _, cx| {
+                            this.set_header_hover(HeaderHoverTarget::Threads, *hovered, cx);
+                        }),
+                        cx.listener(|this, _, window, cx| this.toggle_search(window, cx)),
+                    ))
+                    .child(render_header_icon_button(
+                        "header-pins-btn",
+                        "channel.channel-header-components.channel-pins-button.channel-header-icon",
+                        AppIcon::PushPin,
+                        l10n::tr("Pinned messages"),
+                        l10n::tr("Pinned messages"),
+                        &["CTRL", "P"],
+                        false,
+                        false,
+                        view.hovered_header_item == Some(HeaderHoverTarget::Pins),
+                        theme,
+                        cx.listener(|this, hovered: &bool, _, cx| {
+                            this.set_header_hover(HeaderHoverTarget::Pins, *hovered, cx);
+                        }),
+                        cx.listener(|this, _, window, cx| this.toggle_search(window, cx)),
+                    ))
+                    .child(render_header_icon_button(
+                        "header-favorite-btn",
+                        "channel.channel-header.icon-button.toggle-favorite",
+                        AppIcon::StarBold,
+                        l10n::tr("Add to favorites"),
+                        l10n::tr("Add to favorites"),
+                        &[],
+                        false,
+                        false,
+                        view.hovered_header_item == Some(HeaderHoverTarget::Favorite),
+                        theme,
+                        cx.listener(|this, hovered: &bool, _, cx| {
+                            this.set_header_hover(HeaderHoverTarget::Favorite, *hovered, cx);
+                        }),
+                        |_, _, _| {},
+                    ))
                 })
                 .when(view.member_target.is_some() || view.group_dm.is_some(), |d| {
                     let members_label = if open {
@@ -176,19 +243,22 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     } else {
                         l10n::tr("Show members")
                     };
-                    d.child(
-                        div().debug_selector(|| "toggle-member-list".to_owned()).flx("channel.channel-header.channel-header-icon.toggle-members").child(
-                            Button::new("toggle-member-list")
-                                .ghost()
-                                .with_size(px(32.))
-                                .rounded(px(16.))
-                                .icon(hdr_icon(AppIcon::Users, if open { theme.foreground } else { theme.muted_foreground }))
-                                .selected(open)
-                                .tooltip(members_label.clone())
-                                .accessibility_label(members_label)
-                                .on_click(cx.listener(|this, _, _, cx| this.toggle_member_list(cx))),
-                        ),
-                    )
+                    d.child(render_header_icon_button(
+                        "toggle-member-list",
+                        "channel.channel-header.channel-header-icon.toggle-members",
+                        AppIcon::Users,
+                        members_label.clone(),
+                        members_label,
+                        &["CTRL", "U"],
+                        false,
+                        open,
+                        view.hovered_header_item == Some(HeaderHoverTarget::Members),
+                        theme,
+                        cx.listener(|this, hovered: &bool, _, cx| {
+                            this.set_header_hover(HeaderHoverTarget::Members, *hovered, cx);
+                        }),
+                        cx.listener(|this, _, _, cx| this.toggle_member_list(cx)),
+                    ))
                 })
                 .child({
                     let search_open = view.search.is_some();
@@ -204,7 +274,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .rounded(px(12.))
                         .bg(rgb(0x242229))
                         .when(search_open, |d| d.border_1().border_color(theme.accent))
-                        .hover(|s| s.bg(theme.muted))
+                        .hover(|s| s.bg(theme.control_hover_bg))
                         .cursor_pointer()
                         .flex()
                         .flex_row()
@@ -225,18 +295,22 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 .child(l10n::tr("Search messages")),
                         )
                 })
-                .child(
-                    div().debug_selector(|| "header-inbox-btn".to_owned()).flx("channel.channel-header.inbox-button").child(
-                        Button::new("header-inbox-btn")
-                            .ghost()
-                            .with_size(px(32.))
-                            .rounded(px(16.))
-                            .icon(hdr_icon(AppIcon::Inbox, theme.muted_foreground))
-                            .tooltip(l10n::tr("Inbox"))
-                            .accessibility_label(l10n::tr("Inbox"))
-                            .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx))),
-                    ),
-                ),
+                .child(render_header_icon_button(
+                    "header-inbox-btn",
+                    "channel.channel-header.inbox-button",
+                    AppIcon::Inbox,
+                    l10n::tr("Inbox"),
+                    l10n::tr("Inbox"),
+                    &["CTRL", "I"],
+                    true,
+                    false,
+                    view.hovered_header_item == Some(HeaderHoverTarget::Inbox),
+                    theme,
+                    cx.listener(|this, hovered: &bool, _, cx| {
+                        this.set_header_hover(HeaderHoverTarget::Inbox, *hovered, cx);
+                    }),
+                    cx.listener(|this, _, window, cx| this.toggle_search(window, cx)),
+                )),
         )
 }
 

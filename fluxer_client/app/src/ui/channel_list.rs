@@ -43,7 +43,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     .border_1()
                     .border_color(theme.border)
                     .cursor_pointer()
-                    .hover(|s| s.bg(theme.muted))
+                    .hover(|s| s.bg(theme.hover_bg))
                     .on_click(cx.listener(|this, _, window, cx| this.open_quick_switcher(window, cx)))
                     .child(
                         div()
@@ -92,8 +92,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .px_4()
                 .border_b_1()
                 .border_color(theme.border)
-                .bg(theme.background_secondary)
-                .hover(|s| s.bg(theme.muted))
+                .hover(|s| s.bg(theme.hover_bg))
                 .id("guild-header")
                 .role(Role::Button)
                 .aria_label(l10n::tr("Community menu"))
@@ -223,7 +222,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 .py_1p5()
                                 .rounded(px(5.))
                                 .cursor_pointer()
-                                .hover(|s| s.bg(theme.muted))
+                                .hover(|s| s.bg(theme.hover_bg))
                                 .flex()
                                 .flex_row()
                                 .items_center()
@@ -245,7 +244,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 .py_1p5()
                                 .rounded(px(5.))
                                 .cursor_pointer()
-                                .hover(|s| s.bg(theme.muted))
+                                .hover(|s| s.bg(theme.hover_bg))
                                 .flex()
                                 .flex_row()
                                 .items_center()
@@ -267,7 +266,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 .py_1p5()
                                 .rounded(px(5.))
                                 .cursor_pointer()
-                                .hover(|s| s.bg(theme.muted))
+                                .hover(|s| s.bg(theme.hover_bg))
                                 .flex()
                                 .flex_row()
                                 .items_center()
@@ -346,7 +345,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     .rounded(px(6.))
                     .cursor_pointer()
                     .when(active, |d| d.bg(theme.accent))
-                    .hover(|s| s.bg(theme.muted))
+                    .when(!active, |d| d.hover(|s| s.bg(theme.hover_bg)))
                     .on_click(cx.listener(|this, _, _, cx| this.open_friends(cx)))
                     .child(
                         div()
@@ -544,7 +543,8 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         .flx("app.generic-channel-item.long-pressable.click")
         .text_color(if (highlight_unread || selected) && (c.has_messages || is_voice) { fg } else { muted_fg })
         .when(selected, |d| d.bg(theme.accent))
-        .hover(|s| s.bg(theme.muted).text_color(fg))
+        .when(!selected, |d| d.hover(|s| s.bg(theme.hover_bg).text_color(fg)))
+        .when(selected, |d| d.hover(|s| s.text_color(fg)))
         .when(is_voice || c.has_messages, |d| d.cursor_pointer())
         .when(highlight_unread && !selected, |d| {
             d.child(
@@ -651,7 +651,14 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
     if members.is_empty() {
         return row.into_any_element();
     }
-    let mut group = div().flex().flex_col().child(row);
+    let mut list = div()
+        .pl(px(24.))
+        .pr(px(8.))
+        .pt(px(4.))
+        .flex()
+        .flex_col()
+        .gap(px(2.))
+        .flx("app.voice-participants-list.container");
     for member in members {
         let uid = member.user_id;
         let display = view.voice_member_name(member.guild_id, uid);
@@ -659,22 +666,25 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         let is_muted = member.self_mute || member.mute;
         let is_deaf = member.self_deaf || member.deaf;
         let is_streaming = member.self_stream;
-        group = group.child(
+        list = list.child(
             div()
                 .id(("voice-member", uid.0))
+                .h(px(32.))
+                .px(px(6.))
+                .rounded(px(6.))
                 .flex()
                 .flex_row()
                 .items_center()
-                .gap_1p5()
-                .pl_8()
-                .pr_3()
-                .py_0p5()
+                .gap(px(8.))
+                .cursor_pointer()
+                .hover(|s| s.bg(theme.hover_bg))
+                .flx("app.voice-participant-item.participant-row.click")
                 .child(render_avatar(
                     AvatarSpec {
                         user_id: uid,
                         avatar_url: member_avatar,
                         display_name: display.clone(),
-                        size: 20.,
+                        size: 24.,
                         status: None,
                         status_border_bg: None,
                     },
@@ -684,9 +694,12 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                     div()
                         .flex_1()
                         .min_w_0()
-                        .text_xs()
+                        .text_size(px(14.))
+                        .line_height(px(20.))
+                        .font_weight(FontWeight::MEDIUM)
                         .text_color(muted_fg)
                         .truncate()
+                        .flx_text("app.voice-participant-item.participant-name", display.to_string())
                         .child(display),
                 )
                 .when(is_streaming || is_muted || is_deaf, |row| {
@@ -697,44 +710,63 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                             .items_center()
                             .gap_1()
                             .flex_none()
-                            .when(is_streaming, |r| {
-                                r.child(
-                                    div()
-                                        .debug_selector(move || format!("voice-member-live-{}", uid.0))
-                                        .px_1()
-                                        .rounded(px(3.))
-                                        .bg(theme.danger)
-                                        .text_color(theme.on_fill)
-                                        .text_size(px(9.))
-                                        .font_weight(FontWeight::BOLD)
-                                        .child("LIVE"),
-                                )
-                            })
-                            .when(is_muted, |r| {
-                                r.child(
-                                    div()
-                                        .debug_selector(move || format!("voice-member-muted-{}", uid.0))
-                                        .child(
-                                            Icon::new(AppIcon::MicrophoneSlash)
-                                                .with_size(px(16.))
-                                                .text_color(muted_fg),
-                                        ),
-                                )
-                            })
-                            .when(is_deaf, |r| {
-                                r.child(
-                                    div()
-                                        .debug_selector(move || format!("voice-member-deaf-{}", uid.0))
-                                        .child(
-                                            Icon::new(AppIcon::SpeakerSlash)
-                                                .with_size(px(16.))
-                                                .text_color(muted_fg),
-                                        ),
-                                )
-                            }),
+                            .flx("app.voice-participant-item.icons-container")
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap_1()
+                                    .flx("app.voice-state-icons.container")
+                                    .when(is_streaming, |r| {
+                                        r.child(
+                                            div()
+                                                .debug_selector(move || format!("voice-member-live-{}", uid.0))
+                                                .px_1()
+                                                .rounded(px(3.))
+                                                .bg(theme.danger)
+                                                .text_color(theme.on_fill)
+                                                .text_size(px(9.))
+                                                .font_weight(FontWeight::BOLD)
+                                                .child("LIVE"),
+                                        )
+                                    })
+                                    .when(is_muted, |r| {
+                                        r.child(
+                                            div()
+                                                .debug_selector(move || format!("voice-member-muted-{}", uid.0))
+                                                .size(px(16.))
+                                                .flex()
+                                                .items_center()
+                                                .justify_center()
+                                                .flx("app.voice-state-icons.icon")
+                                                .child(
+                                                    Icon::new(AppIcon::MicrophoneSlash)
+                                                        .with_size(px(16.))
+                                                        .text_color(theme.muted_foreground),
+                                                ),
+                                        )
+                                    })
+                                    .when(is_deaf, |r| {
+                                        r.child(
+                                            div()
+                                                .debug_selector(move || format!("voice-member-deaf-{}", uid.0))
+                                                .size(px(16.))
+                                                .flex()
+                                                .items_center()
+                                                .justify_center()
+                                                .flx("app.voice-state-icons.icon")
+                                                .child(
+                                                    Icon::new(AppIcon::SpeakerSlash)
+                                                        .with_size(px(16.))
+                                                        .text_color(theme.muted_foreground),
+                                                ),
+                                        )
+                                    }),
+                            ),
                     )
                 }),
         );
     }
-    group.into_any_element()
+    div().flex().flex_col().child(row).child(list).into_any_element()
 }

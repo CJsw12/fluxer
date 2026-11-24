@@ -177,8 +177,14 @@ pub struct Theme {
     pub text_tertiary_muted: Hsla,
     /// `--text-primary`.
     pub foreground: Hsla,
-    /// Unselected rail buttons / hover fill.
+    /// Unselected rail buttons.
     pub muted: Hsla,
+    /// `--background-modifier-hover` (dark: `rgba(255,255,255,0.05)`, light: `rgba(23,25,28,0.05)`).
+    pub hover_bg: Hsla,
+    /// User area & icon control button hover tint (`--text-primary-muted` at 10% alpha).
+    pub control_hover_bg: Hsla,
+    /// Subtle button fill such as voice panel media buttons (dark: `rgba(255,255,255,0.035)`).
+    pub subtle_fill: Hsla,
     /// `--text-primary-muted`.
     pub muted_foreground: Hsla,
     /// Selected rail button / channel row (`--background-modifier-selected`).
@@ -576,6 +582,17 @@ impl Theme {
             text_tertiary_muted: p.text(light, tertiary_muted).color(),
             foreground: text_primary.color(),
             muted: secondary.color(),
+            hover_bg: if light {
+                Hsl::new(220., 10., 10.).alpha(0.05).color()
+            } else {
+                hsla(0., 0., 1., 0.05)
+            },
+            control_hover_bg: p.text(light, 0.55).alpha(0.10).color(),
+            subtle_fill: if light {
+                hsla(0., 0., 0., 0.04)
+            } else {
+                hsla(0., 0., 1., 0.035)
+            },
             muted_foreground: p.text(light, 0.55).color(),
             accent: p.selected.color(),
             border: p.border.color(),
@@ -813,5 +830,16 @@ mod tests {
         assert!(1920.0 - chrome_with_members >= 1200.0, "1920x1040 center width = {}", 1920.0 - chrome_with_members);
         assert!(800.0 - s.header_height - s.composer_height >= 640.0);
         assert!(1040.0 - s.header_height - s.composer_height >= 880.0);
+    }
+
+    #[test]
+    fn hover_and_control_tokens_are_distinct_from_secondary() {
+        for kind in [ThemeKind::Dark, ThemeKind::Light, ThemeKind::Darker, ThemeKind::Black] {
+            let t = Theme::from_kind(kind);
+            assert_ne!(t.hover_bg, t.background_secondary);
+            assert!(t.hover_bg.a > 0.0);
+            assert!(t.control_hover_bg.a > 0.0);
+            assert!(t.subtle_fill.a > 0.0);
+        }
     }
 }

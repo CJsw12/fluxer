@@ -5,7 +5,7 @@
 
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::switch::Switch;
-use gpui_kit::component::{Icon, Selectable as _, Sizable as _};
+use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{AnyElement, Context, FontWeight, Hsla, Role, SharedString, div, prelude::*, px};
 
 use super::avatar::{AvatarSpec, render_avatar};
@@ -13,6 +13,7 @@ use super::l10n;
 use crate::backend::voice::{VoiceConnectionState, VoiceTrackSource};
 use crate::client_view::{ClientView, VoicePopoutKind};
 use crate::icons::AppIcon;
+use crate::parity_probe::FlxExt as _;
 use crate::settings_model::SettingsEffect;
 use crate::theme::Theme;
 
@@ -21,17 +22,26 @@ fn render_signal_strength_icon(color: Hsla) -> AnyElement {
     div()
         .id("voice-signal-icon")
         .debug_selector(|| "voice-signal-icon".to_owned())
-        .size(px(20.))
+        .size(px(24.))
         .flex_none()
         .flex()
-        .flex_row()
-        .items_end()
+        .items_center()
         .justify_center()
-        .gap(px(2.))
-        .pb(px(3.))
-        .child(div().w(px(3.)).h(px(6.)).rounded(px(1.)).bg(color))
-        .child(div().w(px(3.)).h(px(10.)).rounded(px(1.)).bg(color))
-        .child(div().w(px(3.)).h(px(14.)).rounded(px(1.)).bg(color))
+        .flx("voice.voice-connection-status.voice-connection-status-inner.signal-icon")
+        .child(
+            div()
+                .size(px(16.))
+                .flex()
+                .flex_row()
+                .items_end()
+                .justify_center()
+                .gap(px(1.5))
+                .pb(px(1.5))
+                .flx("voice.signal-strength-icon.svg")
+                .child(div().w(px(2.5)).h(px(5.)).rounded(px(1.)).bg(color))
+                .child(div().w(px(2.5)).h(px(9.)).rounded(px(1.)).bg(color))
+                .child(div().w(px(2.5)).h(px(13.)).rounded(px(1.)).bg(color)),
+        )
         .into_any_element()
 }
 
@@ -42,7 +52,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             VoiceConnectionState::Connecting => {
                 (l10n::tr("Connecting...").into(), theme.status_connecting, None)
             }
-            VoiceConnectionState::Connected => (l10n::tr("In Voice").into(), theme.status_online, None),
+            VoiceConnectionState::Connected => (l10n::tr("In voice chat").into(), theme.status_online, None),
             VoiceConnectionState::Reconnecting => {
                 (l10n::tr("Connecting...").into(), theme.status_connecting, None)
             }
@@ -96,248 +106,366 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             .role(Role::Region)
             .aria_label(l10n::tr("Voice connection"))
             .debug_selector(|| "voice-panel".to_owned())
-            .flex()
-            .flex_col()
-            .flex_none()
-            .gap_2()
-            .px_2p5()
-            .py_2()
+            .flx("app.user-area.user-area-inner.voice-connection-wrapper")
             .border_b_1()
             .border_color(theme.border)
-            // Row 1: `.statusRow` — Signal icon + status button on left, audio processing + disconnect icon buttons on right.
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .justify_between()
-                    .gap_1p5()
-                    .child(
-                        div()
-                            .id("voice-panel-open-stage")
-                            .debug_selector(|| "voice-panel-open-stage".to_owned())
-                            .cursor_pointer()
-                            .on_click(cx.listener(|this, _, _, cx| this.open_voice_stage(cx)))
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_1p5()
-                            .flex_1()
-                            .min_w_0()
-                            .child(render_signal_strength_icon(status_color))
-                            .child(
-                                div()
-                                    .truncate()
-                                    .text_sm()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(status_color)
-                                    .child(status_text),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap_1()
-                            .flex_none()
-                            .when(!is_failed, |d| {
-                                d.child(
-                                    div()
-                                        .debug_selector(|| "voice-noise-suppression-btn".to_owned())
-                                        .child(
-                                            Button::new("voice-noise-suppression-btn")
-                                                .ghost()
-                                                .small()
-                                                .selected(view.voice_popout == Some(VoicePopoutKind::Details))
-                                                .icon(AppIcon::Waveform)
-                                                .tooltip(l10n::tr("Voice & audio settings"))
-                                                .accessibility_label(l10n::tr("Voice & audio settings"))
-                                                .on_click(cx.listener(|this, _, _, cx| {
-                                                    this.toggle_voice_popout(VoicePopoutKind::Details, cx);
-                                                })),
-                                        ),
-                                )
-                            })
-                            .child(
-                                div().debug_selector(|| "voice-disconnect-btn".to_owned()).child(
-                                    Button::new("voice-disconnect-btn")
-                                        .ghost()
-                                        .small()
-                                        .icon(if is_failed {
-                                            AppIcon::X
-                                        } else {
-                                            AppIcon::PhoneX
-                                        })
-                                        .tooltip(if is_failed {
-                                            l10n::tr("Dismiss")
-                                        } else {
-                                            l10n::tr("Disconnect")
-                                        })
-                                        .accessibility_label(if is_failed {
-                                            l10n::tr("Dismiss")
-                                        } else {
-                                            l10n::tr("Disconnect")
-                                        })
-                                        .on_click(cx.listener(|this, _, _, cx| this.leave_voice_channel(cx))),
-                                ),
-                            ),
-                    ),
-            )
-            // Row 2: `.connectionInfo` — `{channelName} / {guildName}` link + speaking avatar stack + permission / failure notice.
             .child(
                 div()
                     .flex()
                     .flex_col()
-                    .gap_1()
-                    .when(!channel_label.is_empty(), |d| {
-                        let source_text = match &guild_label {
-                            Some(g) if !g.is_empty() => format!("{channel_label} / {g}"),
-                            _ => channel_label.to_string(),
-                        };
-                        d.child(
-                            div()
-                                .id("voice-channel-source-link")
-                                .debug_selector(|| "voice-channel-source-link".to_owned())
-                                .cursor_pointer()
-                                .on_click(cx.listener(|this, _, _, cx| this.open_voice_stage(cx)))
-                                .truncate()
-                                .text_xs()
-                                .text_color(theme.muted_foreground)
-                                .hover(|s| s.text_color(theme.foreground))
-                                .child(source_text),
-                        )
-                    })
-                    .when_some(failure_detail, |d, reason| {
-                        d.child(
-                            div()
-                                .truncate()
-                                .text_xs()
-                                .text_color(theme.danger)
-                                .child(reason),
-                        )
-                    })
-                    .when(view.voice.speak_denied, |d| {
-                        d.child(
-                            div()
-                                .truncate()
-                                .text_xs()
-                                .text_color(theme.danger)
-                                .child(l10n::tr("Mic muted by permissions")),
-                        )
-                    })
-                    .when(is_connected && !participants.is_empty(), |d| {
-                        let mut stack = div()
-                            .id("voice-channel-avatar-stack")
-                            .debug_selector(|| "voice-channel-avatar-stack".to_owned())
+                    .flex_none()
+                    .gap(px(12.))
+                    .p(px(8.))
+                    .flx("voice.voice-connection-status.voice-connection-status-inner.voice-connection-container")
+                    // Row 1: `.statusRow` — Signal icon + status button on left, audio processing + disconnect icon buttons on right.
+                    .child(
+                        div()
+                            .h(px(32.))
                             .flex()
                             .flex_row()
                             .items_center()
-                            .gap_1();
-                        for member in participants.iter().take(4) {
-                            let name = view.voice_member_name(member.guild_id, member.user_id);
-                            let avatar_url = view.voice_member_avatar_url(member.guild_id, member.user_id);
-                            let speaking = !member.self_mute && !member.mute && !member.self_deaf && !member.deaf;
-                            stack = stack.child(
+                            .justify_between()
+                            .gap(px(8.))
+                            .flx("voice.voice-connection-status.voice-connection-status-inner.status-row")
+                            .child(
                                 div()
-                                    .rounded_full()
-                                    .border_1()
-                                    .border_color(if speaking { theme.status_online } else { theme.border })
-                                    .child(render_avatar(
-                                        AvatarSpec {
-                                            user_id: member.user_id,
-                                            avatar_url,
-                                            display_name: name,
-                                            size: 20.,
-                                            status: None,
-                                            status_border_bg: None,
-                                        },
-                                        theme,
-                                    )),
-                            );
-                        }
-                        d.child(stack)
-                    }),
-            )
-            // Row 3: `.mediaSection` (`LocalParticipantControls.tsx`) — 2-column grid of Camera + Screen Share icon buttons.
-            .when(!is_failed, |d| {
-                d.child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap_1()
-                        .w_full()
-                        .child(
+                                    .id("voice-panel-open-stage")
+                                    .debug_selector(|| "voice-panel-open-stage".to_owned())
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(|this, _, _, cx| this.open_voice_stage(cx)))
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(8.))
+                                    .flex_1()
+                                    .min_w_0()
+                                    .flx("voice.voice-connection-status.voice-connection-status-inner.focus-ring-wrapper")
+                                    .child(render_signal_strength_icon(status_color))
+                                    .child(
+                                        div()
+                                            .truncate()
+                                            .text_size(px(14.))
+                                            .line_height(px(18.))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(status_color)
+                                            .child(status_text),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(8.))
+                                    .flex_none()
+                                    .flx("voice.voice-connection-status.voice-connection-status-inner.controls")
+                                    .when(!is_failed, |d| {
+                                        let details_open = view.voice_popout == Some(VoicePopoutKind::Details);
+                                        d.child(
+                                            div()
+                                                .id("voice-noise-suppression-btn")
+                                                .role(Role::Button)
+                                                .aria_label(l10n::tr("Voice & audio settings"))
+                                                .debug_selector(|| "voice-noise-suppression-btn".to_owned())
+                                                .size(px(32.))
+                                                .rounded(px(6.))
+                                                .flex()
+                                                .items_center()
+                                                .justify_center()
+                                                .cursor_pointer()
+                                                .when(details_open, |b| b.bg(theme.control_hover_bg))
+                                                .hover(|s| s.bg(theme.control_hover_bg))
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.toggle_voice_popout(VoicePopoutKind::Details, cx);
+                                                }))
+                                                .flx("voice.voice-connection-status.audio-processing-button.control-button.click")
+                                                .child(
+                                                    Icon::new(AppIcon::Waveform)
+                                                        .with_size(px(20.))
+                                                        .text_color(if details_open {
+                                                            theme.foreground
+                                                        } else {
+                                                            theme.muted_foreground
+                                                        }),
+                                                ),
+                                        )
+                                    })
+                                    .child(
+                                        div()
+                                            .id("voice-disconnect-btn")
+                                            .role(Role::Button)
+                                            .aria_label(if is_failed {
+                                                l10n::tr("Dismiss")
+                                            } else {
+                                                l10n::tr("Disconnect")
+                                            })
+                                            .debug_selector(|| "voice-disconnect-btn".to_owned())
+                                            .size(px(32.))
+                                            .rounded(px(6.))
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .cursor_pointer()
+                                            .hover(|s| s.bg(theme.control_hover_bg))
+                                            .on_click(cx.listener(|this, _, _, cx| this.leave_voice_channel(cx)))
+                                            .flx("voice.voice-connection-status.voice-connection-status-inner.control-button")
+                                            .child(
+                                                Icon::new(if is_failed {
+                                                    AppIcon::X
+                                                } else {
+                                                    AppIcon::PhoneX
+                                                })
+                                                .with_size(px(20.))
+                                                .text_color(theme.muted_foreground),
+                                            ),
+                                    ),
+                            ),
+                    )
+                    // Row 2: `.connectionInfo` — `{channelName} / {guildName}` + connection id + speaking avatar stack.
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(8.))
+                            .flx("voice.voice-connection-status.voice-connection-status-inner.connection-info")
+                            .when(!channel_label.is_empty(), |d| {
+                                d.child(
+                                    div()
+                                        .h(px(16.))
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .flx("voice.voice-connection-status.voice-connection-status-inner.channel-source-row")
+                                        .child(
+                                            div()
+                                                .id("voice-channel-source-link")
+                                                .debug_selector(|| "voice-channel-source-link".to_owned())
+                                                .cursor_pointer()
+                                                .on_click(cx.listener(|this, _, _, cx| this.open_voice_stage(cx)))
+                                                .flex()
+                                                .flex_row()
+                                                .items_center()
+                                                .gap(px(4.))
+                                                .min_w_0()
+                                                .text_size(px(12.))
+                                                .line_height(px(16.))
+                                                .text_color(theme.muted_foreground)
+                                                .hover(|s| s.text_color(theme.foreground))
+                                                .flx("voice.voice-connection-status.voice-connection-status-inner.channel-source-link.voice-connection-status-context-menu")
+                                                .child(
+                                                    div()
+                                                        .truncate()
+                                                        .flx_text(
+                                                            "voice.voice-connection-status.voice-connection-status-inner.channel-source-channel",
+                                                            channel_label.to_string(),
+                                                        )
+                                                        .child(channel_label.clone()),
+                                                )
+                                                .when_some(guild_label.as_ref().filter(|g| !g.is_empty()), |r, g| {
+                                                    r.child(
+                                                        div()
+                                                            .flx_text(
+                                                                "voice.voice-connection-status.voice-connection-status-inner.channel-source-separator",
+                                                                "/",
+                                                            )
+                                                            .child("/"),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .truncate()
+                                                            .flx_text(
+                                                                "voice.voice-connection-status.voice-connection-status-inner.channel-source-guild",
+                                                                g.to_string(),
+                                                            )
+                                                            .child(g.clone()),
+                                                    )
+                                                }),
+                                        ),
+                                )
+                            })
+                            .when(is_connected, |d| {
+                                let conn_text = view
+                                    .voice
+                                    .connection_id
+                                    .as_deref()
+                                    .filter(|s| !s.is_empty())
+                                    .unwrap_or("RTC Connected")
+                                    .to_owned();
+                                d.child(
+                                    div()
+                                        .h(px(16.))
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .gap(px(8.))
+                                        .flx("voice.voice-connection-status.voice-connection-status-inner.connection-id-row")
+                                        .child(
+                                            div()
+                                                .size(px(16.))
+                                                .flex_none()
+                                                .flex()
+                                                .items_center()
+                                                .justify_center()
+                                                .flx("voice.voice-connection-status.voice-connection-status-inner.connection-id-icon")
+                                                .child(
+                                                    Icon::new(AppIcon::Shield)
+                                                        .with_size(px(14.))
+                                                        .text_color(theme.muted_foreground),
+                                                ),
+                                        )
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .min_w_0()
+                                                .truncate()
+                                                .text_size(px(12.))
+                                                .line_height(px(16.))
+                                                .text_color(theme.muted_foreground)
+                                                .flx_text(
+                                                    "voice.voice-connection-status.voice-connection-status-inner.connection-id-value-text",
+                                                    conn_text.clone(),
+                                                )
+                                                .child(conn_text),
+                                        ),
+                                )
+                            })
+                            .when_some(failure_detail, |d, reason| {
+                                d.child(
+                                    div()
+                                        .truncate()
+                                        .text_xs()
+                                        .text_color(theme.danger)
+                                        .child(reason),
+                                )
+                            })
+                            .when(view.voice.speak_denied, |d| {
+                                d.child(
+                                    div()
+                                        .truncate()
+                                        .text_xs()
+                                        .text_color(theme.danger)
+                                        .child(l10n::tr("Mic muted by permissions")),
+                                )
+                            })
+                            .when(is_connected && !participants.is_empty(), |d| {
+                                let mut stack = div()
+                                    .id("voice-channel-avatar-stack")
+                                    .debug_selector(|| "voice-channel-avatar-stack".to_owned())
+                                    .min_h(px(42.))
+                                    .py(px(3.))
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .flx("voice.voice-connection-status.voice-connection-status-inner.channel-avatar-stack");
+                                for member in participants.iter().take(4) {
+                                    let name = view.voice_member_name(member.guild_id, member.user_id);
+                                    let avatar_url = view.voice_member_avatar_url(member.guild_id, member.user_id);
+                                    let speaking = !member.self_mute && !member.mute && !member.self_deaf && !member.deaf;
+                                    stack = stack.child(
+                                        div()
+                                            .rounded_full()
+                                            .when(speaking, |b| b.border_2().border_color(theme.status_online))
+                                            .flx("voice.voice-participant-avatar-list.render-avatar.stack-avatar")
+                                            .child(render_avatar(
+                                                AvatarSpec {
+                                                    user_id: member.user_id,
+                                                    avatar_url,
+                                                    display_name: name,
+                                                    size: 32.,
+                                                    status: None,
+                                                    status_border_bg: None,
+                                                },
+                                                theme,
+                                            )),
+                                    );
+                                }
+                                d.child(stack)
+                            }),
+                    )
+                    // Row 3: `.mediaSection` (`LocalParticipantControls.tsx`) — 2-column grid of Camera + Screen Share icon buttons.
+                    .when(!is_failed, |d| {
+                        d.child(
                             div()
-                                .id("voice-camera-btn")
-                                .role(Role::Button)
-                                .aria_label(l10n::tr("Turn on camera"))
-                                .debug_selector(|| "voice-camera-btn".to_owned())
-                                .flex_1()
                                 .h(px(32.))
-                                .rounded(px(6.))
-                                .border_1()
-                                .border_color(theme.border)
-                                .bg(theme.background)
                                 .flex()
+                                .flex_row()
                                 .items_center()
-                                .justify_center()
-                                .when(!is_connected, |b| b.opacity(0.5))
-                                .when(is_connected, |b| {
-                                    b.cursor_pointer()
-                                        .hover(|s| s.bg(theme.muted))
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.open_voice_settings(window, cx);
-                                        }))
-                                })
+                                .gap(px(4.))
+                                .w_full()
+                                .flx("voice.voice-connection-status.voice-connection-status-inner.media-section")
                                 .child(
-                                    Icon::new(AppIcon::CameraSlash)
-                                        .with_size(px(20.))
-                                        .text_color(theme.muted_foreground),
+                                    div()
+                                        .id("voice-camera-btn")
+                                        .role(Role::Button)
+                                        .aria_label(l10n::tr("Turn on camera"))
+                                        .debug_selector(|| "voice-camera-btn".to_owned())
+                                        .flex_1()
+                                        .h(px(32.))
+                                        .rounded(px(6.))
+                                        .bg(theme.subtle_fill)
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .when(!is_connected, |b| b.opacity(0.5))
+                                        .when(is_connected, |b| {
+                                            b.cursor_pointer()
+                                                .hover(|s| s.bg(theme.control_hover_bg))
+                                                .on_click(cx.listener(|this, _, window, cx| {
+                                                    this.open_voice_settings(window, cx);
+                                                }))
+                                        })
+                                        .flx("voice.voice-connection-status.local-participant-controls.media-button.undefined")
+                                        .child(
+                                            Icon::new(AppIcon::CameraSlash)
+                                                .with_size(px(20.))
+                                                .text_color(theme.muted_foreground),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .id("voice-share-btn")
+                                        .role(Role::Button)
+                                        .aria_label(share_label)
+                                        .debug_selector(|| "voice-share-btn".to_owned())
+                                        .flex_1()
+                                        .h(px(32.))
+                                        .rounded(px(6.))
+                                        .when(view.voice.self_stream, |b| b.border_1().border_color(share_active_border))
+                                        .bg(if view.voice.self_stream {
+                                            share_active_bg
+                                        } else {
+                                            theme.subtle_fill
+                                        })
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .when(!is_connected, |b| b.opacity(0.5))
+                                        .when(is_connected, |b| {
+                                            b.cursor_pointer()
+                                                .hover(|s| {
+                                                    s.bg(if view.voice.self_stream {
+                                                        share_active_bg
+                                                    } else {
+                                                        theme.control_hover_bg
+                                                    })
+                                                })
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.toggle_screen_share(false, cx);
+                                                }))
+                                        })
+                                        .flx("voice.voice-connection-status.local-participant-controls.media-button.undefined")
+                                        .child(
+                                            Icon::new(AppIcon::MonitorPlay).with_size(px(20.)).text_color(if view.voice.self_stream {
+                                                theme.status_online
+                                            } else {
+                                                theme.muted_foreground
+                                            }),
+                                        ),
                                 ),
                         )
-                        .child(
-                            div()
-                                .id("voice-share-btn")
-                                .role(Role::Button)
-                                .aria_label(share_label)
-                                .debug_selector(|| "voice-share-btn".to_owned())
-                                .flex_1()
-                                .h(px(32.))
-                                .rounded(px(6.))
-                                .border_1()
-                                .border_color(if view.voice.self_stream {
-                                    share_active_border
-                                } else {
-                                    theme.border
-                                })
-                                .bg(if view.voice.self_stream {
-                                    share_active_bg
-                                } else {
-                                    theme.background
-                                })
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .when(!is_connected, |b| b.opacity(0.5))
-                                .when(is_connected, |b| {
-                                    b.cursor_pointer()
-                                        .hover(|s| s.bg(if view.voice.self_stream { share_active_bg } else { theme.muted }))
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.toggle_screen_share(false, cx);
-                                        }))
-                                })
-                                .child(
-                                    Icon::new(AppIcon::MonitorPlay).with_size(px(20.)).text_color(if view.voice.self_stream {
-                                        theme.status_online
-                                    } else {
-                                        theme.foreground
-                                    }),
-                                ),
-                        ),
-                )
-            })
+                    }),
+            )
             // Active stream audio toggle & remote stream quick-watch pill when applicable.
             .when(
                 is_connected && (view.voice.self_stream || watchable_video_track.is_some()),

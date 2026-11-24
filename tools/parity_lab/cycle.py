@@ -17,6 +17,8 @@ import sys
 import time
 from pathlib import Path
 
+import rust_probe as rp
+
 REPO = Path(__file__).resolve().parents[2]
 TARGET = REPO / "target" / "fc-root"
 PWSH = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "PowerShell" / "7" / "pwsh.exe"
@@ -64,6 +66,16 @@ def main(argv: list[str]) -> int:
         if "Status: Online" in r.stdout:
             print("client: Online")
             break
+        try:
+            pr = rp.send("probe_inspect")
+            if pr.get("ok") and any(
+                e.get("flx") == "app.user-area.user-area-inner.user-status" and e.get("text") == "Online"
+                for e in pr.get("elements", [])
+            ):
+                print("client: Online (via probe)")
+                break
+        except Exception:
+            pass
     else:
         print("client: NOT online (check tunnel)")
         return 1

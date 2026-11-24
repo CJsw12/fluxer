@@ -353,6 +353,7 @@ fn render_row(
                     .px_2()
                     .rounded(px(6.))
                     .cursor_pointer()
+                    .hover(|s| s.bg(theme.hover_bg))
                     .when(offline, |d| d.opacity(0.4))
                     .flx("channel.member-list-item.focus-ring-wrapper")
                     .child(picture)

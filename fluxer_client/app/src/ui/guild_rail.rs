@@ -73,6 +73,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         theme,
         48.,
         "app.sidebar-nav.fluxer-button.fluxer-button.select",
+        "app.sidebar-nav.fluxer-button.guild-indicator",
+        "app.sidebar-nav.fluxer-button.guild-indicator-bar",
         cx.listener(|this, _, _, cx| this.select_place(Place::Home, cx)),
         cx.listener(|this, hovered: &bool, _, cx| {
             this.set_rail_hover(RailHoverTarget::Home, *hovered, cx);
@@ -116,6 +118,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             theme,
             48.,
             "app.sidebar-nav.favorites-button.fluxer-button.select",
+            "app.sidebar-nav.favorites-button.guild-indicator",
+            "app.sidebar-nav.favorites-button.guild-indicator-bar",
             cx.listener(|this, _, _, cx| this.select_favorites(cx)),
             cx.listener(|this, hovered: &bool, _, cx| {
                 this.set_rail_hover(RailHoverTarget::Favorites, *hovered, cx);
@@ -195,6 +199,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             theme,
             54.,
             "app.sidebar-nav.guild-list-item-presentation.guild-list-item.click",
+            "app.sidebar-nav.guild-list-item-presentation.guild-indicator",
+            "app.sidebar-nav.guild-list-item-presentation.guild-indicator-bar",
             cx.listener(move |this, _, _, cx| this.select_place(Place::Guild(id), cx)),
             cx.listener(move |this, hovered: &bool, _, cx| {
                 this.set_rail_hover(RailHoverTarget::Guild(id), *hovered, cx);
@@ -309,6 +315,8 @@ fn rail_item(
     theme: &Theme,
     slot_height: f32,
     flx: &'static str,
+    indicator_wrap_flx: &'static str,
+    indicator_flx: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
     on_hover: impl Fn(&bool, &mut Window, &mut App) + 'static,
     button: impl IntoElement,
@@ -334,15 +342,24 @@ fn rail_item(
         .children(pill.map(|h| {
             let sel = format!("rail-pill-{pill_key_str}");
             div()
-                .debug_selector(move || sel.clone())
                 .absolute()
-                .left(px(-1.))
-                .top(px((slot_height - h) / 2.))
-                .w(px(6.))
-                .h(px(h))
-                .rounded_r(px(6.))
-                .bg(fg)
-                .flx("app.sidebar-nav.guild-list-item-presentation.guild-indicator-bar")
+                .left(px(-2.))
+                .top(px((slot_height - 44.) / 2.))
+                .w(px(8.))
+                .h(px(44.))
+                .flx(indicator_wrap_flx)
+                .child(
+                    div()
+                        .debug_selector(move || sel.clone())
+                        .absolute()
+                        .left(px(1.))
+                        .top(px((44. - h) / 2.))
+                        .w(px(6.))
+                        .h(px(h))
+                        .rounded_r(px(6.))
+                        .bg(fg)
+                        .flx(indicator_flx),
+                )
         }))
         .flx(flx)
 }

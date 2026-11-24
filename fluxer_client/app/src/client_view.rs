@@ -75,6 +75,25 @@ pub(crate) enum RailHoverTarget {
     Join,
 }
 
+/// Which channel header right-section icon button is currently hovered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum HeaderHoverTarget {
+    Mute,
+    Threads,
+    Pins,
+    Favorite,
+    Members,
+    Inbox,
+}
+
+/// Which bottom-left user-area control button is currently hovered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum UserControlHoverTarget {
+    Mute,
+    Deafen,
+    Settings,
+}
+
 /// Emitted to the window root.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClientEvent {
@@ -263,6 +282,10 @@ pub struct ClientView {
     pub(crate) guild_header_popout_open: bool,
     /// Currently hovered item in the left Guild Rail (`GuildListIndicator.ts`).
     pub(crate) hovered_rail_item: Option<RailHoverTarget>,
+    /// Currently hovered icon button in the channel header.
+    pub(crate) hovered_header_item: Option<HeaderHoverTarget>,
+    /// Currently hovered control button in the bottom-left user area.
+    pub(crate) hovered_user_control: Option<UserControlHoverTarget>,
     /// True when the `Favorites` virtual rail button (`FavoritesGuildButton`) is selected.
     pub(crate) favorites_selected: bool,
     /// True while the user is running the interactive Microphone Test monitor in Settings -> Voice & Video.
@@ -460,6 +483,8 @@ impl ClientView {
             user_area_submenu: None,
             guild_header_popout_open: false,
             hovered_rail_item: None,
+            hovered_header_item: None,
+            hovered_user_control: None,
             favorites_selected: false,
             mic_test_active: false,
             voice_popout: None,
@@ -1589,6 +1614,39 @@ impl ClientView {
         }
     }
 
+    pub(crate) fn set_header_hover(&mut self, target: HeaderHoverTarget, hovered: bool, cx: &mut Context<Self>) {
+        let next = if hovered {
+            Some(target)
+        } else if self.hovered_header_item == Some(target) {
+            None
+        } else {
+            self.hovered_header_item
+        };
+        if self.hovered_header_item != next {
+            self.hovered_header_item = next;
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn set_user_control_hover(
+        &mut self,
+        target: UserControlHoverTarget,
+        hovered: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let next = if hovered {
+            Some(target)
+        } else if self.hovered_user_control == Some(target) {
+            None
+        } else {
+            self.hovered_user_control
+        };
+        if self.hovered_user_control != next {
+            self.hovered_user_control = next;
+            cx.notify();
+        }
+    }
+
     pub(crate) fn select_channel(&mut self, channel_id: Snowflake, cx: &mut Context<Self>) {
         self.voice_stage_open = false;
         self.select_channel_inner(channel_id, true, cx);
@@ -2536,6 +2594,20 @@ impl ClientView {
             ["voice-leave"] => {
                 self.close_overlay(window, cx);
                 self.leave_voice_channel(cx);
+                true
+            }
+            ["voice-mute", mode] => {
+                let want = *mode == "on";
+                if self.voice.self_mute != want {
+                    self.toggle_voice_mute(cx);
+                }
+                true
+            }
+            ["voice-deafen", mode] => {
+                let want = *mode == "on";
+                if self.voice.self_deaf != want {
+                    self.toggle_voice_deaf(cx);
+                }
                 true
             }
             ["user-area-popout"] => {

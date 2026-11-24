@@ -462,19 +462,22 @@ pub fn render(
     let mut mention_bg: Hsla = rgb(0xfaa61a).into();
     mention_bg.a = 0.10;
     let mention_border: Hsla = rgb(0xfaa61a).into();
-    let column = div()
+    let is_hovered = !matches!(bar, RowBar::None);
+    let article = div()
         .flex()
         .flex_col()
         .w_full()
-        .when(row.group_start, |d| d.pt(px(sizes.group_gap)))
-        .when(row.group_start, |d| {
-            d.child(div().absolute().top_0().bottom_0().left(px(16.)).right(px(16.)).flx("channel.message-group.group"))
-        })
+        .flx("channel.message.article.alt-click")
         .when(row.mentioned, |d| {
             d.debug_selector(move || mentioned_sel.clone())
                 .bg(mention_bg)
                 .border_l_2()
                 .border_color(mention_border)
+        })
+        .when(is_hovered && !row.mentioned, |d| d.bg(theme.hover_bg))
+        .when(!row.mentioned, |d| d.hover(|s| s.bg(theme.hover_bg)))
+        .when(row.group_start, |d| {
+            d.child(div().absolute().top_0().bottom_0().left(px(16.)).right(px(16.)).flx("channel.message-group.group"))
         })
         .children(reply_line)
         .child(main);
@@ -508,9 +511,28 @@ pub fn render(
     let id = SharedString::from(format!("message-{}", row.id.0));
     // A message still being sent has no actions yet.
     let hover_target = (row.state != MessageState::Sending).then_some(message_id);
-    message_actions::with_hover_actions(id, column, bar, move |_, cx| {
+    let leave_view = view.clone();
+    let interactive = message_actions::with_hover_actions(id, article, bar, move |_, cx| {
         let _ = view.update(cx, |v, cx| v.hover_message(hover_target, cx));
-    })
+    });
+    if row.group_start {
+        div()
+            .flex()
+            .flex_col()
+            .w_full()
+            .child(
+                div()
+                    .w_full()
+                    .h(px(sizes.group_gap))
+                    .on_mouse_move(move |_, _, cx| {
+                        let _ = leave_view.update(cx, |v, cx| v.hover_message(None, cx));
+                    }),
+            )
+            .child(interactive)
+            .into_any_element()
+    } else {
+        interactive
+    }
 }
 
 /// What floats at the top right of a message row.

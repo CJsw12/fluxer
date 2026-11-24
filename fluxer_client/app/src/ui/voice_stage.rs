@@ -20,6 +20,7 @@ use super::{l10n, video_viewer};
 use crate::backend::voice::{TrackSubscriptionKey, VoiceConnectionState, VoiceTrackSource};
 use crate::client_view::ClientView;
 use crate::icons::AppIcon;
+use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 
 struct StageParticipant {
@@ -372,9 +373,11 @@ fn render_participant_tile(
 /// Official `VoiceControlBar.tsx` + `VoiceControlBar.module.css` button container:
 /// `44x44px` (`--vc-button-size: 2.75rem`) rounded square (`--vc-button-radius: 1rem` = 16px)
 /// with top-right floating `17x17px` (`rounded 7px`) `.settingsButton` (`CaretDown`) corner badge.
+#[allow(clippy::too_many_arguments)]
 fn split_control_group(
     main_id: &'static str,
     caret_id: &'static str,
+    caret_flx: &'static str,
     icon: AppIcon,
     main_label: String,
     caret_label: String,
@@ -401,6 +404,7 @@ fn split_control_group(
         .relative()
         .size(px(44.))
         .flex_none()
+        .flx("voice.voice-control-bar.voice-control-bar-inner.button-container")
         .child(
             div()
                 .id(main_id)
@@ -420,7 +424,8 @@ fn split_control_group(
                         .hover(|s| s.opacity(0.88))
                         .on_click(on_main_click)
                 })
-                .child(Icon::new(icon).small().text_color(fg)),
+                .flx("voice.voice-control-bar.voice-control-bar-inner.button.undefined")
+                .child(Icon::new(icon).with_size(px(22.)).text_color(fg)),
         )
         .child(
             div()
@@ -443,13 +448,16 @@ fn split_control_group(
                 .cursor_pointer()
                 .hover(|s| s.border_color(gpui_kit::hsla(0., 0., 1., 0.40)))
                 .on_click(on_caret_click)
+                .flx(caret_flx)
                 .child(Icon::new(AppIcon::CaretDown).with_size(px(10.)).text_color(gpui_kit::hsla(0., 0., 1., 0.88))),
         )
         .into_any_element()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn single_control_button(
     id: &'static str,
+    flx: &'static str,
     icon: AppIcon,
     label: String,
     active_danger: bool,
@@ -480,7 +488,8 @@ fn single_control_button(
                 .hover(|s| s.opacity(0.88))
                 .on_click(on_click)
         })
-        .child(Icon::new(icon).small().text_color(fg))
+        .flx(flx)
+        .child(Icon::new(icon).with_size(px(22.)).text_color(fg))
         .into_any_element()
 }
 
@@ -715,6 +724,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     // Official `VoiceControlBar.tsx` + `VoiceControlBar.module.css`:
     // black floating capsule (`--vc-control-material-bg: #000`, `border-radius: 24px`, `padding: 6px`, `gap: 4px`).
     let control_pill = div()
+        .h(px(58.))
         .p(px(6.))
         .rounded(px(24.))
         .border_1()
@@ -726,9 +736,11 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .items_center()
         .justify_center()
         .gap_1()
+        .flx("voice.voice-control-bar.voice-control-bar-inner.container")
         .child(split_control_group(
             "voice-stage-mute-btn",
             "voice-stage-input-settings-btn",
+            "voice.voice-control-bar.voice-control-bar-inner.settings-button.input-settings-click",
             if effective_muted {
                 AppIcon::MicrophoneSlash
             } else {
@@ -748,6 +760,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .child(split_control_group(
             "voice-stage-deaf-btn",
             "voice-stage-output-settings-btn",
+            "voice.voice-control-bar.voice-control-bar-inner.settings-button.output-settings-click",
             if effective_deafened {
                 AppIcon::SpeakerSlash
             } else {
@@ -767,6 +780,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .child(split_control_group(
             "voice-stage-camera-btn",
             "voice-stage-camera-settings-btn",
+            "voice.voice-control-bar.voice-control-bar-inner.settings-button.camera-settings-click",
             AppIcon::CameraSlash,
             l10n::tr("Turn on camera"),
             l10n::tr("Camera settings"),
@@ -780,6 +794,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .child(split_control_group(
             "voice-stage-share-btn",
             "voice-stage-share-settings-btn",
+            "voice.voice-control-bar.voice-control-bar-inner.settings-button.screen-share-settings-click",
             AppIcon::MonitorPlay,
             share_label,
             l10n::tr("Screen share settings"),
@@ -794,6 +809,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         ))
         .child(single_control_button(
             "voice-stage-more-btn",
+            "voice.voice-control-bar.voice-control-bar-inner.button.more-options-click",
             AppIcon::DotsThreeBold,
             l10n::tr("More options"),
             false,
@@ -806,11 +822,13 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .id("voice-stage-control-separator")
                 .debug_selector(|| "voice-stage-control-separator".to_owned())
                 .w(px(1.))
-                .h(px(24.))
-                .bg(theme.border),
+                .h(px(22.))
+                .bg(theme.border)
+                .flx("voice.voice-control-bar.voice-control-bar-inner.button-separator"),
         )
         .child(single_control_button(
             "voice-stage-disconnect-btn",
+            "voice.voice-control-bar.voice-control-bar-inner.button.disconnect",
             AppIcon::PhoneX,
             l10n::tr("Disconnect"),
             true,
@@ -821,6 +839,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .when_some(watched_track, |d, track| {
             d.child(single_control_button(
                 "voice-stage-stop-watching-btn",
+                "voice.voice-control-bar.voice-control-bar-inner.button.stop-watching",
                 AppIcon::EyeSlash,
                 l10n::tr("Stop watching stream"),
                 false,
@@ -1151,6 +1170,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .items_center()
         .justify_center()
         .gap_2()
+        .flx("voice.compact-voice-call-view.compact-voice-call-view-inner.control-bar-section")
         .children(control_popout)
         .child(control_pill);
 
@@ -1173,6 +1193,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         })
         .min_w_0()
         .bg(rgb(0x000000))
+        .flx("voice.compact-voice-call-view.compact-voice-call-view-inner.section.voice-root-pointer-activity")
         .child(header)
         .child(stage_body)
         .child(controls)

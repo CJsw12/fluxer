@@ -17,27 +17,33 @@ use super::avatar::{AvatarSpec, render_avatar};
 use super::member_list::{status_color, status_label};
 use super::settings::SettingsTab;
 use crate::profile::build_profile_card;
-use super::{l10n, voice_panel};
-use crate::client_view::{ClientView, Connection};
+use super::{l10n, rail_tooltip, voice_panel};
+use crate::client_view::{ClientView, Connection, UserControlHoverTarget};
 use crate::icons::AppIcon;
 use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 
+#[allow(clippy::too_many_arguments)]
 fn render_control_icon_button(
     id: &'static str,
     icon: AppIcon,
     label: String,
+    tooltip_keys: &'static [&'static str],
     active_danger: bool,
     locked: bool,
+    hovered: bool,
     theme: &Theme,
+    on_hover: impl Fn(&bool, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
     on_click: impl Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
 ) -> AnyElement {
     let mut danger_bg = theme.danger;
-    danger_bg.a = 0.12;
+    danger_bg.a = 0.10;
     let mut danger_hover_bg = theme.danger;
-    danger_hover_bg.a = 0.20;
+    danger_hover_bg.a = 0.16;
     let icon_color = if active_danger {
         theme.danger
+    } else if hovered && !locked {
+        theme.foreground
     } else {
         theme.muted_foreground
     };
@@ -48,12 +54,14 @@ fn render_control_icon_button(
         "user-panel-settings" => Some("app.user-area.user-area-inner.control-button.settings-click"),
         _ => None,
     };
+    let tip_text = label.clone();
     div()
         .id(id)
         .role(Role::Button)
         .aria_label(label)
         .debug_selector(move || id.to_owned())
         .when_some(flx, |d, f| d.flx(f))
+        .relative()
         .size(px(32.))
         .rounded(px(6.))
         .flex()
@@ -61,18 +69,22 @@ fn render_control_icon_button(
         .justify_center()
         .when(active_danger, |d| d.bg(danger_bg))
         .when(locked, |d| d.opacity(0.5))
+        .on_hover(on_hover)
         .when(!locked, |d| {
             d.cursor_pointer()
                 .hover(move |s| {
                     if active_danger {
                         s.bg(danger_hover_bg)
                     } else {
-                        s.bg(theme.muted)
+                        s.bg(theme.control_hover_bg)
                     }
                 })
                 .on_click(on_click)
         })
         .child(Icon::new(icon).with_size(px(20.)).text_color(icon_color))
+        .when(hovered, |d| {
+            d.child(rail_tooltip::above(tip_text, tooltip_keys, theme))
+        })
         .into_any_element()
 }
 
@@ -130,9 +142,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     let speaker_label = if view.voice.server_deaf {
         l10n::tr("Server deafened")
     } else if effective_deafened {
-        l10n::tr("Undeafen")
+        l10n::tr("Undeafen yourself")
     } else {
-        l10n::tr("Deafen")
+        l10n::tr("Deafen yourself")
     };
 
 
@@ -281,9 +293,14 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 AppIcon::Microphone
                             },
                             mic_label,
+                            &["CTRL", "SHIFT", "M"],
                             effective_muted,
                             mute_toggle_locked,
+                            view.hovered_user_control == Some(UserControlHoverTarget::Mute),
                             theme,
+                            cx.listener(|this, hovered: &bool, _, cx| {
+                                this.set_user_control_hover(UserControlHoverTarget::Mute, *hovered, cx);
+                            }),
                             cx.listener(|this, _, _, cx| this.toggle_voice_mute(cx)),
                         ))
                         .child(render_control_icon_button(
@@ -294,18 +311,28 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 AppIcon::SpeakerHigh
                             },
                             speaker_label,
+                            &["CTRL", "SHIFT", "D"],
                             effective_deafened,
                             deaf_toggle_locked,
+                            view.hovered_user_control == Some(UserControlHoverTarget::Deafen),
                             theme,
+                            cx.listener(|this, hovered: &bool, _, cx| {
+                                this.set_user_control_hover(UserControlHoverTarget::Deafen, *hovered, cx);
+                            }),
                             cx.listener(|this, _, _, cx| this.toggle_voice_deaf(cx)),
                         ))
                         .child(render_control_icon_button(
                             "user-panel-settings",
                             AppIcon::Gear,
                             l10n::tr("User settings"),
+                            &["CTRL", ","],
                             false,
                             false,
+                            view.hovered_user_control == Some(UserControlHoverTarget::Settings),
                             theme,
+                            cx.listener(|this, hovered: &bool, _, cx| {
+                                this.set_user_control_hover(UserControlHoverTarget::Settings, *hovered, cx);
+                            }),
                             cx.listener(|this, _, window, cx| this.open_settings(window, cx)),
                         )),
                 ),

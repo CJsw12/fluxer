@@ -12,22 +12,31 @@ import {mkdirSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {Cdp, DOM_DUMP, clientInfo, helpers, pageWsUrl, sleep} from './lib.mjs';
 
-const args = Object.fromEntries(
-	process.argv.slice(2).reduce((acc, v, i, a) => (v.startsWith('--') ? [...acc, [v.slice(2), a[i + 1]]] : acc), []),
-);
+const rawArgs = process.argv.slice(2);
+const HOVER = rawArgs.includes('--hover');
+const args = {};
+for (let i = 0; i < rawArgs.length; i++) {
+	const v = rawArgs[i];
+	if (v === '--hover') continue;
+	if (v.startsWith('--')) {
+		args[v.slice(2)] = rawArgs[i + 1];
+		i++;
+	}
+}
 const PORT = Number(args.attach);
 const ORIGIN = args.origin;
 const ROUTE = args.route;
 const OUT = args.out;
 const DEPTH = Number(args.depth ?? 1);
 const MAX = Number(args.max ?? 400);
+const HOVER_MAX = Number(args['hover-max'] ?? 80);
 const WIDTH = Number(args.width ?? 1280);
 const HEIGHT = Number(args.height ?? 800);
 if (!PORT || !ORIGIN || !ROUTE || !OUT) {
-	console.error('usage: --attach PORT --origin ORIGIN --route PATH --out DIR');
+	console.error('usage: --attach PORT --origin ORIGIN --route PATH --out DIR [--hover] [--hover-max N]');
 	process.exit(2);
 }
-mkdirSync(join(OUT, 'states'), {recursive: true});
+mkdirSync(join(OUT, HOVER ? 'hover' : 'states'), {recursive: true});
 
 const DENY = new RegExp(
 	[
@@ -168,6 +177,136 @@ const target = (c) => `[...document.querySelectorAll('[data-flx="${c.flx.replace
 await loadRoute();
 const baseline = await dump();
 const baselineIds = idSet(baseline);
+
+const HOVER_STYLE_KEYS = [
+	'backgroundColor', 'color', 'borderRadius', 'borderTopWidth', 'borderTopStyle', 'borderTopColor',
+	'opacity', 'transform', 'boxShadow', 'cursor',
+];
+const HOVER_EXTENDED_KEYS = [
+	'backgroundColor', 'color', 'fontSize', 'fontWeight', 'borderRadius', 'borderTopWidth', 'borderTopColor',
+	'paddingTop', 'paddingRight', 'paddingBottom', 'paddingLeft', 'boxShadow',
+];
+
+async function collectHoverTargets() {
+	return cdp.eval(`(() => {
+	  const seen = new Map();
+	  const out = [];
+	  const addEl = (el, hostOverride) => {
+	    if (!el) return;
+	    const host = hostOverride || (el.hasAttribute('data-flx') ? el : el.closest('[data-flx]'));
+	    if (!host) return;
+	    const r = el.getBoundingClientRect();
+	    if (r.width < 4 || r.height < 4 || r.top < 0 || r.left < 0 || r.bottom > innerHeight || r.right > innerWidth) return;
+	    const cs = getComputedStyle(el);
+	    if (cs.visibility === 'hidden' || cs.display === 'none' || Number(cs.opacity) === 0) return;
+	    const flx = host.getAttribute('data-flx');
+	    if (/native-titlebar|minimize|maximize|close-window/i.test(flx)) return;
+	    const all = [...document.querySelectorAll('[data-flx="' + CSS.escape(flx) + '"]')];
+	    const idx = all.indexOf(host);
+	    if (idx < 0) return;
+	    const key = flx + '#' + idx;
+	    if (seen.has(key)) return;
+	    seen.set(key, true);
+	    out.push({
+	      flx, idx,
+	      label: host.getAttribute('aria-label') || el.getAttribute('aria-label') || '',
+	      text: (host.innerText || '').trim().slice(0, 60),
+	      rect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)],
+	      cx: Math.round(r.left + r.width / 2),
+	      cy: Math.round(r.top + r.height / 2),
+	    });
+	  };
+	  for (const el of document.querySelectorAll('button,a[href],[role="button"],[role="tab"],[role="menuitem"],[role="separator"]')) addEl(el);
+	  for (const el of document.querySelectorAll('[data-flx^="app.sidebar-nav."]')) addEl(el, el);
+	  addEl(document.querySelector('[data-flx="app.guild-header.header-wrapper"]'));
+	  for (const el of document.querySelectorAll('[data-flx="app.generic-channel-item.long-pressable.click"]')) addEl(el, el);
+	  for (const el of [...document.querySelectorAll('[data-flx="channel.message.article.alt-click"]')].slice(0, 3)) addEl(el, el);
+	  for (const el of [...document.querySelectorAll('[data-flx="channel.member-list-item.content"]')].slice(0, 2)) addEl(el, el);
+	  for (const el of document.querySelectorAll('[data-flx^="app.user-area."]')) addEl(el, el);
+	  return out;
+	})()`);
+}
+
+async function runHoverSweep() {
+	await shot(join(OUT, 'baseline.png'));
+	writeFileSync(join(OUT, 'baseline.dom.json'), JSON.stringify(baseline));
+	const targets = (await collectHoverTargets()).slice(0, HOVER_MAX);
+	const hoverStates = [];
+	try {
+		for (const t of targets) {
+			await cdp.send('Input.dispatchMouseEvent', {type: 'mouseMoved', x: WIDTH - 40, y: HEIGHT - 40});
+			await sleep(350);
+			const before = await dump();
+			const beforeIds = idSet(before);
+			const beforeStyle = await cdp.eval(`(() => {
+			  const el = ${target(t)};
+			  if (!el) return null;
+			  const cs = getComputedStyle(el);
+			  const s = {}; for (const k of ${JSON.stringify(HOVER_STYLE_KEYS)}) s[k] = cs[k];
+			  return s;
+			})()`);
+			if (!beforeStyle) continue;
+			await cdp.send('Input.dispatchMouseEvent', {type: 'mouseMoved', x: t.cx, y: t.cy});
+			await sleep(700);
+			const after = await dump();
+			const afterIds = idSet(after);
+			const {afterStyle, tooltips} = await cdp.eval(`(() => {
+			  const el = ${target(t)};
+			  const cs = el ? getComputedStyle(el) : null;
+			  const afterStyle = {};
+			  if (cs) for (const k of ${JSON.stringify(HOVER_STYLE_KEYS)}) afterStyle[k] = cs[k];
+			  const tooltips = [];
+			  for (const tt of document.querySelectorAll('[role="tooltip"]')) {
+			    const r = tt.getBoundingClientRect();
+			    if (r.width < 4 || r.height < 4 || r.bottom < 0 || r.right < 0 || r.top > innerHeight || r.left > innerWidth) continue;
+			    const tcs = getComputedStyle(tt);
+			    if (tcs.visibility === 'hidden' || tcs.display === 'none' || Number(tcs.opacity) === 0) continue;
+			    const style = {}; for (const k of ${JSON.stringify(HOVER_EXTENDED_KEYS)}) style[k] = tcs[k];
+			    tooltips.push({
+			      flx: tt.getAttribute('data-flx') || '',
+			      rect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)],
+			      text: (tt.innerText || '').trim().slice(0, 200),
+			      style,
+			    });
+			  }
+			  return {afterStyle, tooltips};
+			})()`);
+			const addedElements = after.filter((e) => !beforeIds.has(base(e.flx)));
+			const styleDiff = {};
+			for (const k of HOVER_STYLE_KEYS) {
+				if (beforeStyle[k] !== afterStyle[k]) styleDiff[k] = [beforeStyle[k], afterStyle[k]];
+			}
+			if (addedElements.length > 0 || tooltips.length > 0 || Object.keys(styleDiff).length > 0) {
+				const id = String(hoverStates.length + 1).padStart(3, '0');
+				const s = await cdp.send('Page.captureScreenshot', {format: 'png'});
+				writeFileSync(join(OUT, 'hover', `${id}.png`), Buffer.from(s.data, 'base64'));
+				hoverStates.push({
+					id, flx: t.flx, idx: t.idx, label: t.label, text: t.text, rect: t.rect,
+					added_elements: addedElements, tooltips, style_diff: styleDiff,
+				});
+				console.log(`${id} ${t.flx}#${t.idx} (${t.label || t.text}) → +${addedElements.length} tooltips=${tooltips.length} style=${Object.keys(styleDiff).join(',')}`);
+			}
+		}
+	} finally {
+		await cdp.send('Input.dispatchMouseEvent', {type: 'mouseMoved', x: WIDTH - 40, y: HEIGHT - 40}).catch(() => {});
+		await cdp.send('Emulation.clearDeviceMetricsOverride').catch(() => {});
+	}
+	blocked.push(...(await blockedWrites()));
+	const outGraph = {
+		route: ROUTE, client: await clientInfo(cdp), width: WIDTH, height: HEIGHT,
+		total_targets: targets.length, changed_count: hoverStates.length,
+		blocked_writes: blocked, hover_states: hoverStates,
+	};
+	writeFileSync(join(OUT, 'hover_graph.json'), JSON.stringify(outGraph, null, 1));
+	console.log(`hover sweep done: ${hoverStates.length}/${targets.length} changed`);
+}
+
+if (HOVER) {
+	await runHoverSweep();
+	cdp.ws.close();
+	process.exit(0);
+}
+
 await shot(join(OUT, 'baseline.png'));
 writeFileSync(join(OUT, 'baseline.dom.json'), JSON.stringify(baseline));
 

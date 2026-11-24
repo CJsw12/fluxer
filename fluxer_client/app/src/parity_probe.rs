@@ -13,7 +13,7 @@ use std::sync::{Mutex, OnceLock};
 use gpui_kit::{
     App, Bounds, IntoElement, KeyDownEvent, KeyUpEvent, Keystroke, Modifiers, MouseButton, MouseDownEvent,
     MouseMoveEvent, MouseUpEvent, OperatingSystem, ParentElement, Pixels, PlatformInput, Styled, Window,
-    canvas, point, px, size,
+    AbsoluteLength, StyleRefinement, canvas, point, px, size,
 };
 use serde_json::{Value, json};
 
@@ -119,6 +119,21 @@ fn prune(v: Value) -> Option<Value> {
     }
 }
 
+/// Declared border widths `[top, right, bottom, left]` in px (rem = 16px).
+/// An absolutely positioned child is laid out against the padding box, so the
+/// recording canvas is pushed out by these amounts to measure the border box
+/// like the official DOM rects. Borders set after `.flx(..)` in the builder
+/// chain are not seen (same limit as the serialized style).
+fn border_px(style: &StyleRefinement) -> [f32; 4] {
+    let len = |l: &Option<AbsoluteLength>| match l {
+        Some(AbsoluteLength::Pixels(p)) => f32::from(*p),
+        Some(AbsoluteLength::Rems(r)) => r.0 * 16.0,
+        None => 0.0,
+    };
+    let b = &style.border_widths;
+    [len(&b.top), len(&b.right), len(&b.bottom), len(&b.left)]
+}
+
 /// Tags an element with an official `data-flx` id. Every method does nothing
 /// unless the probe is enabled, so Location capture (free, compile-time
 /// constant), serialization and allocation only happen with the probe on.
@@ -130,11 +145,15 @@ pub trait FlxExt: ParentElement + Styled + Sized {
         }
         let loc = std::panic::Location::caller();
         let src = format_src(loc.file(), loc.line());
+        let [bt, br, bb, bl] = border_px(self.style());
         let style = style_json(self.style());
         self.child(
             canvas(move |bounds, _, _| record(id, bounds, None, &src, &style), |_, (), _, _| {})
                 .absolute()
-                .inset_0(),
+                .top(px(-bt))
+                .right(px(-br))
+                .bottom(px(-bb))
+                .left(px(-bl)),
         )
     }
 
@@ -145,12 +164,16 @@ pub trait FlxExt: ParentElement + Styled + Sized {
         }
         let loc = std::panic::Location::caller();
         let src = format_src(loc.file(), loc.line());
+        let [bt, br, bb, bl] = border_px(self.style());
         let style = style_json(self.style());
         let text: String = text.into();
         self.child(
             canvas(move |bounds, _, _| record(id, bounds, Some(&text), &src, &style), |_, (), _, _| {})
                 .absolute()
-                .inset_0(),
+                .top(px(-bt))
+                .right(px(-br))
+                .bottom(px(-bb))
+                .left(px(-bl)),
         )
     }
 }

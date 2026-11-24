@@ -2,10 +2,10 @@
 //! and per-relationship actions.
 
 use fluxer_client_core::state::{ChannelKind, ClientState, RelationshipKind, Snowflake, Status, User};
-use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::Input;
-use gpui_kit::{AnyElement, ClickEvent, Context, FontWeight, SharedString, div, prelude::*, px};
+use gpui_kit::component::Sizable as _;
+use gpui_kit::{AnyElement, ClickEvent, Context, FontWeight, SharedString, Window, div, prelude::*, px};
 
 use super::badge;
 use super::member_list::status_label;
@@ -13,6 +13,7 @@ use super::avatar::{AvatarSpec, render_avatar};
 use super::profile_popout::find_1on1_dm;
 use crate::client_view::ClientView;
 use crate::format::{default_avatar_index, initials};
+use crate::icons::AppIcon;
 use crate::profile::format_username_tag;
 use crate::theme::Theme;
 use crate::ui::l10n;
@@ -134,8 +135,6 @@ impl ClientView {
     /// The "Personal notes" sidebar row: opens the user's self-DM
     /// (`ChannelKind::DmPersonalNotes`). When the READY payload did not carry
     /// it, asks the server for the DM with the user's own id.
-    /// TODO(backlog): the web client routes to `dmChannel(currentUserId)` and
-    /// the notes purge / context menu (`PersonalNotesContextMenu`) is missing.
     pub(crate) fn open_personal_notes(&mut self, cx: &mut Context<Self>) {
         let (existing, own_id) = {
             let state = self.backend.state();
@@ -171,6 +170,11 @@ impl ClientView {
             Some(channel_id) => self.open_channel(None, channel_id, cx),
             None => self.backend.open_dm(user_id),
         }
+    }
+
+    pub(crate) fn clear_friends_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.friends_search_input.update(cx, |s, cx| s.set_value("", window, cx));
+        cx.notify();
     }
 }
 
@@ -458,26 +462,87 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             )
             .children(status_el)
             .into_any_element()
-    } else if view.friend_rows.is_empty() {
-        div()
-            .flex_1()
-            .flex()
-            .items_center()
-            .justify_center()
-            .text_color(theme.muted_foreground)
-            .child(l10n::tr("No friends to show."))
-            .into_any_element()
     } else {
+        let raw_query = view.friends_search_input.read(cx).value().to_string();
+        let query = raw_query.trim().to_lowercase();
+        let filtered_rows: Vec<&FriendRow> = if query.is_empty() {
+            view.friend_rows.iter().collect()
+        } else {
+            view.friend_rows
+                .iter()
+                .filter(|r| {
+                    r.display_name.to_lowercase().contains(&query)
+                        || r.username_tag.to_lowercase().contains(&query)
+                })
+                .collect()
+        };
+        let search_bar = div()
+            .px_4()
+            .pt_3()
+            .pb_1()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_2()
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .debug_selector(|| "friends-search-input".to_owned())
+                    .child(Input::new(&view.friends_search_input).small()),
+            )
+            .when(!raw_query.is_empty(), |d| {
+                d.child(
+                    div().debug_selector(|| "friends-search-clear".to_owned()).child(
+                        Button::new("friends-search-clear")
+                            .ghost()
+                            .small()
+                            .icon(AppIcon::X)
+                            .accessibility_label(l10n::tr("Clear search"))
+                            .on_click(cx.listener(|this, _, window, cx| this.clear_friends_search(window, cx))),
+                    ),
+                )
+            });
+
+        let list_content: AnyElement = if view.friend_rows.is_empty() {
+            div()
+                .flex_1()
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_color(theme.muted_foreground)
+                .child(l10n::tr("No friends to show."))
+                .into_any_element()
+        } else if filtered_rows.is_empty() {
+            div()
+                .flex_1()
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_color(theme.muted_foreground)
+                .child(l10n::tr("No friends match your search."))
+                .into_any_element()
+        } else {
+            div()
+                .id("friends-list")
+                .flex_1()
+                .min_h_0()
+                .overflow_y_scroll()
+                .px_3()
+                .py_2()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .children(filtered_rows.into_iter().map(|row| render_row(row, theme, cx)))
+                .into_any_element()
+        };
         div()
-            .id("friends-list")
             .flex_1()
             .min_h_0()
-            .overflow_y_scroll()
-            .p_3()
             .flex()
             .flex_col()
-            .gap_1()
-            .children(view.friend_rows.iter().map(|row| render_row(row, theme, cx)))
+            .child(search_bar)
+            .child(list_content)
             .into_any_element()
     };
 

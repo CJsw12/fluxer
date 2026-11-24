@@ -85,6 +85,7 @@ fn both<A: Action + Clone>(out: &mut Vec<KeyBinding>, keys: &'static str, action
     out.push(KeyBinding::new(keys, NoAction, Some(guild_settings_modals::PRIVACY_CONTEXT)));
     out.push(KeyBinding::new(keys, NoAction, Some(guild_settings_modals::PROFILE_CONTEXT)));
     out.push(KeyBinding::new(keys, NoAction, Some(guild_settings_modals::DELETE_MESSAGES_CONTEXT)));
+    out.push(KeyBinding::new(keys, NoAction, Some(guild_settings_modals::PURGE_NOTES_CONTEXT)));
 }
 
 /// Every shortcut binding of the client layout.
@@ -129,6 +130,7 @@ fn bindings() -> Vec<KeyBinding> {
     out.push(KeyBinding::new("ctrl-k", NoAction, Some(IN_GUILD_PROFILE_INPUT)));
     out.push(KeyBinding::new("ctrl-k", NoAction, Some(guild_settings_modals::DELETE_MESSAGES_CONTEXT)));
     out.push(KeyBinding::new("ctrl-k", NoAction, Some(IN_DELETE_GUILD_MESSAGES_INPUT)));
+    out.push(KeyBinding::new("ctrl-k", NoAction, Some(guild_settings_modals::PURGE_NOTES_CONTEXT)));
     both(&mut out, "ctrl-e", ToggleEmojiPicker);
     both(&mut out, "ctrl-,", OpenSettings);
     both(&mut out, "ctrl-=", ZoomIn);
@@ -196,6 +198,6 @@ mod tests {
             let key = (format!("{:?}", b.keystrokes()), b.predicate().map(|p| p.to_string()));
             assert!(seen.insert(key.clone()), "{key:?} bound twice");
         }
-        assert_eq!(seen.len(), 351);
+        assert_eq!(seen.len(), 371);
     }
 }

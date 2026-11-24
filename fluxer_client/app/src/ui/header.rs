@@ -4,14 +4,16 @@
 //! `[Member List (Users)]`, `[Search messages pill]`, and `[Inbox (Tray)]`.
 
 use gpui_kit::component::{Icon, Sizable as _};
-use gpui_kit::{AnyElement, Context, FontWeight, Role, div, prelude::*, px, rgb};
+use gpui_kit::{AnyElement, Context, FontWeight, MouseButton, Role, div, prelude::*, px, rgb};
 
 use crate::client_view::{ClientView, HeaderHoverTarget};
 use crate::icons::AppIcon;
 use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 use crate::ui::avatar::{AvatarSpec, render_avatar_tagged};
+use crate::ui::search_panel::SearchScopeChoice;
 use crate::ui::{l10n, rail_tooltip};
+use crate::updater::UpdateStatus;
 use crate::view_model::{ChannelIcon, Place};
 
 #[allow(clippy::too_many_arguments)]
@@ -321,6 +323,20 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 })
                 .child({
                     let search_open = view.search.is_some();
+                    let update_visible = matches!(
+                        view.update_status,
+                        UpdateStatus::Available { .. } | UpdateStatus::Downloading { .. } | UpdateStatus::Downloaded { .. }
+                    );
+                    let non_default_scope = view.search.as_ref().is_some_and(|s| {
+                        let default_scope = if view.selected_channel.is_some() {
+                            SearchScopeChoice::CurrentChannel
+                        } else if view.current_guild_id().is_some() {
+                            SearchScopeChoice::CurrentGuild
+                        } else {
+                            SearchScopeChoice::All
+                        };
+                        s.scope != default_scope
+                    });
                     div()
                         .id("toggle-search")
                         .role(Role::Button)
@@ -329,7 +345,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .w(px(theme.sizes.search_bar_width))
                         .h(px(38.))
                         .px_2p5()
-                        .mr(px(40.))
+                        .when(!update_visible, |d| d.mr(px(40.)))
                         .rounded(px(12.))
                         .bg(rgb(0x242229))
                         .when(search_open, |d| d.border_1().border_color(theme.accent))
@@ -343,10 +359,50 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .flx("channel.message-search-bar.message-search-bar.input-container")
                         .child(
                             div()
+                                .id("header-search-scope-btn")
+                                .debug_selector(|| "header-search-scope-btn".to_owned())
+                                .role(Role::Button)
+                                .aria_label(l10n::tr("Search scope"))
+                                .relative()
                                 .flex_none()
                                 .size(px(16.))
-                                .flx("channel.message-search-bar.message-search-bar.search-icon")
-                                .child(Icon::new(AppIcon::MagnifyingGlass).with_size(px(16.)).text_color(theme.muted_foreground)),
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .cursor_pointer()
+                                .text_color(theme.foreground)
+                                .text_size(px(16.))
+                                .line_height(px(24.))
+                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                .on_click(cx.listener(|this, ev: &gpui_kit::ClickEvent, window, cx| {
+                                    cx.stop_propagation();
+                                    this.toggle_search_scope_popout(ev.position(), window, cx);
+                                }))
+                                .flx("channel.message-search-bar.message-search-bar.scope-button.scope-menu-open")
+                                .child(crate::ui::channel_popouts::track_trigger("header-search-scope-btn"))
+                                .child(
+                                    div()
+                                        .flex_none()
+                                        .size(px(16.))
+                                        .flx("channel.message-search-bar.message-search-bar.search-icon")
+                                        .child(
+                                            Icon::new(AppIcon::MagnifyingGlass)
+                                                .with_size(px(16.))
+                                                .text_color(theme.muted_foreground),
+                                        ),
+                                )
+                                .when(non_default_scope, |d| {
+                                    d.child(
+                                        div()
+                                            .debug_selector(|| "header-search-scope-indicator".to_owned())
+                                            .absolute()
+                                            .bottom(px(-2.))
+                                            .left(px(-2.))
+                                            .size(px(6.))
+                                            .rounded_full()
+                                            .bg(theme.brand),
+                                    )
+                                }),
                         )
                         .child(
                             div()
@@ -360,6 +416,52 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 .child(l10n::tr("Search messages")),
                         )
                 })
+                .when_some(
+                    match &view.update_status {
+                        UpdateStatus::Available { latest, .. } => {
+                            Some(format!("{}: v{latest}", l10n::tr("Update available")))
+                        }
+                        UpdateStatus::Downloading { .. } => Some(l10n::tr("Updating…")),
+                        UpdateStatus::Downloaded { latest, .. } => {
+                            Some(format!("{}: v{latest}", l10n::tr("Restart to update")))
+                        }
+                        _ => None,
+                    },
+                    |d, label| {
+                        let hovered = view.hovered_header_item == Some(HeaderHoverTarget::Update);
+                        let green: gpui_kit::Hsla = rgb(0x22c55e).into();
+                        d.child(
+                            div()
+                                .id("header-update-btn")
+                                .role(Role::Button)
+                                .aria_label(label.clone())
+                                .debug_selector(|| "header-update-btn".to_owned())
+                                .relative()
+                                .size(px(32.))
+                                .rounded_full()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .cursor_pointer()
+                                .text_color(green)
+                                .on_hover(cx.listener(|this, h: &bool, _, cx| {
+                                    this.set_header_hover(HeaderHoverTarget::Update, *h, cx);
+                                }))
+                                .on_click(cx.listener(|this, _, window, cx| this.on_header_update_click(window, cx)))
+                                .flx("channel.channel-header-components.updater-icon.button.click")
+                                .child(
+                                    div()
+                                        .size(px(20.))
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .flx("channel.channel-header-components.updater-icon.update-icon")
+                                        .child(hdr_icon(AppIcon::ArrowClockwise, green)),
+                                )
+                                .when(hovered, |d| d.child(rail_tooltip::below(label, &[], true, theme))),
+                        )
+                    },
+                )
                 .child(render_header_icon_button(
                     "header-inbox-btn",
                     "channel.channel-header.inbox-button",

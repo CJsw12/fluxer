@@ -182,6 +182,14 @@ impl RestClient {
         self.request(Method::DELETE, &path, &[], None, Auth::Required).await?;
         Ok(())
     }
+
+    /// `POST /channels/{c}/messages/purge` -> `{ "deleted_count": N }`.
+    pub async fn purge_personal_notes_messages(&self, channel_id: &str) -> Result<u64, RestError> {
+        check_snowflake(channel_id, "channel_id")?;
+        let path = format!("/channels/{channel_id}/messages/purge");
+        let body: Value = self.request(Method::POST, &path, &[], None, Auth::Required).await?;
+        Ok(body.get("deleted_count").and_then(Value::as_u64).unwrap_or(0))
+    }
 }
 
 /// Validates and serialises a [`SendMessageRequest`].

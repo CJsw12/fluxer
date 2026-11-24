@@ -50,6 +50,8 @@ mod tests;
 #[cfg(test)]
 mod tests_accounts;
 #[cfg(test)]
+mod tests_backlog_ux;
+#[cfg(test)]
 mod tests_channel_mgmt;
 #[cfg(test)]
 mod tests_channel_popouts;

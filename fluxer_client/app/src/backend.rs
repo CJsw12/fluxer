@@ -10,12 +10,12 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use anyhow::{Context as _, Result};
 use fluxer_client_core::gateway::{self, Compression, GatewayConfig, GatewayEvent, GatewayHandle, IdentifyProperties};
 use fluxer_client_core::rest::{
-    AckRequest, ClientIdentity, CreateInviteRequest, DiscoveryOptions, Endpoints, GuildBanEntry, MessageQuery,
-    MessageSearchOutcome, PinsQuery, RestClient, RestConfig, SecretToken, SendMessageRequest, TransportPolicy,
-    UserProfileFull, WebAuthnCredential, discover_with,
+    AckRequest, ClientIdentity, DiscoveryOptions, Endpoints, GuildBanEntry, MessageQuery, MessageSearchOutcome,
+    PinsQuery, RestClient, RestConfig, SecretToken, SendMessageRequest, TransportPolicy, UserProfileFull,
+    WebAuthnCredential, discover_with,
 };
 #[cfg(test)]
-use fluxer_client_core::rest::{GuildSettingsPatch, MessageSearchRequest, UserSettingsPatch};
+use fluxer_client_core::rest::{CreateInviteRequest, GuildSettingsPatch, MessageSearchRequest, UserSettingsPatch};
 use fluxer_client_core::state::{ClientState, LoadMode, Message, PAGE_SIZE, Snowflake};
 use serde_json::{Value, json};
 use tokio::runtime::Handle;
@@ -103,6 +103,8 @@ pub enum UiEvent {
     InviteCreated { seq: u64, channel_id: Snowflake, result: Result<CreatedInvite, String> },
     /// `POST /users/@me/guilds/{g}/messages/bulk-delete-mine` finished.
     GuildMessagesBulkDeleted { seq: u64, guild_id: Snowflake, error: Option<String> },
+    /// `POST /channels/{c}/messages/purge` finished for personal notes.
+    PersonalNotesPurged { seq: u64, channel_id: Snowflake, result: Result<u64, String> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -269,6 +271,12 @@ pub struct Backend {
     /// Recorded `POST /users/@me/guilds/{g}/messages/bulk-delete-mine` calls `(guild_id, had_password)` (tests).
     #[cfg(test)]
     pub(crate) sent_guild_bulk_deletes: Arc<Mutex<Vec<(Snowflake, bool)>>>,
+    /// Recorded `POST /channels/{c}/messages/purge` personal notes purges (tests).
+    #[cfg(test)]
+    pub(crate) sent_personal_notes_purges: Arc<Mutex<Vec<Snowflake>>>,
+    /// Recorded `POST /channels/{c}/call/ring` requests `(channel_id, recipients)` (tests).
+    #[cfg(test)]
+    pub(crate) sent_call_rings: Arc<Mutex<Vec<(Snowflake, Option<Vec<Snowflake>>)>>>,
 }
 
 impl Backend {
@@ -394,6 +402,10 @@ impl Backend {
             sent_invites: Arc::default(),
             #[cfg(test)]
             sent_guild_bulk_deletes: Arc::default(),
+            #[cfg(test)]
+            sent_personal_notes_purges: Arc::default(),
+            #[cfg(test)]
+            sent_call_rings: Arc::default(),
         };
         (backend, rx)
     }

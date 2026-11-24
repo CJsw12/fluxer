@@ -498,6 +498,7 @@ pub fn render(
             },
         ));
     }
+    let is_hovered = !matches!(bar, RowBar::None);
     let mut main = div()
         .flex()
         .flex_row()
@@ -537,12 +538,6 @@ pub fn render(
                 ))
                 .into_any_element()
         } else {
-            div().into_any_element()
-        };
-        // Probe-only: the official grouped message shows its (hover) timestamp in the gutter.
-        let gutter = if row.group_start || !crate::parity_probe::enabled() {
-            gutter
-        } else {
             div()
                 .ml(px(8.))
                 .w(px(40.))
@@ -554,7 +549,18 @@ pub fn render(
                         .w(px(50.78))
                         .h(px(22.))
                         .flex_none()
-                        .flx("channel.timestamp-with-tooltip.render-time-element.time"),
+                        .flx("channel.timestamp-with-tooltip.render-time-element.time")
+                        .when(is_hovered && !row.short_time.is_empty(), |d| {
+                            d.debug_selector(move || format!("msg-hover-time-{}", message_id.0))
+                                .flex()
+                                .items_center()
+                                .justify_end()
+                                .text_size(px(11.))
+                                .line_height(px(22.))
+                                .text_color(muted_fg)
+                                .whitespace_nowrap()
+                                .child(row.short_time.clone())
+                        }),
                 )
                 .into_any_element()
         };
@@ -575,7 +581,6 @@ pub fn render(
     let mut mention_bg: Hsla = rgb(0xfaa61a).into();
     mention_bg.a = 0.10;
     let mention_border: Hsla = rgb(0xfaa61a).into();
-    let is_hovered = !matches!(bar, RowBar::None);
     let rclick_view = view.clone();
     let rclick_target = row.actions.clone();
     let article = div()

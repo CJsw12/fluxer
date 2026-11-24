@@ -14,8 +14,8 @@ use fluxer_client_markdown::{Document, LowerOptions, MarkdownContext, MentionRes
 use gpui_kit::SharedString;
 
 use crate::format::{
-    SystemIcon, default_avatar_index, fit_image, format_full_date, format_message_time, initials, message_time,
-    starts_group, system_text,
+    SystemIcon, default_avatar_index, fit_image, format_full_date, format_message_time, format_short_time,
+    initials, message_time, starts_group, system_text,
 };
 use crate::ui::l10n;
 use crate::ui::embed::{self, EmbedView, TextKind};
@@ -205,6 +205,8 @@ pub struct MessageRow {
     /// `getDefaultAvatarIndex`, used when there is no avatar image.
     pub default_avatar: usize,
     pub time: SharedString,
+    /// Short time-of-day (`7:20 PM` / `19:20`) shown on hover for grouped messages.
+    pub short_time: SharedString,
     /// Set for system message types; rendered as icon + text + time.
     pub system: Option<SystemRow>,
     /// Date separator shown above this row ("Wednesday, November 18, 2026"):
@@ -597,6 +599,7 @@ impl RowContext<'_> {
             }
         }
         let mut time = at.map(|at| format_message_time(at, now)).unwrap_or_default();
+        let short_time = at.map(format_short_time).unwrap_or_default();
         if m.is_edited() {
             time.push_str(" (edited)");
         }
@@ -638,6 +641,7 @@ impl RowContext<'_> {
             avatar_url: self.media.and_then(|media| avatar_url(media, &m.author)).map(Into::into),
             default_avatar: default_avatar_index(m.author.id),
             time: time.into(),
+            short_time: short_time.into(),
             system,
             day_divider: None,
             new_divider: false,

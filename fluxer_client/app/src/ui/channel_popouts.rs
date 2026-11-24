@@ -21,7 +21,9 @@ use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 use crate::ui::message_actions::{self, ActionTarget, MessageAction};
 use crate::ui::overlay::Overlay;
+use crate::ui::search_panel::SearchScopeChoice;
 use crate::ui::{attachments, composer_text, l10n};
+use crate::view_model::Place;
 
 pub const POPOUT_CONTEXT: &str = "ChannelPopout";
 
@@ -115,6 +117,12 @@ pub enum ChannelPopoutKind {
         at_cursor: bool,
         translate_submenu: bool,
     },
+    /// Header search bar scope selector (`SearchScopeOptions`).
+    SearchScope,
+    /// Personal notes sidebar item right-click menu (`PersonalNotesContextMenu`).
+    PersonalNotesMenu {
+        channel_id: Snowflake,
+    },
 }
 
 pub struct ChannelPopout {
@@ -131,6 +139,8 @@ impl ChannelPopoutKind {
             Self::Inbox { .. } => "inbox",
             Self::ComposerPlusMenu => "composer-plus-menu",
             Self::MessageMenu { .. } => "message-menu",
+            Self::SearchScope => "search-scope",
+            Self::PersonalNotesMenu { .. } => "personal-notes-menu",
         }
     }
 }
@@ -351,6 +361,45 @@ impl ClientView {
         }
     }
 
+    pub(crate) fn toggle_search_scope_popout(
+        &mut self,
+        anchor: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.toggle_channel_popout_key("search-scope", window, cx) {
+            return;
+        }
+        let resolved = match trigger_rect("header-search-scope-btn") {
+            Some(b) => gpui_kit::point(b.left(), b.bottom()),
+            None => gpui_kit::point(anchor.x - px(8.), anchor.y + px(8.)),
+        };
+        self.prepare_overlay_replace(cx);
+        self.autocomplete = None;
+        self.overlay = Overlay::ChannelPopout(ChannelPopout {
+            kind: ChannelPopoutKind::SearchScope,
+            anchor: resolved,
+        });
+        cx.notify();
+    }
+
+    pub(crate) fn open_personal_notes_menu(
+        &mut self,
+        channel_id: Snowflake,
+        anchor: Point<Pixels>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.dismissed_channel_popout = None;
+        self.prepare_overlay_replace(cx);
+        self.autocomplete = None;
+        self.overlay = Overlay::ChannelPopout(ChannelPopout {
+            kind: ChannelPopoutKind::PersonalNotesMenu { channel_id },
+            anchor,
+        });
+        cx.notify();
+    }
+
     pub(crate) fn set_threads_popout_tab(&mut self, tab: ThreadsTab, cx: &mut Context<Self>) {
         if let Overlay::ChannelPopout(pop) = &mut self.overlay
             && let ChannelPopoutKind::Threads { tab: active, .. } = &mut pop.kind
@@ -451,6 +500,23 @@ pub fn render(
             "ui.action-menu.context-menu.popup",
             render_message_menu(view, target, theme, hover_bg, cx),
         ),
+        ChannelPopoutKind::SearchScope => {
+            let opt_count = usize::from(view.selected_channel.is_some())
+                + usize::from(matches!(view.place, Place::Guild(_)))
+                + 1;
+            (
+                220.,
+                14. + (opt_count as f32) * 34.,
+                "ui.action-menu.context-menu.popup",
+                render_search_scope(view, theme, hover_bg, cx),
+            )
+        }
+        ChannelPopoutKind::PersonalNotesMenu { channel_id } => (
+            208.,
+            44.,
+            "ui.action-menu.personal-notes-context-menu.menu-group",
+            render_personal_notes_menu(*channel_id, hover_bg, cx),
+        ),
     };
 
     let vw = f32::from(viewport.width);
@@ -463,10 +529,15 @@ pub fn render(
     // from the trigger's left edge with a 4px gap.
     let (anchor_corner, left, top) = match &pop.kind {
         ChannelPopoutKind::Inbox { .. } => (Anchor::TopLeft, (vw - width - 16.).max(16.), 52.0_f32.min((vh - height - 12.).max(44.))),
-        // Right-click message menu opens at cursor clamped within viewport.
-        ChannelPopoutKind::MessageMenu { at_cursor: true, .. } => {
+        // Right-click message / personal-notes menus open at cursor clamped within viewport.
+        ChannelPopoutKind::MessageMenu { at_cursor: true, .. } | ChannelPopoutKind::PersonalNotesMenu { .. } => {
             (Anchor::TopLeft, ax.clamp(12., (vw - width - 12.).max(12.)), ay.clamp(12., (vh - height - 12.).max(12.)))
         }
+        ChannelPopoutKind::SearchScope => (
+            Anchor::TopLeft,
+            ax.clamp(12., (vw - width - 12.).max(12.)),
+            (ay + 12.).clamp(44., (vh - height - 16.).max(44.)),
+        ),
         // The message menu opens left of the More button (8px gap), top-aligned to it and
         // pushed up to stay 12px inside the window.
         ChannelPopoutKind::MessageMenu { at_cursor: false, .. } => {
@@ -1808,6 +1879,125 @@ fn render_composer_plus(has_text: bool, theme: &Theme, hover_bg: gpui_kit::Hsla,
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.open_settings(window, cx);
                 })),
+        )
+        .into_any_element()
+}
+
+fn render_search_scope(
+    view: &ClientView,
+    theme: &Theme,
+    hover_bg: gpui_kit::Hsla,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
+    let has_channel = view.selected_channel.is_some();
+    let has_guild = matches!(view.place, Place::Guild(_));
+    let active_scope = view.search.as_ref().map(|s| s.scope).unwrap_or(if has_channel {
+        SearchScopeChoice::CurrentChannel
+    } else if has_guild {
+        SearchScopeChoice::CurrentGuild
+    } else {
+        SearchScopeChoice::All
+    });
+
+    let mut options: Vec<(&'static str, SearchScopeChoice, String)> = Vec::new();
+    if has_channel {
+        options.push((
+            "search-scope-opt-channel",
+            SearchScopeChoice::CurrentChannel,
+            l10n::tr("Current channel"),
+        ));
+    }
+    if has_guild {
+        options.push((
+            "search-scope-opt-guild",
+            SearchScopeChoice::CurrentGuild,
+            l10n::tr("Current community"),
+        ));
+    }
+    options.push(("search-scope-opt-all", SearchScopeChoice::All, l10n::tr("All messages")));
+
+    let mut col = div().p(px(6.)).flex().flex_col();
+    for (id, choice, label) in options {
+        let selected = active_scope == choice;
+        let radio_border = if selected { theme.brand } else { gpui_kit::Hsla::from(rgba(0xc9c5d326)) };
+        col = col.child(
+            context_menu_item(id.to_owned(), hover_bg)
+                .debug_selector(move || id.to_owned())
+                .aria_selected(selected)
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.close_overlay(window, cx);
+                    this.open_search(window, cx);
+                    this.search_set_scope(choice, cx);
+                }))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .h(px(18.))
+                        .text_size(px(13.))
+                        .text_color(theme.foreground)
+                        .child(label),
+                )
+                .child(
+                    div()
+                        .size(px(18.))
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(
+                            div()
+                                .size(px(16.))
+                                .rounded_full()
+                                .border_1()
+                                .border_color(radio_border)
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .when(selected, |d| {
+                                    d.child(div().size(px(6.)).rounded_full().bg(gpui_kit::Hsla::from(rgb(0xffffff))))
+                                }),
+                        ),
+                ),
+        );
+    }
+    col.into_any_element()
+}
+
+fn render_personal_notes_menu(
+    channel_id: Snowflake,
+    hover_bg: gpui_kit::Hsla,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
+    let danger: gpui_kit::Hsla = rgb(0xe8605f).into();
+    let label = l10n::tr("Purge personal notes");
+    div()
+        .p(px(6.))
+        .flex()
+        .flex_col()
+        .child(
+            context_menu_item("personal-notes-purge-item".to_owned(), hover_bg)
+                .debug_selector(|| "personal-notes-purge-item".to_owned())
+                .flx_text("ui.action-menu.personal-notes-context-menu.menu-item.close", label.clone())
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.open_purge_personal_notes(channel_id, window, cx);
+                }))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .h(px(18.))
+                        .text_size(px(13.))
+                        .text_color(danger)
+                        .child(label),
+                )
+                .child(
+                    div()
+                        .size(px(16.))
+                        .flex_none()
+                        .flx("ui.action-menu.personal-notes-context-menu.delete-icon")
+                        .child(Icon::new(AppIcon::Trash).with_size(px(16.)).text_color(danger)),
+                ),
         )
         .into_any_element()
 }

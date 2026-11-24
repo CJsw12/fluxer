@@ -787,3 +787,16 @@ fn guild_features_privacy_settings_and_member_profile_parse() {
     assert_eq!(m.bio.as_deref(), Some("hello bio"));
     assert_eq!(m.pronouns.as_deref(), Some("they/them"));
 }
+
+#[test]
+fn clear_channel_messages_empties_window_and_keeps_ready() {
+    let mut state = loaded_state();
+    assert!(!state.messages.window(sf(GENERAL)).unwrap().messages.is_empty());
+    assert!(state.clear_channel_messages(sf(GENERAL)));
+    let win = state.messages.window(sf(GENERAL)).unwrap();
+    assert!(win.ready);
+    assert!(win.messages.is_empty());
+    assert!(!win.has_more_before);
+    assert!(!win.has_more_after);
+    assert!(!state.clear_channel_messages(sf(GENERAL)));
+}

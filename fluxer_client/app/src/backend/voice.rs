@@ -2038,6 +2038,26 @@ impl Backend {
             Some(&self.sent_voice_states),
         );
     }
+
+    /// Rings DM/group DM call recipients (`POST /channels/{channel_id}/call/ring`).
+    pub fn ring_dm_call(&self, channel_id: Snowflake, recipients: Option<Vec<Snowflake>>) {
+        #[cfg(test)]
+        super::lock_sent(&self.sent_call_rings).push((channel_id, recipients.clone()));
+        let rest = self.rest.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            let recipient_strings: Option<Vec<String>> =
+                recipients.map(|ids| ids.into_iter().map(|id| id.to_string()).collect());
+            if let Err(err) = rest
+                .ring_call_recipients(&channel_id.to_string(), recipient_strings.as_deref())
+                .await
+            {
+                let _ = events.send(UiEvent::ActionFailed {
+                    error: format!("Could not ring call recipients: {err}"),
+                });
+            }
+        });
+    }
 }
 
 #[cfg(test)]

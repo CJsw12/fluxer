@@ -92,6 +92,7 @@ pub(crate) enum HeaderHoverTarget {
     Favorite,
     Members,
     Inbox,
+    Update,
 }
 
 /// Which bottom-left user-area control button is currently hovered.
@@ -235,6 +236,8 @@ pub struct ClientView {
     pub(crate) pending_incoming: u32,
     /// Username/tag input inside the "Add friend" tab.
     pub(crate) add_friend_input: Entity<InputState>,
+    /// Live search filter input for Home Friends tabs.
+    pub(crate) friends_search_input: Entity<InputState>,
     /// Result banner for the most recent "Add friend" request.
     pub(crate) friends_status: Option<Result<String, String>>,
     /// Newly joined guild awaiting its `GUILD_CREATE` gateway snapshot.
@@ -288,6 +291,8 @@ pub struct ClientView {
     invite_seq: u64,
     /// Sequence counter for bulk-delete-my-messages requests.
     guild_delete_seq: u64,
+    /// Sequence counter for purging personal notes messages.
+    purge_notes_seq: u64,
     /// Text-to-speech playback state for "Speak message".
     pub(crate) tts: crate::tts::TtsPlayer,
     /// Channel explicitly marked unread by the user; suppresses auto-ack until cleared.
@@ -345,7 +350,7 @@ pub struct ClientView {
     pub(crate) pending_deep_link: Option<(crate::deep_links::DeepLink, std::time::Instant)>,
     /// Latest update check state for Settings -> About & Updates.
     pub(crate) update_status: crate::updater::UpdateStatus,
-    _update_task: Option<Task<()>>,
+    pub(crate) _update_task: Option<Task<()>>,
     /// Persisted interactive layout sizes and active resize drag state.
     pub(crate) sidebar_width: f32,
     pub(crate) voice_call_height: f32,
@@ -377,11 +382,17 @@ impl ClientView {
         let composer = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Select a channel")));
         composer.update(cx, |s, cx| s.set_disabled(true, cx));
         let add_friend_input = cx.new(|cx| InputState::new(window, cx).placeholder("username#0000"));
+        let friends_search_input = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Search")));
         let group_dm_rename = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Group name")));
         let subscriptions = vec![
             cx.subscribe_in(&add_friend_input, window, |this: &mut Self, _, ev: &InputEvent, _, cx| {
                 if let InputEvent::PressEnter { shift: false, .. } = ev {
                     this.submit_add_friend(cx);
+                }
+            }),
+            cx.subscribe_in(&friends_search_input, window, |_, _, ev: &InputEvent, _, cx| {
+                if matches!(ev, InputEvent::Change) {
+                    cx.notify();
                 }
             }),
             cx.subscribe_in(&group_dm_rename, window, |this: &mut Self, input_entity, ev: &InputEvent, window, cx| {
@@ -499,6 +510,7 @@ impl ClientView {
             friend_rows: Vec::new(),
             pending_incoming: 0,
             add_friend_input,
+            friends_search_input,
             friends_status: None,
             pending_joined_guild: None,
             pending_joined_channel: None,
@@ -526,6 +538,7 @@ impl ClientView {
             thread_seq: 0,
             invite_seq: 0,
             guild_delete_seq: 0,
+            purge_notes_seq: 0,
             tts: crate::tts::TtsPlayer::new(),
             manual_unread_channel: None,
             group_dm: None,
@@ -656,6 +669,7 @@ impl ClientView {
                 | Overlay::GuildPrivacy(_)
                 | Overlay::GuildProfile(_)
                 | Overlay::DeleteMyGuildMessages(_)
+                | Overlay::PurgePersonalNotes(_)
         );
         self.overlay = Overlay::None;
         if restore_composer {
@@ -1167,6 +1181,25 @@ impl ClientView {
                             }
                             Some(err) => {
                                 if let Overlay::DeleteMyGuildMessages(modal) = &mut self.overlay {
+                                    modal.submitting = false;
+                                    modal.error = Some(err);
+                                }
+                            }
+                        }
+                    }
+                }
+                UiEvent::PersonalNotesPurged { seq, channel_id, result } => {
+                    if matches!(
+                        &self.overlay,
+                        Overlay::PurgePersonalNotes(m) if m.seq == seq && m.channel_id == channel_id
+                    ) {
+                        match result {
+                            Ok(_) => {
+                                self.overlay = Overlay::None;
+                                self.focus_composer_later(cx);
+                            }
+                            Err(err) => {
+                                if let Overlay::PurgePersonalNotes(modal) = &mut self.overlay {
                                     modal.submitting = false;
                                     modal.error = Some(err);
                                 }
@@ -2327,20 +2360,49 @@ impl ClientView {
         cx.notify();
     }
 
-    /// DM header voice-call button (`CallButtons.tsx` `VoiceCallButton`): joins the DM voice call.
-    /// TODO(backlog): official `requestStartCall` also rings the recipient; the ring request is not ported.
-    pub(crate) fn start_dm_voice_call(&mut self, cx: &mut Context<Self>) {
-        if let Some(channel_id) = self.selected_channel {
-            self.join_voice_channel(channel_id, cx);
+    fn start_dm_call(&mut self, channel_id: Snowflake, cx: &mut Context<Self>) {
+        let was_active = self.voice.channel_id == Some(channel_id)
+            && matches!(
+                self.voice.state,
+                crate::backend::voice::VoiceConnectionState::Connected
+                    | crate::backend::voice::VoiceConnectionState::Connecting
+                    | crate::backend::voice::VoiceConnectionState::Reconnecting
+            );
+        let ring_info = {
+            let state = self.backend.state();
+            let me = state.current_user_id();
+            let Some(ch) = state.channels.get(&channel_id) else { return };
+            let can_ring = matches!(
+                ch.kind,
+                fluxer_client_core::state::ChannelKind::Dm | fluxer_client_core::state::ChannelKind::GroupDm
+            );
+            let recipients: Vec<Snowflake> = ch
+                .recipients
+                .iter()
+                .map(|u| u.id)
+                .filter(|id| Some(*id) != me)
+                .collect();
+            (can_ring, (!recipients.is_empty()).then_some(recipients))
+        };
+        self.join_voice_channel(channel_id, cx);
+        if !was_active && ring_info.0 && self.voice.channel_id == Some(channel_id) {
+            self.backend.ring_dm_call(channel_id, ring_info.1);
         }
     }
 
-    /// DM header video-call button (`CallButtons.tsx` `VideoCallButton`).
+    /// DM header voice-call button (`CallButtons.tsx` `VoiceCallButton`): joins and rings the DM call.
+    pub(crate) fn start_dm_voice_call(&mut self, cx: &mut Context<Self>) {
+        if let Some(channel_id) = self.selected_channel {
+            self.start_dm_call(channel_id, cx);
+        }
+    }
+
+    /// DM header video-call button (`CallButtons.tsx` `VideoCallButton`): joins and rings the DM call.
     /// TODO(backlog): no camera capture/publish path exists in the voice worker yet, so this only
-    /// joins the call without turning the camera on; the recipient ring request is not ported either.
+    /// joins and rings without turning the local camera on.
     pub(crate) fn start_dm_video_call(&mut self, cx: &mut Context<Self>) {
         let Some(channel_id) = self.selected_channel else { return };
-        self.join_voice_channel(channel_id, cx);
+        self.start_dm_call(channel_id, cx);
     }
 
     pub(crate) fn leave_voice_channel(&mut self, cx: &mut Context<Self>) {
@@ -3427,6 +3489,28 @@ impl ClientView {
         self.guild_delete_seq
     }
 
+    pub(crate) fn next_purge_notes_seq(&mut self) -> u64 {
+        self.purge_notes_seq = self.purge_notes_seq.saturating_add(1);
+        self.purge_notes_seq
+    }
+
+    pub(crate) fn on_header_update_click(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        match &self.update_status {
+            crate::updater::UpdateStatus::Available {
+                asset_name: Some(_),
+                asset_url: Some(_),
+                ..
+            } => self.download_available_update(cx),
+            crate::updater::UpdateStatus::Available { .. } | crate::updater::UpdateStatus::Downloaded { .. } => {
+                if !matches!(self.overlay, Overlay::Settings(_)) {
+                    self.open_settings(window, cx);
+                }
+                self.select_settings_tab(ui::settings::SettingsTab::Advanced, cx);
+            }
+            _ => {}
+        }
+    }
+
     pub(crate) fn toggle_hide_muted_channels(&mut self, guild_id: Snowflake, cx: &mut Context<Self>) {
         let hide = !self.backend.state().guild_hides_muted_channels(guild_id);
         self.backend.set_guild_hide_muted_channels(guild_id, hide);
@@ -3575,6 +3659,7 @@ impl Render for ClientView {
             Overlay::GuildPrivacy(modal) => Some(ui::guild_settings_modals::render_privacy(self, modal, &theme, cx)),
             Overlay::GuildProfile(modal) => Some(ui::guild_settings_modals::render_profile(modal, &theme, cx)),
             Overlay::DeleteMyGuildMessages(modal) => Some(ui::guild_settings_modals::render_delete_messages(modal, &theme, cx)),
+            Overlay::PurgePersonalNotes(modal) => Some(ui::guild_settings_modals::render_purge_personal_notes(modal, &theme, cx)),
             Overlay::None => None,
         };
         // Every image below without its own cache (avatars, custom emoji,

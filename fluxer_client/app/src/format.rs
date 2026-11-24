@@ -80,6 +80,18 @@ where
     }
 }
 
+/// Short time-of-day for grouped message gutter hover timestamps (`7:20 PM` or `19:20`).
+pub fn format_short_time<Tz: TimeZone>(at: &DateTime<Tz>) -> String
+where
+    Tz::Offset: std::fmt::Display,
+{
+    if TIME_24H.load(std::sync::atomic::Ordering::Relaxed) {
+        at.format("%H:%M").to_string()
+    } else {
+        at.format("%-I:%M %p").to_string()
+    }
+}
+
 pub const IMAGE_MAX_WIDTH: f32 = 400.;
 pub const IMAGE_MAX_HEIGHT: f32 = 300.;
 
@@ -507,6 +519,8 @@ mod tests {
         // 10:20 UTC is 19:20 in UTC+9.
         assert_eq!(format_message_time(&parse("2026-11-18T10:20:30+00:00"), &now), "11/18/2026, 7:20 PM");
         assert_eq!(format_message_time(&parse("2026-11-17T16:00:00+00:00"), &now), "11/18/2026, 1:00 AM");
+        assert_eq!(format_short_time(&parse("2026-11-18T10:20:30+00:00")), "7:20 PM");
+        assert_eq!(format_short_time(&parse("2026-11-17T16:00:00+00:00")), "1:00 AM");
     }
 
     #[test]

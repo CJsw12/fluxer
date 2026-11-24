@@ -406,6 +406,27 @@ impl Backend {
             }
         });
     }
+
+    /// Purges all messages in the personal notes channel (`POST /channels/{c}/messages/purge`).
+    pub fn purge_personal_notes(&self, seq: u64, channel_id: Snowflake) {
+        #[cfg(test)]
+        super::lock_sent(&self.sent_personal_notes_purges).push(channel_id);
+        let rest = self.rest.clone();
+        let state = self.state.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            let result = match rest.purge_personal_notes_messages(&channel_id.to_string()).await {
+                Ok(deleted) => {
+                    if lock(&state).clear_channel_messages(channel_id) {
+                        let _ = events.send(UiEvent::StateChanged);
+                    }
+                    Ok(deleted)
+                }
+                Err(err) => Err(err.to_string()),
+            };
+            let _ = events.send(UiEvent::PersonalNotesPurged { seq, channel_id, result });
+        });
+    }
 }
 
 #[cfg(test)]

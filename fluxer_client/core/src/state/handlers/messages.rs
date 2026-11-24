@@ -216,6 +216,14 @@ impl ClientState {
         changed
     }
 
+    /// Clears all loaded and outgoing messages for `channel_id` while keeping the window ready.
+    pub fn clear_channel_messages(&mut self, channel_id: Snowflake) -> bool {
+        let changed = self.messages.clear_channel_messages(channel_id);
+        let prev_saved = self.saved_messages.len();
+        self.saved_messages.retain(|_, entry| entry.channel_id != channel_id);
+        changed || self.saved_messages.len() != prev_saved
+    }
+
     /// The reply header for `message`; see [`ReplyPreview`].
     pub fn reply_preview<'a>(&'a self, message: &'a Message) -> ReplyPreview<'a> {
         let Some(target) = message.reply_to() else {

@@ -279,6 +279,44 @@ impl RestClient {
     pub async fn delete_channel(&self, channel_id: &str) -> Result<(), RestError> {
         self.leave_channel(channel_id, false).await
     }
+
+    /// `POST /channels/{channel_id}/call/ring` (204): rings call recipients (or all DM members when `None`).
+    pub async fn ring_call_recipients(&self, channel_id: &str, recipients: Option<&[String]>) -> Result<(), RestError> {
+        self.post_call_ring(channel_id, "ring", recipients).await
+    }
+
+    /// `POST /channels/{channel_id}/call/stop-ringing` (204): cancels active call ringing.
+    pub async fn stop_ringing_call_recipients(
+        &self,
+        channel_id: &str,
+        recipients: Option<&[String]>,
+    ) -> Result<(), RestError> {
+        self.post_call_ring(channel_id, "stop-ringing", recipients).await
+    }
+
+    async fn post_call_ring(
+        &self,
+        channel_id: &str,
+        action: &str,
+        recipients: Option<&[String]>,
+    ) -> Result<(), RestError> {
+        check_snowflake(channel_id, "channel_id")?;
+        if let Some(list) = recipients {
+            if list.len() > 1000 {
+                return Err(RestError::InvalidArgument("recipients"));
+            }
+            for id in list {
+                check_snowflake(id, "recipients")?;
+            }
+        }
+        let body = match recipients {
+            Some(list) => json!({ "recipients": list }),
+            None => json!({}),
+        };
+        let path = format!("/channels/{channel_id}/call/{action}");
+        self.request(Method::POST, &path, &[], Some(&body), Auth::Required).await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]

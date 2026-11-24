@@ -595,6 +595,21 @@ impl MessageStore {
         self.outgoing.remove(&channel_id);
     }
 
+    pub(crate) fn clear_channel_messages(&mut self, channel_id: Snowflake) -> bool {
+        let mut changed = self.outgoing.remove(&channel_id).is_some();
+        if let Some(window) = self.windows.get_mut(&channel_id) {
+            if !window.messages.is_empty() || window.has_more_before || window.has_more_after {
+                changed = true;
+            }
+            window.messages.clear();
+            window.has_more_before = false;
+            window.has_more_after = false;
+            window.ready = true;
+            window.pinned_to_end = true;
+        }
+        changed
+    }
+
     pub(crate) fn discard_channel_history(&mut self, channel_id: Snowflake) {
         self.park_channel_unsent(channel_id);
         let unsent = self

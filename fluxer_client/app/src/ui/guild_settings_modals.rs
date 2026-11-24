@@ -26,6 +26,7 @@ pub const NOTIFICATIONS_CONTEXT: &str = "GuildNotificationsModal";
 pub const PRIVACY_CONTEXT: &str = "GuildPrivacyModal";
 pub const PROFILE_CONTEXT: &str = "GuildProfileModal";
 pub const DELETE_MESSAGES_CONTEXT: &str = "DeleteMyGuildMessagesModal";
+pub const PURGE_NOTES_CONTEXT: &str = "PurgePersonalNotesModal";
 
 pub struct GuildNotificationsModal {
     pub guild_id: Snowflake,
@@ -61,6 +62,14 @@ pub struct DeleteMyGuildMessagesModal {
     pub submitting: bool,
     pub error: Option<String>,
     pub _subscription: Subscription,
+}
+
+pub struct PurgePersonalNotesModal {
+    pub seq: u64,
+    pub channel_id: Snowflake,
+    pub submitting: bool,
+    pub error: Option<String>,
+    pub focus_handle: FocusHandle,
 }
 
 fn channel_icon_for(kind: ChannelKind) -> AppIcon {
@@ -455,6 +464,43 @@ impl ClientView {
             (modal.guild_id, password)
         };
         self.backend.bulk_delete_my_guild_messages(seq, guild_id, password);
+        cx.notify();
+    }
+
+    pub(crate) fn open_purge_personal_notes(
+        &mut self,
+        channel_id: Snowflake,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.prepare_overlay_replace(cx);
+        self.autocomplete = None;
+        let seq = self.next_purge_notes_seq();
+        let focus_handle = cx.focus_handle();
+        self.overlay = Overlay::PurgePersonalNotes(PurgePersonalNotesModal {
+            seq,
+            channel_id,
+            submitting: false,
+            error: None,
+            focus_handle: focus_handle.clone(),
+        });
+        window.focus(&focus_handle, cx);
+        cx.notify();
+    }
+
+    pub(crate) fn submit_purge_personal_notes(&mut self, cx: &mut Context<Self>) {
+        let seq = self.next_purge_notes_seq();
+        let channel_id = {
+            let Overlay::PurgePersonalNotes(modal) = &mut self.overlay else { return };
+            if modal.submitting {
+                return;
+            }
+            modal.seq = seq;
+            modal.submitting = true;
+            modal.error = None;
+            modal.channel_id
+        };
+        self.backend.purge_personal_notes(seq, channel_id);
         cx.notify();
     }
 }
@@ -1306,6 +1352,91 @@ pub fn render_delete_messages(
                                 l10n::tr("Delete my messages")
                             })
                             .on_click(cx.listener(|this, _, _, cx| this.submit_delete_my_guild_messages(cx))),
+                    ),
+                ),
+        );
+
+    let view = cx.weak_entity();
+    overlay::modal(content, theme, move |window, cx| {
+        let _ = view.update(cx, |v, cx| v.close_overlay(window, cx));
+    })
+}
+
+pub fn render_purge_personal_notes(
+    modal: &PurgePersonalNotesModal,
+    theme: &Theme,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
+    let content = div()
+        .id("purge-personal-notes-modal")
+        .debug_selector(|| "purge-personal-notes-modal".to_owned())
+        .track_focus(&modal.focus_handle)
+        .key_context(PURGE_NOTES_CONTEXT)
+        .p_4()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .capture_action(cx.listener(|this, _: &Escape, window, cx| {
+            cx.stop_propagation();
+            this.close_overlay(window, cx);
+        }))
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_between()
+                .child(div().text_lg().font_weight(FontWeight::BOLD).child(l10n::tr("Purge personal notes")))
+                .child(
+                    div().debug_selector(|| "purge-personal-notes-close-btn".to_owned()).child(
+                        Button::new("purge-personal-notes-close-btn")
+                            .ghost()
+                            .small()
+                            .icon(AppIcon::X)
+                            .accessibility_label(l10n::tr("Close"))
+                            .on_click(cx.listener(|this, _, window, cx| this.close_overlay(window, cx))),
+                    ),
+                ),
+        )
+        .child(
+            div()
+                .text_sm()
+                .text_color(theme.muted_foreground)
+                .child(l10n::tr(
+                    "Are you sure you want to delete every message in your personal notes? This cannot be undone.",
+                )),
+        )
+        .when_some(modal.error.clone(), |d, err| {
+            d.child(div().text_xs().text_color(theme.danger).child(err))
+        })
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .justify_end()
+                .gap_2()
+                .child(
+                    div().debug_selector(|| "purge-personal-notes-cancel-btn".to_owned()).child(
+                        Button::new("purge-personal-notes-cancel-btn")
+                            .ghost()
+                            .small()
+                            .disabled(modal.submitting)
+                            .label(l10n::tr("Cancel"))
+                            .on_click(cx.listener(|this, _, window, cx| this.close_overlay(window, cx))),
+                    ),
+                )
+                .child(
+                    div().debug_selector(|| "purge-personal-notes-confirm-btn".to_owned()).child(
+                        Button::new("purge-personal-notes-confirm-btn")
+                            .danger()
+                            .small()
+                            .disabled(modal.submitting)
+                            .label(if modal.submitting {
+                                l10n::tr("Purging…")
+                            } else {
+                                l10n::tr("Purge personal notes")
+                            })
+                            .on_click(cx.listener(|this, _, _, cx| this.submit_purge_personal_notes(cx))),
                     ),
                 ),
         );

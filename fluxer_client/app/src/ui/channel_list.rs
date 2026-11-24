@@ -343,6 +343,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             text: "channel.direct-message.dm-list.clickable-item-text--2",
         };
         let pending = view.pending_incoming;
+        let notes_target_id = notes_id.or_else(|| view.backend.state().current_user_id());
         list = list
             // `DirectMessageList` leading `var(--spacing-2)` spacer.
             .child(div().flex_none().h(px(8.)))
@@ -354,6 +355,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 flx,
                 theme,
                 (pending > 0).then(|| badge(pending, theme).into_any_element()),
+                None,
                 cx.listener(|this, _, _, cx| this.open_friends(cx)),
             ))
             .child(clickable_item(
@@ -364,6 +366,13 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 flx_notes,
                 theme,
                 None,
+                notes_target_id.map(|cid| {
+                    Box::new(cx.listener(move |this, ev: &gpui_kit::MouseDownEvent, window, cx| {
+                        cx.stop_propagation();
+                        this.open_personal_notes_menu(cid, ev.position, window, cx);
+                    }))
+                        as Box<dyn Fn(&gpui_kit::MouseDownEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static>
+                }),
                 cx.listener(|this, _, _, cx| this.open_personal_notes(cx)),
             ))
             // `.dmSectionSeparator`: 1px, full width, 0.5rem vertical margin.
@@ -458,6 +467,7 @@ fn clickable_item(
     flx: ClickableFlx,
     theme: &Theme,
     trailing: Option<AnyElement>,
+    on_right_click: Option<Box<dyn Fn(&gpui_kit::MouseDownEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static>>,
     on_click: impl Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
 ) -> AnyElement {
     let (fg, icon_bg, icon_fg) = if selected {
@@ -516,6 +526,7 @@ fn clickable_item(
         .cursor_pointer()
         .when(selected, |d| d.bg(theme.subtle_fill))
         .when(!selected, |d| d.hover(|s| s.bg(theme.hover_bg).text_color(theme.foreground)))
+        .when_some(on_right_click, |d, handler| d.on_mouse_down(gpui_kit::MouseButton::Right, handler))
         .on_click(on_click)
         .flx(flx.button)
         .child(inner)

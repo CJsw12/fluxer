@@ -24,6 +24,7 @@ use crate::ui::group_dm::{CreateGroupDmModal, LeaveGroupDmModal};
 use crate::ui::guild_modal::{JoinGuildModal, LeaveGuildModal};
 use crate::ui::guild_settings_modals::{
     DeleteMyGuildMessagesModal, GuildNotificationsModal, GuildPrivacyModal, GuildProfileModal,
+    PurgePersonalNotesModal,
 };
 use crate::ui::invite_modal::InviteMembersModal;
 use crate::ui::link_warning::LinkWarningModal;
@@ -62,6 +63,7 @@ pub enum Overlay {
     GuildPrivacy(GuildPrivacyModal),
     GuildProfile(GuildProfileModal),
     DeleteMyGuildMessages(DeleteMyGuildMessagesModal),
+    PurgePersonalNotes(PurgePersonalNotesModal),
 }
 
 impl Overlay {

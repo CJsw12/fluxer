@@ -661,3 +661,46 @@ async fn guild_privacy_profile_and_bulk_delete_my_messages_endpoints() {
         Err(RestError::InvalidArgument("pronouns"))
     ));
 }
+
+#[tokio::test]
+async fn purge_personal_notes_and_call_ring_routes() {
+    let fx = Fixture::start(|req, _| {
+        if req.method == "POST" && req.target == format!("/api/v1/channels/{CHANNEL}/messages/purge") {
+            return Resp::json(200, json!({ "deleted_count": 7 }));
+        }
+        Resp::empty(204)
+    })
+    .await;
+    let client = authed(&fx).await;
+
+    let deleted = client.purge_personal_notes_messages(CHANNEL).await.unwrap();
+    assert_eq!(deleted, 7);
+
+    let targets = vec![USER.to_owned()];
+    client.ring_call_recipients(CHANNEL, None).await.unwrap();
+    client.ring_call_recipients(CHANNEL, Some(&targets)).await.unwrap();
+    client.stop_ringing_call_recipients(CHANNEL, Some(&targets)).await.unwrap();
+
+    assert_eq!(
+        lines(&fx),
+        vec![
+            l("POST", format!("/api/v1/channels/{CHANNEL}/messages/purge")),
+            l("POST", format!("/api/v1/channels/{CHANNEL}/call/ring")),
+            l("POST", format!("/api/v1/channels/{CHANNEL}/call/ring")),
+            l("POST", format!("/api/v1/channels/{CHANNEL}/call/stop-ringing")),
+        ]
+    );
+    let reqs = fx.requests();
+    assert_eq!(reqs[1].json(), json!({}));
+    assert_eq!(reqs[2].json(), json!({ "recipients": [USER] }));
+    assert_eq!(reqs[3].json(), json!({ "recipients": [USER] }));
+
+    assert!(matches!(
+        client.purge_personal_notes_messages("bad").await,
+        Err(RestError::InvalidArgument("channel_id"))
+    ));
+    assert!(matches!(
+        client.ring_call_recipients(CHANNEL, Some(&["bad".to_owned()])).await,
+        Err(RestError::InvalidArgument("recipients"))
+    ));
+}

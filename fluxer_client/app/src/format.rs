@@ -94,6 +94,19 @@ pub fn fit_image(width: Option<u32>, height: Option<u32>) -> (f32, f32) {
     ((w * scale).round().max(1.), (h * scale).round().max(1.))
 }
 
+/// `getFormattedShortDate`: "Nov 21, 2029" (en-US), "2029년 11월 21일" (ko).
+pub fn format_short_date<Tz: TimeZone>(at: &DateTime<Tz>) -> String
+where
+    Tz::Offset: std::fmt::Display,
+{
+    const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    let (y, m, d) = (at.year(), at.month(), at.day());
+    if base_lang(l10n::current().locale()) == "ko" {
+        return format!("{y}년 {m}월 {d}일");
+    }
+    format!("{} {d}, {y}", MONTHS[(m as usize).saturating_sub(1).min(11)])
+}
+
 /// `getFormattedFullDate` (en-US): "Wednesday, November 18, 2026".
 pub fn format_full_date<Tz: TimeZone>(at: &DateTime<Tz>) -> String
 where

@@ -25,7 +25,10 @@ pub enum InlineObject {
     Timestamp(Timestamp),
     /// One word (with its trailing whitespace) of a hidden spoiler; words
     /// are separate objects so a long spoiler wraps.
-    HiddenSpoiler { spoiler: SpoilerId, text: String },
+    /// `start`/`end` mark the first and last word of the whole spoiler: only
+    /// they get the rounded corners and inline padding, so a multi-word
+    /// spoiler reads as one box.
+    HiddenSpoiler { spoiler: SpoilerId, text: String, start: bool, end: bool },
 }
 
 /// One `TextView`: top-level subtext gets its own, drawn small and muted.
@@ -329,7 +332,10 @@ impl Writer<'_> {
     /// word before it); newlines are hard breaks.
     fn hidden_spoiler(&mut self, spoiler: SpoilerId, text: &str, mode: Mode) -> String {
         let mut out = String::new();
-        for (n, line) in text.trim_end_matches('\n').split('\n').enumerate() {
+        let lines: Vec<&str> = text.trim_end_matches('\n').split('\n').collect();
+        let total: usize = lines.iter().map(|line| split_words(line).len()).sum();
+        let mut seen = 0;
+        for (n, line) in lines.into_iter().enumerate() {
             if n > 0 {
                 if mode == Mode::Paragraph {
                     hard_break(&mut out);
@@ -338,7 +344,14 @@ impl Writer<'_> {
                 }
             }
             for word in split_words(line) {
-                self.object(InlineObject::HiddenSpoiler { spoiler, text: word.to_owned() }, false, &mut out);
+                let object = InlineObject::HiddenSpoiler {
+                    spoiler,
+                    text: word.to_owned(),
+                    start: seen == 0,
+                    end: seen + 1 == total,
+                };
+                seen += 1;
+                self.object(object, false, &mut out);
             }
         }
         out

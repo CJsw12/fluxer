@@ -197,8 +197,8 @@ fn hidden_spoilers_are_words_revealed_ones_marked() {
     assert_eq!(
         lowered.objects,
         [
-            InlineObject::HiddenSpoiler { spoiler: 0, text: "two ".to_owned() },
-            InlineObject::HiddenSpoiler { spoiler: 0, text: "words".to_owned() },
+            InlineObject::HiddenSpoiler { spoiler: 0, text: "two ".to_owned(), start: true, end: false },
+            InlineObject::HiddenSpoiler { spoiler: 0, text: "words".to_owned(), start: false, end: true },
         ]
     );
     let shown = revealed(&d);

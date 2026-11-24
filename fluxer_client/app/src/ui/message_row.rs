@@ -70,14 +70,28 @@ fn file_extension_badge(filename: &str) -> String {
         .unwrap_or_else(|| l10n::tr("File"))
 }
 
+/// `ExpiryFootnote.module.css .footnote`: 0.65rem tertiary text, 0.35rem top margin.
+fn expiry_footnote(label: SharedString, theme: &Theme) -> AnyElement {
+    div()
+        .flex()
+        .flex_row()
+        .mt(px(5.6))
+        .child(
+            div()
+                .text_size(px(10.4))
+                .line_height(px(12.48))
+                .text_color(theme.text_tertiary)
+                .child(label)
+                .flx("app.expiry-footnote.inline-footnote.text"),
+        )
+        .into_any_element()
+}
+
 /// Mention pills and hidden spoilers in the active theme's colors.
 pub(crate) fn markdown_style(theme: &Theme) -> MarkdownStyle {
     let default_style = MarkdownStyle::default();
-    let spoiler_hidden = if theme.background.l > 0.5 {
-        gpui_kit::hsla(220. / 360., 0.08, 0.80, 1.)
-    } else {
-        default_style.spoiler_hidden
-    };
+    // `--markup-spoiler-hidden-bg`: currentColor at 16%.
+    let spoiler_hidden = theme.text_chat.opacity(0.16);
     MarkdownStyle {
         mention_background: theme.mention_bg,
         mention_foreground: theme.mention_fg,
@@ -384,7 +398,8 @@ pub fn render(
                 .mt(px(2.))
                 .overflow_hidden()
                 .flx("channel.embeds.attachments.attachment-mosaic.attachment-mosaic-component.mosaic-container-wrapper")
-                .child(container),
+                .child(container)
+                .children(row.image_expiry.clone().map(|label| expiry_footnote(label, theme))),
         );
     }
     if !row.file_attachments.is_empty() {
@@ -454,7 +469,12 @@ pub fn render(
                     let _ = view_file.update(cx, |v, cx| v.open_external_url(&url, window, cx));
                 });
             }
-            list = list.child(div().debug_selector(move || debug_id.to_string()).child(card));
+            list = list.child(
+                div()
+                    .debug_selector(move || debug_id.to_string())
+                    .child(card)
+                    .children(file.expiry.clone().map(|label| expiry_footnote(label, theme))),
+            );
         }
         content = content.child(list);
     }
@@ -463,11 +483,20 @@ pub fn render(
     }
     let (channel_id, message_id) = (row.actions.channel_id, row.id);
     if !row.reactions.is_empty() {
-        let view = view.clone();
-        content = content.child(reactions::reaction_bar(row.id.0, &row.reactions, theme, move |emoji, _, cx| {
-            let emoji = emoji.clone();
-            let _ = view.update(cx, |v, cx| v.toggle_reaction(channel_id, message_id, emoji, cx));
-        }));
+        let view_toggle = view.clone();
+        let view_add = view.clone();
+        content = content.child(reactions::reaction_bar(
+            row.id.0,
+            &row.reactions,
+            theme,
+            move |emoji, _, cx| {
+                let emoji = emoji.clone();
+                let _ = view_toggle.update(cx, |v, cx| v.toggle_reaction(channel_id, message_id, emoji, cx));
+            },
+            move |pos, window, cx| {
+                let _ = view_add.update(cx, |v, cx| v.open_reaction_emoji_picker(channel_id, message_id, pos, window, cx));
+            },
+        ));
     }
     let mut main = div()
         .flex()
@@ -817,6 +846,7 @@ mod tests {
             size_label: "12.4 KB".to_owned(),
             url: "https://cdn/archive.zip".to_owned(),
             spoiler: false,
+            expiry: None,
         }];
         let (_, cx) = cx.add_window_view(|window, cx| {
             let host = cx.new(|_| Host { row });

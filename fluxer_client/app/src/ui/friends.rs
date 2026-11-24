@@ -1,7 +1,7 @@
 //! Home Friends surface (`Online`, `All`, `Pending`, `Blocked`, `Add friend`)
 //! and per-relationship actions.
 
-use fluxer_client_core::state::{ClientState, RelationshipKind, Snowflake, Status, User};
+use fluxer_client_core::state::{ChannelKind, ClientState, RelationshipKind, Snowflake, Status, User};
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::Input;
@@ -129,6 +129,24 @@ impl ClientView {
     pub(crate) fn open_friends(&mut self, cx: &mut Context<Self>) {
         self.place = Place::Home;
         self.clear_selection(cx);
+    }
+
+    /// The "Personal notes" sidebar row: opens the user's self-DM
+    /// (`ChannelKind::DmPersonalNotes`). When the READY payload did not carry
+    /// it, asks the server for the DM with the user's own id.
+    /// TODO(backlog): the web client routes to `dmChannel(currentUserId)` and
+    /// the notes purge / context menu (`PersonalNotesContextMenu`) is missing.
+    pub(crate) fn open_personal_notes(&mut self, cx: &mut Context<Self>) {
+        let (existing, own_id) = {
+            let state = self.backend.state();
+            let existing = state.dm_channels().into_iter().find(|c| c.kind == ChannelKind::DmPersonalNotes).map(|c| c.id);
+            (existing, state.current_user_id())
+        };
+        match (existing, own_id) {
+            (Some(channel_id), _) => self.open_channel(None, channel_id, cx),
+            (None, Some(user_id)) => self.backend.open_dm(user_id),
+            (None, None) => {}
+        }
     }
 
     pub(crate) fn set_friends_tab(&mut self, tab: FriendsTab, cx: &mut Context<Self>) {

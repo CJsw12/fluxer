@@ -74,7 +74,7 @@ impl Default for MarkdownStyle {
         Self {
             mention_background: hsla(235. / 360., 0.86, 0.65, 0.3),
             mention_foreground: hsla(235. / 360., 0.86, 0.85, 1.),
-            spoiler_hidden: hsla(220. / 360., 0.08, 0.12, 1.),
+            spoiler_hidden: hsla(0., 0., 0.93, 0.16),
             spoiler_revealed: hsla(0., 0., 0.5, 0.15),
             timestamp_background: hsla(0., 0., 0.5, 0.12),
             subtext: hsla(220. / 360., 0.05, 0.6, 1.),
@@ -323,16 +323,36 @@ impl MarkdownPlugin for ObjectPlugin {
                 .line_height(line_height)
                 .child(timestamp.text.clone())
                 .into_any_element(),
-            InlineObject::HiddenSpoiler { spoiler, text } => {
-                let spoiler = *spoiler;
+            InlineObject::HiddenSpoiler { spoiler, text, start, end } => {
+                let (spoiler, start, end) = (*spoiler, *start, *end);
                 let reveals = self.reveals.clone();
+                // `.spoiler:not([data-revealed])`: currentColor 16% fill, a 1px
+                // inset ring at 10%, `--spoiler-border-radius` 0.375rem, 0.2em
+                // inline padding; the content is transparent.
+                let cover = self.style.spoiler_hidden;
                 div()
                     .id(ElementId::named_usize("fluxer-md-spoiler", index))
-                    .bg(self.style.spoiler_hidden)
-                    .text_color(self.style.spoiler_hidden)
+                    .relative()
+                    .when(start, |d| d.pl(px(3.2)).rounded_l(px(6.)))
+                    .when(end, |d| d.pr(px(3.2)).rounded_r(px(6.)))
+                    .bg(cover)
+                    .text_color(hsla(0., 0., 0., 0.))
                     .text_size(font_size)
                     .line_height(line_height)
                     .cursor_pointer()
+                    .child(
+                        div()
+                            .absolute()
+                            .top_0()
+                            .bottom_0()
+                            .left_0()
+                            .right_0()
+                            .when(start, |d| d.rounded_l(px(6.)).border_l_1())
+                            .when(end, |d| d.rounded_r(px(6.)).border_r_1())
+                            .border_t_1()
+                            .border_b_1()
+                            .border_color(cover.opacity(0.625)),
+                    )
                     .on_click(move |_, window, cx| {
                         reveals.update(cx, |state, cx| {
                             state.reveal(spoiler);

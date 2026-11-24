@@ -17,6 +17,7 @@ use crate::format::{
     SystemIcon, default_avatar_index, fit_image, format_full_date, format_message_time, initials, message_time,
     starts_group, system_text,
 };
+use crate::ui::l10n;
 use crate::ui::embed::{self, EmbedView, TextKind};
 use crate::ui::message_actions::ActionTarget;
 use crate::ui::reactions::{ReactionPill, reaction_pills};
@@ -150,6 +151,34 @@ pub(crate) struct FileAttachmentRow {
     pub size_label: String,
     pub url: String,
     pub spoiler: bool,
+    /// `ExpiryFootnote` text under the card (`Attachment.tsx`).
+    pub expiry: Option<SharedString>,
+}
+
+/// `ExpiryFootnote` text for attachments (`getEarliestAttachmentExpiry`):
+/// "Expires on {date}" or a range, "Expired ..." once any is past; `None`
+/// when no attachment carries an expiry.
+pub(crate) fn attachment_expiry_label(attachments: &[&fluxer_client_core::state::Attachment]) -> Option<String> {
+    let now = Local::now();
+    let (mut earliest, mut latest): (Option<DateTime<Local>>, Option<DateTime<Local>>) = (None, None);
+    let mut expired = false;
+    for a in attachments {
+        let at = match a.expires_at.as_deref().and_then(|s| DateTime::parse_from_rfc3339(s).ok()) {
+            Some(at) => at.with_timezone(&Local),
+            None if a.expired => now,
+            None => continue,
+        };
+        earliest = Some(earliest.map_or(at, |e| e.min(at)));
+        latest = Some(latest.map_or(at, |l| l.max(at)));
+        expired |= a.expired || at <= now;
+    }
+    let (first, last) = (crate::format::format_short_date(&earliest?), crate::format::format_short_date(&latest?));
+    Some(match (first != last, expired) {
+        (true, true) => l10n::tr_args("Expired between {earliest} and {latest}", &[("earliest", &first), ("latest", &last)]),
+        (true, false) => l10n::tr_args("Expires between {earliest} and {latest}", &[("earliest", &first), ("latest", &last)]),
+        (false, true) => l10n::tr_args("Expired on {earliest}", &[("earliest", &first)]),
+        (false, false) => l10n::tr_args("Expires on {earliest}", &[("earliest", &first)]),
+    })
 }
 
 /// Human-readable file size (`"512 B"`, `"12.4 KB"`, `"2.1 MB"`).
@@ -202,6 +231,8 @@ pub struct MessageRow {
     pub image_covers: Vec<ImageCover>,
     /// Non-image file attachments for file cards.
     pub(crate) file_attachments: Vec<FileAttachmentRow>,
+    /// `ExpiryFootnote` text under the image mosaic (`AttachmentMosaic`).
+    pub image_expiry: Option<SharedString>,
     /// Embeds to draw (empty when embeds are off or suppressed).
     pub embeds: Vec<EmbedView>,
     pub state: MessageState,
@@ -278,9 +309,11 @@ pub fn dm_unread(state: &ClientState) -> Unread {
 pub fn channel_items(state: &ClientState, place: Place, media: Option<&str>) -> Vec<ChannelItem> {
     let now_ms = i64::try_from(crate::accounts::now_ms()).unwrap_or(i64::MAX);
     match place {
+        // The personal-notes self-DM has its own sidebar row, not a DM row.
         Place::Home => state
             .dm_channels()
             .into_iter()
+            .filter(|c| c.kind != ChannelKind::DmPersonalNotes)
             .map(|c| channel_item(state, c, false, now_ms, media))
             .collect(),
         Place::Guild(guild_id) => {
@@ -496,6 +529,7 @@ impl RowContext<'_> {
                 size_label: format_file_size(a.size),
                 url: a.url.clone().unwrap_or_default(),
                 spoiler,
+                expiry: attachment_expiry_label(&[a]).map(Into::into),
             });
             if !body.is_empty() {
                 body.push_str("\n\n");
@@ -558,6 +592,7 @@ impl RowContext<'_> {
             images,
             image_covers,
             file_attachments,
+            image_expiry: attachment_expiry_label(&m.attachments.iter().filter(|a| a.content_type.as_deref().is_some_and(|t| t.starts_with("image/")) && a.url.is_some()).collect::<Vec<_>>()).map(Into::into),
             embeds,
             state: m.state,
             upload_percent: None,
@@ -1085,6 +1120,7 @@ mod tests {
                 size_label: "12.4 KB".to_owned(),
                 url: "https://cdn/report.pdf".to_owned(),
                 spoiler: true,
+                expiry: None,
             }]
         );
     }

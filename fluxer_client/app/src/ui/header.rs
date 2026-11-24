@@ -10,8 +10,9 @@ use crate::client_view::{ClientView, HeaderHoverTarget};
 use crate::icons::AppIcon;
 use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
+use crate::ui::avatar::{AvatarSpec, render_avatar_tagged};
 use crate::ui::{l10n, rail_tooltip};
-use crate::view_model::Place;
+use crate::view_model::{ChannelIcon, Place};
 
 #[allow(clippy::too_many_arguments)]
 fn render_header_icon_button(
@@ -78,6 +79,12 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     };
     let channel_muted = view.selected_channel_muted();
     let is_dm = view.place == Place::Home;
+    // `ChannelHeader.tsx`: a 1:1 DM shows the peer's status avatar (32px)
+    // instead of the `@` glyph.
+    let dm_peer = view
+        .channels
+        .iter()
+        .find(|c| Some(c.id) == view.selected_channel && c.icon == ChannelIcon::Dm && is_dm);
 
     div()
         .h(px(theme.sizes.header_height))
@@ -101,7 +108,21 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .flex_row()
                 .items_center()
                 .gap(px(12.))
-                .when(!glyph.is_empty(), |d| {
+                .when_some(dm_peer, |d, peer| {
+                    d.child(render_avatar_tagged(
+                        AvatarSpec {
+                            user_id: peer.dm_user_id.unwrap_or(peer.id),
+                            avatar_url: peer.dm_avatar_url.clone(),
+                            display_name: peer.name.clone(),
+                            size: 32.,
+                            status: peer.dm_status,
+                            status_border_bg: Some(theme.background_secondary_lighter),
+                        },
+                        theme,
+                        &["ui.status-aware-avatar.avatar"],
+                    ))
+                })
+                .when(dm_peer.is_none() && !glyph.is_empty(), |d| {
                     if glyph == "#" {
                         d.child(
                             div()
@@ -127,7 +148,14 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .text_size(px(16.))
                         .line_height(px(24.))
                         .text_color(theme.foreground)
-                        .flx_text("channel.channel-header.channel-name--8", view.channel_title.to_string())
+                        .flx_text(
+                            if dm_peer.is_some() {
+                                "channel.channel-header.channel-name--4"
+                            } else {
+                                "channel.channel-header.channel-name--8"
+                            },
+                            view.channel_title.to_string(),
+                        )
                         .child(view.channel_title.clone()),
                 )
                 .when_some(view.channel_topic.clone(), |d, topic| {

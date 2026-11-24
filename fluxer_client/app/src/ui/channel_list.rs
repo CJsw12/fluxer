@@ -313,74 +313,113 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .flex_col()
         .flex_1()
         .min_h_0()
-        .pt(px(11.))
+        .pt(px(if view.place == Place::Home { 0. } else { 11. }))
         .pb_2()
         .gap(px(1.))
+        .when(view.place == Place::Home, |d| d.px(px(8.)))
         .overflow_y_scroll();
     if view.place == Place::Home {
-        let active = view.selected_channel.is_none();
+        let notes_id = view
+            .backend
+            .state()
+            .dm_channels()
+            .into_iter()
+            .find(|c| c.kind == fluxer_client_core::state::ChannelKind::DmPersonalNotes)
+            .map(|c| c.id);
+        let friends_active = view.selected_channel.is_none();
+        let notes_active = notes_id.is_some() && view.selected_channel == notes_id;
+        let flx = ClickableFlx {
+            button: "channel.direct-message.dm-list.clickable-item.clickable-item.button",
+            inner: "channel.direct-message.dm-list.clickable-item-inner",
+            content: "channel.direct-message.dm-list.clickable-item-content",
+            icon: "channel.direct-message.dm-list.clickable-item-icon",
+            text: "channel.direct-message.dm-list.clickable-item-text",
+        };
+        let flx_notes = ClickableFlx {
+            button: "channel.direct-message.dm-list.clickable-item.clickable-item.button",
+            inner: "",
+            content: "channel.direct-message.dm-list.clickable-item-content--2",
+            icon: "channel.direct-message.dm-list.clickable-item-icon--2",
+            text: "channel.direct-message.dm-list.clickable-item-text--2",
+        };
+        let pending = view.pending_incoming;
         list = list
+            // `DirectMessageList` leading `var(--spacing-2)` spacer.
+            .child(div().flex_none().h(px(8.)))
+            .child(clickable_item(
+                "home-friends",
+                l10n::tr("Friends"),
+                AppIcon::UsersThreeFill,
+                friends_active,
+                flx,
+                theme,
+                (pending > 0).then(|| badge(pending, theme).into_any_element()),
+                cx.listener(|this, _, _, cx| this.open_friends(cx)),
+            ))
+            .child(clickable_item(
+                "home-personal-notes",
+                l10n::tr("Personal notes"),
+                AppIcon::NotePencilFill,
+                notes_active,
+                flx_notes,
+                theme,
+                None,
+                cx.listener(|this, _, _, cx| this.open_personal_notes(cx)),
+            ))
+            // `.dmSectionSeparator`: 1px, full width, 0.5rem vertical margin.
             .child(
                 div()
-                    .id("home-friends")
-                    .role(Role::Button)
-                    .aria_label(l10n::tr("Friends"))
-                    .aria_selected(active)
-                    .debug_selector(|| "home-friends".to_owned())
+                    .flex_none()
+                    .h(px(1.))
+                    .my(px(8.))
+                    .mx(px(-8.))
+                    .bg(theme.subtle_fill)
+                    .flx("channel.direct-message.dm-list.dm-section-separator"),
+            )
+            // `.dmSectionHeader`: 0.5rem margins and inline padding.
+            .child(
+                div()
                     .flex()
                     .flex_row()
+                    .flex_none()
                     .items_center()
                     .justify_between()
-                    .gap_2()
-                    .mx_2()
-                    .px_2()
-                    .py_1p5()
-                    .rounded(px(6.))
-                    .cursor_pointer()
-                    .when(active, |d| d.bg(theme.accent))
-                    .when(!active, |d| d.hover(|s| s.bg(theme.hover_bg)))
-                    .on_click(cx.listener(|this, _, _, cx| this.open_friends(cx)))
+                    .my(px(8.))
+                    .px(px(8.))
+                    .flx("channel.direct-message.dm-list.dm-section-header")
                     .child(
                         div()
+                            .flex_none()
                             .flex()
                             .flex_row()
                             .items_center()
-                            .gap_2()
-                            .child(Icon::new(AppIcon::Users).xsmall())
-                            .child(div().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("Friends"))),
+                            .gap(px(4.))
+                            .text_color(theme.muted_foreground)
+                            .flx("channel.direct-message.dm-list.dm-section-header-text")
+                            .child(
+                                div()
+                                    .truncate()
+                                    .text_size(px(13.))
+                                    .line_height(px(16.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .flx("channel.direct-message.dm-list.dm-section-header-label")
+                                    .child(l10n::tr("Direct messages")),
+                            ),
                     )
-                    .when(view.pending_incoming > 0, |d| d.child(badge(view.pending_incoming, theme))),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .justify_between()
-                    .gap_1()
-                    .px_3()
-                    .pt_3()
-                    .pb_1()
                     .child(
                         div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_xs()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.muted_foreground)
-                            .child(l10n::tr("Direct messages")),
-                    )
-                    .child(
-                        div().debug_selector(|| "create-group-dm-btn".to_owned()).child(
-                            Button::new("create-group-dm-btn")
-                                .ghost()
-                                .xsmall()
-                                .icon(AppIcon::Plus)
-                                .tooltip(l10n::tr("Create group DM"))
-                                .accessibility_label(l10n::tr("Create group DM"))
-                                .on_click(cx.listener(|this, _, window, cx| this.open_create_group_dm(window, cx))),
-                        ),
+                            .flex_none()
+                            .size(px(16.))
+                            .debug_selector(|| "create-group-dm-btn".to_owned())
+                            .child(
+                                Button::new("create-group-dm-btn")
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(AppIcon::Plus)
+                                    .tooltip(l10n::tr("Create group DM"))
+                                    .accessibility_label(l10n::tr("Create group DM"))
+                                    .on_click(cx.listener(|this, _, window, cx| this.open_create_group_dm(window, cx))),
+                            ),
                     ),
             );
     }
@@ -396,6 +435,91 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .bg(theme.background_secondary)
         .child(header_bar)
         .child(list)
+}
+
+/// Parity tags of one `ClickableItem` row of the DM list.
+struct ClickableFlx {
+    button: &'static str,
+    inner: &'static str,
+    content: &'static str,
+    icon: &'static str,
+    text: &'static str,
+}
+
+/// `DirectMessageList.module.css .clickableItem`: a 42px row with a 32px
+/// round icon (`--guild-list-foreground`, brand when selected) and a
+/// 16px/500 label.
+#[allow(clippy::too_many_arguments)]
+fn clickable_item(
+    id: &'static str,
+    label: String,
+    icon: AppIcon,
+    selected: bool,
+    flx: ClickableFlx,
+    theme: &Theme,
+    trailing: Option<AnyElement>,
+    on_click: impl Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
+) -> AnyElement {
+    let (fg, icon_bg, icon_fg) = if selected {
+        (theme.foreground, theme.brand, theme.on_fill)
+    } else {
+        (theme.muted_foreground, theme.guild_list_foreground, theme.foreground)
+    };
+    let content = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap(px(12.))
+        .child(
+            div()
+                .flex_none()
+                .size(px(32.))
+                .rounded_full()
+                .bg(icon_bg)
+                .flex()
+                .items_center()
+                .justify_center()
+                .flx(flx.icon)
+                .child(Icon::new(icon).with_size(px(20.)).text_color(icon_fg)),
+        )
+        .child(
+            div()
+                .text_size(px(16.))
+                .line_height(px(24.))
+                .font_weight(FontWeight::MEDIUM)
+                .flx(flx.text)
+                .child(label.clone()),
+        )
+        .flx(flx.content);
+    let mut inner = div().flex().flex_row().items_center().justify_between().w_full().child(content);
+    if let Some(trailing) = trailing {
+        inner = inner.child(trailing);
+    }
+    if !flx.inner.is_empty() {
+        inner = inner.flx(flx.inner);
+    }
+    div()
+        .id(id)
+        .role(Role::Button)
+        .aria_label(label)
+        .aria_selected(selected)
+        .debug_selector(move || id.to_owned())
+        .flex()
+        .flex_row()
+        .items_center()
+        .flex_none()
+        .w_full()
+        .h(px(42.))
+        .px(px(8.))
+        .rounded(px(6.))
+        .text_color(fg)
+        .cursor_pointer()
+        .when(selected, |d| d.bg(theme.subtle_fill))
+        .when(!selected, |d| d.hover(|s| s.bg(theme.hover_bg).text_color(theme.foreground)))
+        .on_click(on_click)
+        .flx(flx.button)
+        .child(inner)
+        .into_any_element()
 }
 
 fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
@@ -519,6 +643,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
     } else {
         c.name.to_string()
     };
+    let is_dm = c.icon == ChannelIcon::Dm;
     let mut row = div()
         .id(("channel", c.id.0))
         .group(row_group.clone())
@@ -529,19 +654,26 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         .flex()
         .flex_row()
         .items_center()
-        .gap(px(6.))
-        .mx_2()
+        .gap(px(if is_dm { 12. } else { 6. }))
+        .when(!is_dm, |d| d.mx_2())
         .pl_2()
         .pr_2()
-        .min_h(px(32.))
-        .py(px(6.))
+        .when(is_dm, |d| d.h(px(42.)).flex_none())
+        .when(!is_dm, |d| d.min_h(px(32.)).py(px(6.)))
         .text_size(px(16.))
         .line_height(px(20.))
         .font_weight(FontWeight::MEDIUM)
         .rounded(px(6.))
-        .flx("app.generic-channel-item.long-pressable.click")
-        .text_color(if (highlight_unread || selected) && (c.has_messages || is_voice) { fg } else { muted_fg })
-        .when(selected, |d| d.bg(theme.accent))
+        .when(!is_dm, |d| d.flx("app.generic-channel-item.long-pressable.click"))
+        .when(is_dm && selected, |d| d.flx("channel.direct-message.dm-list-item.dm-item-selected.navigate-to"))
+        .text_color(if is_dm && !selected && !highlight_unread {
+            theme.muted_foreground
+        } else if (highlight_unread || selected) && (c.has_messages || is_voice) {
+            fg
+        } else {
+            muted_fg
+        })
+        .when(selected, |d| d.bg(if is_dm { theme.subtle_fill } else { theme.accent }))
         .when(!selected, |d| d.hover(|s| s.bg(theme.hover_bg).text_color(fg)))
         .when(selected, |d| d.hover(|s| s.text_color(fg)))
         .when(is_voice || c.has_messages, |d| d.cursor_pointer())
@@ -561,14 +693,16 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
             div()
                 .debug_selector(|| "dm-row-avatar".to_owned())
                 .flex_none()
+                .size(px(32.))
+                .when(selected, |d| d.flx("channel.direct-message.dm-list-item.dm-item-avatar-wrapper--2"))
                 .child(render_avatar(
                     AvatarSpec {
                         user_id: c.dm_user_id.unwrap_or(c.id),
                         avatar_url: c.dm_avatar_url.clone(),
                         display_name: c.name.clone(),
-                        size: 28.,
+                        size: 32.,
                         status: c.dm_status,
-                        status_border_bg: Some(if selected { theme.accent } else { theme.background_secondary }),
+                        status_border_bg: Some(theme.background_secondary),
                     },
                     theme,
                 ))
@@ -601,16 +735,42 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 .flx("app.channel-item-content.div")
                 .into_any_element()
         })
-        .child(
+        .child(if is_dm {
+            // `.dmItemInfo` / `.dmItemName` (20px lines) around the name text.
+            div()
+                .flex_1()
+                .min_w_0()
+                .flex()
+                .flex_row()
+                .items_center()
+                .h(px(20.))
+                // Room for the close button (24px) the official row reserves.
+                .mr(px(24.))
+                .when(selected, |d| {
+                    d.flx("channel.direct-message.dm-list-item.dm-item-info--2")
+                        .flx("channel.direct-message.dm-list-item.dm-item-name--2")
+                })
+                .child(
+                    div()
+                        .min_w_0()
+                        .truncate()
+                        .when(selected, |d| {
+                            d.flx_text("channel.direct-message.dm-list-item.dm-item-name-text--2", c.name.to_string())
+                        })
+                        .child(c.name.clone()),
+                )
+                .into_any_element()
+        } else {
             div()
                 .flex_1()
                 .min_w_0()
                 .truncate()
                 .flx_text("app.channel-item-content.channel-name", c.name.to_string())
-                .child(c.name.clone()),
-        )
+                .child(c.name.clone())
+                .into_any_element()
+        })
         // Official trailing slot: gap plus reserved icon space (16px when selected).
-        .child(div().flex_none().w(px(if selected { 16. } else { 0. })));
+        .child(div().flex_none().w(px(if selected && !is_dm { 16. } else { 0. })));
     if c.muted {
         row = row.child(Icon::new(AppIcon::BellSlash).xsmall());
     }

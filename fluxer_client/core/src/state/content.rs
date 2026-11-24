@@ -56,6 +56,12 @@ pub struct Attachment {
     /// Audio/video length in seconds.
     #[serde(default)]
     pub duration: Option<u32>,
+    /// ISO 8601 time the attachment URL stops working (`expires_at`).
+    #[serde(default)]
+    pub expires_at: Option<String>,
+    /// The server already expired the attachment (`expired`).
+    #[serde(default, deserialize_with = "null_default")]
+    pub expired: bool,
 }
 
 impl Attachment {

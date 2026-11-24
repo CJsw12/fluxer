@@ -65,6 +65,8 @@ impl Backend {
                     placeholder: None,
                     flags: f.flags,
                     duration: None,
+                    expires_at: None,
+                    expired: false,
                 })
                 .collect();
             state.messages.insert_pending_full(

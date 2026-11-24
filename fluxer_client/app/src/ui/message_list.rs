@@ -296,11 +296,12 @@ fn divider(label: Option<SharedString>, new: bool, theme: &Theme) -> AnyElement 
     let line_color = if new { theme.danger } else { gpui_kit::hsla(252. / 360., 0.17, 0.80, 0.15) };
     let line = move || div().flex_1().h(px(2.)).bg(line_color);
     // `ChannelDivider.container`: 20px tall, 0 1.25rem padding, text padding 0 0.75rem.
-    let mut row = div().flex().flex_row().items_center().gap(px(12.)).mx(px(20.)).h(px(20.)).child(line());
+    let mut row = div().flex().flex_row().items_center().mx(px(20.)).h(px(20.)).child(line());
     if let Some(label) = label {
         row = row
             .child(
                 div()
+                    .px(px(12.))
                     .text_size(px(12.))
                     .line_height(px(18.))
                     .font_weight(FontWeight::MEDIUM)

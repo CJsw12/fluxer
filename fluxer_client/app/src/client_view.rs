@@ -3303,12 +3303,14 @@ impl Render for ClientView {
                     .child(div().w(px(1.)).h_full().flex_none().bg(theme.background_secondary))
                     // `channel-list-content.bottom-spacer` (73px).
                     .child(
-                        div()
-                            .h_full()
-                            .flex_none()
-                            .pb(px(73.))
-                            .flx("app.guild-sidebar.guild-navbar")
-                            .child(ui::channel_list::render(self, &theme, cx)),
+                        // The navbar sits inside the 1px frame border at the top and bottom.
+                        div().h_full().flex_none().pt(px(1.)).pb(px(1.)).child(
+                            div()
+                                .h_full()
+                                .pb(px(73.))
+                                .flx("app.guild-sidebar.guild-navbar")
+                                .child(ui::channel_list::render(self, &theme, cx)),
+                        ),
                     ),
             )
             .child(div().flex().flex_1().min_w_0().h_full().bg(theme.background_secondary_lighter).child(if show_voice_stage {
@@ -3356,6 +3358,7 @@ impl Render for ClientView {
                     .h_full()
                     // OutlineFrame.module.css: the pane sits inside the 1px frame border.
                     .pt(px(1.))
+                    .pb(px(1.))
                     // Files dropped anywhere on the message pane go to the tray.
                     .on_drop(cx.listener(|v, paths: &ExternalPaths, _, cx| v.add_paths(paths.paths(), cx)))
                     .child(ui::header::render(self, &theme, cx))

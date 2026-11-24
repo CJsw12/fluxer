@@ -257,7 +257,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .flex_row()
         .flex_none()
         .w(px(theme.sizes.member_list_width))
-        .h_full()
+        // Stretches to the row but stops 1px short: the official list ends inside the frame border.
+        .mb(px(1.))
         .overflow_hidden()
         .bg(theme.background_secondary_lighter)
         .flx("channel.member-list-container.member-list-container")

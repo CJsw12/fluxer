@@ -46,6 +46,7 @@ pub fn render_with(
     let upload = view.can_send.then(|| {
         div()
             .flex_none()
+            .ml(px(4.))
             .debug_selector(|| "composer-upload".to_owned())
             .flx("channel.lexical-channel-textarea-content.plus-button-above-backdrop.clear-slash-command")
             .child(
@@ -127,7 +128,7 @@ pub fn render_with(
                 .min_h(px(theme.sizes.composer_height))
                 .rounded(px(theme.sizes.composer_radius))
                 .bg(rgb(0x242229))
-                .pl(px(14.))
+                .pl(px(10.))
                 .pr(px(10.))
                 .py(px(13.))
                 .flx("channel.lexical-channel-textarea-content.textarea-outer")
@@ -167,7 +168,8 @@ pub fn render_with(
                     }),
             ),
         )
-        .child(div().px(px(6.)).pb(px(6.)).flx("channel.channel-chat-layout.textarea-area").child(key_hooks(input, keys, cx)))
+        // The 6px frame is the outer box's margin: the official area itself has no padding.
+        .child(div().flx("channel.channel-chat-layout.textarea-area").child(div().mx(px(6.)).mb(px(6.)).child(key_hooks(input, keys, cx))))
 }
 
 /// Placeholder for the current channel and send permission.

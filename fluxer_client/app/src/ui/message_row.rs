@@ -221,6 +221,8 @@ pub fn render(
                 .max_w(px(760.))
                 .text_size(px(16.))
                 .line_height(px(24.))
+                // `.messageText` bottom padding.
+                .pb(px(1.))
                 .text_color(theme.text_chat)
                 .flx("channel.user-message.message-text")
                 .child(body),

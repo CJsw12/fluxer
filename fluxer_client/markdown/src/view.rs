@@ -196,7 +196,9 @@ impl RenderOnce for MessageMarkdown {
 /// A code block is 14px padded, radius 6, 12px/16px mono.
 fn text_view_style(style: &MarkdownStyle) -> TextViewStyle {
     let code_block = StyleRefinement::default()
-        .p(px(14.))
+        // 14px padding; the vertical 18 adds `.hljs`'s 4px top and bottom padding.
+        .px(px(14.))
+        .py(px(18.))
         .rounded(px(6.))
         .bg(style.code_background)
         .border_color(style.code_border)
@@ -222,6 +224,8 @@ fn blockquote_refinement(style: &MarkdownStyle) -> StyleRefinement {
         .border_color(style.quote_bar)
         .pl(px(12.))
         .py(px(4.))
+        // `.blockquoteContainer` margin-top.
+        .mt(px(4.))
         .text_color(style.quote_text)
 }
 

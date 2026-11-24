@@ -20,6 +20,10 @@ use crate::state::{User, parse_timestamp_ms};
 pub const MAX_AUDIT_LOG_REASON_UTF16: usize = 512;
 /// `GuildMemberUpdateRequest.nick` max length (`GuildRequestSchemas.ts:135`).
 pub const MAX_NICKNAME_UTF16: usize = 32;
+/// `GuildMemberUpdateRequest.bio` max length (`GuildRequestSchemas.ts:145`).
+pub const MAX_MEMBER_BIO_UTF16: usize = 320;
+/// `GuildMemberUpdateRequest.pronouns` max length (`GuildRequestSchemas.ts:148`).
+pub const MAX_MEMBER_PRONOUNS_UTF16: usize = 40;
 /// Maximum recent message purge window on ban (`GuildRequestSchemas.ts:319`).
 pub const MAX_BAN_DELETE_MESSAGE_SECONDS: u32 = 604_800;
 /// `MIN_TEMP_BAN_DURATION_SECONDS` (`LimitConstants.ts:112`).
@@ -62,6 +66,10 @@ pub struct GuildMemberPatch {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub nick: Option<Option<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub bio: Option<Option<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pronouns: Option<Option<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub communication_disabled_until: Option<Option<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout_reason: Option<String>,
@@ -69,7 +77,11 @@ pub struct GuildMemberPatch {
 
 impl GuildMemberPatch {
     pub fn is_empty(&self) -> bool {
-        self.nick.is_none() && self.communication_disabled_until.is_none() && self.timeout_reason.is_none()
+        self.nick.is_none()
+            && self.bio.is_none()
+            && self.pronouns.is_none()
+            && self.communication_disabled_until.is_none()
+            && self.timeout_reason.is_none()
     }
 }
 
@@ -120,6 +132,18 @@ pub fn validate_member_patch(patch: &GuildMemberPatch) -> Result<(), RestError> 
         let len = nick.trim().encode_utf16().count();
         if len == 0 || len > MAX_NICKNAME_UTF16 {
             return Err(RestError::InvalidArgument("nick"));
+        }
+    }
+    if let Some(Some(bio)) = &patch.bio {
+        let len = bio.trim().encode_utf16().count();
+        if len == 0 || len > MAX_MEMBER_BIO_UTF16 {
+            return Err(RestError::InvalidArgument("bio"));
+        }
+    }
+    if let Some(Some(pronouns)) = &patch.pronouns {
+        let len = pronouns.trim().encode_utf16().count();
+        if len == 0 || len > MAX_MEMBER_PRONOUNS_UTF16 {
+            return Err(RestError::InvalidArgument("pronouns"));
         }
     }
     if let Some(Some(until)) = &patch.communication_disabled_until {
@@ -276,6 +300,12 @@ fn normalized_member_patch_json(patch: &GuildMemberPatch) -> Result<Value, RestE
     let mut normalized = patch.clone();
     if let Some(Some(nick)) = &normalized.nick {
         normalized.nick = Some(Some(nick.trim().to_owned()));
+    }
+    if let Some(Some(bio)) = &normalized.bio {
+        normalized.bio = Some(Some(bio.trim().to_owned()));
+    }
+    if let Some(Some(pronouns)) = &normalized.pronouns {
+        normalized.pronouns = Some(Some(pronouns.trim().to_owned()));
     }
     if let Some(Some(until)) = &normalized.communication_disabled_until {
         normalized.communication_disabled_until = Some(Some(until.trim().to_owned()));

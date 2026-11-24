@@ -174,6 +174,48 @@ impl ClientState {
         }
     }
 
+    /// Removes loaded sent messages authored by the current user across all
+    /// channels in `guild_id` after `POST /users/@me/guilds/{g}/messages/bulk-delete-mine`.
+    pub fn remove_own_messages_in_guild(&mut self, guild_id: Snowflake) -> bool {
+        let Some(me) = self.current_user_id() else {
+            return false;
+        };
+        let guild_channels: Vec<Snowflake> = self
+            .channels
+            .values()
+            .filter(|c| c.guild_id == Some(guild_id))
+            .map(|c| c.id)
+            .collect();
+        let mut per_channel: Vec<(Snowflake, Vec<Snowflake>)> = Vec::new();
+        for ch_id in guild_channels {
+            if let Some(win) = self.messages.window(ch_id) {
+                let ids: Vec<Snowflake> = win
+                    .messages
+                    .iter()
+                    .filter(|m| m.author.id == me && m.state == crate::state::model::MessageState::Sent)
+                    .map(|m| m.id)
+                    .collect();
+                if !ids.is_empty() {
+                    per_channel.push((ch_id, ids));
+                }
+            }
+        }
+        let mut changed = false;
+        for (ch_id, ids) in &per_channel {
+            changed |= self.messages.remove(*ch_id, ids);
+            for id in ids {
+                if self.saved_messages.remove(id).is_some() {
+                    changed = true;
+                }
+            }
+        }
+        self.saved_messages.retain(|_, entry| {
+            !(entry.message.as_ref().is_some_and(|m| m.author.id == me)
+                && self.channels.get(&entry.channel_id).is_some_and(|c| c.guild_id == Some(guild_id)))
+        });
+        changed
+    }
+
     /// The reply header for `message`; see [`ReplyPreview`].
     pub fn reply_preview<'a>(&'a self, message: &'a Message) -> ReplyPreview<'a> {
         let Some(target) = message.reply_to() else {

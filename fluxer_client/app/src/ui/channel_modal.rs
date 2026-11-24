@@ -188,7 +188,24 @@ impl ClientView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.open_create_channel_with_kind(parent_id, ChannelKind::GuildText, window, cx);
+    }
+
+    pub(crate) fn open_create_category(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_create_channel_with_kind(None, ChannelKind::GuildCategory, window, cx);
+    }
+
+    fn open_create_channel_with_kind(
+        &mut self,
+        mut parent_id: Option<Snowflake>,
+        initial_kind: ChannelKind,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let Place::Guild(guild_id) = self.place else { return };
+        if initial_kind == ChannelKind::GuildCategory {
+            parent_id = None;
+        }
         let (can_manage_root, categories) = {
             let state = self.backend.state();
             if !state.guilds.contains_key(&guild_id) {
@@ -218,7 +235,12 @@ impl ClientView {
         self.prepare_overlay_replace(cx);
         self.autocomplete = None;
         let seq = self.next_channel_mgmt_seq();
-        let name_input = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Channel name")));
+        let placeholder = if initial_kind == ChannelKind::GuildCategory {
+            l10n::tr("Category name")
+        } else {
+            l10n::tr("Channel name")
+        };
+        let name_input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
         let subscription =
             cx.subscribe_in(&name_input, window, |this: &mut Self, input_entity, ev: &InputEvent, window, cx| match ev {
                 InputEvent::PressEnter { shift: false, .. } => {
@@ -242,7 +264,7 @@ impl ClientView {
             can_manage_root,
             parent_id,
             categories,
-            kind: ChannelKind::GuildText,
+            kind: initial_kind,
             name_input,
             nsfw: false,
             submitting: false,

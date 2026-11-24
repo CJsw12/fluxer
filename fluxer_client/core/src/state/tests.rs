@@ -162,6 +162,8 @@ fn guild(owner: Option<u64>, roles: &[(u64, u64)]) -> Guild {
         visiting: false,
         default_message_notifications: 0,
         large_feature: false,
+        member_dms_disabled: false,
+        invites_disabled: false,
         roles: roles
             .iter()
             .map(|&(id, permissions)| {

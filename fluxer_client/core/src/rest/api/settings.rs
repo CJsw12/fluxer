@@ -52,6 +52,12 @@ pub struct UserSettingsPatch {
     /// Trusted external link domains (`UserSettings.trusted_domains`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub trusted_domains: Option<Vec<String>>,
+    /// Guild IDs where non-friend DMs from members are restricted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub restricted_guilds: Option<Vec<String>>,
+    /// Guild IDs where DMs from bots in that community are restricted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bot_restricted_guilds: Option<Vec<String>>,
 }
 
 /// `MuteConfigSchema`.
@@ -106,6 +112,12 @@ fn validate_user_settings_patch(patch: &UserSettingsPatch) -> Result<(), RestErr
     }
     for id in patch.guild_positions.iter().flatten() {
         check_snowflake(id, "guild_positions")?;
+    }
+    for id in patch.restricted_guilds.iter().flatten() {
+        check_snowflake(id, "restricted_guilds")?;
+    }
+    for id in patch.bot_restricted_guilds.iter().flatten() {
+        check_snowflake(id, "bot_restricted_guilds")?;
     }
     if let Some(domains) = &patch.trusted_domains {
         if domains.len() > 1000

@@ -2,11 +2,20 @@
 //! block/unblock, guild invites, and leaving communities.
 
 use fluxer_client_core::Dispatch;
-use fluxer_client_core::rest::parse_user_tag;
+use fluxer_client_core::rest::{CreateInviteRequest, parse_user_tag};
 use fluxer_client_core::state::Snowflake;
 use serde_json::{Value, json};
 
 use super::{Backend, UiEvent, lock};
+
+/// Metadata returned by `POST /channels/{channel_id}/invites`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreatedInvite {
+    pub code: String,
+    pub max_age: u32,
+    pub max_uses: u32,
+    pub temporary: bool,
+}
 
 /// Summary returned by `GET /invites/{code}` before accepting an invite.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -327,6 +336,71 @@ impl Backend {
                     let _ = events.send(UiEvent::GuildLeft {
                         guild_id,
                         error: Some(format!("Could not leave community: {err}")),
+                    });
+                }
+            }
+        });
+    }
+
+    /// Creates a channel invite (`POST /channels/{c}/invites`), echoing `seq`.
+    pub fn create_channel_invite(&self, seq: u64, channel_id: Snowflake, request: CreateInviteRequest) {
+        #[cfg(test)]
+        super::lock_sent(&self.sent_invites).push((channel_id, request.clone()));
+        let rest = self.rest.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            let result = rest
+                .create_channel_invite(&channel_id.to_string(), &request)
+                .await
+                .map_err(|err| err.to_string())
+                .and_then(|val| {
+                    let code = val
+                        .get("code")
+                        .and_then(Value::as_str)
+                        .filter(|s| !s.is_empty())
+                        .ok_or_else(|| "Server response did not include an invite code.".to_owned())?
+                        .to_owned();
+                    let max_age = val
+                        .get("max_age")
+                        .and_then(Value::as_u64)
+                        .and_then(|n| u32::try_from(n).ok())
+                        .unwrap_or_else(|| request.max_age.unwrap_or(0));
+                    let max_uses = val
+                        .get("max_uses")
+                        .and_then(Value::as_u64)
+                        .and_then(|n| u32::try_from(n).ok())
+                        .unwrap_or_else(|| request.max_uses.unwrap_or(0));
+                    let temporary = val
+                        .get("temporary")
+                        .and_then(Value::as_bool)
+                        .unwrap_or_else(|| request.temporary.unwrap_or(false));
+                    Ok(CreatedInvite { code, max_age, max_uses, temporary })
+                });
+            let _ = events.send(UiEvent::InviteCreated { seq, channel_id, result });
+        });
+    }
+
+    /// Requests deletion of all current user messages in `guild_id`, echoing `seq`.
+    pub fn bulk_delete_my_guild_messages(&self, seq: u64, guild_id: Snowflake, password: Option<String>) {
+        #[cfg(test)]
+        super::lock_sent(&self.sent_guild_bulk_deletes)
+            .push((guild_id, password.as_deref().is_some_and(|p| !p.trim().is_empty())));
+        let rest = self.rest.clone();
+        let state = self.state.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            match rest.bulk_delete_my_guild_messages(&guild_id.to_string(), password.as_deref()).await {
+                Ok(()) => {
+                    if lock(&state).remove_own_messages_in_guild(guild_id) {
+                        let _ = events.send(UiEvent::StateChanged);
+                    }
+                    let _ = events.send(UiEvent::GuildMessagesBulkDeleted { seq, guild_id, error: None });
+                }
+                Err(err) => {
+                    let _ = events.send(UiEvent::GuildMessagesBulkDeleted {
+                        seq,
+                        guild_id,
+                        error: Some(err.to_string()),
                     });
                 }
             }

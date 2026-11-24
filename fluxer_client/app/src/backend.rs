@@ -10,9 +10,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use anyhow::{Context as _, Result};
 use fluxer_client_core::gateway::{self, Compression, GatewayConfig, GatewayEvent, GatewayHandle, IdentifyProperties};
 use fluxer_client_core::rest::{
-    AckRequest, ClientIdentity, DiscoveryOptions, Endpoints, GuildBanEntry, MessageQuery, MessageSearchOutcome,
-    PinsQuery, RestClient, RestConfig, SecretToken, SendMessageRequest, TransportPolicy, UserProfileFull,
-    WebAuthnCredential, discover_with,
+    AckRequest, ClientIdentity, CreateInviteRequest, DiscoveryOptions, Endpoints, GuildBanEntry, MessageQuery,
+    MessageSearchOutcome, PinsQuery, RestClient, RestConfig, SecretToken, SendMessageRequest, TransportPolicy,
+    UserProfileFull, WebAuthnCredential, discover_with,
 };
 #[cfg(test)]
 use fluxer_client_core::rest::{GuildSettingsPatch, MessageSearchRequest, UserSettingsPatch};
@@ -99,6 +99,10 @@ pub enum UiEvent {
     MessageForwarded { seq: u64, target_channels: Vec<Snowflake>, error: Option<String> },
     /// `POST /channels/{c}/messages/{m}/threads` finished.
     ThreadCreated { seq: u64, result: Result<Snowflake, String> },
+    /// `POST /channels/{c}/invites` finished.
+    InviteCreated { seq: u64, channel_id: Snowflake, result: Result<CreatedInvite, String> },
+    /// `POST /users/@me/guilds/{g}/messages/bulk-delete-mine` finished.
+    GuildMessagesBulkDeleted { seq: u64, guild_id: Snowflake, error: Option<String> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -177,9 +181,9 @@ pub use channels::GuildChannelCall;
 pub use group_dm::GroupDmCall;
 #[cfg(test)]
 pub use moderation::ModerationCall;
-pub use social::{AcceptedInvite, InvitePreview, extract_invite_code};
 #[cfg(test)]
 pub use social::SocialCall;
+pub use social::{AcceptedInvite, CreatedInvite, InvitePreview, extract_invite_code};
 
 /// A logged-in session. Cloning shares the same connection and state.
 #[derive(Clone)]
@@ -194,6 +198,8 @@ pub struct Backend {
     media: Option<Arc<str>>,
     /// Web app origin for `Copy message link`.
     webapp: Option<Arc<str>>,
+    /// Invite link base origin from discovery (`endpoints.invite`).
+    invite_origin: Option<Arc<str>>,
     /// WebAuthn relying-party origin derived from discovery endpoints.
     webauthn_origin: Option<Arc<str>>,
     /// Hostnames belonging to the active Fluxer instance (trusted external links).
@@ -257,6 +263,12 @@ pub struct Backend {
     /// Recorded `POST /channels/{c}/messages/{m}/threads` payloads (tests).
     #[cfg(test)]
     pub(crate) sent_thread_creates: Arc<Mutex<Vec<(Snowflake, Snowflake, fluxer_client_core::rest::CreateThreadFromMessageRequest)>>>,
+    /// Recorded `POST /channels/{c}/invites` requests (tests).
+    #[cfg(test)]
+    pub(crate) sent_invites: Arc<Mutex<Vec<(Snowflake, CreateInviteRequest)>>>,
+    /// Recorded `POST /users/@me/guilds/{g}/messages/bulk-delete-mine` calls `(guild_id, had_password)` (tests).
+    #[cfg(test)]
+    pub(crate) sent_guild_bulk_deletes: Arc<Mutex<Vec<(Snowflake, bool)>>>,
 }
 
 impl Backend {
@@ -289,6 +301,7 @@ impl Backend {
         let (mut backend, rx) = Self::new(runtime, instance.rest, Some(gateway));
         backend.media = instance.endpoints.media.as_deref().map(Arc::from);
         backend.webapp = derive_webapp_origin(&instance.endpoints).map(Arc::from);
+        backend.invite_origin = instance.endpoints.invite.as_deref().map(|u| Arc::from(u.trim_end_matches('/')));
         backend.webauthn_origin = crate::webauthn::derive_origin(&instance.endpoints).ok().map(Arc::from);
         let hosts = crate::trusted_domains::hosts_from_urls(
             [
@@ -335,6 +348,7 @@ impl Backend {
             last_nonce: Arc::new(AtomicU64::new(0)),
             media: None,
             webapp: None,
+            invite_origin: None,
             webauthn_origin: None,
             instance_hosts: Arc::from(Vec::new()),
             focus: Arc::default(),
@@ -376,6 +390,10 @@ impl Backend {
             sent_voice_states: Arc::default(),
             #[cfg(test)]
             sent_thread_creates: Arc::default(),
+            #[cfg(test)]
+            sent_invites: Arc::default(),
+            #[cfg(test)]
+            sent_guild_bulk_deletes: Arc::default(),
         };
         (backend, rx)
     }
@@ -508,6 +526,19 @@ impl Backend {
     #[cfg(test)]
     pub(crate) fn set_webapp_for_test(&mut self, webapp: Option<String>) {
         self.webapp = webapp.map(|u| Arc::from(u.trim_end_matches('/')));
+    }
+
+    pub fn invite_url(&self, code: &str) -> String {
+        if let Some(origin) = self.invite_origin.as_deref() {
+            format!("{}/{code}", origin.trim_end_matches('/'))
+        } else {
+            format!("{}/invite/{code}", self.web_origin().trim_end_matches('/'))
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_invite_origin_for_test(&mut self, origin: Option<String>) {
+        self.invite_origin = origin.map(|u| Arc::from(u.trim_end_matches('/')));
     }
 
     /// Canonical web URL for jumping to a message (`buildMessageJumpLink`).

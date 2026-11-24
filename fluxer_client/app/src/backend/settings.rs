@@ -272,6 +272,195 @@ impl Backend {
             }
         });
     }
+
+    /// Optimistically updates top-level guild notification settings fields
+    /// (`muted`, `message_notifications`, `suppress_everyone`, `suppress_roles`,
+    /// `hide_muted_channels`) via `PATCH /users/@me/guilds/{g}/settings`.
+    pub fn update_guild_settings_fields(
+        &self,
+        guild_id: Snowflake,
+        patch: GuildSettingsPatch,
+        err_prefix: &'static str,
+    ) {
+        let seq = {
+            let mut map = self.guild_settings_seq.lock().unwrap_or_else(PoisonError::into_inner);
+            let entry = map.entry(Some(guild_id)).or_insert(0);
+            *entry += 1;
+            *entry
+        };
+        let patch_value = serde_json::to_value(&patch).unwrap_or(Value::Null);
+        let patch_obj = patch_value.as_object().cloned().unwrap_or_default();
+        let previous_raw = {
+            let mut state = self.state();
+            let prev = state
+                .guild_settings
+                .get(&Some(guild_id))
+                .map(|s| s.raw.clone())
+                .unwrap_or(Value::Null);
+            let mut dispatch_obj = patch_obj.clone();
+            dispatch_obj.insert("guild_id".to_owned(), Value::String(guild_id.to_string()));
+            state.apply(&Dispatch {
+                t: "USER_GUILD_SETTINGS_UPDATE".to_owned(),
+                s: 0,
+                d: Value::Object(dispatch_obj),
+            });
+            prev
+        };
+        #[cfg(test)]
+        super::lock_sent(&self.sent_guild_settings).push((Some(guild_id), patch.clone()));
+        let _ = self.events.send(UiEvent::StateChanged);
+
+        let rest = self.rest.clone();
+        let state = self.state.clone();
+        let events = self.events.clone();
+        let guild_settings_seq = self.guild_settings_seq.clone();
+        self.runtime.spawn(async move {
+            let res = rest.update_guild_settings(&guild_id.to_string(), &patch).await;
+            let seq_matches = || {
+                guild_settings_seq
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .get(&Some(guild_id))
+                    .copied()
+                    == Some(seq)
+            };
+            match res {
+                Ok(updated) => {
+                    if updated.is_object() && seq_matches() {
+                        lock(&state).apply(&Dispatch {
+                            t: "USER_GUILD_SETTINGS_UPDATE".to_owned(),
+                            s: 0,
+                            d: updated,
+                        });
+                        let _ = events.send(UiEvent::StateChanged);
+                    }
+                }
+                Err(err) => {
+                    if seq_matches() {
+                        let mut revert = revert_payload(&previous_raw, &patch_obj);
+                        if let Value::Object(map) = &mut revert {
+                            map.insert("guild_id".to_owned(), Value::String(guild_id.to_string()));
+                        }
+                        lock(&state).apply(&Dispatch {
+                            t: "USER_GUILD_SETTINGS_UPDATE".to_owned(),
+                            s: 0,
+                            d: revert,
+                        });
+                        let _ = events.send(UiEvent::ActionFailed {
+                            error: format!("{err_prefix}: {err}"),
+                        });
+                        let _ = events.send(UiEvent::StateChanged);
+                    }
+                }
+            }
+        });
+    }
+
+    pub fn set_guild_hide_muted_channels(&self, guild_id: Snowflake, hide: bool) {
+        self.update_guild_settings_fields(
+            guild_id,
+            GuildSettingsPatch {
+                hide_muted_channels: Some(hide),
+                ..Default::default()
+            },
+            "Could not update hidden channels filter",
+        );
+    }
+
+    /// Removes `channel_id` from `channel_overrides` for `guild_id` while
+    /// preserving sibling overrides, rolling back on REST error.
+    pub fn remove_channel_override(&self, guild_id: Snowflake, channel_id: Snowflake) {
+        let seq = {
+            let mut map = self.guild_settings_seq.lock().unwrap_or_else(PoisonError::into_inner);
+            let entry = map.entry(Some(guild_id)).or_insert(0);
+            *entry += 1;
+            *entry
+        };
+        let (patch, previous_entry) = {
+            let mut state = self.state();
+            let mut patch_overrides = BTreeMap::new();
+            if let Some(settings) = state.guild_settings.get(&Some(guild_id)) {
+                for (cid, ov) in &settings.channel_overrides {
+                    if *cid == channel_id {
+                        continue;
+                    }
+                    patch_overrides.insert(
+                        cid.to_string(),
+                        ChannelOverride {
+                            collapsed: Some(ov.collapsed),
+                            message_notifications: ov.message_notifications.and_then(|n| u8::try_from(n).ok()),
+                            muted: Some(ov.muted),
+                            mute_config: ov.mute_config.as_ref().map(|m| {
+                                Some(MuteConfig {
+                                    end_time: m.end_time.clone(),
+                                    selected_time_window: m.selected_time_window.unwrap_or(0),
+                                })
+                            }),
+                        },
+                    );
+                }
+            }
+            let patch = GuildSettingsPatch {
+                channel_overrides: Some(if patch_overrides.is_empty() {
+                    None
+                } else {
+                    Some(patch_overrides)
+                }),
+                ..Default::default()
+            };
+            let mut merged = existing_channel_overrides(state.guild_settings.get(&Some(guild_id)).map(|s| &s.raw));
+            let previous_entry = merged.remove(&channel_id.to_string());
+            state.apply(&Dispatch {
+                t: "USER_GUILD_SETTINGS_UPDATE".to_owned(),
+                s: 0,
+                d: json!({
+                    "guild_id": guild_id.to_string(),
+                    "channel_overrides": Value::Object(merged),
+                }),
+            });
+            (patch, previous_entry)
+        };
+        #[cfg(test)]
+        super::lock_sent(&self.sent_guild_settings).push((Some(guild_id), patch.clone()));
+        let _ = self.events.send(UiEvent::StateChanged);
+
+        let rest = self.rest.clone();
+        let state = self.state.clone();
+        let events = self.events.clone();
+        let guild_settings_seq = self.guild_settings_seq.clone();
+        self.runtime.spawn(async move {
+            let res = rest.update_guild_settings(&guild_id.to_string(), &patch).await;
+            let seq_matches = || {
+                guild_settings_seq
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .get(&Some(guild_id))
+                    .copied()
+                    == Some(seq)
+            };
+            match res {
+                Ok(updated) => {
+                    if updated.is_object() && seq_matches() {
+                        lock(&state).apply(&Dispatch {
+                            t: "USER_GUILD_SETTINGS_UPDATE".to_owned(),
+                            s: 0,
+                            d: updated,
+                        });
+                        let _ = events.send(UiEvent::StateChanged);
+                    }
+                }
+                Err(err) => {
+                    if seq_matches() {
+                        apply_channel_mute_rollback(&mut lock(&state), Some(guild_id), channel_id, previous_entry);
+                        let _ = events.send(UiEvent::ActionFailed {
+                            error: format!("Could not remove channel override: {err}"),
+                        });
+                        let _ = events.send(UiEvent::StateChanged);
+                    }
+                }
+            }
+        });
+    }
 }
 
 #[cfg(test)]

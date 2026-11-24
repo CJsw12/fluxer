@@ -52,6 +52,24 @@ impl UserSettings {
             .unwrap_or_default()
     }
 
+    /// Guild IDs where non-friend DMs from members are restricted.
+    pub fn restricted_guilds(&self) -> Vec<Snowflake> {
+        self.raw
+            .get("restricted_guilds")
+            .and_then(Value::as_array)
+            .map(|items| items.iter().filter_map(id_value).collect())
+            .unwrap_or_default()
+    }
+
+    /// Guild IDs where DMs from bots in that community are restricted.
+    pub fn bot_restricted_guilds(&self) -> Vec<Snowflake> {
+        self.raw
+            .get("bot_restricted_guilds")
+            .and_then(Value::as_array)
+            .map(|items| items.iter().filter_map(id_value).collect())
+            .unwrap_or_default()
+    }
+
     fn from_raw(raw: Value) -> Self {
         let text = |key: &str| raw.get(key).and_then(Value::as_str).map(str::to_owned);
         Self {
@@ -247,6 +265,13 @@ impl ClientState {
             .get(&guild_id)
             .and_then(|s| s.channel_overrides.get(&channel_id))
             .is_some_and(|o| mute_active(o.muted, o.mute_config.as_ref(), now_ms))
+    }
+
+    /// True when the user enabled "Hide muted channels" for `guild_id`.
+    pub fn guild_hides_muted_channels(&self, guild_id: Snowflake) -> bool {
+        self.guild_settings
+            .get(&Some(guild_id))
+            .is_some_and(|s| s.hide_muted_channels)
     }
 }
 

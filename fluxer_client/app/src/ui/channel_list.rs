@@ -133,7 +133,13 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             let danger_color: gpui_kit::Hsla = rgb(0xe8605f).into();
             let is_owner = view.current_guild_is_owner();
             let can_manage = view.can_manage_guild_channels;
-            let hide_muted = view.hide_muted_channels;
+            let (can_invite, hide_muted) = {
+                let state = view.backend.state();
+                (
+                    crate::ui::invite_modal::can_invite_in_guild(&state, id, view.selected_channel),
+                    state.guild_hides_muted_channels(id),
+                )
+            };
             let hover_bg = theme.hover_bg;
             let item = move |key: &'static str, label: &'static str, color: gpui_kit::Hsla| {
                 div()
@@ -184,15 +190,16 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     .flex()
                     .flex_col()
                     .gap(px(2.))
-                    .child(
-                        item("guild-popout-invite", "Invite members", c)
-                            .child(icon(AppIcon::UserPlusFill, c))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                // TODO(M9.4-backlog): invite members modal
-                                this.guild_header_popout_open = false;
-                                cx.notify();
-                            })),
-                    )
+                    .when(can_invite, |d| {
+                        d.child(
+                            item("guild-popout-invite", "Invite members", c)
+                                .child(icon(AppIcon::UserPlusFill, c))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.guild_header_popout_open = false;
+                                    this.open_invite_members(id, window, cx);
+                                })),
+                        )
+                    })
                     .when(can_manage_roles, |d| {
                         d.child(
                             item("guild-popout-roles", "Community settings", c)
@@ -215,47 +222,41 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .child(
                             item("guild-popout-create-category", "Create category", c)
                                 .child(icon(AppIcon::FolderPlusFill, c))
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    // TODO(M9.4-backlog): create category modal
+                                .on_click(cx.listener(|this, _, window, cx| {
                                     this.guild_header_popout_open = false;
-                                    cx.notify();
+                                    this.open_create_category(window, cx);
                                 })),
                         )
                     })
                     .child(
                         item("guild-popout-notifications", "Notification settings", c)
                             .child(icon(AppIcon::Bell, c))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                // TODO(M9.4-backlog): guild notification settings modal
+                            .on_click(cx.listener(move |this, _, window, cx| {
                                 this.guild_header_popout_open = false;
-                                cx.notify();
+                                this.open_guild_notifications(id, window, cx);
                             })),
                     )
                     .child(
                         item("guild-popout-privacy", "Privacy settings", c)
                             .child(icon(AppIcon::Shield, c))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                // TODO(M9.4-backlog): guild privacy settings modal
+                            .on_click(cx.listener(move |this, _, window, cx| {
                                 this.guild_header_popout_open = false;
-                                cx.notify();
+                                this.open_guild_privacy(id, window, cx);
                             })),
                     )
                     .child(
                         item("guild-popout-edit-profile", "Edit community profile", c)
                             .child(icon(AppIcon::UserCircle, c))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                // TODO(M9.4-backlog): per-community profile editor
+                            .on_click(cx.listener(move |this, _, window, cx| {
                                 this.guild_header_popout_open = false;
-                                cx.notify();
+                                this.open_guild_profile(id, window, cx);
                             })),
                     )
                     .child(
                         item("guild-popout-hide-muted", "Hide muted channels", c)
                             .flx("guild.guild-header-popout.guild-header-popout-checkbox-item.item-button.click")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                // TODO(M9.4-backlog): filter muted channels from the list
-                                this.hide_muted_channels = !this.hide_muted_channels;
-                                cx.notify();
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.toggle_hide_muted_channels(id, cx);
                             }))
                             .child(
                                 div()
@@ -278,10 +279,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         d.child(
                             item("guild-popout-delete-messages", "Delete my messages", danger_color)
                                 .child(icon(AppIcon::Trash, danger_color))
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    // TODO(M9.4-backlog): delete my messages in community
+                                .on_click(cx.listener(move |this, _, window, cx| {
                                     this.guild_header_popout_open = false;
-                                    cx.notify();
+                                    this.open_delete_my_guild_messages(id, window, cx);
                                 })),
                         )
                         .child(

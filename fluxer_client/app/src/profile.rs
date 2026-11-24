@@ -368,6 +368,8 @@ mod tests {
             roles: roles.into_iter().map(|role| (role.id, role)).collect(),
             default_message_notifications: 0,
             large_feature: false,
+            member_dms_disabled: false,
+            invites_disabled: false,
         }
     }
 
@@ -390,6 +392,8 @@ mod tests {
             roles,
             joined_at: None,
             communication_disabled_until: None,
+            bio: None,
+            pronouns: None,
         }
     }
 

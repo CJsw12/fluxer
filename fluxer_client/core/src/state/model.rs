@@ -124,6 +124,12 @@ pub struct Guild {
     pub default_message_notifications: i8,
     /// `LARGE_GUILD_OVERRIDE` or `VERY_LARGE_GUILD` in `features`.
     pub large_feature: bool,
+    /// `MEMBER_DMS_DISABLED` in `features`.
+    #[serde(default)]
+    pub member_dms_disabled: bool,
+    /// `INVITES_DISABLED` in `features`.
+    #[serde(default)]
+    pub invites_disabled: bool,
 }
 
 /// `LARGE_GUILD_THRESHOLD` (`GatewayConstants.ts`).
@@ -161,8 +167,12 @@ pub(crate) struct GuildProperties {
 }
 
 impl GuildProperties {
+    pub(crate) fn has_feature(&self, name: &str) -> bool {
+        self.features.iter().any(|f| f == name)
+    }
+
     pub(crate) fn large_feature(&self) -> bool {
-        self.features.iter().any(|f| f == "LARGE_GUILD_OVERRIDE" || f == "VERY_LARGE_GUILD")
+        self.has_feature("LARGE_GUILD_OVERRIDE") || self.has_feature("VERY_LARGE_GUILD")
     }
 }
 
@@ -312,6 +322,10 @@ pub struct Member {
     pub joined_at: Option<String>,
     #[serde(default)]
     pub communication_disabled_until: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bio: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pronouns: Option<String>,
 }
 
 impl Member {

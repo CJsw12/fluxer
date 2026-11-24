@@ -394,6 +394,7 @@ fn timeout_and_nickname_set_clear_self_vs_other_routes(cx: &mut TestAppContext) 
                 nick: None,
                 communication_disabled_until: Some(None),
                 timeout_reason: None,
+                ..Default::default()
             },
             reason: None,
         }

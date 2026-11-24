@@ -738,3 +738,52 @@ fn saved_messages_threads_and_manual_ack() {
     assert_eq!(state.channel_unread(sf(GENERAL)).mention_count, 2);
     assert!(state.channel_unread(sf(GENERAL)).unread);
 }
+
+#[test]
+fn guild_features_privacy_settings_and_member_profile_parse() {
+    let mut state = loaded_state();
+    state.apply(&dispatch(
+        "GUILD_UPDATE",
+        json!({
+            "id": GUILD.to_string(),
+            "name": "Dev Guild",
+            "owner_id": OWNER.to_string(),
+            "features": ["MEMBER_DMS_DISABLED", "INVITES_DISABLED"]
+        }),
+    ));
+    let g = &state.guilds[&sf(GUILD)];
+    assert!(g.member_dms_disabled);
+    assert!(g.invites_disabled);
+
+    state.apply(&dispatch(
+        "USER_SETTINGS_UPDATE",
+        json!({
+            "restricted_guilds": [GUILD.to_string()],
+            "bot_restricted_guilds": ["999"]
+        }),
+    ));
+    assert_eq!(state.user_settings.restricted_guilds(), vec![sf(GUILD)]);
+    assert_eq!(state.user_settings.bot_restricted_guilds(), vec![sf(999)]);
+
+    assert!(!state.guild_hides_muted_channels(sf(GUILD)));
+    state.apply(&dispatch(
+        "USER_GUILD_SETTINGS_UPDATE",
+        json!({ "guild_id": GUILD.to_string(), "hide_muted_channels": true }),
+    ));
+    assert!(state.guild_hides_muted_channels(sf(GUILD)));
+
+    state.apply(&dispatch(
+        "GUILD_MEMBER_UPDATE",
+        json!({
+            "guild_id": GUILD.to_string(),
+            "user": user_json(ME, "me"),
+            "nick": "Rustacean",
+            "bio": "hello bio",
+            "pronouns": "they/them"
+        }),
+    ));
+    let m = &state.members[&sf(GUILD)][&sf(ME)];
+    assert_eq!(m.nick.as_deref(), Some("Rustacean"));
+    assert_eq!(m.bio.as_deref(), Some("hello bio"));
+    assert_eq!(m.pronouns.as_deref(), Some("they/them"));
+}

@@ -27,10 +27,14 @@ impl ClientState {
             .map(|r| (r.id, r))
             .collect();
         let large_feature = props.large_feature();
+        let member_dms_disabled = props.has_feature("MEMBER_DMS_DISABLED");
+        let invites_disabled = props.has_feature("INVITES_DISABLED");
         let guild = Guild {
             id,
             default_message_notifications: props.default_message_notifications,
             large_feature,
+            member_dms_disabled,
+            invites_disabled,
             name: props.name,
             icon: props.icon,
             owner_id: props.owner_id,
@@ -148,6 +152,8 @@ impl ClientState {
         let owner_changed = guild.owner_id != props.owner_id;
         guild.default_message_notifications = props.default_message_notifications;
         guild.large_feature = props.large_feature();
+        guild.member_dms_disabled = props.has_feature("MEMBER_DMS_DISABLED");
+        guild.invites_disabled = props.has_feature("INVITES_DISABLED");
         guild.name = props.name;
         guild.icon = props.icon;
         guild.owner_id = props.owner_id;

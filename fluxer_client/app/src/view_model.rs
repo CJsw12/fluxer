@@ -306,7 +306,26 @@ pub fn dm_unread(state: &ClientState) -> Unread {
     total
 }
 
-pub fn channel_items(state: &ClientState, place: Place, media: Option<&str>) -> Vec<ChannelItem> {
+fn show_channel_when_hiding_muted(
+    state: &ClientState,
+    channel_id: Snowflake,
+    effective_muted: bool,
+    selected_channel: Option<Snowflake>,
+    connected_voice_channel: Option<Snowflake>,
+) -> bool {
+    selected_channel == Some(channel_id)
+        || connected_voice_channel == Some(channel_id)
+        || !effective_muted
+        || state.channel_unread(channel_id).mention_count > 0
+}
+
+pub fn channel_items_with_active(
+    state: &ClientState,
+    place: Place,
+    media: Option<&str>,
+    selected_channel: Option<Snowflake>,
+    connected_voice_channel: Option<Snowflake>,
+) -> Vec<ChannelItem> {
     let now_ms = i64::try_from(crate::accounts::now_ms()).unwrap_or(i64::MAX);
     match place {
         // The personal-notes self-DM has its own sidebar row, not a DM row.
@@ -317,11 +336,49 @@ pub fn channel_items(state: &ClientState, place: Place, media: Option<&str>) -> 
             .map(|c| channel_item(state, c, false, now_ms, media))
             .collect(),
         Place::Guild(guild_id) => {
+            let hide_muted = state.guild_hides_muted_channels(guild_id);
             let mut items = Vec::new();
             for node in state.channel_tree(guild_id) {
-                items.push(channel_item(state, &node.channel, false, now_ms, media));
-                for child in &node.children {
-                    items.push(channel_item(state, child, true, now_ms, media));
+                if !hide_muted {
+                    items.push(channel_item(state, &node.channel, false, now_ms, media));
+                    for child in &node.children {
+                        items.push(channel_item(state, child, true, now_ms, media));
+                    }
+                    continue;
+                }
+                if node.channel.kind.is_category() {
+                    let cat_muted = state.is_channel_muted(Some(guild_id), node.channel.id, now_ms);
+                    let visible_children: Vec<&Channel> = node
+                        .children
+                        .iter()
+                        .filter(|child| {
+                            let ch_muted = state.is_channel_muted(Some(guild_id), child.id, now_ms);
+                            show_channel_when_hiding_muted(
+                                state,
+                                child.id,
+                                cat_muted || ch_muted,
+                                selected_channel,
+                                connected_voice_channel,
+                            )
+                        })
+                        .collect();
+                    if node.children.is_empty() || !visible_children.is_empty() {
+                        items.push(channel_item(state, &node.channel, false, now_ms, media));
+                        for child in visible_children {
+                            items.push(channel_item(state, child, true, now_ms, media));
+                        }
+                    }
+                } else {
+                    let ch_muted = state.is_channel_muted(Some(guild_id), node.channel.id, now_ms);
+                    if show_channel_when_hiding_muted(
+                        state,
+                        node.channel.id,
+                        ch_muted,
+                        selected_channel,
+                        connected_voice_channel,
+                    ) {
+                        items.push(channel_item(state, &node.channel, false, now_ms, media));
+                    }
                 }
             }
             items
@@ -1123,5 +1180,63 @@ mod tests {
                 expiry: None,
             }]
         );
+    }
+
+    #[test]
+    fn hide_muted_channels_follows_visibility_rules() {
+        let mut state = resolver_state();
+        let guild = Snowflake(1);
+        state.apply(&Dispatch {
+            t: "GUILD_CREATE".to_owned(),
+            s: 2,
+            d: json!({
+                "id": guild.to_string(),
+                "properties": { "name": "Dev Guild" },
+                "roles": [{ "id": guild.to_string(), "name": "@everyone", "permissions": fluxer_client_core::state::bits::VIEW_CHANNEL.to_string() }],
+                "channels": [
+                    { "id": "10", "type": 4, "name": "Cat", "position": 0 },
+                    { "id": "11", "type": 0, "name": "open", "parent_id": "10", "position": 0 },
+                    { "id": "12", "type": 0, "name": "muted-plain", "parent_id": "10", "position": 1 },
+                    { "id": "13", "type": 0, "name": "muted-selected", "parent_id": "10", "position": 2 },
+                    { "id": "14", "type": 0, "name": "muted-mentioned", "parent_id": "10", "position": 3 },
+                    { "id": "20", "type": 4, "name": "All Muted Cat", "position": 1 },
+                    { "id": "21", "type": 0, "name": "hidden-child", "parent_id": "20", "position": 0 }
+                ],
+                "members": [{ "user": { "id": "100", "username": "me" }, "roles": [] }]
+            }),
+        });
+        state.apply(&Dispatch {
+            t: "USER_GUILD_SETTINGS_UPDATE".to_owned(),
+            s: 3,
+            d: json!({
+                "guild_id": guild.to_string(),
+                "hide_muted_channels": true,
+                "channel_overrides": {
+                    "12": { "channel_id": "12", "muted": true },
+                    "13": { "channel_id": "13", "muted": true },
+                    "14": { "channel_id": "14", "muted": true },
+                    "21": { "channel_id": "21", "muted": true }
+                }
+            }),
+        });
+        state.apply(&Dispatch {
+            t: "MESSAGE_CREATE".to_owned(),
+            s: 4,
+            d: json!({
+                "id": "999",
+                "channel_id": "14",
+                "content": "<@100>",
+                "timestamp": "2026-11-18T10:00:00+00:00",
+                "author": { "id": "200", "username": "alice" },
+                "mentions": [{ "id": "100", "username": "me" }]
+            }),
+        });
+
+        let ids: Vec<u64> = channel_items_with_active(&state, Place::Guild(guild), None, Some(Snowflake(13)), None)
+            .into_iter()
+            .map(|c| c.id.0)
+            .collect();
+        // Cat (10) + open (11) + selected muted (13) + mentioned muted (14); muted-plain (12) and All Muted Cat (20, 21) hidden.
+        assert_eq!(ids, vec![10, 11, 13, 14]);
     }
 }

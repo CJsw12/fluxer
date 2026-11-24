@@ -526,6 +526,7 @@ async fn guild_member_moderation_routes() {
                 nick: Some(None),
                 communication_disabled_until: Some(None),
                 timeout_reason: Some("사유".into()),
+                ..Default::default()
             },
             Some("  정정  "),
         )
@@ -583,4 +584,80 @@ async fn guild_member_moderation_routes() {
         Err(RestError::InvalidArgument("user_id"))
     ));
     assert_eq!(fixture.requests().len(), 6);
+}
+
+#[tokio::test]
+async fn guild_privacy_profile_and_bulk_delete_my_messages_endpoints() {
+    let fixture = Fixture::start(|req, _| {
+        if req.target.contains("bulk-delete-mine") {
+            Resp::empty(202)
+        } else {
+            Resp::json(200, json!({ "ok": true }))
+        }
+    })
+    .await;
+    let client = authed(&fixture).await;
+
+    let privacy = UserSettingsPatch {
+        restricted_guilds: Some(vec![GUILD.to_owned()]),
+        bot_restricted_guilds: Some(vec![]),
+        ..Default::default()
+    };
+    client.update_user_settings(&privacy).await.unwrap();
+    client
+        .update_own_guild_member(
+            GUILD,
+            &GuildMemberPatch {
+                bio: Some(Some("  hello world  ".into())),
+                pronouns: Some(Some("  they/them  ".into())),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    client.bulk_delete_my_guild_messages(GUILD, None).await.unwrap();
+    client.bulk_delete_my_guild_messages(GUILD, Some("secret")).await.unwrap();
+
+    assert_eq!(
+        lines(&fixture),
+        vec![
+            l("PATCH", "/api/v1/users/@me/settings".into()),
+            l("PATCH", format!("/api/v1/guilds/{GUILD}/members/@me")),
+            l("POST", format!("/api/v1/users/@me/guilds/{GUILD}/messages/bulk-delete-mine")),
+            l("POST", format!("/api/v1/users/@me/guilds/{GUILD}/messages/bulk-delete-mine")),
+        ]
+    );
+    let reqs = fixture.requests();
+    assert_eq!(reqs[0].json(), json!({ "restricted_guilds": [GUILD], "bot_restricted_guilds": [] }));
+    assert_eq!(reqs[1].json(), json!({ "bio": "hello world", "pronouns": "they/them" }));
+    assert_eq!(reqs[2].json(), json!({}));
+    assert_eq!(reqs[3].json(), json!({ "password": "secret" }));
+
+    assert!(matches!(
+        client
+            .update_user_settings(&UserSettingsPatch {
+                restricted_guilds: Some(vec!["bad".into()]),
+                ..Default::default()
+            })
+            .await,
+        Err(RestError::InvalidArgument("restricted_guilds"))
+    ));
+    assert!(matches!(
+        client
+            .update_own_guild_member(
+                GUILD,
+                &GuildMemberPatch { bio: Some(Some("x".repeat(MAX_MEMBER_BIO_UTF16 + 1))), ..Default::default() },
+            )
+            .await,
+        Err(RestError::InvalidArgument("bio"))
+    ));
+    assert!(matches!(
+        client
+            .update_own_guild_member(
+                GUILD,
+                &GuildMemberPatch { pronouns: Some(Some("   ".into())), ..Default::default() },
+            )
+            .await,
+        Err(RestError::InvalidArgument("pronouns"))
+    ));
 }

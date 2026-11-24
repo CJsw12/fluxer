@@ -49,7 +49,8 @@ use crate::ui::member_list::{self, MemberListSubscriptions, MemberPanel};
 use crate::ui::message_actions::{self, ActionTarget, MessageAction};
 use crate::ui::reply::ReplyingTo;
 use crate::view_model::{
-    ChannelIcon, ChannelItem, GuildItem, MessageRow, Place, UserSummary, channel_items, channel_name, current_user,
+    ChannelIcon, ChannelItem, GuildItem, MessageRow, Place, UserSummary, channel_items_with_active, channel_name,
+    current_user,
     dm_unread, guild_items_with_media, message_pane, opens_message_pane,
 };
 
@@ -283,6 +284,10 @@ pub struct ClientView {
     forward_seq: u64,
     /// Sequence counter for thread creation from a message.
     thread_seq: u64,
+    /// Sequence counter for guild invite creation requests.
+    invite_seq: u64,
+    /// Sequence counter for bulk-delete-my-messages requests.
+    guild_delete_seq: u64,
     /// Text-to-speech playback state for "Speak message".
     pub(crate) tts: crate::tts::TtsPlayer,
     /// Channel explicitly marked unread by the user; suppresses auto-ack until cleared.
@@ -316,8 +321,6 @@ pub struct ClientView {
     pub(crate) user_area_submenu: Option<crate::ui::user_panel::UserAreaSubmenu>,
     /// When true, the Guild Header dropdown menu (`GuildHeaderPopout.tsx`) is open below the guild header.
     pub(crate) guild_header_popout_open: bool,
-    /// Checked state of the guild header popout "Hide muted channels" item.
-    pub(crate) hide_muted_channels: bool,
     /// Currently hovered item in the left Guild Rail (`GuildListIndicator.ts`).
     pub(crate) hovered_rail_item: Option<RailHoverTarget>,
     /// Currently hovered icon button in the channel header.
@@ -521,6 +524,8 @@ impl ClientView {
             moderation_seq: 0,
             forward_seq: 0,
             thread_seq: 0,
+            invite_seq: 0,
+            guild_delete_seq: 0,
             tts: crate::tts::TtsPlayer::new(),
             manual_unread_channel: None,
             group_dm: None,
@@ -538,7 +543,6 @@ impl ClientView {
             pins_seq: 0,
             user_area_submenu: None,
             guild_header_popout_open: false,
-            hide_muted_channels: false,
             hovered_rail_item: None,
             hovered_header_item: None,
             hovered_user_control: None,
@@ -647,6 +651,11 @@ impl ClientView {
                 | Overlay::Access(_)
                 | Overlay::ForwardMessage(_)
                 | Overlay::CreateThread(_)
+                | Overlay::InviteMembers(_)
+                | Overlay::GuildNotifications(_)
+                | Overlay::GuildPrivacy(_)
+                | Overlay::GuildProfile(_)
+                | Overlay::DeleteMyGuildMessages(_)
         );
         self.overlay = Overlay::None;
         if restore_composer {
@@ -941,10 +950,16 @@ impl ClientView {
                             if self.selected_channel == Some(channel_id) {
                                 let next = {
                                     let state = self.backend.state();
-                                    channel_items(&state, self.place, self.backend.media())
-                                        .into_iter()
-                                        .find(|c| c.has_messages && c.id != channel_id)
-                                        .map(|c| c.id)
+                                    channel_items_with_active(
+                                        &state,
+                                        self.place,
+                                        self.backend.media(),
+                                        self.selected_channel,
+                                        self.voice.channel_id,
+                                    )
+                                    .into_iter()
+                                    .find(|c| c.has_messages && c.id != channel_id)
+                                    .map(|c| c.id)
                                 };
                                 match next {
                                     Some(id) => self.select_channel(id, cx),
@@ -964,6 +979,20 @@ impl ClientView {
                             }
                             Some(err) => {
                                 if let Overlay::MemberModeration(modal) = &mut self.overlay {
+                                    modal.submitting = false;
+                                    modal.error = Some(err);
+                                }
+                            }
+                        }
+                    } else if matches!(&self.overlay, Overlay::GuildProfile(m) if m.seq == seq) {
+                        match error {
+                            None => {
+                                self.profile_cache.remove(&(user_id, Some(guild_id)));
+                                self.overlay = Overlay::None;
+                                self.focus_composer_later(cx);
+                            }
+                            Some(err) => {
+                                if let Overlay::GuildProfile(modal) = &mut self.overlay {
                                     modal.submitting = false;
                                     modal.error = Some(err);
                                 }
@@ -1109,6 +1138,42 @@ impl ClientView {
                         }
                     }
                 }
+                UiEvent::InviteCreated { seq, channel_id, result } => {
+                    if let Overlay::InviteMembers(modal) = &mut self.overlay
+                        && modal.seq == seq
+                        && modal.channel_id == channel_id
+                    {
+                        modal.loading = false;
+                        match result {
+                            Ok(inv) => {
+                                modal.invite = Some(inv);
+                                modal.error = None;
+                            }
+                            Err(err) => {
+                                modal.error = Some(err);
+                            }
+                        }
+                    }
+                }
+                UiEvent::GuildMessagesBulkDeleted { seq, guild_id, error } => {
+                    if matches!(
+                        &self.overlay,
+                        Overlay::DeleteMyGuildMessages(m) if m.seq == seq && m.guild_id == guild_id
+                    ) {
+                        match error {
+                            None => {
+                                self.overlay = Overlay::None;
+                                self.focus_composer_later(cx);
+                            }
+                            Some(err) => {
+                                if let Overlay::DeleteMyGuildMessages(modal) = &mut self.overlay {
+                                    modal.submitting = false;
+                                    modal.error = Some(err);
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
         if connected || guild_available {
@@ -1247,20 +1312,32 @@ impl ClientView {
                 self.last_channel.retain(|_, v| *v != removed_id);
                 self.selected_channel = None;
                 if matches!(self.place, Place::Guild(_)) {
-                    let next = channel_items(&state, self.place, self.backend.media())
-                        .into_iter()
-                        .find(|c| c.has_messages)
-                        .map(|c| c.id);
+                    let next = channel_items_with_active(
+                        &state,
+                        self.place,
+                        self.backend.media(),
+                        self.selected_channel,
+                        self.voice.channel_id,
+                    )
+                    .into_iter()
+                    .find(|c| c.has_messages)
+                    .map(|c| c.id);
                     fallback_guild_channel = Some(next);
                 }
             } else if self.selected_channel.is_some_and(|id| !state.can_view_channel(id))
                 && matches!(self.place, Place::Guild(_))
                 && !self.guild_unavailable
             {
-                let next = channel_items(&state, self.place, self.backend.media())
-                    .into_iter()
-                    .find(|c| c.has_messages)
-                    .map(|c| c.id);
+                let next = channel_items_with_active(
+                    &state,
+                    self.place,
+                    self.backend.media(),
+                    self.selected_channel,
+                    self.voice.channel_id,
+                )
+                .into_iter()
+                .find(|c| c.has_messages)
+                .map(|c| c.id);
                 fallback_guild_channel = Some(next);
             }
             if state.current_user_id().is_some() {
@@ -1307,21 +1384,32 @@ impl ClientView {
                         || !state.can_ban_members(m.guild_id)
                 }
                 Overlay::Access(m) => !m.allowed(self.place, &state),
+                Overlay::InviteMembers(m) => {
+                    !state.guilds.contains_key(&m.guild_id)
+                        || !ui::invite_modal::can_invite_in_guild(&state, m.guild_id, Some(m.channel_id))
+                }
+                Overlay::GuildNotifications(m) => !state.guilds.contains_key(&m.guild_id),
+                Overlay::GuildPrivacy(m) => !state.guilds.contains_key(&m.guild_id),
+                Overlay::GuildProfile(m) => !state.guilds.contains_key(&m.guild_id),
+                Overlay::DeleteMyGuildMessages(m) => {
+                    !state.guilds.contains_key(&m.guild_id)
+                        || state
+                            .current_user_id()
+                            .is_some_and(|me| state.guilds.get(&m.guild_id).is_some_and(|g| g.owner_id == Some(me)))
+                }
                 _ => false,
             };
-            if dismiss_modal || fallback_guild_channel.is_some() {
-                if let Some(next_opt) = fallback_guild_channel {
-                    drop(state);
-                    if dismiss_modal {
-                        self.overlay = Overlay::None;
-                        self.focus_composer_later(cx);
-                    }
-                    match next_opt {
-                        Some(id) => self.select_channel(id, cx),
-                        None => self.clear_selection(cx),
-                    }
-                    return;
+            if dismiss_modal {
+                self.overlay = Overlay::None;
+                self.focus_composer_later(cx);
+            }
+            if let Some(next_opt) = fallback_guild_channel {
+                drop(state);
+                match next_opt {
+                    Some(id) => self.select_channel(id, cx),
+                    None => self.clear_selection(cx),
                 }
+                return;
             }
             if !dismiss_modal && let Overlay::EditChannel(m) = &mut self.overlay {
                 m.sync_state(&state);
@@ -1339,7 +1427,13 @@ impl ClientView {
             } else {
                 Vec::new()
             };
-            self.channels = channel_items(&state, self.place, self.backend.media());
+            self.channels = channel_items_with_active(
+                &state,
+                self.place,
+                self.backend.media(),
+                self.selected_channel,
+                self.voice.channel_id,
+            );
             let target = match (self.place, self.selected_channel) {
                 (Place::Guild(guild_id), Some(channel_id))
                     if state.channels.get(&channel_id).is_some_and(|c| c.guild_id == Some(guild_id)) =>
@@ -3323,6 +3417,22 @@ impl ClientView {
         self.thread_seq
     }
 
+    pub(crate) fn next_invite_seq(&mut self) -> u64 {
+        self.invite_seq = self.invite_seq.saturating_add(1);
+        self.invite_seq
+    }
+
+    pub(crate) fn next_guild_delete_seq(&mut self) -> u64 {
+        self.guild_delete_seq = self.guild_delete_seq.saturating_add(1);
+        self.guild_delete_seq
+    }
+
+    pub(crate) fn toggle_hide_muted_channels(&mut self, guild_id: Snowflake, cx: &mut Context<Self>) {
+        let hide = !self.backend.state().guild_hides_muted_channels(guild_id);
+        self.backend.set_guild_hide_muted_channels(guild_id, hide);
+        self.refresh(cx);
+    }
+
     /// Leaves a historical `?around=` jump window and returns to the latest messages.
     pub(crate) fn jump_to_present(&mut self, cx: &mut Context<Self>) {
         if self.loading_history {
@@ -3460,6 +3570,11 @@ impl Render for ClientView {
             Overlay::Access(modal) => Some(ui::access::render(self, modal, &theme, cx)),
             Overlay::ForwardMessage(modal) => Some(ui::forward_modal::render(self, modal, &theme, cx)),
             Overlay::CreateThread(modal) => Some(ui::create_thread_modal::render(modal, &theme, cx)),
+            Overlay::InviteMembers(modal) => Some(ui::invite_modal::render(self, modal, &theme, cx)),
+            Overlay::GuildNotifications(modal) => Some(ui::guild_settings_modals::render_notifications(self, modal, &theme, cx)),
+            Overlay::GuildPrivacy(modal) => Some(ui::guild_settings_modals::render_privacy(self, modal, &theme, cx)),
+            Overlay::GuildProfile(modal) => Some(ui::guild_settings_modals::render_profile(modal, &theme, cx)),
+            Overlay::DeleteMyGuildMessages(modal) => Some(ui::guild_settings_modals::render_delete_messages(modal, &theme, cx)),
             Overlay::None => None,
         };
         // Every image below without its own cache (avatars, custom emoji,

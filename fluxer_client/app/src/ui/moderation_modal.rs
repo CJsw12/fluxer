@@ -329,6 +329,7 @@ impl ClientView {
                     nick: None,
                     communication_disabled_until: Some(Some(until)),
                     timeout_reason: reason.clone(),
+                    ..Default::default()
                 };
                 if let Err(err) = validate_member_patch(&patch) {
                     if let Overlay::MemberModeration(modal) = &mut self.overlay {
@@ -345,8 +346,7 @@ impl ClientView {
                 }
                 let patch = GuildMemberPatch {
                     nick: Some((!trimmed.is_empty()).then_some(trimmed)),
-                    communication_disabled_until: None,
-                    timeout_reason: None,
+                    ..Default::default()
                 };
                 if let Err(err) = validate_member_patch(&patch) {
                     if let Overlay::MemberModeration(modal) = &mut self.overlay {
@@ -400,9 +400,9 @@ impl ClientView {
         }
         let reason = (!trimmed.is_empty()).then_some(trimmed);
         let patch = GuildMemberPatch {
-            nick: None,
             communication_disabled_until: Some(None),
             timeout_reason: reason.clone(),
+            ..Default::default()
         };
         let seq = self.next_moderation_seq();
         if let Overlay::MemberModeration(modal) = &mut self.overlay {

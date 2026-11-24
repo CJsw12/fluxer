@@ -22,6 +22,10 @@ use crate::ui::emoji_picker::EmojiPicker;
 use crate::ui::forward_modal::ForwardMessageModal;
 use crate::ui::group_dm::{CreateGroupDmModal, LeaveGroupDmModal};
 use crate::ui::guild_modal::{JoinGuildModal, LeaveGuildModal};
+use crate::ui::guild_settings_modals::{
+    DeleteMyGuildMessagesModal, GuildNotificationsModal, GuildPrivacyModal, GuildProfileModal,
+};
+use crate::ui::invite_modal::InviteMembersModal;
 use crate::ui::link_warning::LinkWarningModal;
 use crate::ui::media_viewer::MediaViewerModal;
 use crate::ui::moderation_modal::{GuildBansModal, MemberModerationModal};
@@ -53,6 +57,11 @@ pub enum Overlay {
     Access(AccessModal),
     ForwardMessage(ForwardMessageModal),
     CreateThread(CreateThreadModal),
+    InviteMembers(InviteMembersModal),
+    GuildNotifications(GuildNotificationsModal),
+    GuildPrivacy(GuildPrivacyModal),
+    GuildProfile(GuildProfileModal),
+    DeleteMyGuildMessages(DeleteMyGuildMessagesModal),
 }
 
 impl Overlay {

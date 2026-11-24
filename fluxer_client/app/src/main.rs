@@ -60,6 +60,8 @@ mod tests_emoji_picker;
 #[cfg(test)]
 mod tests_group_dm;
 #[cfg(test)]
+mod tests_guild_popout;
+#[cfg(test)]
 mod tests_keyboard;
 #[cfg(test)]
 mod tests_media_display;

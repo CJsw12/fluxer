@@ -178,6 +178,10 @@ impl ClientState {
         has(self.guild_permissions(guild_id), bits::CHANGE_NICKNAME)
     }
 
+    pub fn can_create_invite(&self, channel_id: Snowflake) -> bool {
+        has(self.channel_permissions(channel_id), bits::CREATE_INSTANT_INVITE)
+    }
+
     /// True when the current user may kick `target_id` from `guild_id`.
     pub fn can_kick_member(&self, guild_id: Snowflake, target_id: Snowflake) -> bool {
         self.can_kick_members(guild_id) && self.can_manage_guild_member(guild_id, target_id)

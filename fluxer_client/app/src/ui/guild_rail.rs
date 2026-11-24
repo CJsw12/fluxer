@@ -197,7 +197,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 div()
                     .text_size(px(font))
                     .line_height(px(font))
-                    .font_weight(FontWeight::NORMAL)
+                    .font_weight(FontWeight::MEDIUM)
                     .text_color(initials_fg)
                     .flx("guild.guild-acronym.text")
                     .child(g.initials.clone())
@@ -236,11 +236,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     }
 
     let discover_hovered = view.hovered_rail_item == Some(RailHoverTarget::Discover);
-    let discover_fg = if discover_hovered {
-        theme.foreground
-    } else {
-        theme.muted_foreground
-    };
+    let discover_fg = theme.foreground;
     let join_hovered = view.hovered_rail_item == Some(RailHoverTarget::Join);
 
     rail.child(slot(2., 68., 44., "app.sidebar-nav.discovery-button.button.click",

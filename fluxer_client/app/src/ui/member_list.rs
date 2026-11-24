@@ -13,6 +13,7 @@ use std::rc::Rc;
 
 use fluxer_client_core::gateway::normalize_member_list_ranges;
 use fluxer_client_core::state::{ClientState, MemberListRow, Snowflake, Status};
+use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
     AnyElement, Context, FontWeight, Hsla, SharedString, UniformListScrollHandle, WeakEntity, div, hsla, prelude::*, px,
     rgb, uniform_list,
@@ -21,6 +22,7 @@ use gpui_kit::{
 use super::avatar::{AvatarSpec, render_avatar_tagged};
 use crate::client_view::ClientView;
 use crate::format::{default_avatar_index, initials};
+use crate::icons::AppIcon;
 use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 use crate::ui::l10n;
@@ -317,7 +319,8 @@ fn render_row(
                     .h(px(32.))
                     .w_full()
                     .flex()
-                    .items_center()
+                    .items_start()
+                    .pt(px(12.))
                     .px_2()
                     .text_size(px(14.))
                     .line_height(px(16.))
@@ -360,7 +363,7 @@ fn render_row(
                     .flex_row()
                     .items_center()
                     .gap(px(10.))
-                    .px_2()
+                    .pl(px(8.)).pr(px(12.))
                     .rounded(px(6.))
                     .cursor_pointer()
                     .hover(|s| s.bg(theme.hover_bg))
@@ -401,10 +404,15 @@ fn render_row(
                                 d.child(
                                     div()
                                         .flex_none()
-                                        .text_xs()
-                                        .text_color(rgb(0xf0b232))
+                                        .size(px(14.))
+                                        .mt(px(1.4))
                                         .debug_selector(move || format!("member-owner-crown-{}", user_id.0))
-                                        .child("👑"),
+                                        .flx("channel.member-list-item.crown-icon")
+                                        .child(
+                                            Icon::new(AppIcon::CrownFill)
+                                                .with_size(px(14.))
+                                                .text_color(hsla(39. / 360., 0.57, 0.64, 1.)),
+                                        ),
                                 )
                             }),
                             ),

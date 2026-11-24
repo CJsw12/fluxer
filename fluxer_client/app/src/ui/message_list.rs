@@ -2,6 +2,7 @@
 //! channel-start header, the date / "NEW" dividers and system messages.
 
 use gpui_kit::component::message_scroller::MessageScroller;
+use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
     AnyElement, App, FontWeight, HighlightStyle, Hsla, MouseButton, SharedString, StyleRefinement, StyledText,
     WeakEntity, div, prelude::*, px,
@@ -12,6 +13,7 @@ use super::message_row::{self, RowBar};
 use crate::client_view::ClientView;
 use crate::parity_probe::FlxExt as _;
 use crate::format::SystemIcon;
+use crate::icons::AppIcon;
 use crate::theme::Theme;
 use crate::ui::l10n;
 use crate::view_model::{MessageRow, SystemRow};
@@ -210,30 +212,39 @@ fn render_system(row: &MessageRow, system: &SystemRow, theme: &Theme) -> AnyElem
 
 /// `ChannelWelcomeSection`: "Welcome to #name" / "This is the start of #name."
 fn channel_start(name: &SharedString, theme: &Theme) -> AnyElement {
-    let glyph: String = name.chars().take(1).collect();
+    // `ChannelWelcomeSection.module.css`: container margin 1rem inside the 1rem list gutter,
+    // 5rem icon box (`--guild-list-foreground`), heading margin-top 0.75rem, gap 0.25rem.
     div()
         .flex()
         .flex_col()
-        .gap_2()
-        .px_4()
+        .gap_1()
+        .px(px(32.))
         .pt_4()
-        // Measured against the official layout: the divider text sits 32px higher than 2rem + 1rem (45px).
-        .pb(px(13.))
+        // Measured against the official layout: the description ends 32px above the divider.
+        .pb(px(47.))
         .child(
             div()
-                .size(px(theme.sizes.channel_start_icon))
+                .size(px(80.))
+                .flex_none()
                 .rounded_full()
                 .flex()
                 .items_center()
                 .justify_center()
-                .bg(theme.border)
+                .bg(theme.guild_list_foreground) // --channel-welcome-icon-bg falls back to --guild-list-foreground
                 .text_color(theme.foreground)
-                .text_size(px(36.))
+                .text_size(px(20.))
                 .flx("channel.channel-welcome-section.pointer-events-none")
-                .child(glyph),
+                .child(
+                    div()
+                        .size(px(48.))
+                        .flex_none()
+                        .flx("channel.channel-utils.get-icon.text-channel-icon")
+                        .child(Icon::new(AppIcon::TextChannel).with_size(px(48.)).text_color(theme.foreground)),
+                ),
         )
         .child(
             div()
+                .mt(px(12.))
                 .text_color(theme.foreground)
                 .text_size(px(30.))
                 .line_height(px(45.))
@@ -302,7 +313,7 @@ fn divider(label: Option<SharedString>, new: bool, theme: &Theme) -> AnyElement 
     let line_color = if new { theme.danger } else { gpui_kit::hsla(252. / 360., 0.17, 0.80, 0.15) };
     let line = move |id: &'static str| div().flex_1().h(px(2.)).bg(line_color).flx(id);
     // `ChannelDivider.container`: 20px tall, 0 1.25rem padding, text padding 0 0.75rem.
-    let mut row = div().flex().flex_row().items_center().mx(px(20.)).h(px(20.)).child(line("channel.divider.line"));
+    let mut row = div().flex().flex_row().items_center().mx(px(36.)).h(px(20.)).child(line("channel.divider.line"));
     if let Some(label) = label {
         row = row
             .child(

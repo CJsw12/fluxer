@@ -167,6 +167,8 @@ pub struct Theme {
     pub background_secondary_lighter: Hsla,
     /// `--background-tertiary` (guild rail).
     pub background_tertiary: Hsla,
+    /// `--guild-list-foreground` (surface stop 0.38 dark/coal, 0.35 light).
+    pub guild_list_foreground: Hsla,
     /// `--text-chat` (message body, member names).
     pub text_chat: Hsla,
     /// `--text-secondary`.
@@ -576,6 +578,7 @@ impl Theme {
             background_secondary: secondary.color(),
             background_secondary_lighter: lighter.color(),
             background_tertiary: p.surface(p.stops.2).color(),
+            guild_list_foreground: p.surface(if light { 0.35 } else { 0.38 }).color(),
             text_chat: p.text(light, chat).color(),
             text_secondary: p.text(light, secondary_text).color(),
             text_tertiary: p.text(light, tertiary).color(),
@@ -723,12 +726,15 @@ mod tests {
         near(d.text_tertiary, 258., 10., 70.4);
         near(d.text_tertiary_muted, 258., 10., 62.88);
         near(d.muted_foreground, 258., 10., 81.42);
+        // ThemeVariableManifest.ts `--guild-list-foreground`.
+        near(d.guild_list_foreground, 258., 10., 16.7);
         let l = Theme::from_kind(ThemeKind::Light);
         near(l.background_secondary_lighter, 220., 10., 94.61);
         near(l.text_chat, 220., 10., 20.99);
         near(l.text_secondary, 220., 10., 33.78);
         near(l.text_tertiary, 220., 10., 47.76);
         near(l.text_tertiary_muted, 220., 10., 53.12);
+        near(l.guild_list_foreground, 220., 10., 87.53);
         let c = Theme::from_kind(ThemeKind::Black);
         assert_eq!(c.background_secondary_lighter, c.background);
     }

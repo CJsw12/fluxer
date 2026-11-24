@@ -540,7 +540,7 @@ fn render_notification_settings(
             )
     };
     let separator = || {
-        div().mx(px(2.)).my(px(4.)).h(px(1.)).w_full().flex_none().bg(gpui_kit::Hsla::from(rgba(0xc9c5d326))).flx("ui.action-menu.context-menu.separator")
+        div().mx(px(2.)).my(px(4.)).h(px(1.)).w(px(190.)).flex_none().bg(gpui_kit::Hsla::from(rgba(0xc9c5d326))).flx("ui.action-menu.context-menu.separator")
     };
 
     div()
@@ -649,10 +649,12 @@ fn render_threads(
         .child(
             div()
                 .flex_none()
-                .px(px(12.))
+                .pl(px(16.))
+                .pr(px(12.))
                 .py(px(8.))
+                .gap_2()
                 .border_b_1()
-                .border_color(theme.border)
+                .border_color(gpui_kit::hsla(252. / 360., 0.17, 0.80, 0.15))
                 .flx("threads.thread-browser.header")
                 .flex()
                 .flex_row()
@@ -663,6 +665,8 @@ fn render_threads(
                         .flex()
                         .flex_row()
                         .items_center()
+                        .flex_1()
+                        .min_w_0()
                         .gap_2()
                         .child(
                             div()
@@ -673,6 +677,8 @@ fn render_threads(
                         )
                         .child(
                             div()
+                                .flex_1()
+                                .min_w_0()
                                 .text_base()
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(theme.foreground)
@@ -765,7 +771,8 @@ fn render_threads(
             div()
                 .flex_1()
                 .min_h_0()
-                .px_8()
+                .px(px(40.))
+                .pt(px(10.))
                 .flex()
                 .flex_col()
                 .items_center()
@@ -791,6 +798,7 @@ fn render_threads(
                 .child(
                     div()
                         .text_sm()
+                        .line_height(px(20.))
                         .text_color(theme.muted_foreground)
                         .flx("threads.thread-browser.empty-state.hint")
                         .child(l10n::tr("Stay focused on a conversation with a thread, a temporary text channel.")),
@@ -816,13 +824,14 @@ fn render_pins(
             div()
                 .flex_none()
                 .px_4()
-                .py_3()
+                .h(px(68.))
+                .pt(px(3.))
                 .border_b_1()
                 .border_color(theme.border)
                 .flex()
                 .flex_row()
                 .items_center()
-                .gap_2()
+                .gap_1()
                 .child(
                     div()
                         .size(px(24.))

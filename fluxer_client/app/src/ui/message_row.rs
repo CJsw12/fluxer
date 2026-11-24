@@ -222,7 +222,7 @@ pub fn render(
                         .flex()
                         .flex_row()
                         .items_baseline()
-                        .gap_2()
+                        .gap_x(px(2.4)).gap_y(px(0.))
                         .h(px(23.))
                         .flx("channel.user-message.message-author-row--2")
                         .child(author_btn)

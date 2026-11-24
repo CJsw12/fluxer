@@ -4,8 +4,8 @@
   "scenes": {
     "markdown": {
       "spec": "target/parity-tmp/md.1280.spec.json",
-      "max_deltas": 63,
-      "max_missing": 157,
+      "max_deltas": 33,
+      "max_missing": 155,
       "ignore": [
         "app.native-titlebar.wordmark|width",
         "channel.channel-header-components.channel-header-icon.button-icon|x"

@@ -214,7 +214,7 @@ Run everything from the repo root. In **PowerShell** there is no MSYS path mangl
 - Voice helpers: `node tools/parity_lab/voice_official.mjs --attach 9334 join|watch|share|stop|leave [--guild G --channel C]`.
 **Loops and checks**
 - Dev loop: `python -I tools/parity_lab/cycle.py [--release] [--worker] [--skip-tests] [--check OFFICIAL.dom.json OFFICIAL.png <link> OUT]`.
-- Scene diff: `python -I tools/parity_lab/check_scene.py OFFICIAL.dom.json OFFICIAL.png <link> OUT [--official-offset 0,32]`; generic join: `compare.py` (writes `diff_heatmap.png`); replay crawl graph on Rust: `replay.py GRAPH_DIR OUT --link <link>`.
+- Scene diff: `python -I tools/parity_lab/check_scene.py OFFICIAL.dom.json OFFICIAL.png <link> OUT [--official-offset 0,32]`; generic join: `compare.py` (writes `diff_heatmap.png`); replay crawl graph on Rust: `replay.py GRAPH_DIR OUT --link <link> [--launch-rust dist/fluxer_client/fluxer_client.exe] [--strict-no-duplicates]` (generates `backlog.md`/`backlog.json` and detects copy-paste duplicate screens).
 - State & surface gates: `python -I tools/parity_lab/state_matrix.py --strict --launch-rust dist/fluxer_client/fluxer_client.exe --out OUT` (blocks `phantom_hover_ui` spikes and missing tooltips); `python -I tools/parity_lab/check_surface_parity.py --launch-rust dist/fluxer_client/fluxer_client.exe --out OUT` (seam, member corner, hover phantom UI, Media/Stickers/Emojis split, settings contrast).
 - Screen share both ways: `python -I tools/parity_lab/share_check.py --guild G --channel C --out OUT` (needs release client with worker).
 - Icons: `python -I tools/parity_lab/check_icons.py` (manifest + originals, must be 0 errors); ground truth list `tools/parity_lab/official_icons.json`.

@@ -147,8 +147,8 @@ Git Bash에서는 `/channels/...` 인자가 Windows 경로로 바뀌지 않도�
 4. 불일치를 영역별로 묶어 에이전트에 넘긴다. 브리프에는 공식 사각형·글꼴·색(다크 실측)과 공식 CSS 모듈 이름, 소유 파일, 금지 파일을 적는다. 에이전트는 실측을 못 하므로 루트가 다시 측정해 수치로 판정한다.
 5. 측정 수치가 개선되고 전체 테스트가 통과하면 영역 단위로 커밋·push한다. `docs/progress/progress.json` 갱신과 `scripts/progress_svg.py`는 기능 상태가 바뀔 때 실행한다.
 
-### 10.3 위임 방식 (비용 순)
-- 모델은 Claude Opus·Sonnet·Haiku 5.5와 opencode의 DeepSeek flash만 쓴다. 영역별 수정은 Sonnet `fluxer-porter` 1~2개로 파일 소유권을 겹치지 않게 나누고(동시 빌드 최대 2개), 같은 `target/fc-root`를 쓰므로 잠금 대기·링크 실패는 재시도하게 한다. 루트(Opus)는 목표 수치 추출, 재측정, 통합, 커밋만 맡는다.
+### 10.3 위임 방식 (난이도 순)
+- 모델 선택은 도구별 지침을 따른다(Claude: Opus·Sonnet·Haiku + DeepSeek flash, Antigravity: 전역 GEMINI.md의 Hydrogen·Neon·Argon + DeepSeek flash). 배정은 난이도 기준이다: 명세가 분명한 스크립트·태그 목록은 저가 모델, GPUI 구현은 중급(Sonnet·Neon급), 전략·설계·T3 검토는 상위 모델. 영역별 수정 워커는 1~2개로 파일 소유권을 겹치지 않게 나누고(동시 빌드 최대 2개, 실기 클라이언트를 조작하는 워커는 한 번에 하나), 같은 `target/fc-root`를 쓰므로 잠금 대기·링크 실패는 재시도하게 한다. 루트는 목표 수치 추출, 재측정, 통합, 커밋만 맡는다.
 - 측정에서 얻은 사실을 브리프에 그대로 넣는다(예: GPUI 기본 줄높이는 글자 크기의 약 1.6배라 요소마다 `line_height`가 필요, 메시지 목록은 아래 고정이라 위쪽 위치는 아래 높이 합에 따라 결정, gpui-component `Button`은 아이콘 색을 덮어쓰므로 `Icon::new(..).text_color(..)`로 넘김).
 - 아이콘 SVG는 기억으로 쓰지 말고 Phosphor 원본 패키지(`@phosphor-icons/core` `assets/{regular,fill}`)에서 복사한다.
 
@@ -198,6 +198,7 @@ Git Bash에서는 `/channels/...` 인자가 Windows 경로로 바뀌지 않도�
 - **세션 도중 터널과 공식 비교 앱이 함께 꺼짐**(2026-11-24, 원인 미확인) → Rust는 `Reconnecting…`, CDP 9334 무응답. 예방: 측정 전에 `Status: Online`과 `curl 127.0.0.1:9334/json/version`을 함께 확인하고, 꺼졌으면 10.1대로 다시 띄운다.
 - **공식 앱 게이트웨이가 조용히 끊김**(2026-11-25) → 공식 화면은 예전 상태(둘 다 온라인)를 보여 주지만 서버에서는 tester2가 오프라인이라, 막 재시작한 Rust의 멤버 목록이 `Online—1 / Offline—1`로 바뀌어 멤버 행 y 차이 6건이 새로 생김. 예방: 측정 전에 Rust 멤버 목록이 `Online—2`인지 확인하고, 아니면 공식 앱을 CDP `Page.reload`로 다시 연결한다.
 - **측정 태그를 테두리 설정보다 앞에 붙임** → `.flx()`가 테두리를 모르면 상자가 2px 작게 잡힘. 예방: `.flx()`는 `.border_*()` 뒤에 둔다.
+- **게이트가 마이크를 음소거로 남김**(2026-11-25) → `check_resize.py`가 음성 단계 전에 강제 음소거하고 원복하지 않아, 실행할 때마다 Rust 마이크가 꺼진 채로 남았다(수정 `e41e87941`). 예방: 음성을 건드리는 스크립트는 시작 상태를 접근성 트리(`Mute`/`Unmute microphone`)로 기록하고 끝에 되돌린다. 측정 전 점검에 양쪽 마이크 상태를 넣는다.
 - **개인 정보 커밋 위험** → 예방: 커밋 전 IP·키 경로·사용자 경로·계정 문자열을 검색하고, `Logs/`와 `*.local.md`는 커밋하지 않는다.
 - **전체 박스·모서리·미태그 모달·컨테이너 호버·의미 차이 누락(2026-11-24 추가 발견 6건)** → ① `sample_colors`가 박스 중앙 50%만 봐서 1px 관통 선(하단 프로필 위 외곽선)과 모서리 반경(멤버 목록 14px 둥근 모서리)을 놓침 ② `.flx` 태그 없는 모달(설정 창)은 `coverage` 숫자만 찍히고 게이트에 걸리지 않음 ③ `state_matrix.py`가 호버 시 대상 작은 박스(32×32) 안쪽만 비교하고 주변 컨테이너 전체를 보지 않았으며 exit 0만 반환해 헤더·사용자 영역 숨은 호버 버튼(채널 설정 기어·길드 액션·계정 전환 버튼)을 놓침 ④ `replay.py`·`composer.rs`가 버튼 클릭 뒤 "서로 다른 화면이 열리는지"를 검사하지 않아 스티커 버튼이 이모지 피커를 여는 결함을 놓침. **예방:** `compare.py`에 전체 박스 `edge_p95`·모서리 16×16 패치·`diff_heatmap.png`·`top_untagged_official`를 넣고, `state_matrix.py --strict`가 컨테이너 밝은 픽셀 변화(`phantom_hover_ui`)와 툴팁 누락 시 실패하도록 바꾸며, `check_surface_parity.py`가 미디어/스티커/이모지 분리·숨은 호버 부재·프레임 이음매·설정 명암을 검증한다.
 
@@ -226,3 +227,16 @@ Run everything from the repo root. In **PowerShell** there is no MSYS path mangl
 - Theme tokens: `node tools/parity_lab/theme_tokens.mjs --attach 9334 --out tokens.json` (raw + engine-resolved CSS variables) → `python -I tools/parity_lab/theme_tokens_rs.py tokens.json out.rs`.
 - Same-account official reference (tester1 = Rust account, owner menus): `../Logs/parity/run_web.py tester1 scenes.json OUT --height 800`; scene actions support `click`, `context` (right click), `hover`, `click_text`, `key`; each scene also writes `.svgs.json`. Web has no titlebar: add 32 to y for desktop coordinates.
 - Tests: `cd fluxer_client; $env:CARGO_TARGET_DIR="<repo>\target\fc-root"; cargo test --workspace -j 4 -- --test-threads=2`; voice_worker: `cd fluxer_client\voice_worker; $env:CARGO_TARGET_DIR="<repo>\target\vw"; cargo test --release -j 4`.
+
+### 10.8 명세 루프 표준 절차 (도구 공통, 2026-11-25)
+판정은 공식 앱 실측 수치로만 한다. 스크린샷 육안 비교는 마지막 확인용이다.
+
+1. **측정 전 점검(매번):** Rust `Status: Online` · Rust 멤버 목록 `Online—2`(아니면 공식 앱 게이트웨이가 끊긴 것이므로 CDP `Page.reload`) · `curl 127.0.0.1:9334/json/version` 응답 · 양쪽 마이크·스피커 켜짐(접근성 이름이 `Mute microphone`인지 확인; 토글은 상태를 읽은 뒤에만).
+2. **공식 명세:** 기본 화면은 `spec_official.mjs --attach 9334 --viewport 1280x800 --out X.spec.json`, 열린 상태는 `--scenes <scenes.json> --out-dir <dir>`. 장면 파일: `tools/parity_lab/spec_scenes.json`(팝오버·모달 8개), `spec_scenes_more.json`(DM·탐색·설정 탭), `spec_scenes_msg.json`(메시지 마우스 올림 바). 공식 앱은 tester2, Rust는 tester1이라 본인 시점·상대 이름·색은 결함이 아니다.
+3. **차이 목록:** `spec_delta.py X.spec.json --live` 또는 `--scenes ... --spec-dir ... --live --out-dir ...`. 줄마다 공식 CSS 규칙과 Rust `파일:줄`이 붙는다. `floating`, 1~4px 글자 폭(글꼴 메트릭)은 대개 결함이 아니다.
+4. **누락 분류:** `coverage.py <spec> <delta>` 또는 `--scenes-dir`. 대부분은 "그려지지만 태그 없음"이므로 먼저 `.flx()` 태그를 붙여 결합 수를 늘린다(`.flx()`는 `.border_*()` 뒤).
+5. **수정:** 워커에게 아래 브리프 양식으로 넘기고, 워커가 `cycle.py --skip-tests`로 직접 빌드·재측정해 "범위 안 차이 0줄"을 맞춘다.
+6. **루트 재검증(커밋 전 필수):** `cycle.py --release`(테스트 포함, 실패 시 패키징 전 중단) → `spec_gate.py --live --all`(래칫) → `check_icons.py` → `check_resize.py` → `check_surface_parity.py` → `state_matrix.py --strict` → 해당 화면 스크린샷 육안 확인. 게이트는 상시 실행 클라이언트로 돌리고 `--launch-rust`는 쓰지 않는다.
+7. **래칫 갱신:** 차이가 줄면 `spec_gate.py --live --all --update`. 커버리지를 늘려 차이가 늘어난 경우에만 `--allow-raise`를 쓰고 커밋 메시지에 이유를 적는다.
+
+**워커 브리프 양식(요약):** 목표 1줄 / 입력(공식 명세·차이 목록·스크린샷 경로, 모두 `target/parity-tmp/`) / 루트가 이미 판정한 비결함 목록 / 실제 결함 목록(공식 수치·CSS 규칙·Rust 위치) / 루프 명령 / 회귀 기준(기존 장면 차이 상한, 래칫 OK, 아이콘 0 오류) / 소유 파일·금지 파일 / 규칙(GPUI `uniform_list` 콜백 상태 변경 금지, 숨은 호버 버튼 금지, 버튼마다 고유 핸들러, 기능 없는 항목은 `TODO(backlog)`로 남기고 보고, 하드코딩 색 대신 테마 토큰) / 보고 형식(수정 전후 표, 남은 차이와 이유, 테스트 합계, 끝 상태).

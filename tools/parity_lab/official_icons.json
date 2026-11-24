@@ -973,6 +973,7 @@
   "flx": "ui.action-menu.context-menu-icons.edit-message-icon.pencil-simple-icon",
   "icon": "fill/pencil-simple-fill",
   "sizes": [
+   18,
    20
   ],
   "example_state": "Emojis > face_with_peeking_eye"
@@ -981,6 +982,7 @@
   "flx": "ui.action-menu.context-menu-icons.forward-icon.arrow-bend-up-right-icon",
   "icon": "fill/arrow-bend-up-right-fill",
   "sizes": [
+   18,
    20
   ],
   "example_state": ":relaxed:"
@@ -997,6 +999,7 @@
   "flx": "ui.action-menu.context-menu-icons.reply-icon.arrow-bend-up-left-icon",
   "icon": "fill/arrow-bend-up-left-fill",
   "sizes": [
+   18,
    20
   ],
   "example_state": ":relaxed:"
@@ -1552,5 +1555,269 @@
    18
   ],
   "example_state": "more_menu"
+ },
+ {
+  "flx": "app.channel-item-icon.icon",
+  "icon": "fill/gear-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "tester1:guild_menu"
+ },
+ {
+  "flx": "app.channel-list-content.users-icon",
+  "icon": "fill/users-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "tester1:guild_menu"
+ },
+ {
+  "flx": "app.floating.user-area-popout.action-button.action-chevron",
+  "icon": "bold/caret-right-bold",
+  "sizes": [
+   14
+  ],
+  "example_state": "tester1:user_area_popout"
+ },
+ {
+  "flx": "app.floating.user-area-popout.copy-icon",
+  "icon": "fill/copy-fill",
+  "sizes": [
+   14
+  ],
+  "example_state": "tester1:user_area_popout"
+ },
+ {
+  "flx": "app.floating.user-area-popout.custom-status-placeholder-icon",
+  "icon": "regular/smiley",
+  "sizes": [
+   14
+  ],
+  "example_state": "tester1:user_area_popout"
+ },
+ {
+  "flx": "app.floating.user-area-popout.identification-badge-icon",
+  "icon": "bold/identification-badge-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "tester1:user_area_popout"
+ },
+ {
+  "flx": "app.floating.user-area-popout.pencil-icon",
+  "icon": "bold/pencil-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "tester1:user_area_popout"
+ },
+ {
+  "flx": "app.floating.user-area-popout.users-three-icon",
+  "icon": "bold/users-three-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "tester1:user_area_popout"
+ },
+ {
+  "flx": "app.sidebar-nav.download-button.icon-text",
+  "icon": "bold/download-simple-bold",
+  "sizes": [
+   20
+  ],
+  "example_state": "tester1:guild_menu"
+ },
+ {
+  "flx": "app.user-area.user-area-inner.control-icon--4",
+  "icon": "fill/speaker-high-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "tester1:guild_menu"
+ },
+ {
+  "flx": "app.user-area.user-area-inner.control-icon--5",
+  "icon": "fill/gear-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "tester1:guild_menu"
+ },
+ {
+  "flx": "guild.guild-header-popout.guild-header-popout-item.icon-medium",
+  "icon": "fill/folder-plus-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "tester1:guild_menu"
+ },
+ {
+  "flx": "guild.guild-header-popout.guild-header-popout-item.icon-medium",
+  "icon": "fill/gear-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "tester1:guild_menu"
+ },
+ {
+  "flx": "guild.guild-header-popout.guild-header-popout-item.icon-medium",
+  "icon": "fill/plus-circle-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "tester1:guild_menu"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.bookmark-icon.bookmark-simple-icon",
+  "icon": "regular/bookmark-simple",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:msg_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.change-nickname-icon.pencil-simple-icon",
+  "icon": "fill/pencil-simple-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:member_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.copy-id-icon.snowflake-icon",
+  "icon": "regular/snowflake",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:msg_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.copy-link-icon.link-icon",
+  "icon": "bold/link-bold",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:msg_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.copy-message-text-icon.phosphor-copy-icon",
+  "icon": "fill/copy-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:msg_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.create-category-icon.folder-plus-icon",
+  "icon": "fill/folder-plus-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:channel_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.create-channel-icon.plus-circle-icon",
+  "icon": "fill/plus-circle-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:guild_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.create-icon.plus-icon",
+  "icon": "bold/plus-bold",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:channel_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.delete-icon.trash-icon",
+  "icon": "fill/trash-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:msg_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.edit-profile-icon.user-circle-icon",
+  "icon": "fill/user-circle-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:guild_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.invite-icon.user-plus-icon",
+  "icon": "fill/user-plus-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:channel_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.mark-as-unread-icon.envelope-open-icon",
+  "icon": "fill/envelope-open-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:msg_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.mention-user-icon.at-icon",
+  "icon": "bold/at-bold",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:member_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.notification-settings-icon.bell-icon",
+  "icon": "fill/bell-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:guild_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.pin-icon.push-pin-icon",
+  "icon": "fill/push-pin-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:msg_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.privacy-settings-icon.shield-icon",
+  "icon": "fill/shield-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:guild_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.speak-message-icon.speaker-high-icon",
+  "icon": "fill/speaker-high-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:msg_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.translate-icon.phosphor-translate-icon",
+  "icon": "bold/translate-bold",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:msg_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.view-profile-icon.user-icon",
+  "icon": "fill/user-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:member_context"
  }
 ]

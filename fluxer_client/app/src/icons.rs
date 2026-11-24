@@ -82,6 +82,11 @@ pub enum AppIcon {
     Code,
     PencilBold,
     SignOutFill,
+    PlusCircleFill,
+    FolderPlusFill,
+    UserPlusFill,
+    SmileyRegular,
+    Snowflake,
 }
 
 impl AppIcon {
@@ -153,6 +158,11 @@ impl AppIcon {
         Self::Code,
         Self::PencilBold,
         Self::SignOutFill,
+        Self::PlusCircleFill,
+        Self::FolderPlusFill,
+        Self::UserPlusFill,
+        Self::SmileyRegular,
+        Self::Snowflake,
     ];
 
     pub const fn asset_path(self) -> &'static str {
@@ -224,6 +234,11 @@ impl AppIcon {
             Self::Code => "icons/phosphor/code-bold.svg",
             Self::PencilBold => "icons/phosphor/pencil-bold.svg",
             Self::SignOutFill => "icons/phosphor/sign-out-fill.svg",
+            Self::PlusCircleFill => "icons/phosphor/plus-circle-fill.svg",
+            Self::FolderPlusFill => "icons/phosphor/folder-plus-fill.svg",
+            Self::UserPlusFill => "icons/phosphor/user-plus-fill.svg",
+            Self::SmileyRegular => "icons/phosphor/smiley-regular.svg",
+            Self::Snowflake => "icons/phosphor/snowflake.svg",
         }
     }
 
@@ -296,6 +311,11 @@ impl AppIcon {
             Self::Code => include_bytes!("../assets/icons/code-bold.svg"),
             Self::PencilBold => include_bytes!("../assets/icons/pencil-bold.svg"),
             Self::SignOutFill => include_bytes!("../assets/icons/sign-out-fill.svg"),
+            Self::PlusCircleFill => include_bytes!("../assets/icons/plus-circle-fill.svg"),
+            Self::FolderPlusFill => include_bytes!("../assets/icons/folder-plus-fill.svg"),
+            Self::UserPlusFill => include_bytes!("../assets/icons/user-plus-fill.svg"),
+            Self::SmileyRegular => include_bytes!("../assets/icons/smiley-regular.svg"),
+            Self::Snowflake => include_bytes!("../assets/icons/snowflake.svg"),
         }
     }
 }

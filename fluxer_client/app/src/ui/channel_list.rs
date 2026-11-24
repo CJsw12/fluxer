@@ -3,7 +3,7 @@
 
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Icon, Sizable as _};
-use gpui_kit::{AnyElement, Context, FontWeight, MouseButton, Role, SharedString, div, prelude::*, px, rgb, rgba};
+use gpui_kit::{AnyElement, Context, FontWeight, deferred, MouseButton, Role, SharedString, div, prelude::*, px, rgb, rgba};
 
 use super::avatar::{AvatarSpec, render_avatar};
 use super::{access::Scope, badge};
@@ -75,7 +75,6 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .find(|g| g.id == id)
                 .map(|g| g.name.clone())
                 .unwrap_or_default();
-            let can_leave = !view.current_guild_is_owner();
             let can_manage_roles = view.backend.state().can_manage_guild_roles(id);
             let menu_open = view.guild_header_popout_open;
             let header_row = div()
@@ -120,125 +119,185 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .justify_center()
                         .size(px(16.))
                         .text_color(theme.foreground)
-                        .child(Icon::new(if menu_open { AppIcon::X } else { AppIcon::CaretDown }).with_size(px(16.)))
+                        .child({
+                            let caret = Icon::new(AppIcon::CaretDown).with_size(px(16.));
+                            if menu_open { caret.rotate(gpui_kit::radians(std::f32::consts::PI)) } else { caret }
+                        })
                         .flx("app.guild-header.caret-icon"),
                 );
 
             let dark = theme.background.l < 0.5;
             let popout_bg: gpui_kit::Hsla = if dark { rgb(0x2a2730).into() } else { theme.background_secondary };
             let popout_border: gpui_kit::Hsla = if dark { rgba(0xc9c5d326).into() } else { theme.border };
-            let popout = menu_open.then(|| {
+            let item_color: gpui_kit::Hsla = if dark { rgb(0xf4f4f6).into() } else { theme.foreground };
+            let danger_color: gpui_kit::Hsla = rgb(0xe8605f).into();
+            let is_owner = view.current_guild_is_owner();
+            let can_manage = view.can_manage_guild_channels;
+            let hide_muted = view.hide_muted_channels;
+            let hover_bg = theme.hover_bg;
+            let item = move |key: &'static str, label: &'static str, color: gpui_kit::Hsla| {
                 div()
+                    .id(key)
+                    .debug_selector(move || key.to_owned())
+                    .flx("guild.guild-header-popout.guild-header-popout-item.item-button.select")
+                    .w_full()
+                    .h(px(32.))
+                    .flex_none()
+                    .px(px(8.))
+                    .py(px(5.))
+                    .rounded(px(6.))
+                    .cursor_pointer()
+                    .text_color(color)
+                    .hover(move |s| s.bg(hover_bg))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .line_height(px(18.))
+                            .font_weight(FontWeight::MEDIUM)
+                            .flx_text("guild.guild-header-popout.guild-header-popout-item.item-title", label)
+                            .child(l10n::tr(label)),
+                    )
+            };
+            let icon = |i: AppIcon, color: gpui_kit::Hsla| {
+                div().flex_none().size(px(20.)).mr(px(1.)).child(Icon::new(i).with_size(px(20.)).text_color(color))
+            };
+            let popout = menu_open.then(|| {
+                let c = item_color;
+                let list = div()
                     .id("guild-header-popout")
                     .debug_selector(|| "guild-header-popout".to_owned())
                     .flx("guild.guild-header-popout.container")
-                    .mx_2()
-                    .mt_1()
-                    .mb_1()
-                    .p_1p5()
+                    .absolute()
+                    .top(px(theme.sizes.header_height + 8.))
+                    .left(px(16.))
+                    .w(px(288.))
+                    .p(px(8.))
                     .rounded(px(8.))
                     .border_1()
                     .border_color(popout_border)
                     .bg(popout_bg)
+                    .occlude()
                     .flex()
                     .flex_col()
-                    .gap_0p5()
-                    .when(view.can_manage_guild_channels, |d| {
-                        d.child(
-                            div()
-                                .id("guild-popout-create-channel")
-                                .debug_selector(|| "guild-popout-create-channel".to_owned())
-                                .flx("guild.guild-header-popout.guild-header-popout-item.item-button.select")
-                                .px_2()
-                                .py_1p5()
-                                .rounded(px(5.))
-                                .cursor_pointer()
-                                .hover(|s| s.bg(theme.hover_bg))
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .justify_between()
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.guild_header_popout_open = false;
-                                    this.open_create_channel(None, window, cx);
-                                }))
-                                .child(div().text_xs().font_weight(FontWeight::MEDIUM).child(l10n::tr("Create channel")))
-                                .child(Icon::new(AppIcon::Plus).xsmall().text_color(theme.muted_foreground)),
-                        )
-                    })
+                    .gap(px(2.))
+                    .child(
+                        item("guild-popout-invite", "Invite members", c)
+                            .child(icon(AppIcon::UserPlusFill, c))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                // TODO(M9.4-backlog): invite members modal
+                                this.guild_header_popout_open = false;
+                                cx.notify();
+                            })),
+                    )
                     .when(can_manage_roles, |d| {
                         d.child(
-                            div()
-                                .id("guild-popout-roles")
-                                .debug_selector(|| "guild-popout-roles".to_owned())
-                                .flx("guild.guild-header-popout.guild-header-popout-item.item-button.select")
-                                .px_2()
-                                .py_1p5()
-                                .rounded(px(5.))
-                                .cursor_pointer()
-                                .hover(|s| s.bg(theme.hover_bg))
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .justify_between()
+                            item("guild-popout-roles", "Community settings", c)
+                                .child(icon(AppIcon::Gear, c))
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.guild_header_popout_open = false;
                                     this.open_access(Scope::Guild(id), window, cx);
-                                }))
-                                .child(div().text_xs().font_weight(FontWeight::MEDIUM).child(l10n::tr("Community Settings")))
-                                .child(Icon::new(AppIcon::Gear).xsmall().text_color(theme.muted_foreground)),
+                                })),
                         )
                     })
-                    .when(view.can_ban_members, |d| {
+                    .when(can_manage, |d| {
                         d.child(
-                            div()
-                                .id("guild-popout-bans")
-                                .debug_selector(|| "guild-popout-bans".to_owned())
-                                .flx("guild.guild-header-popout.guild-header-popout-item.item-button.select")
-                                .px_2()
-                                .py_1p5()
-                                .rounded(px(5.))
-                                .cursor_pointer()
-                                .hover(|s| s.bg(theme.hover_bg))
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .justify_between()
+                            item("guild-popout-create-channel", "Create channel", c)
+                                .child(icon(AppIcon::PlusCircleFill, c))
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.guild_header_popout_open = false;
-                                    this.open_guild_bans(window, cx);
-                                }))
-                                .child(div().text_xs().font_weight(FontWeight::MEDIUM).child(l10n::tr("Bans")))
-                                .child(Icon::new(AppIcon::Prohibit).xsmall().text_color(theme.muted_foreground)),
+                                    this.open_create_channel(None, window, cx);
+                                })),
+                        )
+                        .child(
+                            item("guild-popout-create-category", "Create category", c)
+                                .child(icon(AppIcon::FolderPlusFill, c))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    // TODO(M9.4-backlog): create category modal
+                                    this.guild_header_popout_open = false;
+                                    cx.notify();
+                                })),
                         )
                     })
-                    .when(can_leave, |d| {
+                    .child(
+                        item("guild-popout-notifications", "Notification settings", c)
+                            .child(icon(AppIcon::Bell, c))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                // TODO(M9.4-backlog): guild notification settings modal
+                                this.guild_header_popout_open = false;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        item("guild-popout-privacy", "Privacy settings", c)
+                            .child(icon(AppIcon::Shield, c))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                // TODO(M9.4-backlog): guild privacy settings modal
+                                this.guild_header_popout_open = false;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        item("guild-popout-edit-profile", "Edit community profile", c)
+                            .child(icon(AppIcon::UserCircle, c))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                // TODO(M9.4-backlog): per-community profile editor
+                                this.guild_header_popout_open = false;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        item("guild-popout-hide-muted", "Hide muted channels", c)
+                            .flx("guild.guild-header-popout.guild-header-popout-checkbox-item.item-button.click")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                // TODO(M9.4-backlog): filter muted channels from the list
+                                this.hide_muted_channels = !this.hide_muted_channels;
+                                cx.notify();
+                            }))
+                            .child(
+                                div()
+                                    .flex_none()
+                                    .size(px(20.))
+                                    .mr(px(1.))
+                                    .rounded(px(4.))
+                                    .border_2()
+                                    .border_color(c)
+                                    .when(hide_muted, |d| d.bg(c))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .when(hide_muted, |d| {
+                                        d.child(Icon::new(AppIcon::Check).with_size(px(14.)).text_color(popout_bg))
+                                    }),
+                            ),
+                    )
+                    .when(!is_owner, |d| {
                         d.child(
-                            div()
-                                .id("guild-popout-leave")
-                                .debug_selector(|| "guild-popout-leave".to_owned())
-                                .flx("guild.guild-header-popout.guild-header-popout-item.item-button.select")
-                                .px_2()
-                                .py_1p5()
-                                .rounded(px(5.))
-                                .cursor_pointer()
-                                .text_color(theme.danger)
-                                .hover(|s| s.bg(theme.muted))
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .justify_between()
+                            item("guild-popout-delete-messages", "Delete my messages", danger_color)
+                                .child(icon(AppIcon::Trash, danger_color))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    // TODO(M9.4-backlog): delete my messages in community
+                                    this.guild_header_popout_open = false;
+                                    cx.notify();
+                                })),
+                        )
+                        .child(
+                            item("guild-popout-leave", "Leave community", danger_color)
+                                .child(icon(AppIcon::SignOutFill, danger_color))
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.guild_header_popout_open = false;
                                     this.open_leave_guild(id, window, cx);
-                                }))
-                                .child(div().text_xs().font_weight(FontWeight::MEDIUM).child(l10n::tr("Leave community")))
-                                .child(Icon::new(AppIcon::SignOutFill).with_size(px(20.)).text_color(theme.danger)),
+                                })),
                         )
-                    })
+                    });
+                deferred(list).with_priority(10)
             });
 
             div()
+                .relative()
                 .flex()
                 .flex_col()
                 .child(header_row)

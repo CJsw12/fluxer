@@ -306,6 +306,8 @@ pub struct ClientView {
     pub(crate) user_area_submenu: Option<crate::ui::user_panel::UserAreaSubmenu>,
     /// When true, the Guild Header dropdown menu (`GuildHeaderPopout.tsx`) is open below the guild header.
     pub(crate) guild_header_popout_open: bool,
+    /// Checked state of the guild header popout "Hide muted channels" item.
+    pub(crate) hide_muted_channels: bool,
     /// Currently hovered item in the left Guild Rail (`GuildListIndicator.ts`).
     pub(crate) hovered_rail_item: Option<RailHoverTarget>,
     /// Currently hovered icon button in the channel header.
@@ -522,6 +524,7 @@ impl ClientView {
             pins_seq: 0,
             user_area_submenu: None,
             guild_header_popout_open: false,
+            hide_muted_channels: false,
             hovered_rail_item: None,
             hovered_header_item: None,
             hovered_user_control: None,

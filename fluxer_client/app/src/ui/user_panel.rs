@@ -524,7 +524,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                 .items_center()
                 .gap(px(3.))
                 .flx("app.floating.user-area-popout.custom-status-row")
-                .child(Icon::new(AppIcon::Smiley).with_size(px(14.)).text_color(secondary))
+                .child(Icon::new(AppIcon::SmileyRegular).with_size(px(14.)).text_color(secondary))
                 .child(
                     div()
                         .text_size(px(12.))
@@ -636,7 +636,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
             }
             this.select_settings_tab(SettingsTab::Profile, cx);
         }))
-        .child(Icon::new(AppIcon::PencilSimple).with_size(px(16.)).text_color(theme.on_fill))
+        .child(Icon::new(AppIcon::PencilBold).with_size(px(16.)).text_color(theme.on_fill))
         .child(
             div()
                 .text_size(px(13.))

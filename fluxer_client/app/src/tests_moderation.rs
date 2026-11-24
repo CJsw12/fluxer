@@ -152,7 +152,8 @@ fn moderation_permissions_hierarchy_profile_buttons_and_bans_entry(cx: &mut Test
         let (_rt, _backend, view, vcx) = open_guild(&mut sub_cx, OWNER, vec![ROLE_MOD_HIGH]);
         assert!(vcx.debug_bounds("guild-bans-btn").is_none());
         open_guild_popout_for_bans(vcx);
-        assert!(vcx.debug_bounds("guild-popout-bans").is_some());
+        // Official popout has no Bans item; bans open from Community settings.
+        assert!(vcx.debug_bounds("guild-popout-bans").is_none());
         open_guild_popout_for_bans(vcx);
 
         open_popout_for(&view, vcx, LOW_USER);
@@ -518,9 +519,7 @@ fn ban_entry(id: u64, username: &str, reason: &str) -> GuildBanEntry {
 #[gpui_kit::test]
 fn guild_bans_list_filter_stale_seq_unban_and_error(cx: &mut TestAppContext) {
     let (_rt, backend, view, cx) = open_guild(cx, OWNER, vec![ROLE_MOD_HIGH]);
-    open_guild_popout_for_bans(cx);
-    let bans_btn = cx.debug_bounds("guild-popout-bans").unwrap().center();
-    cx.simulate_click(bans_btn, Modifiers::default());
+    cx.update(|window, app| view.update(app, |v, cx| v.open_guild_bans(window, cx)));
     cx.run_until_parked();
     draw(cx);
     assert_eq!(*lock_sent(&backend.sent_moderation), vec![ModerationCall::ListBans { guild_id: GUILD }]);
@@ -667,9 +666,7 @@ fn guild_bans_list_filter_stale_seq_unban_and_error(cx: &mut TestAppContext) {
 
     // Switching place away from guild dismisses GuildBans modal.
     draw(cx);
-    open_guild_popout_for_bans(cx);
-    let bans_btn = cx.debug_bounds("guild-popout-bans").unwrap().center();
-    cx.simulate_click(bans_btn, Modifiers::default());
+    cx.update(|window, app| view.update(app, |v, cx| v.open_guild_bans(window, cx)));
     cx.run_until_parked();
     assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::GuildBans(_))));
     view.update(cx, |v, cx| v.select_place(Place::Home, cx));
@@ -698,9 +695,7 @@ fn moderation_and_bans_modals_isolate_global_shortcuts(cx: &mut TestAppContext) 
     cx.run_until_parked();
     draw(cx);
 
-    open_guild_popout_for_bans(cx);
-    let bans_btn = cx.debug_bounds("guild-popout-bans").unwrap().center();
-    cx.simulate_click(bans_btn, Modifiers::default());
+    cx.update(|window, app| view.update(app, |v, cx| v.open_guild_bans(window, cx)));
     cx.run_until_parked();
     draw(cx);
 

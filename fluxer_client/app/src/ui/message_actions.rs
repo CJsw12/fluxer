@@ -214,7 +214,7 @@ fn icon(action: MessageAction, target: &ActionTarget) -> AppIcon {
         MessageAction::Edit => AppIcon::PencilSimple,
         MessageAction::Retry => AppIcon::ArrowClockwise,
         MessageAction::CopyText => AppIcon::Copy,
-        MessageAction::CopyId => AppIcon::Hash,
+        MessageAction::CopyId => AppIcon::Snowflake,
         MessageAction::Delete | MessageAction::DeleteNow => AppIcon::Trash,
     }
 }

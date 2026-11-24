@@ -12,7 +12,7 @@ use std::sync::{Mutex, OnceLock};
 
 use gpui_kit::{
     App, Bounds, IntoElement, KeyDownEvent, KeyUpEvent, Keystroke, Modifiers, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, OperatingSystem, ParentElement, Pixels, PlatformInput, Styled as _, Window,
+    MouseMoveEvent, MouseUpEvent, OperatingSystem, ParentElement, Pixels, PlatformInput, Styled, Window,
     canvas, point, px, size,
 };
 use serde_json::{Value, json};
@@ -32,6 +32,10 @@ pub struct Entry {
     pub w: f32,
     pub h: f32,
     pub text: Option<String>,
+    /// `file:line` of the `.flx` call (repo-relative when possible).
+    pub src: Option<String>,
+    /// Declared (non-hover) style, only the fields that are set.
+    pub style: Option<Value>,
 }
 
 #[derive(Default)]
@@ -55,7 +59,7 @@ pub fn begin_frame() {
     }
 }
 
-fn record(flx: &str, bounds: Bounds<Pixels>, text: Option<&str>) {
+fn record(flx: &str, bounds: Bounds<Pixels>, text: Option<&str>, src: &str, style: &Option<Value>) {
     if let Ok(mut reg) = REGISTRY.lock() {
         reg.building.push(Entry {
             flx: flx.to_owned(),
@@ -64,6 +68,8 @@ fn record(flx: &str, bounds: Bounds<Pixels>, text: Option<&str>) {
             w: f32::from(bounds.size.width),
             h: f32::from(bounds.size.height),
             text: text.map(str::to_owned),
+            src: Some(src.to_owned()),
+            style: style.clone(),
         });
     }
 }
@@ -82,27 +88,78 @@ pub fn frame_marker() -> impl IntoElement {
     canvas(|_, _, _| begin_frame(), |_, (), _, _| {}).absolute().size_0()
 }
 
-/// Tags an element with an official `data-flx` id.
-pub trait FlxExt: ParentElement + Sized {
-    fn flx(self, id: &'static str) -> Self {
+/// Repo-relative forward-slash path of a `Location::caller()` file plus line.
+fn format_src(file: &str, line: u32) -> String {
+    let f = file.replace('\\', "/");
+    let f = match f.find("fluxer_client/") {
+        Some(i) => f[i..].to_owned(),
+        None => f,
+    };
+    format!("{f}:{line}")
+}
+
+/// Serializes only the set fields of a declared style. Hover/active/focus
+/// styles are `pub(crate)` in gpui and cannot be read, so they are skipped.
+fn style_json(style: &impl serde::Serialize) -> Option<Value> {
+    let v = serde_json::to_value(style).ok()?;
+    prune(v)
+}
+
+/// Drops nulls and empty objects/arrays recursively.
+fn prune(v: Value) -> Option<Value> {
+    match v {
+        Value::Null => None,
+        Value::Object(m) => {
+            let m: serde_json::Map<String, Value> =
+                m.into_iter().filter_map(|(k, v)| prune(v).map(|v| (k, v))).collect();
+            if m.is_empty() { None } else { Some(Value::Object(m)) }
+        }
+        Value::Array(a) if a.is_empty() => None,
+        other => Some(other),
+    }
+}
+
+/// Tags an element with an official `data-flx` id. Every method does nothing
+/// unless the probe is enabled, so Location capture (free, compile-time
+/// constant), serialization and allocation only happen with the probe on.
+pub trait FlxExt: ParentElement + Styled + Sized {
+    #[track_caller]
+    fn flx(mut self, id: &'static str) -> Self {
         if !enabled() {
             return self;
         }
-        self.child(canvas(move |bounds, _, _| record(id, bounds, None), |_, (), _, _| {}).absolute().inset_0())
+        let loc = std::panic::Location::caller();
+        let src = format_src(loc.file(), loc.line());
+        let style = style_json(self.style());
+        self.child(
+            canvas(move |bounds, _, _| record(id, bounds, None, &src, &style), |_, (), _, _| {})
+                .absolute()
+                .inset_0(),
+        )
     }
 
-    fn flx_text(self, id: &'static str, text: impl Into<String>) -> Self {
+    #[track_caller]
+    fn flx_text(mut self, id: &'static str, text: impl Into<String>) -> Self {
         if !enabled() {
             return self;
         }
+        let loc = std::panic::Location::caller();
+        let src = format_src(loc.file(), loc.line());
+        let style = style_json(self.style());
         let text: String = text.into();
         self.child(
-            canvas(move |bounds, _, _| record(id, bounds, Some(&text)), |_, (), _, _| {}).absolute().inset_0(),
+            canvas(move |bounds, _, _| record(id, bounds, Some(&text), &src, &style), |_, (), _, _| {})
+                .absolute()
+                .inset_0(),
         )
     }
 }
 
-impl<T: ParentElement + Sized> FlxExt for T {}
+impl<T: ParentElement + Styled + Sized> FlxExt for T {}
+
+fn entry_json(e: Entry) -> Value {
+    json!({ "flx": e.flx, "rect": [e.x, e.y, e.w, e.h], "text": e.text, "src": e.src, "style": e.style })
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Target {
@@ -194,7 +251,7 @@ pub fn execute(req: ProbeRequest, window: &mut Window, cx: &mut App, reply: Send
         ProbeRequest::Inspect => {
             let elements: Vec<Value> = snapshot()
                 .into_iter()
-                .map(|e| json!({ "flx": e.flx, "rect": [e.x, e.y, e.w, e.h], "text": e.text }))
+                .map(entry_json)
                 .collect();
             let a11y = window
                 .debug_a11y_tree_json()
@@ -375,7 +432,7 @@ mod tests {
     use super::*;
 
     fn entry(flx: &str) -> Entry {
-        Entry { flx: flx.to_owned(), x: 1.0, y: 2.0, w: 3.0, h: 4.0, text: None }
+        Entry { flx: flx.to_owned(), x: 1.0, y: 2.0, w: 3.0, h: 4.0, text: None, src: None, style: None }
     }
 
     #[test]
@@ -390,6 +447,33 @@ mod tests {
         reg.begin_frame();
         assert_eq!(reg.last.len(), 2);
         assert!(reg.last.iter().all(|e| e.flx == "b"));
+    }
+
+    #[test]
+    fn style_serializes_only_set_fields() {
+        let mut d = gpui_kit::div().p(px(4.0)).gap(px(2.0)).bg(gpui_kit::rgb(0x112233));
+        let v = style_json(d.style()).unwrap_or(Value::Null);
+        let keys: Vec<&String> = v.as_object().map(|m| m.keys().collect()).unwrap_or_default();
+        eprintln!("style = {v}");
+        assert!(keys.iter().all(|k| ["padding", "gap", "background"].contains(&k.as_str())), "{keys:?}");
+        assert!(keys.contains(&&"padding".to_owned()) && keys.contains(&&"gap".to_owned()));
+        assert!(style_json(gpui_kit::div().style()).is_none());
+    }
+
+    #[test]
+    fn entry_json_shape_with_src_and_style() {
+        let e = Entry {
+            src: Some(format_src("C:\\x\\fluxer_client\\app\\src\\ui\\x.rs", 123)),
+            style: Some(json!({ "gap": { "width": { "Definite": 2.0 } } })),
+            ..entry("a.b")
+        };
+        let v = entry_json(e);
+        eprintln!("entry = {v}");
+        assert_eq!(v["flx"], "a.b");
+        assert_eq!(v["rect"], json!([1.0, 2.0, 3.0, 4.0]));
+        assert_eq!(v["src"], "fluxer_client/app/src/ui/x.rs:123");
+        assert!(v["style"]["gap"].is_object());
+        assert!(v["text"].is_null());
     }
 
     #[test]

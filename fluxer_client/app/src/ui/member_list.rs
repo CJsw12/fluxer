@@ -258,7 +258,6 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .flex_none()
         .w(px(theme.sizes.member_list_width))
         .h_full()
-        .rounded_tl(px(14.))
         .overflow_hidden()
         .bg(theme.background_secondary_lighter)
         .flx("channel.member-list-container.member-list-container")

@@ -11,7 +11,8 @@ use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{Disableable as _, Icon, Sizable as _};
 use gpui_kit::{
-    AnyElement, Context, Entity, FontWeight, ScrollHandle, SharedString, Subscription, Window, div, prelude::*, px,
+    AnyElement, Context, Entity, FontWeight, Hsla, ScrollHandle, SharedString, Subscription, Window, div, hsla,
+    prelude::*, px, rgb,
 };
 
 use crate::backend::voice::VoiceAudioSettings;
@@ -77,11 +78,11 @@ impl SettingsTab {
         match self {
             Self::Profile => l10n::tr("Profile"),
             Self::Account => l10n::tr("Account"),
-            Self::PrivacySafety => l10n::tr("Privacy & safety"),
+            Self::PrivacySafety => l10n::tr("Privacy"),
             Self::Appearance => l10n::tr("Appearance"),
             Self::Themes => l10n::tr("Themes"),
             Self::Notifications => l10n::tr("Notifications"),
-            Self::MessagesMedia => l10n::tr("Messages & media"),
+            Self::MessagesMedia => l10n::tr("Chat"),
             Self::VoiceVideo => l10n::tr("Voice & video"),
             Self::Accessibility => l10n::tr("Accessibility"),
             Self::Language => l10n::tr("Language"),
@@ -692,12 +693,78 @@ impl ClientView {
     }
 }
 
-fn section_heading(title: String, theme: &Theme) -> impl IntoElement {
+fn settings_is_dark(theme: &Theme) -> bool {
+    theme.background.l < 0.5
+}
+
+fn settings_sidebar_bg(theme: &Theme) -> Hsla {
+    if settings_is_dark(theme) {
+        rgb(0x2a2730).into()
+    } else {
+        theme.background_secondary
+    }
+}
+
+fn settings_card_bg(theme: &Theme) -> Hsla {
+    if settings_is_dark(theme) {
+        rgb(0x1e1d23).into()
+    } else {
+        theme.background_secondary
+    }
+}
+
+fn settings_border(theme: &Theme) -> Hsla {
+    if settings_is_dark(theme) {
+        rgb(0x2f2c36).into()
+    } else {
+        theme.border
+    }
+}
+
+fn settings_sub_selected_bg(theme: &Theme) -> Hsla {
+    if settings_is_dark(theme) {
+        hsla(0., 0., 1., 0.10)
+    } else {
+        theme.accent
+    }
+}
+
+fn settings_divider(theme: &Theme) -> AnyElement {
+    let color = if settings_is_dark(theme) {
+        hsla(0., 0., 1., 0.08)
+    } else {
+        theme.border
+    };
+    div().w_full().h(px(1.)).flex_none().bg(color).into_any_element()
+}
+
+fn sidebar_section_heading(title: String, theme: &Theme) -> impl IntoElement {
+    let color: Hsla = if settings_is_dark(theme) {
+        rgb(0xb1acbb).into()
+    } else {
+        theme.muted_foreground
+    };
     div()
         .text_xs()
-        .font_weight(FontWeight::BOLD)
-        .text_color(theme.muted_foreground)
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(color)
         .child(title)
+}
+
+fn section_heading(title: String, theme: &Theme) -> impl IntoElement {
+    div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .gap_2()
+        .child(
+            div()
+                .text_base()
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme.foreground)
+                .child(title),
+        )
+        .child(Icon::new(AppIcon::LinkSimple).with_size(px(13.)).text_color(theme.muted_foreground))
 }
 
 fn info_card_row(title: String, subtitle: String, badge: Option<String>, theme: &Theme) -> AnyElement {
@@ -705,8 +772,8 @@ fn info_card_row(title: String, subtitle: String, badge: Option<String>, theme: 
         .p_3()
         .rounded(px(8.))
         .border_1()
-        .border_color(theme.border)
-        .bg(theme.background_secondary)
+        .border_color(settings_border(theme))
+        .bg(settings_card_bg(theme))
         .flex()
         .flex_row()
         .items_center()
@@ -729,7 +796,7 @@ fn info_card_row(title: String, subtitle: String, badge: Option<String>, theme: 
                     .rounded(px(4.))
                     .bg(theme.background)
                     .border_1()
-                    .border_color(theme.border)
+                    .border_color(settings_border(theme))
                     .text_xs()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.foreground)
@@ -1192,8 +1259,8 @@ fn render_account_tab(
                         .p_4()
                         .rounded(px(8.))
                         .border_1()
-                        .border_color(theme.border)
-                        .bg(theme.background_secondary)
+                        .border_color(settings_border(theme))
+                        .bg(settings_card_bg(theme))
                         .flex()
                         .flex_col()
                         .gap_3()
@@ -1274,8 +1341,8 @@ fn render_account_tab(
                             .p_4()
                             .rounded(px(8.))
                             .border_1()
-                            .border_color(theme.border)
-                            .bg(theme.background_secondary)
+                            .border_color(settings_border(theme))
+                            .bg(settings_card_bg(theme))
                             .flex()
                             .flex_row()
                             .items_center()
@@ -1325,8 +1392,8 @@ fn render_account_tab(
                         .p_4()
                         .rounded(px(8.))
                         .border_1()
-                        .border_color(theme.border)
-                        .bg(theme.background_secondary)
+                        .border_color(settings_border(theme))
+                        .bg(settings_card_bg(theme))
                         .flex()
                         .flex_row()
                         .items_center()
@@ -1384,16 +1451,12 @@ fn render_privacy_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientV
                 .child(section_heading(l10n::tr("Friends & direct messages"), theme))
                 .child(
                     div()
-                        .p_3()
-                        .rounded(px(8.))
-                        .border_1()
-                        .border_color(theme.border)
-                        .bg(theme.background_secondary)
+                        .py_2p5()
                         .flex()
                         .flex_row()
                         .items_center()
                         .justify_between()
-                        .gap_3()
+                        .gap_4()
                         .child(
                             div()
                                 .flex()
@@ -1431,16 +1494,12 @@ fn render_privacy_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientV
                 )
                 .child(
                     div()
-                        .p_3()
-                        .rounded(px(8.))
-                        .border_1()
-                        .border_color(theme.border)
-                        .bg(theme.background_secondary)
+                        .py_2p5()
                         .flex()
                         .flex_row()
                         .items_center()
                         .justify_between()
-                        .gap_3()
+                        .gap_4()
                         .child(
                             div()
                                 .flex()
@@ -1487,6 +1546,7 @@ fn render_privacy_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientV
                         ),
                 ),
         )
+        .child(settings_divider(theme))
         .child(
             div()
                 .flex()
@@ -1495,16 +1555,12 @@ fn render_privacy_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientV
                 .child(section_heading(l10n::tr("Sensitive content"), theme))
                 .child(
                     div()
-                        .p_3()
-                        .rounded(px(8.))
-                        .border_1()
-                        .border_color(theme.border)
-                        .bg(theme.background_secondary)
+                        .py_2p5()
                         .flex()
                         .flex_row()
                         .items_center()
                         .justify_between()
-                        .gap_3()
+                        .gap_4()
                         .child(
                             div()
                                 .flex()
@@ -1551,6 +1607,7 @@ fn render_privacy_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientV
                         ),
                 ),
         )
+        .child(settings_divider(theme))
         .child(
             div()
                 .flex()
@@ -1559,16 +1616,12 @@ fn render_privacy_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientV
                 .child(section_heading(l10n::tr("Link protection"), theme))
                 .child(
                     div()
-                        .p_3()
-                        .rounded(px(8.))
-                        .border_1()
-                        .border_color(theme.border)
-                        .bg(theme.background_secondary)
+                        .py_2p5()
                         .flex()
                         .flex_row()
                         .items_center()
                         .justify_between()
-                        .gap_3()
+                        .gap_4()
                         .child(
                             div()
                                 .flex()
@@ -1687,8 +1740,8 @@ fn render_appearance_preview(view: &ClientView, theme: &Theme) -> AnyElement {
         .p_4()
         .rounded(px(8.))
         .border_1()
-        .border_color(theme.border)
-        .bg(theme.background_secondary)
+        .border_color(settings_border(theme))
+        .bg(settings_card_bg(theme))
         .child(preview_body)
         .into_any_element()
 }
@@ -1798,8 +1851,12 @@ fn render_theme_swatch(
         .p_2()
         .rounded(px(10.))
         .border_2()
-        .border_color(if selected { theme.brand } else { theme.border })
-        .bg(if selected { theme.accent } else { theme.background_secondary })
+        .border_color(if selected { theme.brand } else { settings_border(theme) })
+        .bg(if selected {
+            settings_sub_selected_bg(theme)
+        } else {
+            settings_card_bg(theme)
+        })
         .cursor_pointer()
         .hover(|s| s.border_color(theme.brand))
         .flex()
@@ -1838,6 +1895,7 @@ fn render_theme_swatch(
 fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
     let active_theme = theme::kind(cx);
     let display = view.prefs.data.display();
+    let dark = settings_is_dark(theme);
 
     let theme_swatches = THEME_OPTIONS.iter().enumerate().map(|(ix, (kind, label))| {
         let kind = *kind;
@@ -1845,8 +1903,8 @@ fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Clie
     });
 
     let density_cards = [
-        (false, "Cozy", "Show avatars and generous spacing between messages.", "settings-density-cozy"),
-        (true, "Compact", "Fit more messages on screen with inline timestamps.", "settings-density-compact"),
+        (false, "Comfy", "Spacious layout with clear visual separation between messages.", "settings-density-cozy"),
+        (true, "Dense", "Maximizes visible messages with minimal spacing.", "settings-density-compact"),
     ]
     .into_iter()
     .map(|(compact, label, desc, sel_id)| {
@@ -1857,33 +1915,42 @@ fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Clie
             .aria_label(l10n::tr(label))
             .aria_selected(selected)
             .debug_selector(move || sel_id.to_owned())
-            .flex_1()
-            .min_w(px(180.))
-            .p_3()
-            .rounded(px(8.))
-            .border_2()
-            .border_color(if selected { theme.brand } else { theme.border })
-            .bg(if selected { theme.accent } else { theme.background_secondary })
+            .py_1p5()
+            .px_2()
+            .rounded(px(6.))
             .cursor_pointer()
-            .hover(|s| s.border_color(theme.brand))
+            .hover(move |s| s.bg(if dark { hsla(0., 0., 1., 0.04) } else { theme.muted }))
             .flex()
-            .flex_col()
-            .gap_1()
+            .flex_row()
+            .items_start()
+            .gap_3()
             .on_click(cx.listener(move |this, _, window, cx| {
                 this.apply_settings_effect(SettingsEffect::CompactChanged(compact), window, cx);
             }))
             .child(
                 div()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .justify_between()
-                    .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(l10n::tr(label)))
+                    .mt(px(2.))
+                    .size(px(18.))
+                    .flex_none()
+                    .rounded_full()
+                    .border_2()
+                    .border_color(if selected { theme.brand } else { settings_border(theme) })
                     .when(selected, |d| {
-                        d.child(Icon::new(AppIcon::Check).xsmall().text_color(theme.brand))
+                        d.bg(theme.brand)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(div().size(px(6.)).rounded_full().bg(rgb(0xffffff)))
                     }),
             )
-            .child(div().text_xs().text_color(theme.muted_foreground).child(l10n::tr(desc)))
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_0p5()
+                    .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(l10n::tr(label)))
+                    .child(div().text_xs().text_color(theme.muted_foreground).child(l10n::tr(desc))),
+            )
     });
 
     let font_fraction = {
@@ -1895,6 +1962,7 @@ fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Clie
     };
     let font_stops = FONT_SIZE_OPTIONS.iter().map(|&size| {
         let selected = display.font_size == size;
+        let is_default = size == 16;
         let sel_id = format!("settings-font-{size}");
         let btn_id = sel_id.clone();
         div()
@@ -1913,17 +1981,29 @@ fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Clie
             }))
             .child(
                 div()
-                    .size(px(if selected { 16. } else { 10. }))
+                    .size(px(if selected { 12. } else { 8. }))
                     .rounded_full()
                     .border_2()
-                    .border_color(if selected { theme.brand } else { theme.border })
-                    .bg(if selected { theme.on_fill } else { theme.background_secondary }),
+                    .border_color(if selected {
+                        theme.brand
+                    } else if is_default {
+                        theme.status_online
+                    } else {
+                        settings_border(theme)
+                    })
+                    .bg(if selected { rgb(0xf4f4f6).into() } else { settings_card_bg(theme) }),
             )
             .child(
                 div()
                     .text_xs()
-                    .font_weight(if selected { FontWeight::BOLD } else { FontWeight::NORMAL })
-                    .text_color(if selected { theme.foreground } else { theme.muted_foreground })
+                    .font_weight(if selected || is_default { FontWeight::SEMIBOLD } else { FontWeight::NORMAL })
+                    .text_color(if selected {
+                        theme.foreground
+                    } else if is_default {
+                        theme.status_online
+                    } else {
+                        theme.muted_foreground
+                    })
                     .child(format!("{size}px")),
             )
     });
@@ -1933,27 +2013,18 @@ fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Clie
         .flex()
         .flex_col()
         .gap_2()
-        .p_3()
-        .rounded(px(8.))
-        .border_1()
-        .border_color(theme.border)
-        .bg(theme.background_secondary)
         .child(
             div()
                 .flex()
                 .flex_row()
                 .items_center()
                 .justify_between()
-                .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(l10n::tr("Font size")))
+                .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(l10n::tr("Chat font size")))
                 .child(
                     div()
-                        .px_2()
-                        .py_0p5()
-                        .rounded(px(4.))
-                        .bg(theme.background)
                         .text_xs()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme.foreground)
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(theme.muted_foreground)
                         .child(format!("{}px", display.font_size)),
                 ),
         )
@@ -1961,13 +2032,13 @@ fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Clie
             div()
                 .relative()
                 .w_full()
-                .pt_2()
+                .pt_1()
                 .child(
                     div()
                         .w_full()
                         .h(px(4.))
                         .rounded_full()
-                        .bg(theme.border)
+                        .bg(settings_border(theme))
                         .overflow_hidden()
                         .child(div().h_full().bg(theme.brand).w(gpui_kit::relative(font_fraction))),
                 )
@@ -1985,23 +2056,32 @@ fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Clie
     let zoom_fraction = (f32::from(display.ui_zoom.saturating_sub(MIN_UI_ZOOM))
         / f32::from(MAX_UI_ZOOM.saturating_sub(MIN_UI_ZOOM).max(1)))
     .clamp(0., 1.);
+    let zoom_ticks = [50u16, 75, 100, 125, 150, 175, 200].into_iter().map(|pct| {
+        let is_default = pct == 100;
+        let is_current = display.ui_zoom == pct;
+        div()
+            .text_xs()
+            .text_color(if is_default {
+                theme.status_online
+            } else if is_current {
+                theme.foreground
+            } else {
+                theme.muted_foreground
+            })
+            .child(format!("{pct}%"))
+    });
     let zoom_controls = div()
         .debug_selector(|| "settings-zoom-slider".to_owned())
         .flex()
         .flex_col()
         .gap_2()
-        .p_3()
-        .rounded(px(8.))
-        .border_1()
-        .border_color(theme.border)
-        .bg(theme.background_secondary)
         .child(
             div()
                 .flex()
                 .flex_row()
                 .items_center()
                 .justify_between()
-                .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(l10n::tr("Zoom")))
+                .child(section_heading(l10n::tr("App zoom level"), theme))
                 .child(
                     div()
                         .flex()
@@ -2012,7 +2092,7 @@ fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Clie
                             div().debug_selector(|| "settings-zoom-out".to_owned()).child(
                                 Button::new("settings-zoom-out")
                                     .ghost()
-                                    .small()
+                                    .xsmall()
                                     .label("-")
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         let next = display.ui_zoom.saturating_sub(10).max(MIN_UI_ZOOM);
@@ -2023,18 +2103,16 @@ fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Clie
                         .child(
                             div()
                                 .px_2()
-                                .py_0p5()
-                                .rounded(px(4.))
-                                .bg(theme.background)
                                 .text_xs()
                                 .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(theme.foreground)
                                 .child(format!("{}%", display.ui_zoom)),
                         )
                         .child(
                             div().debug_selector(|| "settings-zoom-in".to_owned()).child(
                                 Button::new("settings-zoom-in")
                                     .ghost()
-                                    .small()
+                                    .xsmall()
                                     .label("+")
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         let next = display.ui_zoom.saturating_add(10).min(MAX_UI_ZOOM);
@@ -2046,7 +2124,7 @@ fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Clie
                             div().debug_selector(|| "settings-zoom-reset".to_owned()).child(
                                 Button::new("settings-zoom-reset")
                                     .ghost()
-                                    .small()
+                                    .xsmall()
                                     .label(l10n::tr("Reset"))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.apply_settings_effect(SettingsEffect::ZoomChanged(100), window, cx);
@@ -2057,12 +2135,31 @@ fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Clie
         )
         .child(
             div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_between()
+                .children(zoom_ticks),
+        )
+        .child(
+            div()
+                .relative()
                 .w_full()
-                .h(px(4.))
-                .rounded_full()
-                .bg(theme.border)
-                .overflow_hidden()
-                .child(div().h_full().bg(theme.brand).w(gpui_kit::relative(zoom_fraction))),
+                .h(px(14.))
+                .flex()
+                .flex_row()
+                .items_center()
+                .child(
+                    div()
+                        .absolute()
+                        .left_0()
+                        .right_0()
+                        .h(px(4.))
+                        .rounded_full()
+                        .bg(settings_border(theme)),
+                )
+                .child(div().h(px(4.)).rounded_full().bg(theme.brand).w(gpui_kit::relative(zoom_fraction)))
+                .child(div().ml(px(-6.)).size(px(12.)).flex_none().rounded_full().bg(rgb(0xf4f4f6))),
         );
 
     div()
@@ -2076,17 +2173,25 @@ fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Clie
                 .flex_col()
                 .gap_2()
                 .child(section_heading(l10n::tr("Theme"), theme))
-                .child(div().flex().flex_row().flex_wrap().gap_3().children(theme_swatches)),
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child(l10n::tr("You can pick a dark or light theme and customize colors in Themes.")),
+                )
+                .child(div().pt_1().flex().flex_row().flex_wrap().gap_3().children(theme_swatches)),
         )
+        .child(settings_divider(theme))
+        .child(zoom_controls)
+        .child(settings_divider(theme))
         .child(
             div()
                 .flex()
                 .flex_col()
-                .gap_3()
-                .child(section_heading(l10n::tr("Display"), theme))
-                .child(div().flex().flex_row().flex_wrap().gap_2().children(density_cards))
+                .gap_4()
+                .child(section_heading(l10n::tr("Messages"), theme))
                 .child(font_slider)
-                .child(zoom_controls),
+                .child(div().flex().flex_col().gap_1p5().children(density_cards)),
         )
         .into_any_element()
 }
@@ -4239,57 +4344,85 @@ fn render_sidebar_tab(
 ) -> AnyElement {
     let sel_id = tab.debug_selector();
     let sections = tab.sections();
+    let dark = settings_is_dark(theme);
+    let selected_bg = settings_sub_selected_bg(theme);
+    let active_text: Hsla = if dark { rgb(0xf4f4f6).into() } else { theme.foreground };
+    let idle_text: Hsla = if dark { rgb(0xcecbd4).into() } else { theme.muted_foreground };
+    let sub_idle_text: Hsla = if dark { rgb(0xb1acbb).into() } else { theme.muted_foreground };
+    let has_tree = selected && show_sections && sections.len() > 1;
+
     let mut item = div().flex().flex_col().gap_0p5().child(
         div()
             .id(sel_id)
             .debug_selector(move || sel_id.to_owned())
-            .px_2()
-            .py(px(6.))
-            .rounded(px(6.))
+            .h(px(34.))
+            .px_2p5()
+            .rounded(px(8.))
             .cursor_pointer()
             .flex()
             .flex_row()
             .items_center()
+            .justify_between()
             .gap_2()
-            .text_color(if selected { theme.foreground } else { theme.muted_foreground })
-            .when(selected, |d| d.bg(theme.accent).font_weight(FontWeight::SEMIBOLD))
-            .when(!selected, |d| d.hover(|s| s.bg(theme.muted).text_color(theme.foreground)))
+            .text_color(if selected { active_text } else { idle_text })
+            .when(selected, |d| d.bg(selected_bg).font_weight(FontWeight::MEDIUM))
+            .when(!selected, |d| {
+                d.hover(move |s| {
+                    s.bg(if dark { hsla(0., 0., 1., 0.05) } else { theme.muted })
+                        .text_color(active_text)
+                })
+            })
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.select_settings_tab(tab, cx);
             }))
-            .child(Icon::new(tab.icon()).with_size(px(20.)))
-            .child(div().text_sm().truncate().child(tab.label())),
+            .child(
+                div()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap_2p5()
+                    .min_w_0()
+                    .child(Icon::new(tab.icon()).with_size(px(16.)))
+                    .child(div().text_size(px(13.)).truncate().child(tab.label())),
+            )
+            .when(has_tree, |d| {
+                d.child(Icon::new(AppIcon::CaretDown).with_size(px(14.)).text_color(sub_idle_text))
+            }),
     );
 
-    if selected && show_sections && sections.len() > 1 {
+    if has_tree {
         let mut sub_list = div()
-            .ml_4()
-            .pl_2()
+            .ml(px(18.))
+            .pl(px(10.))
             .border_l_1()
-            .border_color(theme.border)
+            .border_color(if dark { hsla(0., 0., 1., 0.08) } else { theme.border })
+            .mt(px(2.))
             .flex()
             .flex_col()
             .gap(px(2.));
-        for &(sec_id, sec_label) in sections {
-            let is_active_sec = active_section == Some(sec_id);
+        for (idx, &(sec_id, sec_label)) in sections.iter().enumerate() {
+            let is_active_sec = active_section == Some(sec_id) || (active_section.is_none() && idx == 0);
             let sub_sel = format!("settings-subitem-{sec_id}");
             let sub_id = SharedString::from(sub_sel.clone());
             sub_list = sub_list.child(
                 div()
                     .id(sub_id)
                     .debug_selector(move || sub_sel.clone())
-                    .px_2()
-                    .py_1()
-                    .rounded(px(4.))
+                    .h(px(30.))
+                    .px_2p5()
+                    .rounded(px(6.))
                     .cursor_pointer()
-                    .text_xs()
-                    .text_color(if is_active_sec {
-                        theme.foreground
-                    } else {
-                        theme.muted_foreground
+                    .flex()
+                    .items_center()
+                    .text_size(px(13.))
+                    .text_color(if is_active_sec { active_text } else { sub_idle_text })
+                    .when(is_active_sec, |d| d.font_weight(FontWeight::MEDIUM).bg(selected_bg))
+                    .when(!is_active_sec, |d| {
+                        d.hover(move |s| {
+                            s.bg(if dark { hsla(0., 0., 1., 0.05) } else { theme.muted })
+                                .text_color(active_text)
+                        })
                     })
-                    .when(is_active_sec, |d| d.font_weight(FontWeight::SEMIBOLD).bg(theme.muted))
-                    .hover(|s| s.text_color(theme.foreground))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.select_settings_section(tab, sec_id, cx);
                     }))
@@ -4309,6 +4442,8 @@ fn render_sidebar(
     theme: &Theme,
     cx: &mut Context<ClientView>,
 ) -> AnyElement {
+    let dark = settings_is_dark(theme);
+    let sidebar_bg = settings_sidebar_bg(theme);
     let (avatar_el, user_name) = match &view.user {
         Some(user) => (
             div()
@@ -4320,7 +4455,7 @@ fn render_sidebar(
                         display_name: user.name.clone(),
                         size: 40.,
                         status: Some(view.own_status),
-                        status_border_bg: Some(theme.background),
+                        status_border_bg: Some(sidebar_bg),
                     },
                     theme,
                 ))
@@ -4351,12 +4486,11 @@ fn render_sidebar(
             .flex_none()
             .px_3()
             .py_3()
-            .border_t_1()
-            .border_color(theme.border)
             .flex()
             .flex_col()
             .gap_2()
-            .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("Sign out?")))
+            .child(settings_divider(theme))
+            .child(div().pt_1().text_sm().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("Sign out?")))
             .child(
                 div()
                     .text_xs()
@@ -4389,63 +4523,77 @@ fn render_sidebar(
             )
             .child(
                 div()
-                    .text_xs()
+                    .text_size(px(11.))
                     .text_color(theme.muted_foreground)
+                    .opacity(0.65)
                     .child(format!("Fluxer Rust v{CURRENT_VERSION}")),
             )
             .into_any_element()
     } else {
         div()
             .flex_none()
-            .px_3()
-            .py_3()
-            .border_t_1()
-            .border_color(theme.border)
+            .px_2p5()
+            .pb_3()
+            .pt_1()
             .flex()
             .flex_col()
-            .gap_2()
+            .gap_1()
+            .child(settings_divider(theme))
+            .when(view.accounts_enabled, |d| {
+                let switch_label = if view.saved_accounts.len() > 1 {
+                    format!("{} ({})", l10n::tr("Switch accounts"), view.saved_accounts.len())
+                } else {
+                    l10n::tr("Switch accounts")
+                };
+                d.child(
+                    div()
+                        .id("settings-switch-accounts")
+                        .debug_selector(|| "settings-switch-accounts".to_owned())
+                        .h(px(32.))
+                        .px_2p5()
+                        .rounded(px(8.))
+                        .cursor_pointer()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_2p5()
+                        .text_color(if dark { rgb(0xcecbd4).into() } else { theme.muted_foreground })
+                        .hover(move |s| {
+                            s.bg(if dark { hsla(0., 0., 1., 0.05) } else { theme.muted })
+                                .text_color(theme.foreground)
+                        })
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.apply_settings_effect(SettingsEffect::OpenAccountSwitcher, window, cx);
+                        }))
+                        .child(Icon::new(AppIcon::Users).with_size(px(16.)))
+                        .child(div().text_size(px(13.)).truncate().child(switch_label)),
+                )
+            })
             .child(
                 div()
+                    .id("settings-logout")
+                    .debug_selector(|| "settings-logout".to_owned())
+                    .h(px(34.))
+                    .px_2p5()
+                    .rounded(px(8.))
+                    .cursor_pointer()
                     .flex()
                     .flex_row()
                     .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .child(
-                        div().debug_selector(|| "settings-logout".to_owned()).child(
-                            Button::new("settings-logout")
-                                .danger()
-                                .small()
-                                .icon(AppIcon::SignOut)
-                                .label(l10n::tr("Sign out"))
-                                .on_click(cx.listener(|this, _, _, cx| this.settings_prompt_logout(true, cx))),
-                        ),
-                    )
-                    .when(view.accounts_enabled, |d| {
-                        let switch_label = if view.saved_accounts.len() > 1 {
-                            format!("{} ({})", l10n::tr("Switch accounts"), view.saved_accounts.len())
-                        } else {
-                            l10n::tr("Switch accounts")
-                        };
-                        d.child(
-                            div().debug_selector(|| "settings-switch-accounts".to_owned()).child(
-                                Button::new("settings-switch-accounts")
-                                    .ghost()
-                                    .small()
-                                    .icon(AppIcon::Users)
-                                    .tooltip(switch_label.clone())
-                                    .accessibility_label(switch_label)
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.apply_settings_effect(SettingsEffect::OpenAccountSwitcher, window, cx);
-                                    })),
-                            ),
-                        )
-                    }),
+                    .gap_2p5()
+                    .text_color(theme.danger)
+                    .hover(|s| s.bg(hsla(0., 0.7, 0.5, 0.10)))
+                    .on_click(cx.listener(|this, _, _, cx| this.settings_prompt_logout(true, cx)))
+                    .child(Icon::new(AppIcon::SignOut).with_size(px(16.)).text_color(theme.danger))
+                    .child(div().text_size(px(13.)).font_weight(FontWeight::MEDIUM).child(l10n::tr("Sign out"))),
             )
             .child(
                 div()
-                    .text_xs()
+                    .px_2p5()
+                    .pt_2()
+                    .text_size(px(11.))
                     .text_color(theme.muted_foreground)
+                    .opacity(0.65)
                     .child(format!("Fluxer Rust v{CURRENT_VERSION}")),
             )
             .into_any_element()
@@ -4457,13 +4605,22 @@ fn render_sidebar(
         .flex()
         .flex_col()
         .child(
-            div()
-                .flex_none()
-                .px_3()
-                .pt_3()
-                .pb_2()
-                .debug_selector(|| "settings-search".to_owned())
-                .child(Input::new(&modal.search).small()),
+            div().flex_none().px_3().pt_4().pb_2().child(
+                div()
+                    .debug_selector(|| "settings-search".to_owned())
+                    .h(px(34.))
+                    .px_2p5()
+                    .rounded(px(8.))
+                    .bg(sidebar_bg)
+                    .border_1()
+                    .border_color(settings_border(theme))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap_2()
+                    .child(Icon::new(AppIcon::MagnifyingGlass).with_size(px(15.)).text_color(theme.muted_foreground))
+                    .child(div().flex_1().min_w_0().child(Input::new(&modal.search).small())),
+            ),
         )
         .child(
             div()
@@ -4473,13 +4630,15 @@ fn render_sidebar(
                 .mx_3()
                 .mb_2()
                 .px_2()
-                .py_2()
+                .py_1p5()
                 .rounded(px(8.))
-                .bg(if profile_selected { theme.accent } else { theme.background })
-                .border_1()
-                .border_color(if profile_selected { theme.brand } else { theme.border })
+                .bg(if profile_selected {
+                    settings_sub_selected_bg(theme)
+                } else {
+                    hsla(0., 0., 0., 0.)
+                })
                 .cursor_pointer()
-                .hover(|s| s.border_color(theme.brand))
+                .hover(move |s| s.bg(if dark { hsla(0., 0., 1., 0.06) } else { theme.muted }))
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.select_settings_tab(SettingsTab::Profile, cx);
                 }))
@@ -4525,8 +4684,8 @@ fn render_sidebar(
                         div()
                             .flex()
                             .flex_col()
-                            .gap_1()
-                            .child(div().px_2().child(section_heading(l10n::tr("Your account"), theme)))
+                            .gap_0p5()
+                            .child(div().px_2().pb_1().child(sidebar_section_heading(l10n::tr("Your account"), theme)))
                             .children(account_tabs.iter().map(|&tab| {
                                 render_sidebar_tab(
                                     tab,
@@ -4544,8 +4703,8 @@ fn render_sidebar(
                         div()
                             .flex()
                             .flex_col()
-                            .gap_1()
-                            .child(div().px_2().child(section_heading(l10n::tr("App settings"), theme)))
+                            .gap_0p5()
+                            .child(div().px_2().pb_1().child(sidebar_section_heading(l10n::tr("App settings"), theme)))
                             .children(app_tabs.iter().map(|&tab| {
                                 render_sidebar_tab(
                                     tab,

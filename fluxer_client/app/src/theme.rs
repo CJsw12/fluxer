@@ -257,11 +257,11 @@ pub struct ThemeSizes {
     pub composer_radius: f32,
     /// `SettingsModalLayout.desktopSidebar` min `15.75rem` (252px).
     pub settings_sidebar_width: f32,
-    /// Settings modal fixed top header height (52px).
+    /// Settings modal fixed top header height (56px).
     pub settings_header_height: f32,
-    /// Settings modal body max width (720px).
+    /// Settings modal body max width (740px).
     pub settings_content_max_width: f32,
-    /// Settings modal dialog max width (1200px).
+    /// Settings modal dialog max width (1398px).
     pub settings_modal_max_width: f32,
     /// `--native-titlebar-height: 32px`.
     pub titlebar_height: f32,
@@ -293,9 +293,9 @@ impl ThemeSizes {
         composer_height: 58.,
         composer_radius: 8.,
         settings_sidebar_width: 252.,
-        settings_header_height: 52.,
-        settings_content_max_width: 720.,
-        settings_modal_max_width: 1200.,
+        settings_header_height: 56.,
+        settings_content_max_width: 740.,
+        settings_modal_max_width: 1398.,
         titlebar_height: 32.,
         channel_start_icon: 68.,
         user_panel_avatar: 32.,

@@ -3266,17 +3266,7 @@ impl Render for ClientView {
                             .pb(px(73.))
                             .flx("app.guild-sidebar.guild-navbar")
                             .child(ui::channel_list::render(self, &theme, cx)),
-                    )
-                    .child(
-                        div()
-                            .absolute()
-                            .left(px(6.))
-                            .bottom(px(7.))
-                            // Height is content-sized so the popout grows upward.
-                            .w(px(theme.sizes.rail_width + 1. + sidebar_w - 12.))
-                            .child(ui::user_panel::render(self, &theme, cx)),
-                    )
-                    .children(ui::user_panel::render_popout(self, &theme, cx)),
+                    ),
             )
             .child(div().flex().flex_1().min_w_0().h_full().bg(theme.background_secondary_lighter).child(if show_voice_stage {
                 let split_chat = !self.voice_stage_expanded && self.selected_channel.is_some();
@@ -3380,6 +3370,17 @@ impl Render for ClientView {
                     })
                     .flx("app.outline-frame.frame"),
             )
+            // Keep the bottom-left user card and its popout above the outline frame's 1px left border.
+            .child(
+                div()
+                    .absolute()
+                    .left(px(6.))
+                    .bottom(px(7.))
+                    // Height is content-sized so the popout grows upward.
+                    .w(px(theme.sizes.rail_width + 1. + sidebar_w - 12.))
+                    .child(ui::user_panel::render(self, &theme, cx)),
+            )
+            .children(ui::user_panel::render_popout(self, &theme, cx))
             .child(self.render_sidebar_resize_handle(sidebar_w, theme.sizes.rail_width, cx))
             .children(overlay)
     }

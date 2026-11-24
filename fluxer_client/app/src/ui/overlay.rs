@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use gpui_kit::component::Sizable as _;
+use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::{
     Anchor, AnyElement, App, FontWeight, Hsla, MouseButton, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString,
@@ -103,6 +103,10 @@ pub fn settings_modal(
     let on_dismiss = Rc::new(on_dismiss);
     let on_dismiss_bg = on_dismiss.clone();
     let on_dismiss_btn = on_dismiss;
+    let dark = theme.background.l < 0.5;
+    let modal_bg: Hsla = if dark { rgb(0x1a181e).into() } else { theme.background };
+    let sidebar_bg: Hsla = if dark { rgb(0x2a2730).into() } else { theme.background_secondary };
+    let modal_border: Hsla = if dark { rgb(0x2f2c36).into() } else { theme.border };
 
     let close_button = div()
         .debug_selector(|| "settings-close".to_owned())
@@ -121,12 +125,20 @@ pub fn settings_modal(
         .flex_none()
         .px_6()
         .border_b_1()
-        .border_color(theme.border)
+        .border_color(modal_border)
         .flex()
         .flex_row()
         .items_center()
         .justify_between()
-        .child(div().text_lg().font_weight(FontWeight::BOLD).child(title))
+        .child(
+            div()
+                .flex()
+                .flex_row()
+                .items_center()
+                .gap_2()
+                .child(div().text_base().font_weight(FontWeight::SEMIBOLD).child(title))
+                .child(Icon::new(AppIcon::LinkSimple).with_size(px(14.)).text_color(theme.muted_foreground)),
+        )
         .child(close_button);
 
     let content_scroll = div()
@@ -134,26 +146,38 @@ pub fn settings_modal(
         .flex_1()
         .min_h_0()
         .overflow_y_scroll()
-        .px_8()
+        .px_10()
         .py_6()
-        .child(div().max_w(px(theme.sizes.settings_content_max_width)).flex().flex_col().gap_5().child(body));
+        .child(
+            div()
+                .w_full()
+                .max_w(px(theme.sizes.settings_content_max_width))
+                .mx_auto()
+                .flex()
+                .flex_col()
+                .gap_6()
+                .child(body),
+        );
 
     let sidebar_pane = div()
-        .w(px(theme.sizes.settings_sidebar_width))
         .flex_none()
+        .min_w(px(theme.sizes.settings_sidebar_width))
+        .w(gpui_kit::relative(0.24))
+        .max_w(px(320.))
         .h_full()
-        .bg(theme.background_secondary)
+        .bg(sidebar_bg)
         .border_r_1()
-        .border_color(theme.border)
+        .border_color(modal_border)
         .flex()
         .flex_col()
+        .flx("app.settings-modal-layout.settings-modal-desktop-sidebar.desktop-sidebar")
         .child(sidebar);
 
     let content_pane = div()
         .flex_1()
         .min_w_0()
         .h_full()
-        .bg(theme.background)
+        .bg(modal_bg)
         .flex()
         .flex_col()
         .child(header)
@@ -163,14 +187,16 @@ pub fn settings_modal(
         .w_full()
         .max_w(px(theme.sizes.settings_modal_max_width))
         .h_full()
-        .max_h(px(860.))
+        .max_h(px(1248.))
         .rounded(px(12.))
         .border_1()
-        .border_color(theme.border)
+        .border_color(modal_border)
+        .bg(modal_bg)
         .overflow_hidden()
         .shadow_lg()
         .flex()
         .flex_row()
+        .flx("user.user-settings-modal.modal-root")
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .child(sidebar_pane)
         .child(content_pane);
@@ -181,11 +207,11 @@ pub fn settings_modal(
         .top_0()
         .left_0()
         .size_full()
-        .p(px(24.))
+        .p(px(28.))
         .flex()
         .items_center()
         .justify_center()
-        .bg(gpui_kit::hsla(0., 0., 0., 0.65))
+        .bg(gpui_kit::hsla(0., 0., 0., 0.72))
         .occlude()
         .on_mouse_down(MouseButton::Left, move |_, window, cx| on_dismiss_bg(window, cx))
         .child(panel)

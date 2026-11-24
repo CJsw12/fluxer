@@ -12,7 +12,7 @@
 ## 현재 상태 (2026-11-24)
 
 - **Baseline:** 브랜치 `desktop-rs`(작업), `main` = `upstream/main`. 주력은 `fluxer_client/`(Rust GPUI + gpui-kit). 음성·화면 공유는 별도 헬퍼 `fluxer_client/voice_worker`(LiveKit, 정적 CRT) 프로세스. `fluxer_desktop_rs/`는 WebView2 전환기 셸.
-- **Done(최근):** M9.2 상태 행렬·호버·툴팁·음성 영역 1:1 수렴(`8f49ada84`), M9.3 앱 내부 크기 조절·프로브 `probe_drag`/`probe_dblclick` 구현 및 테스트(`tests_resize`, `cargo test --workspace` 706개 통과), 화면 공유 양방향 자동 시험과 수신 색 결함 수정(`ac638a6a3`, M9.5 1차), 업스트림 2026-11-23 병합(`3cc9d8ffb`). Parity Lab 구축(공식 앱 CDP 실측 ↔ Rust 측정 기능 조인 비교, 클릭 크롤러, 재생 러너, 쓰기 차단 가드)과 #markdown 메인 화면 1~5차 수렴. 셸 대부분 0~1px 일치. 상세는 `docs/PARITY_LAB.md` 7.1, 커밋 `82bed49a3`..`7ddeff5ed`.
+- **Done(최근):** M9.2 상태 행렬·호버·툴팁·음성 영역 1:1 수렴(`8f49ada84`), M9.3 앱 내부 크기 조절·프로브 `probe_drag`/`probe_dblclick` 구현 및 실기 25/25 검증(`fc6c1d245`), 좌측 하단 프로필 선 겹침·우측 멤버 목록 모서리·설정 창 1:1 스타일 수정 및 실기 스크린샷 확인(`cargo test --workspace` 706개 통과), 화면 공유 양방향 자동 시험과 수신 색 결함 수정(`ac638a6a3`, M9.5 1차), 업스트림 2026-11-23 병합(`3cc9d8ffb`). Parity Lab 구축(공식 앱 CDP 실측 ↔ Rust 측정 기능 조인 비교, 클릭 크롤러, 재생 러너, 쓰기 차단 가드)과 #markdown 메인 화면 1~5차 수렴. 셸 대부분 0~1px 일치. 상세는 `docs/PARITY_LAB.md` 7.1, 커밋 `82bed49a3`..`7ddeff5ed`.
 - **Decisions:**
   - 1:1 판정은 공식 데스크톱 앱 실측이 기준이다. 정규식 감사(`scripts/audit_ui_parity.py`)와 합성 갤러리는 보조다.
   - 비교 기준 앱은 포터블 공식 데스크톱 사본(Web 2026.1120, 다크, tester2)이다. 사용자 개인 공식 앱은 조작하지 않는다.

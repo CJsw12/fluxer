@@ -287,22 +287,17 @@ pub fn resizable_popover(
         .border_color(border)
         .bg(bg)
         .shadow_lg()
+        .occlude()
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_mouse_down_out(move |_, window, cx| on_dismiss(window, cx))
+        .on_mouse_move(on_drag_move)
+        .on_mouse_up(MouseButton::Left, on_drag_end)
         .flx(flx)
         .child(content);
-    let on_drag_end = Rc::new(on_drag_end);
-    let on_drag_end_out = Rc::clone(&on_drag_end);
     div()
-        .id("popover-backdrop")
         .absolute()
         .top_0()
         .left_0()
-        .size_full()
-        .occlude()
-        .on_mouse_down(MouseButton::Left, move |_, window, cx| on_dismiss(window, cx))
-        .on_mouse_move(on_drag_move)
-        .on_mouse_up(MouseButton::Left, move |ev, window, cx| on_drag_end(ev, window, cx))
-        .on_mouse_up_out(MouseButton::Left, move |ev, window, cx| on_drag_end_out(ev, window, cx))
         .child(anchored().position(gpui_kit::point(px(left), px(top))).anchor(Anchor::TopLeft).child(panel))
         .into_any_element()
 }

@@ -223,3 +223,81 @@ fn empty_search_shows_empty_state_and_click_cell_works(cx: &mut TestAppContext) 
     }));
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn composer_expression_tabs_switch_and_toggle_close(cx: &mut TestAppContext) {
+    use crate::ui::emoji_picker::ExpressionTab;
+
+    let (rt, _backend, view, cx) = open_emoji_channel(cx);
+    let media_pos = cx.debug_bounds("composer-gif").expect("media btn").center();
+    let sticker_pos = cx.debug_bounds("composer-sticker").expect("sticker btn").center();
+    let emoji_pos = cx.debug_bounds("composer-emoji").expect("emoji btn").center();
+
+    // Media button opens Media tab (not file dialog).
+    cx.simulate_click(media_pos, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| {
+        matches!(&v.overlay, Overlay::EmojiPicker(p) if p.active_tab == ExpressionTab::Media)
+    }));
+    assert!(cx.debug_bounds("media-picker-panel").is_some());
+    let images_pill = cx.debug_bounds("media-filter-Images").expect("Images filter pill").center();
+    cx.simulate_click(images_pill, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| {
+        matches!(&v.overlay, Overlay::EmojiPicker(p) if p.media_filter == "Images")
+    }));
+
+    // Clicking Stickers directly switches tab without needing Escape.
+    cx.simulate_click(sticker_pos, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| {
+        matches!(&v.overlay, Overlay::EmojiPicker(p) if p.active_tab == ExpressionTab::Stickers)
+    }));
+    assert!(cx.debug_bounds("sticker-picker-panel").is_some());
+    assert!(cx.debug_bounds("media-picker-panel").is_none());
+    assert!(cx.debug_bounds("emoji-picker-grid").is_none());
+
+    // Clicking Emojis directly switches to Emojis grid.
+    cx.simulate_click(emoji_pos, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| {
+        matches!(&v.overlay, Overlay::EmojiPicker(p) if p.active_tab == ExpressionTab::Emojis)
+    }));
+    assert!(cx.debug_bounds("emoji-cell-pepe").is_some());
+
+    // In-popout tab bar switches cleanly back to Stickers, then Escape closes.
+    let tab_stickers = cx.debug_bounds("expression-tab-Stickers").expect("Stickers tab").center();
+    cx.simulate_click(tab_stickers, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| {
+        matches!(&v.overlay, Overlay::EmojiPicker(p) if p.active_tab == ExpressionTab::Stickers)
+    }));
+
+    // Repeat-clicking Stickers composer button toggles popout closed.
+    cx.simulate_click(sticker_pos, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::None)));
+
+    // Dismissing on outside click still lets the next composer click open normally.
+    cx.simulate_click(emoji_pos, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::EmojiPicker(_))));
+    cx.simulate_click(point(px(200.), px(200.)), Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::None)));
+    cx.simulate_click(emoji_pos, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| {
+        matches!(&v.overlay, Overlay::EmojiPicker(p) if p.active_tab == ExpressionTab::Emojis)
+    }));
+    drop(rt);
+}

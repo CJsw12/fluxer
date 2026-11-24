@@ -109,6 +109,13 @@ fn open_popout_for(view: &gpui_kit::Entity<ClientView>, cx: &mut gpui_kit::Visua
     draw(cx);
 }
 
+fn open_guild_popout_for_bans(cx: &mut gpui_kit::VisualTestContext) {
+    let menu_btn = cx.debug_bounds("guild-header-menu-btn").expect("guild menu trigger drawn").center();
+    cx.simulate_click(menu_btn, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+}
+
 #[gpui_kit::test]
 fn moderation_permissions_hierarchy_profile_buttons_and_bans_entry(cx: &mut TestAppContext) {
     // 1. Plain member: no Bans button; can change own nickname, cannot moderate others.
@@ -116,6 +123,9 @@ fn moderation_permissions_hierarchy_profile_buttons_and_bans_entry(cx: &mut Test
         let mut sub_cx = cx.clone();
         let (_rt, _backend, view, vcx) = open_guild(&mut sub_cx, OWNER, vec![ROLE_LOW]);
         assert!(vcx.debug_bounds("guild-bans-btn").is_none());
+        open_guild_popout_for_bans(vcx);
+        assert!(vcx.debug_bounds("guild-popout-bans").is_none());
+        open_guild_popout_for_bans(vcx);
 
         open_popout_for(&view, vcx, ME);
         assert!(vcx.debug_bounds("profile-nickname-btn").is_some());
@@ -136,11 +146,14 @@ fn moderation_permissions_hierarchy_profile_buttons_and_bans_entry(cx: &mut Test
         });
     }
 
-    // 2. Mod role: beats LOW_USER, loses tie to PEER_MOD, cannot moderate OWNER, sees Bans button.
+    // 2. Mod role: beats LOW_USER, loses tie to PEER_MOD, cannot moderate OWNER, exposes Bans in guild popout.
     {
         let mut sub_cx = cx.clone();
         let (_rt, _backend, view, vcx) = open_guild(&mut sub_cx, OWNER, vec![ROLE_MOD_HIGH]);
-        assert!(vcx.debug_bounds("guild-bans-btn").is_some());
+        assert!(vcx.debug_bounds("guild-bans-btn").is_none());
+        open_guild_popout_for_bans(vcx);
+        assert!(vcx.debug_bounds("guild-popout-bans").is_some());
+        open_guild_popout_for_bans(vcx);
 
         open_popout_for(&view, vcx, LOW_USER);
         assert!(vcx.debug_bounds("profile-nickname-btn").is_some());
@@ -505,7 +518,8 @@ fn ban_entry(id: u64, username: &str, reason: &str) -> GuildBanEntry {
 #[gpui_kit::test]
 fn guild_bans_list_filter_stale_seq_unban_and_error(cx: &mut TestAppContext) {
     let (_rt, backend, view, cx) = open_guild(cx, OWNER, vec![ROLE_MOD_HIGH]);
-    let bans_btn = cx.debug_bounds("guild-bans-btn").unwrap().center();
+    open_guild_popout_for_bans(cx);
+    let bans_btn = cx.debug_bounds("guild-popout-bans").unwrap().center();
     cx.simulate_click(bans_btn, Modifiers::default());
     cx.run_until_parked();
     draw(cx);
@@ -653,7 +667,8 @@ fn guild_bans_list_filter_stale_seq_unban_and_error(cx: &mut TestAppContext) {
 
     // Switching place away from guild dismisses GuildBans modal.
     draw(cx);
-    let bans_btn = cx.debug_bounds("guild-bans-btn").unwrap().center();
+    open_guild_popout_for_bans(cx);
+    let bans_btn = cx.debug_bounds("guild-popout-bans").unwrap().center();
     cx.simulate_click(bans_btn, Modifiers::default());
     cx.run_until_parked();
     assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::GuildBans(_))));
@@ -683,7 +698,8 @@ fn moderation_and_bans_modals_isolate_global_shortcuts(cx: &mut TestAppContext) 
     cx.run_until_parked();
     draw(cx);
 
-    let bans_btn = cx.debug_bounds("guild-bans-btn").unwrap().center();
+    open_guild_popout_for_bans(cx);
+    let bans_btn = cx.debug_bounds("guild-popout-bans").unwrap().center();
     cx.simulate_click(bans_btn, Modifiers::default());
     cx.run_until_parked();
     draw(cx);

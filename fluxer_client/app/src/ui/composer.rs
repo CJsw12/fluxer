@@ -15,6 +15,7 @@ use crate::client_view::ClientView;
 use crate::icons::AppIcon;
 use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
+use crate::ui::emoji_picker::ExpressionTab;
 use crate::ui::l10n;
 use crate::ui::reply::ReplyingTo;
 
@@ -54,46 +55,55 @@ pub fn render_with(
         )
     });
     let gif_btn = view.can_send.then(|| {
-        div().debug_selector(|| "composer-gif".to_owned()).child(
-            Button::new("composer-gif")
-                .ghost()
-                .with_size(px(32.))
-                .rounded(px(6.))
-                .icon(composer_icon(AppIcon::Image, theme))
-                .tooltip(l10n::tr("GIFs & media"))
-                .accessibility_label(l10n::tr("GIFs & media"))
-                .on_click(cx.listener(|v, _, _, cx| v.pick_files(cx))),
-        )
+        div()
+            .debug_selector(|| "composer-gif".to_owned())
+            .flx("channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--2")
+            .child(
+                Button::new("composer-gif-btn")
+                    .ghost()
+                    .with_size(px(32.))
+                    .rounded(px(6.))
+                    .icon(composer_icon(AppIcon::Image, theme))
+                    .tooltip(l10n::tr("Media"))
+                    .accessibility_label(l10n::tr("Media"))
+                    .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
+                        v.toggle_expression_tab(ExpressionTab::Media, ev.position(), window, cx);
+                    })),
+            )
     });
     let sticker_btn = view.can_send.then(|| {
-        div().debug_selector(|| "composer-sticker".to_owned()).child(
-            Button::new("composer-sticker")
-                .ghost()
-                .with_size(px(32.))
-                .rounded(px(6.))
-                .icon(composer_icon(AppIcon::Sticker, theme))
-                .tooltip(l10n::tr("Stickers"))
-                .accessibility_label(l10n::tr("Stickers"))
-                .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
-                    v.open_emoji_picker(
-                        crate::ui::emoji_picker::sections::PickerTarget::Composer,
-                        ev.position(),
-                        window,
-                        cx,
-                    );
-                })),
-        )
+        div()
+            .debug_selector(|| "composer-sticker".to_owned())
+            .flx("channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--3")
+            .child(
+                Button::new("composer-sticker-btn")
+                    .ghost()
+                    .with_size(px(32.))
+                    .rounded(px(6.))
+                    .icon(composer_icon(AppIcon::Sticker, theme))
+                    .tooltip(l10n::tr("Stickers"))
+                    .accessibility_label(l10n::tr("Stickers"))
+                    .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
+                        v.toggle_expression_tab(ExpressionTab::Stickers, ev.position(), window, cx);
+                    })),
+            )
     });
     let emoji = view.can_send.then(|| {
-        Button::new("composer-emoji")
-            .ghost()
-            .with_size(px(32.))
-            .rounded(px(6.))
-            .icon(composer_icon(AppIcon::Smiley, theme))
-            .tooltip(l10n::tr("Add emoji"))
-            .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
-                v.open_emoji_picker(crate::ui::emoji_picker::sections::PickerTarget::Composer, ev.position(), window, cx);
-            }))
+        div()
+            .debug_selector(|| "composer-emoji".to_owned())
+            .flx("channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--4")
+            .child(
+                Button::new("composer-emoji-btn")
+                    .ghost()
+                    .with_size(px(32.))
+                    .rounded(px(6.))
+                    .icon(composer_icon(AppIcon::Smiley, theme))
+                    .tooltip(l10n::tr("Emojis"))
+                    .accessibility_label(l10n::tr("Emojis"))
+                    .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
+                        v.toggle_expression_tab(ExpressionTab::Emojis, ev.position(), window, cx);
+                    })),
+            )
     });
     let input = div()
         .flex()

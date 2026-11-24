@@ -16,6 +16,20 @@ use crate::root::{AppRoot, ResumeError, Screen};
 use crate::tests::{draw, offline_rest, runtime};
 use crate::ui::overlay::Overlay;
 
+fn open_switcher_from_user_area(cx: &mut VisualTestContext) {
+    let profile = cx.debug_bounds("user-panel-profile").expect("profile button drawn").center();
+    cx.simulate_click(profile, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    let switch_btn = cx
+        .debug_bounds("user-area-switch-accounts")
+        .expect("switch accounts item in user area popout")
+        .center();
+    cx.simulate_click(switch_btn, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+}
+
 struct TempDir(std::path::PathBuf);
 
 impl TempDir {
@@ -166,13 +180,10 @@ fn switch_accounts_preserves_other_tokens_updates_active_on_success_and_ignores_
         assert_eq!(v.saved_accounts[1].key, key_100);
         assert!(!v.saved_accounts[1].is_active);
     });
-    assert!(cx.debug_bounds("switch-accounts").is_some());
+    assert!(cx.debug_bounds("switch-accounts").is_none());
 
-    // Open via user panel button and close via Escape (restores composer focus)
-    let switch_btn = cx.debug_bounds("switch-accounts").expect("switch button drawn").center();
-    cx.simulate_click(switch_btn, Modifiers::default());
-    cx.run_until_parked();
-    draw(cx);
+    // Open via user area popout and close via Escape (restores composer focus)
+    open_switcher_from_user_area(cx);
     assert!(cx.debug_bounds("account-switcher-modal").is_some());
     cx.simulate_keystrokes("escape");
     cx.run_until_parked();
@@ -260,10 +271,7 @@ fn switch_failure_recovery_unreachable_keeps_both_and_rejected_forgets_only_targ
 
     // Trigger switch to 200 and fail Unreachable -> Login shows both + Back to accounts
     assert_eq!(key_200, "https://other.invalid/api::200");
-    let switch_btn = cx.debug_bounds("switch-accounts").expect("switch button").center();
-    cx.simulate_click(switch_btn, Modifiers::default());
-    cx.run_until_parked();
-    draw(cx);
+    open_switcher_from_user_area(cx);
     let target = cx
         .debug_bounds("acct-switch-https://other.invalid/api::200")
         .expect("200 row")
@@ -298,10 +306,7 @@ fn switch_failure_recovery_unreachable_keeps_both_and_rejected_forgets_only_targ
     draw(cx);
 
     // Switch to 200 again and fail Rejected (401) -> forgets ONLY 200; keeps 100 usable
-    let switch_btn = cx.debug_bounds("switch-accounts").expect("switch button").center();
-    cx.simulate_click(switch_btn, Modifiers::default());
-    cx.run_until_parked();
-    draw(cx);
+    open_switcher_from_user_area(cx);
     let target = cx
         .debug_bounds("acct-switch-https://other.invalid/api::200")
         .expect("200 row")
@@ -354,10 +359,7 @@ fn add_account_cancel_remove_inactive_and_logout_with_remaining_accounts(cx: &mu
     draw(cx);
 
     // Add account opens Login with cancel button; cancelling resumes 100
-    let switch_btn = cx.debug_bounds("switch-accounts").expect("switch button").center();
-    cx.simulate_click(switch_btn, Modifiers::default());
-    cx.run_until_parked();
-    draw(cx);
+    open_switcher_from_user_area(cx);
     let add_btn = cx.debug_bounds("acct-add-btn").expect("add button").center();
     cx.simulate_click(add_btn, Modifiers::default());
     cx.run_until_parked();
@@ -373,10 +375,7 @@ fn add_account_cancel_remove_inactive_and_logout_with_remaining_accounts(cx: &mu
     draw(cx);
 
     // Authenticate a second account (200) -> both saved, 200 active
-    let switch_btn = cx.debug_bounds("switch-accounts").expect("switch button").center();
-    cx.simulate_click(switch_btn, Modifiers::default());
-    cx.run_until_parked();
-    draw(cx);
+    open_switcher_from_user_area(cx);
     let add_btn = cx.debug_bounds("acct-add-btn").expect("add button").center();
     cx.simulate_click(add_btn, Modifiers::default());
     cx.run_until_parked();
@@ -392,10 +391,7 @@ fn add_account_cancel_remove_inactive_and_logout_with_remaining_accounts(cx: &mu
     assert_eq!(stored_keys(&root, cx).len(), 2);
 
     // Remove inactive account 100 from AccountSwitcher (requires two-step confirmation)
-    let switch_btn = cx.debug_bounds("switch-accounts").expect("switch button").center();
-    cx.simulate_click(switch_btn, Modifiers::default());
-    cx.run_until_parked();
-    draw(cx);
+    open_switcher_from_user_area(cx);
     let rm_100 = cx
         .debug_bounds("acct-remove-https://fluxer.invalid/api::100")
         .expect("remove 100 button")
@@ -479,9 +475,11 @@ fn token_env_mode_hides_account_switcher(cx: &mut TestAppContext) {
     draw(cx);
 
     assert!(cx.debug_bounds("switch-accounts").is_none());
+    open_switcher_from_user_area(cx);
     let client = active_client(&root, cx);
     client.update_in(cx, |v, window, cx| {
         assert!(!v.accounts_enabled);
+        assert!(matches!(v.overlay, Overlay::None));
         v.open_account_switcher(window, cx);
         assert!(matches!(v.overlay, Overlay::None));
     });
@@ -505,10 +503,7 @@ fn start_client_failure_preserves_previous_account_and_active_store(cx: &mut Tes
     cx.run_until_parked();
     draw(cx);
 
-    let switch_btn = cx.debug_bounds("switch-accounts").expect("switch button").center();
-    cx.simulate_click(switch_btn, Modifiers::default());
-    cx.run_until_parked();
-    draw(cx);
+    open_switcher_from_user_area(cx);
     let target = cx
         .debug_bounds("acct-switch-https://other.invalid/api::200")
         .expect("200 row")

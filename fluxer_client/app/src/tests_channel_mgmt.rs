@@ -113,6 +113,13 @@ fn open_guild(
     (rt, backend, view, cx)
 }
 
+fn open_guild_popout(cx: &mut gpui_kit::VisualTestContext) {
+    let menu_btn = cx.debug_bounds("guild-header-menu-btn").expect("guild menu trigger drawn").center();
+    cx.simulate_click(menu_btn, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+}
+
 #[gpui_kit::test]
 fn channel_mgmt_permissions_gate_sidebar_header_and_category_scope(cx: &mut TestAppContext) {
     // 1. Plain member cannot see create/edit controls and cannot open modals.
@@ -123,6 +130,10 @@ fn channel_mgmt_permissions_gate_sidebar_header_and_category_scope(cx: &mut Test
         assert!(vcx.debug_bounds("edit-selected-channel-btn").is_none());
         assert!(vcx.debug_bounds("edit-channel-11").is_none());
         assert!(vcx.debug_bounds("edit-channel-15").is_none());
+        open_guild_popout(vcx);
+        assert!(vcx.debug_bounds("guild-popout-create-channel").is_none());
+        assert!(vcx.debug_bounds("guild-popout-roles").is_none());
+        open_guild_popout(vcx);
         vcx.update(|window, cx| {
             view.update(cx, |v, cx| {
                 v.open_create_channel(None, window, cx);
@@ -137,6 +148,9 @@ fn channel_mgmt_permissions_gate_sidebar_header_and_category_scope(cx: &mut Test
     let (_rt, backend, view, cx) = open_guild(cx, OWNER, 0, bits::MANAGE_CHANNELS);
     assert!(cx.debug_bounds("create-channel-btn").is_none());
     assert!(cx.debug_bounds("edit-selected-channel-btn").is_none());
+    open_guild_popout(cx);
+    assert!(cx.debug_bounds("guild-popout-create-channel").is_none());
+    open_guild_popout(cx);
     assert!(cx.debug_bounds("create-in-category-15").is_some(), "empty managed category must be visible");
     assert!(cx.debug_bounds("edit-channel-15").is_some());
     assert!(cx.debug_bounds("create-in-category-16").is_none(), "unmanaged empty category stays hidden");
@@ -186,7 +200,10 @@ fn channel_mgmt_permissions_gate_sidebar_header_and_category_scope(cx: &mut Test
 #[gpui_kit::test]
 fn access_editor_uses_scoped_permissions_and_closes_on_gateway_revocation(cx: &mut TestAppContext) {
     let (_rt, backend, view, cx) = open_guild(cx, OWNER, bits::MANAGE_ROLES, 0);
-    assert!(cx.debug_bounds("guild-roles-btn").is_some());
+    assert!(cx.debug_bounds("guild-roles-btn").is_none());
+    open_guild_popout(cx);
+    assert!(cx.debug_bounds("guild-popout-roles").is_some());
+    open_guild_popout(cx);
     assert!(cx.debug_bounds("channel-permissions-11").is_some());
     assert!(cx.debug_bounds("edit-channel-11").is_none());
     let permissions = cx.debug_bounds("channel-permissions-11").unwrap().center();
@@ -205,6 +222,9 @@ fn access_editor_uses_scoped_permissions_and_closes_on_gateway_revocation(cx: &m
     draw(cx);
     assert!(view.read_with(cx, |v, _| !v.overlay.is_open()));
     assert!(cx.debug_bounds("guild-roles-btn").is_none());
+    open_guild_popout(cx);
+    assert!(cx.debug_bounds("guild-popout-roles").is_none());
+    open_guild_popout(cx);
     assert!(cx.debug_bounds("channel-permissions-11").is_none());
 }
 
@@ -235,10 +255,13 @@ fn category_sync_move_retains_other_channel_settings(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn create_channel_validation_payloads_dedup_stale_seq_and_selection(cx: &mut TestAppContext) {
     let (_rt, backend, view, cx) = open_guild(cx, ME, 0, 0);
-    assert!(cx.debug_bounds("create-channel-btn").is_some());
-    assert!(cx.debug_bounds("edit-selected-channel-btn").is_some());
+    assert!(cx.debug_bounds("create-channel-btn").is_none());
+    assert!(cx.debug_bounds("edit-selected-channel-btn").is_none());
+    assert!(cx.debug_bounds("edit-channel-11").is_some());
 
-    let create_btn = cx.debug_bounds("create-channel-btn").unwrap().center();
+    open_guild_popout(cx);
+    assert!(cx.debug_bounds("guild-popout-create-channel").is_some());
+    let create_btn = cx.debug_bounds("guild-popout-create-channel").unwrap().center();
     cx.simulate_click(create_btn, Modifiers::default());
     cx.run_until_parked();
     draw(cx);
@@ -319,7 +342,8 @@ fn create_channel_validation_payloads_dedup_stale_seq_and_selection(cx: &mut Tes
     draw(cx);
     assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::None)));
 
-    let create_btn = cx.debug_bounds("create-channel-btn").unwrap().center();
+    open_guild_popout(cx);
+    let create_btn = cx.debug_bounds("guild-popout-create-channel").unwrap().center();
     cx.simulate_click(create_btn, Modifiers::default());
     cx.run_until_parked();
     draw(cx);
@@ -377,7 +401,8 @@ fn create_channel_validation_payloads_dedup_stale_seq_and_selection(cx: &mut Tes
     assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::None) && v.selected_channel == Some(GENERAL)));
 
     // Text channel creation auto-selects the created channel and restores composer focus
-    let create_btn = cx.debug_bounds("create-channel-btn").unwrap().center();
+    open_guild_popout(cx);
+    let create_btn = cx.debug_bounds("guild-popout-create-channel").unwrap().center();
     cx.simulate_click(create_btn, Modifiers::default());
     cx.run_until_parked();
     cx.simulate_input("lounge-text");
@@ -434,7 +459,7 @@ fn edit_channel_dirty_patch_topic_clear_and_row_propagation(cx: &mut TestAppCont
     assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::None)));
 
     // Open edit on selected GENERAL via header button; modify all fields + clear topic -> Some(None)
-    let edit_sel = cx.debug_bounds("edit-selected-channel-btn").unwrap().center();
+    let edit_sel = cx.debug_bounds("edit-channel-11").unwrap().center();
     cx.simulate_click(edit_sel, Modifiers::default());
     cx.run_until_parked();
     draw(cx);
@@ -520,7 +545,7 @@ fn delete_channel_two_step_escape_failure_fallback_and_category_detach(cx: &mut 
         v.drafts.insert(GENERAL, InputContent::new("unsent draft"));
     });
 
-    let edit_sel = cx.debug_bounds("edit-selected-channel-btn").unwrap().center();
+    let edit_sel = cx.debug_bounds("edit-channel-11").unwrap().center();
     cx.simulate_click(edit_sel, Modifiers::default());
     cx.run_until_parked();
     draw(cx);
@@ -547,7 +572,7 @@ fn delete_channel_two_step_escape_failure_fallback_and_category_detach(cx: &mut 
     assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::None)));
 
     // Reopen, confirm delete -> handle failure, then confirm delete -> handle success + fallback to ANNOUNCE
-    let edit_sel = cx.debug_bounds("edit-selected-channel-btn").unwrap().center();
+    let edit_sel = cx.debug_bounds("edit-channel-11").unwrap().center();
     cx.simulate_click(edit_sel, Modifiers::default());
     cx.run_until_parked();
     draw(cx);
@@ -656,7 +681,8 @@ fn channel_modals_isolate_global_shortcuts(cx: &mut TestAppContext) {
     let (_rt, _backend, view, cx) = open_guild(cx, ME, 0, 0);
     focus_composer(&view, cx);
 
-    let create_btn = cx.debug_bounds("create-channel-btn").unwrap().center();
+    open_guild_popout(cx);
+    let create_btn = cx.debug_bounds("guild-popout-create-channel").unwrap().center();
     cx.simulate_click(create_btn, Modifiers::default());
     cx.run_until_parked();
     draw(cx);
@@ -671,7 +697,7 @@ fn channel_modals_isolate_global_shortcuts(cx: &mut TestAppContext) {
     cx.run_until_parked();
     draw(cx);
 
-    let edit_sel = cx.debug_bounds("edit-selected-channel-btn").unwrap().center();
+    let edit_sel = cx.debug_bounds("edit-channel-11").unwrap().center();
     cx.simulate_click(edit_sel, Modifiers::default());
     cx.run_until_parked();
     draw(cx);
@@ -961,7 +987,8 @@ fn role_create_edit_and_delete_backend_rest_round_trip() {
 #[gpui_kit::test]
 fn role_editor_ui_create_edit_and_delete_submissions(cx: &mut TestAppContext) {
     let (_rt, backend, view, cx) = open_guild(cx, ME, bits::MANAGE_ROLES, 0);
-    let roles_btn = cx.debug_bounds("guild-roles-btn").unwrap().center();
+    open_guild_popout(cx);
+    let roles_btn = cx.debug_bounds("guild-popout-roles").unwrap().center();
     cx.simulate_click(roles_btn, Modifiers::default());
     cx.run_until_parked();
     draw(cx);

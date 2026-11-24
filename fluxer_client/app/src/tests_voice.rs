@@ -395,7 +395,15 @@ fn a11y_labels_and_roles_render_without_panic(cx: &mut TestAppContext) {
         v.select_channel(Snowflake(12), cx);
     });
     draw(vcx);
-    assert!(vcx.debug_bounds("create-channel-btn").is_some());
+    assert!(vcx.debug_bounds("create-channel-btn").is_none());
+    let menu_btn = vcx.debug_bounds("guild-header-menu-btn").expect("guild menu trigger").center();
+    vcx.simulate_click(menu_btn, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("guild-popout-create-channel").is_some());
+    vcx.simulate_click(menu_btn, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
     assert!(vcx.debug_bounds("user-area-wrapper").is_some());
     assert!(vcx.debug_bounds("voice-panel").is_some());
     assert!(vcx.debug_bounds("voice-signal-icon").is_some());
@@ -406,7 +414,8 @@ fn a11y_labels_and_roles_render_without_panic(cx: &mut TestAppContext) {
     assert!(vcx.debug_bounds("voice-share-btn").is_some());
     assert!(vcx.debug_bounds("user-panel-mute").is_some());
     assert!(vcx.debug_bounds("user-panel-deafen").is_some());
-    assert!(vcx.debug_bounds("edit-selected-channel-btn").is_some());
+    assert!(vcx.debug_bounds("edit-selected-channel-btn").is_none());
+    assert!(vcx.debug_bounds("edit-channel-12").is_some());
     assert!(vcx.debug_bounds("toggle-search").is_some());
     assert!(vcx.debug_bounds("toggle-member-list").is_some());
 }

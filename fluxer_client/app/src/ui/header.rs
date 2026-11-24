@@ -3,9 +3,8 @@
 //! + optional topic; right toolbar displays `[Bell]`, `[Threads]`, `[Pins]`, `[Favorites (Star)]`,
 //! `[Member List (Users)]`, `[Search messages pill]`, and `[Inbox (Tray)]`.
 
-use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Icon, Sizable as _};
-use gpui_kit::{AnyElement, Context, FontWeight, Role, SharedString, div, prelude::*, px, rgb};
+use gpui_kit::{AnyElement, Context, FontWeight, Role, div, prelude::*, px, rgb};
 
 use crate::client_view::{ClientView, HeaderHoverTarget};
 use crate::icons::AppIcon;
@@ -74,10 +73,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     };
     let channel_muted = view.selected_channel_muted();
     let is_dm = view.place == Place::Home;
-    let header_group: SharedString = "channel-header-group".into();
 
     div()
-        .group(header_group.clone())
         .h(px(theme.sizes.header_height))
         .flex_none()
         .flex()
@@ -143,28 +140,6 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .gap(px(8.))
                 .relative()
                 .flx("channel.channel-header.header-right-section")
-                .when_some(view.selected_channel.filter(|_| view.can_manage_selected_channel), |d, ch_id| {
-                    d.child(
-                        div()
-                            .absolute()
-                            .left(px(-40.))
-                            .debug_selector(|| "edit-selected-channel-btn".to_owned())
-                            .opacity(0.)
-                            .group_hover(header_group, |s| s.opacity(1.))
-                            .child(
-                                Button::new("edit-selected-channel-btn")
-                                    .ghost()
-                                    .with_size(px(32.))
-                                    .rounded(px(16.))
-                                    .icon(hdr_icon(AppIcon::Gear, theme.muted_foreground))
-                                    .tooltip(l10n::tr("Channel settings"))
-                                    .accessibility_label(l10n::tr("Channel settings"))
-                                    .on_click(cx.listener(move |this, _, window, cx| {
-                                        this.open_edit_channel(ch_id, window, cx)
-                                    })),
-                            ),
-                    )
-                })
                 .when(view.selected_channel.is_some(), |d| {
                     let label = match (is_dm, channel_muted) {
                         (true, true) => l10n::tr("Unmute DM"),

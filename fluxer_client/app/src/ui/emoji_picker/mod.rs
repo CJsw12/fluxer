@@ -27,6 +27,15 @@ pub use view::render;
 /// Key context of the emoji picker popover.
 pub const CONTEXT: &str = "EmojiPicker";
 
+/// Active top tab inside the composer expression picker (`ExpressionPickerPopout`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ExpressionTab {
+    Media,
+    Stickers,
+    #[default]
+    Emojis,
+}
+
 /// Computes visible emoji grid column count from panel width (`48px` column track).
 pub fn columns_for_width(width: f32) -> usize {
     ((width - 64.0) / 48.0).floor().clamp(5.0, 24.0) as usize
@@ -34,6 +43,8 @@ pub fn columns_for_width(width: f32) -> usize {
 
 pub struct EmojiPicker {
     pub target: PickerTarget,
+    pub active_tab: ExpressionTab,
+    pub media_filter: &'static str,
     pub anchor: Point<Pixels>,
     pub input: Entity<InputState>,
     /// 0 = default, 1..=5 = skin tone index.
@@ -99,10 +110,14 @@ impl EmojiPicker {
     }
 
     pub fn sync_placeholder(&self, window: &mut Window, cx: &mut gpui_kit::App) {
-        let placeholder = self
-            .inspected()
-            .map(EmojiChoice::label)
-            .unwrap_or_else(|| l10n::tr("Search emoji"));
+        let placeholder = match self.active_tab {
+            ExpressionTab::Media => l10n::tr("Search media"),
+            ExpressionTab::Stickers => l10n::tr("Search stickers"),
+            ExpressionTab::Emojis => self
+                .inspected()
+                .map(EmojiChoice::label)
+                .unwrap_or_else(|| l10n::tr("Search emoji")),
+        };
         self.input.update(cx, |s, cx| {
             if s.presentation().placeholder().as_ref() != placeholder {
                 s.set_placeholder(placeholder, window, cx);
@@ -121,6 +136,30 @@ impl ClientView {
             let y = (bounds.size.height - px(70.)).max(px(404.));
             self.open_emoji_picker(PickerTarget::Composer, point(x, y), window, cx);
         }
+    }
+
+    pub(crate) fn toggle_expression_tab(
+        &mut self,
+        tab: ExpressionTab,
+        anchor: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let dismissed = self.dismissed_expression_tab.take();
+        if matches!(
+            &self.overlay,
+            Overlay::EmojiPicker(picker)
+                if picker.target == PickerTarget::Composer && picker.active_tab == tab
+        ) || dismissed == Some((PickerTarget::Composer, tab))
+        {
+            self.close_overlay(window, cx);
+            return;
+        }
+        if matches!(&self.overlay, Overlay::EmojiPicker(picker) if picker.target == PickerTarget::Composer) {
+            self.expression_picker_select_tab(tab, window, cx);
+            return;
+        }
+        self.open_expression_picker(PickerTarget::Composer, tab, anchor, window, cx);
     }
 
     pub(crate) fn open_reaction_emoji_picker(
@@ -142,13 +181,30 @@ impl ClientView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.open_expression_picker(target, ExpressionTab::Emojis, anchor, window, cx);
+    }
+
+    pub(crate) fn open_expression_picker(
+        &mut self,
+        target: PickerTarget,
+        tab: ExpressionTab,
+        anchor: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.prepare_overlay_replace(cx);
         self.autocomplete = None;
+        let active_tab = if target == PickerTarget::Composer { tab } else { ExpressionTab::Emojis };
+        let placeholder = match active_tab {
+            ExpressionTab::Media => l10n::tr("Search media"),
+            ExpressionTab::Stickers => l10n::tr("Search stickers"),
+            ExpressionTab::Emojis => l10n::tr("Search emoji"),
+        };
         let sections = {
             let state = self.backend.state();
             build_sections(&state, self.selected_channel, &self.frecency.data, now_ms())
         };
-        let input = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Search emoji")));
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(placeholder));
         let subscription = cx.subscribe_in(&input, window, |this: &mut Self, _, ev: &InputEvent, _, cx| {
             if let InputEvent::Change = ev {
                 this.emoji_picker_query_changed(cx);
@@ -156,6 +212,8 @@ impl ClientView {
         });
         let mut picker = EmojiPicker {
             target,
+            active_tab,
+            media_filter: "All",
             anchor,
             input: input.clone(),
             tone: 0,
@@ -177,6 +235,38 @@ impl ClientView {
         cx.notify();
     }
 
+    pub(crate) fn expression_picker_select_tab(
+        &mut self,
+        tab: ExpressionTab,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let focus = {
+            let Overlay::EmojiPicker(picker) = &mut self.overlay else { return };
+            if picker.target != PickerTarget::Composer {
+                return;
+            }
+            if picker.active_tab != tab {
+                picker.active_tab = tab;
+                picker.tone_menu_open = false;
+                picker.hovered = None;
+            }
+            picker.sync_placeholder(window, cx);
+            picker.input.read(cx).focus_handle(cx)
+        };
+        window.focus(&focus, cx);
+        cx.notify();
+    }
+
+    pub(crate) fn expression_picker_set_media_filter(&mut self, filter: &'static str, cx: &mut Context<Self>) {
+        if let Overlay::EmojiPicker(picker) = &mut self.overlay
+            && picker.media_filter != filter
+        {
+            picker.media_filter = filter;
+            cx.notify();
+        }
+    }
+
     fn emoji_picker_composing(&self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let Overlay::EmojiPicker(picker) = &self.overlay else { return false };
         picker.input.update(cx, |s, cx| s.marked_text_range(window, cx)).is_some()
@@ -185,6 +275,10 @@ impl ClientView {
     fn emoji_picker_query_changed(&mut self, cx: &mut Context<Self>) {
         let query = {
             let Overlay::EmojiPicker(picker) = &self.overlay else { return };
+            if picker.active_tab != ExpressionTab::Emojis {
+                cx.notify();
+                return;
+            }
             picker.input.read(cx).value().to_string()
         };
         let results = if normalize_picker_query(&query).is_empty() {
@@ -207,6 +301,9 @@ impl ClientView {
             return;
         }
         if let Overlay::EmojiPicker(picker) = &mut self.overlay {
+            if picker.active_tab != ExpressionTab::Emojis {
+                return;
+            }
             picker.move_selection(dr, dc);
             picker.sync_placeholder(window, cx);
             cx.notify();
@@ -257,6 +354,9 @@ impl ClientView {
         }
         let choice = {
             let Overlay::EmojiPicker(picker) = &self.overlay else { return };
+            if picker.active_tab != ExpressionTab::Emojis {
+                return;
+            }
             picker.selected_choice().cloned()
         };
         if let Some(choice) = choice {

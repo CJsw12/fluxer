@@ -2,16 +2,19 @@
 //! resizable `uniform_list` grid, and hovered-emoji inspector.
 
 use fluxer_client_core::search::emoji::{EmojiCategory, EmojiChoice};
+use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Enter, Escape, Input, MoveDown, MoveLeft, MoveRight, MoveUp};
+use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
-    AnyElement, Context, FontWeight, KeyDownEvent, MouseButton, MouseDownEvent, ObjectFit, Pixels, SharedString,
-    Size, div, img, prelude::*, px, uniform_list,
+    AnyElement, Context, FontWeight, KeyDownEvent, MouseButton, MouseDownEvent, ObjectFit, Pixels, Role, SharedString,
+    Size, div, img, prelude::*, px, rgb, rgba, uniform_list,
 };
 
-use super::sections::{SKIN_TONES, SectionKind};
-use super::{CONTEXT, EmojiPicker};
+use super::sections::{PickerTarget, SKIN_TONES, SectionKind};
+use super::{CONTEXT, EmojiPicker, ExpressionTab};
 use crate::client_view::{ClientView, ResizeEdge};
 use crate::format::initials;
+use crate::icons::AppIcon;
 use crate::parity_probe::FlxExt as _;
 use crate::prefs::{
     EMOJI_PICKER_HEIGHT_MAX, EMOJI_PICKER_HEIGHT_MIN, EMOJI_PICKER_WIDTH_MAX, EMOJI_PICKER_WIDTH_MIN,
@@ -354,6 +357,215 @@ pub fn render(
     .size(px(20.))
     .cursor_nwse_resize();
 
+    let dark = theme.background.l < 0.5;
+    let tab_active_bg: gpui_kit::Hsla = if dark { rgb(0x3a3644).into() } else { theme.accent };
+    let tab_hover_bg: gpui_kit::Hsla = if dark { rgba(0xffffff12).into() } else { theme.hover_bg };
+
+    let tab_bar = (picker.target == PickerTarget::Composer).then(|| {
+        let tabs = [
+            (ExpressionTab::Media, "Media"),
+            (ExpressionTab::Stickers, "Stickers"),
+            (ExpressionTab::Emojis, "Emojis"),
+        ];
+        div()
+            .flex_none()
+            .h(px(40.))
+            .px_3()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(8.))
+            .border_b_1()
+            .border_color(theme.border)
+            .children(tabs.into_iter().map(|(tab, label)| {
+                let active = picker.active_tab == tab;
+                let text = l10n::tr(label);
+                div()
+                    .id(SharedString::from(format!("expression-tab-{label}")))
+                    .debug_selector(move || format!("expression-tab-{label}"))
+                    .role(Role::Button)
+                    .aria_selected(active)
+                    .px_3()
+                    .py_1()
+                    .rounded(px(6.))
+                    .cursor_pointer()
+                    .text_sm()
+                    .font_weight(if active { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM })
+                    .text_color(if active { theme.foreground } else { theme.muted_foreground })
+                    .when(active, |d| d.bg(tab_active_bg))
+                    .when(!active, |d| d.hover(move |s| s.bg(tab_hover_bg)))
+                    .flx_text("expressions.expression-picker-popout.tab.button", text.clone())
+                    .child(text)
+                    .on_click(cx.listener(move |this, _, window, cx| this.expression_picker_select_tab(tab, window, cx)))
+            }))
+    });
+
+    let body: AnyElement = match picker.active_tab {
+        ExpressionTab::Emojis => div()
+            .flex_1()
+            .min_h_0()
+            .flex()
+            .flex_col()
+            .flx("expressions.emoji-picker.container")
+            .child(
+                div()
+                    .flex_none()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap_2()
+                    .p_2()
+                    .child(div().flex_1().child(Input::new(&picker.input)))
+                    .child(tone_button),
+            )
+            .children(tone_strip)
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .flex()
+                    .flex_row()
+                    .border_t_1()
+                    .border_color(theme.border)
+                    .children(rail)
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .flex_1()
+                            .min_w_0()
+                            .h_full()
+                            .min_h_0()
+                            .children(section_header)
+                            .child(grid),
+                    ),
+            )
+            .child(inspector)
+            .into_any_element(),
+        ExpressionTab::Stickers => {
+            let empty_title = l10n::tr("No stickers yet");
+            div()
+                .id("sticker-picker-panel")
+                .debug_selector(|| "sticker-picker-panel".to_owned())
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .child(div().flex_none().p_2().border_b_1().border_color(theme.border).child(Input::new(&picker.input)))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_h_0()
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .justify_center()
+                        .gap_2()
+                        .px_6()
+                        .child(Icon::new(AppIcon::Sticker).with_size(px(36.)).text_color(theme.muted_foreground))
+                        .child(
+                            div()
+                                .text_base()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(theme.foreground)
+                                .flx_text("expressions.sticker-picker.empty", empty_title.clone())
+                                .child(empty_title),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(theme.muted_foreground)
+                                .child(l10n::tr("Stickers added to your communities show up here.")),
+                        ),
+                )
+                .into_any_element()
+        }
+        ExpressionTab::Media => {
+            let empty_title = l10n::tr("No saved media");
+            let pills = ["All", "Images", "Videos", "Audio", "GIFs"];
+            div()
+                .id("media-picker-panel")
+                .debug_selector(|| "media-picker-panel".to_owned())
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .child(div().flex_none().p_2().child(Input::new(&picker.input)))
+                .child(
+                    div()
+                        .flex_none()
+                        .px_2()
+                        .pb_2()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_1()
+                        .border_b_1()
+                        .border_color(theme.border)
+                        .children(pills.into_iter().map(|pill| {
+                            let active = picker.media_filter == pill;
+                            div()
+                                .id(SharedString::from(format!("media-filter-{pill}")))
+                                .debug_selector(move || format!("media-filter-{pill}"))
+                                .role(Role::Button)
+                                .aria_selected(active)
+                                .px_2()
+                                .py_1()
+                                .rounded(px(6.))
+                                .cursor_pointer()
+                                .text_xs()
+                                .font_weight(if active { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM })
+                                .text_color(if active { theme.foreground } else { theme.muted_foreground })
+                                .when(active, |d| d.bg(tab_active_bg))
+                                .when(!active, |d| d.bg(theme.background).hover(move |s| s.bg(tab_hover_bg)))
+                                .child(l10n::tr(pill))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.expression_picker_set_media_filter(pill, cx);
+                                }))
+                        })),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_h_0()
+                        .flex()
+                        .flex_col()
+                        .items_center()
+                        .justify_center()
+                        .gap_2()
+                        .px_6()
+                        .child(Icon::new(AppIcon::Image).with_size(px(36.)).text_color(theme.muted_foreground))
+                        .child(
+                            div()
+                                .text_base()
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(theme.foreground)
+                                .flx_text("expressions.media-picker.empty", empty_title.clone())
+                                .child(empty_title),
+                        )
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(theme.muted_foreground)
+                                .child(l10n::tr("Save some media from messages to get started!")),
+                        )
+                        .child(
+                            div().mt_2().child(
+                                Button::new("media-picker-upload")
+                                    .primary()
+                                    .small()
+                                    .label(l10n::tr("Upload a file"))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        this.close_overlay(window, cx);
+                                        this.pick_files(cx);
+                                    })),
+                            ),
+                        ),
+                )
+                .into_any_element()
+        }
+    };
+
     let content = div()
         .id("emoji-picker-popover")
         .key_context(CONTEXT)
@@ -400,40 +612,8 @@ pub fn render(
             cx.stop_propagation();
             this.close_overlay(window, cx);
         }))
-        .child(
-            div()
-                .flex_none()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap_2()
-                .p_2()
-                .child(div().flex_1().child(Input::new(&picker.input)))
-                .child(tone_button),
-        )
-        .children(tone_strip)
-        .child(
-            div()
-                .flex_1()
-                .min_h_0()
-                .flex()
-                .flex_row()
-                .border_t_1()
-                .border_color(theme.border)
-                .children(rail)
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .flex_1()
-                        .min_w_0()
-                        .h_full()
-                        .min_h_0()
-                        .children(section_header)
-                        .child(grid),
-                ),
-        )
-        .child(inspector)
+        .children(tab_bar)
+        .child(body)
         .child(top_handle)
         .child(left_handle)
         .child(corner_handle);
@@ -451,7 +631,12 @@ pub fn render(
         viewport,
         theme,
         move |window, cx| {
-            let _ = view_dismiss.update(cx, |v, cx| v.close_overlay(window, cx));
+            let _ = view_dismiss.update(cx, |v, cx| {
+                if let overlay::Overlay::EmojiPicker(p) = &v.overlay {
+                    v.dismissed_expression_tab = Some((p.target, p.active_tab));
+                }
+                v.close_overlay(window, cx);
+            });
         },
         move |ev, window, cx| {
             let _ = view_move.update(cx, |v, cx| v.handle_resize_move(ev, window, cx));

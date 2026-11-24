@@ -6,7 +6,6 @@
 //! danger highlight and moderator/permission lock state).
 
 use fluxer_client_core::state::{Snowflake, Status};
-use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
     AnyElement, ClipboardItem, Context, FontWeight, Hsla, MouseButton, ObjectFit, Role, SharedString, deferred, div, img,
@@ -148,8 +147,6 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     };
 
 
-    let panel_group: SharedString = "user-panel-group".into();
-
     let mut status_color_text = theme.muted_foreground;
     status_color_text.a = 0.85;
 
@@ -170,7 +167,6 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .child(
             div()
                 .id("user-panel")
-                .group(panel_group.clone())
                 .debug_selector(|| "user-panel".to_owned())
                 .flx("app.user-area.user-area-inner.user-area-container")
                 .min_h(px(58.))
@@ -264,27 +260,6 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .relative()
                         .pl(px(12.))
                         .flx("app.user-area.user-area-inner.controls-container")
-                        .when(view.accounts_enabled, |d| {
-                            d.child(
-                                div()
-                                    .debug_selector(|| "switch-accounts".to_owned())
-                                    .absolute()
-                                    .left(px(-36.))
-                                    .opacity(0.)
-                                    .group_hover(panel_group, |s| s.opacity(1.))
-                                    .child(
-                                        Button::new("switch-accounts")
-                                            .ghost()
-                                            .small()
-                                            .icon(AppIcon::Users)
-                                            .tooltip(l10n::tr("Switch accounts"))
-                                            .accessibility_label(l10n::tr("Switch accounts"))
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                this.open_account_switcher(window, cx);
-                                            })),
-                                    ),
-                            )
-                        })
                         .child(render_control_icon_button(
                             "user-panel-mute",
                             if effective_muted {
@@ -405,11 +380,23 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
     if !view.user_area_popout_open {
         return None;
     }
-    let uid = view.user.as_ref()?.id;
-    let card = {
+    let active_saved = view.saved_accounts.iter().find(|a| a.is_active);
+    let uid = view
+        .user
+        .as_ref()
+        .map(|u| u.id)
+        .or_else(|| active_saved.and_then(|a| a.user_id.parse::<u64>().ok()).map(Snowflake))
+        .unwrap_or(Snowflake(0));
+    let mut card = {
         let state = view.backend.state();
         build_profile_card(&state, view.backend.media(), uid, None, view.profile_cache.get(&(uid, None)))
     };
+    if view.user.is_none()
+        && let Some(acct) = active_saved
+    {
+        card.display_name = acct.display_name.to_string();
+        card.avatar_url = acct.avatar_url.as_ref().map(ToString::to_string);
+    }
     let banner_color = rgb(card.banner_color);
     let status = view.own_status;
     let secondary: Hsla = rgb(SECONDARY_TEXT).into();

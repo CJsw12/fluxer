@@ -470,17 +470,25 @@ fn join_guild_shortcut_preview_accept_and_guild_create(cx: &mut TestAppContext) 
 #[gpui_kit::test]
 fn leave_guild_non_owner_vs_owner(cx: &mut TestAppContext) {
     let (rt, backend, view, cx) = open_social_fixture(cx);
+    let click_guild_leave = |cx: &mut VisualTestContext| {
+        let menu_btn = cx.debug_bounds("guild-header-menu-btn").expect("guild menu trigger drawn").center();
+        cx.simulate_click(menu_btn, Modifiers::default());
+        cx.run_until_parked();
+        draw(cx);
+        let leave_btn = cx.debug_bounds("guild-popout-leave").expect("leave option shown for non-owner").center();
+        cx.simulate_click(leave_btn, Modifiers::default());
+        cx.run_until_parked();
+        draw(cx);
+    };
 
-    // Non-owner guild exposes leave button; Escape closes modal and restores composer focus
+    // Non-owner guild exposes leave option in guild menu; Escape closes modal and restores composer focus
     view.update(cx, |v, cx| v.select_place(Place::Guild(GUILD_MEMBER), cx));
     cx.run_until_parked();
     draw(cx);
     focus_composer(&view, cx);
     assert!(!view.read_with(cx, |v, _| v.current_guild_is_owner()));
-    let leave_btn = cx.debug_bounds("leave-guild-btn").expect("leave button shown for non-owner").center();
-    cx.simulate_click(leave_btn, Modifiers::default());
-    cx.run_until_parked();
-    draw(cx);
+    assert!(cx.debug_bounds("leave-guild-btn").is_none());
+    click_guild_leave(cx);
     assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::LeaveGuild(_))));
 
     cx.simulate_keystrokes("escape");
@@ -493,10 +501,7 @@ fn leave_guild_non_owner_vs_owner(cx: &mut TestAppContext) {
     assert!(composer_focused, "Escape on LeaveGuild closes modal instead of composer");
 
     // Reopen and confirm leave
-    let leave_btn = cx.debug_bounds("leave-guild-btn").expect("leave button shown").center();
-    cx.simulate_click(leave_btn, Modifiers::default());
-    cx.run_until_parked();
-    draw(cx);
+    click_guild_leave(cx);
     let confirm_btn = cx.debug_bounds("leave-guild-confirm").expect("leave confirm drawn").center();
     cx.simulate_click(confirm_btn, Modifiers::default());
     cx.run_until_parked();
@@ -528,12 +533,19 @@ fn leave_guild_non_owner_vs_owner(cx: &mut TestAppContext) {
     cx.run_until_parked();
     assert_eq!(view.read_with(cx, |v, _| (v.place, v.selected_channel, v.last_guild)), (Place::Home, None, None));
 
-    // Owner guild hides leave button and ignores open_leave_guild
+    // Owner guild hides leave option and ignores open_leave_guild
     view.update(cx, |v, cx| v.select_place(Place::Guild(GUILD_OWNER), cx));
     cx.run_until_parked();
     draw(cx);
     assert!(view.read_with(cx, |v, _| v.current_guild_is_owner()));
     assert!(cx.debug_bounds("leave-guild-btn").is_none());
+    let menu_btn = cx.debug_bounds("guild-header-menu-btn").expect("guild menu trigger drawn").center();
+    cx.simulate_click(menu_btn, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    assert!(cx.debug_bounds("guild-popout-leave").is_none());
+    cx.simulate_click(menu_btn, Modifiers::default());
+    cx.run_until_parked();
     view.update_in(cx, |v, window, cx| v.open_leave_guild(GUILD_OWNER, window, cx));
     cx.run_until_parked();
     assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::None)));

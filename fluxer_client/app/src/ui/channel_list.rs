@@ -78,9 +78,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             let can_leave = !view.current_guild_is_owner();
             let can_manage_roles = view.backend.state().can_manage_guild_roles(id);
             let menu_open = view.guild_header_popout_open;
-            let header_group: SharedString = "guild-header-group".into();
             let header_row = div()
-                .group(header_group.clone())
                 .relative()
                 .h(px(theme.sizes.header_height))
                 .flex_none()
@@ -112,78 +110,6 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .font_weight(FontWeight::SEMIBOLD)
                         .flx_text("app.guild-header.guild-name", name.to_string())
                         .child(name),
-                )
-                .child(
-                    div()
-                        .id("guild-header-actions")
-                        .absolute()
-                        .right(px(40.))
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap_0p5()
-                        .opacity(0.)
-                        .group_hover(header_group, |s| s.opacity(1.))
-                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                        .on_click(|_, _, cx| cx.stop_propagation())
-                        .when(view.can_manage_guild_channels, |d| {
-                            d.child(
-                                div().debug_selector(|| "create-channel-btn".to_owned()).child(
-                                    Button::new("create-channel-btn")
-                                        .ghost()
-                                        .xsmall()
-                                        .icon(AppIcon::Plus)
-                                        .tooltip(l10n::tr("Create channel"))
-                                        .accessibility_label(l10n::tr("Create channel"))
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.open_create_channel(None, window, cx)
-                                        })),
-                                ),
-                            )
-                        })
-                        .when(view.can_ban_members, |d| {
-                            d.child(
-                                div().debug_selector(|| "guild-bans-btn".to_owned()).child(
-                                    Button::new("guild-bans-btn")
-                                        .ghost()
-                                        .xsmall()
-                                        .icon(AppIcon::Prohibit)
-                                        .tooltip(l10n::tr("Bans"))
-                                        .accessibility_label(l10n::tr("Bans"))
-                                        .on_click(cx.listener(|this, _, window, cx| this.open_guild_bans(window, cx))),
-                                ),
-                            )
-                        })
-                        .when(can_manage_roles, |d| {
-                            d.child(
-                                div().debug_selector(|| "guild-roles-btn".to_owned()).child(
-                                    Button::new("guild-roles-btn")
-                                        .ghost()
-                                        .xsmall()
-                                        .icon(AppIcon::SlidersHorizontal)
-                                        .tooltip(l10n::tr("Roles"))
-                                        .accessibility_label(l10n::tr("Roles"))
-                                        .on_click(cx.listener(move |this, _, window, cx| {
-                                            this.open_access(Scope::Guild(id), window, cx)
-                                        })),
-                                ),
-                            )
-                        })
-                        .when(can_leave, |d| {
-                            d.child(
-                                div().debug_selector(|| "leave-guild-btn".to_owned()).child(
-                                    Button::new("leave-guild-btn")
-                                        .ghost()
-                                        .xsmall()
-                                        .icon(AppIcon::SignOut)
-                                        .tooltip(l10n::tr("Leave community"))
-                                        .accessibility_label(l10n::tr("Leave community"))
-                                        .on_click(cx.listener(move |this, _, window, cx| {
-                                            this.open_leave_guild(id, window, cx)
-                                        })),
-                                ),
-                            )
-                        }),
                 )
                 .child(
                     div()

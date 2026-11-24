@@ -297,6 +297,8 @@ pub struct ClientView {
     pub(crate) voice_stage_expanded: bool,
     /// When true, the dedicated bottom-left `UserAreaPopout` menu (`UserArea.tsx`) is open above the user row.
     pub(crate) user_area_popout_open: bool,
+    /// Expression picker tab closed on the current `MouseDown` outside click so repeat clicks toggle instead of reopening.
+    pub(crate) dismissed_expression_tab: Option<(crate::ui::emoji_picker::sections::PickerTarget, crate::ui::emoji_picker::ExpressionTab)>,
     /// Hovered `UserAreaPopout` submenu (status / expiry / accounts).
     pub(crate) user_area_submenu: Option<crate::ui::user_panel::UserAreaSubmenu>,
     /// When true, the Guild Header dropdown menu (`GuildHeaderPopout.tsx`) is open below the guild header.
@@ -512,6 +514,7 @@ impl ClientView {
             voice_stage_open: false,
             voice_stage_expanded: true,
             user_area_popout_open: false,
+            dismissed_expression_tab: None,
             user_area_submenu: None,
             guild_header_popout_open: false,
             hovered_rail_item: None,
@@ -3241,6 +3244,9 @@ impl Render for ClientView {
             .bg(theme.background)
             .text_color(theme.foreground)
             .text_size(px(theme.sizes.text))
+            .capture_any_mouse_down(cx.listener(|v, _, _, _| {
+                v.dismissed_expression_tab = None;
+            }))
             .on_mouse_move(cx.listener(Self::handle_resize_move))
             .on_mouse_up(MouseButton::Left, cx.listener(|v, _, _, cx| v.finish_resize(cx)))
             .on_mouse_up_out(MouseButton::Left, cx.listener(|v, _, _, cx| v.finish_resize(cx)))

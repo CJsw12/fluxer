@@ -179,3 +179,41 @@ Git Bash에서는 `/channels/...` 인자가 Windows 경로로 바뀌지 않도�
 3. 토큰 드리프트는 공식 `ThemeVariableManifest.ts`를 단일 출처로 삼아 Rust 테마 상수를 생성하는 방식으로 막는다(Style Dictionary와 같은 발상, 손으로 옮기지 않음).
 4. 컴포넌트 단위 회귀는 GPUI 헤드리스 스냅샷(구조는 insta JSON, 픽셀은 허용 오차)으로 CI에서 잡는다. 실기 비교는 장면 단위로만 한다.
 5. Blitz·Servo로 공식 HTML/CSS를 그대로 그리는 방식은 공식 앱이 JS 의존이라 현재는 부적합하다. 정적 부분 실험 정도만 가치가 있다.
+
+### 10.6 자주 한 실수와 예방법
+- **성공 판정 없는 캡처를 검증으로 보고함** → 32장이 모두 연결 실패 화면이었는데 통과로 보고. 예방: 캡처마다 장면 성공(연결 상태, 기대 요소 존재)을 확인하고, 아니면 실패로 보고.
+- **`SSL_CERT_FILE`에 없는 파일 지정** → 클라이언트가 `Reconnecting…`에 멈춤. 예방: 이 변수는 설정하지 않는다.
+- **정적 감사(정규식) 통과를 1:1 일치로 착각** → 실측은 4/53만 일치. 예방: 판정은 공식 앱 실측 비교(`check_scene.py`)로만 한다.
+- **아이콘을 이름·소스로 짐작하거나 기억으로 SVG 작성** → 굵기(fill/regular) 오류. 예방: 실행 중인 공식 앱에서 뽑은 원본(`harvest_icons.mjs`, `official_icons.json`)만 쓴다.
+- **크롤러가 서버 데이터를 바꿈**(반응 추가, 알림 음소거) → 예방: 쓰기 차단 가드가 켜진 `crawl.mjs`만 쓰고, 크롤 뒤 상태 점검(PARITY_LAB 10.5).
+- **한 가지 상태만 비교**(호버·음성·음소거 미확인) → 호버 툴팁, 음성 배지, 화면 공유 결함을 놓침. 예방: 상태별(호버, 음성 참가, 음소거, 공유 중) 캡처를 함께 비교한다.
+- **"구현됨"을 동작 확인 없이 집계** → 화면 공유 미동작을 놓침. 예방: 기능은 자동 기능 시험(`share_check.py` 등)을 통과해야 완료로 센다.
+- **워커를 고치고 일반 패키징만 함** → `dist`에 옛 워커가 남음. 예방: `voice_worker`를 바꾸면 `-IncludeVoiceWorker`로 패키징.
+- **토글 버튼(음소거 등)을 상태 확인 없이 클릭** → 마이크가 켜질 수 있음. 예방: 접근성 이름(`Unmute microphone` 여부)을 먼저 읽고 필요할 때만 클릭.
+- **다른 계정·테마·버전으로 비교** → 색·본인 표시 차이를 결함으로 오인. 예방: 같은 테마·버전 기준, 본인 시점 표시는 제외하고 판단.
+- **비교 앱 상태를 바꿔 놓고 원복 안 함**(멤버 목록 숨김, 즐겨찾기, 음성 참가·공유) → 다음 측정이 어긋남. 예방: 작업 후 멤버 목록 표시·즐겨찾기 해제·음성 나가기·공유 중지 확인.
+- **에이전트 보고를 그대로 믿음** → 미검증 수치·추측이 섞임. 예방: 루트가 빌드 후 실측으로 다시 판정한다.
+- **Git Bash 경로 변환·키 경로 공백·백그라운드 2시간 제한** → 도구 실패. 예방: 위 "Tool quick reference"와 상시 실행 구성 항목 참고.
+- **개인 정보 커밋 위험** → 예방: 커밋 전 IP·키 경로·사용자 경로·계정 문자열을 검색하고, `Logs/`와 `*.local.md`는 커밋하지 않는다.
+
+### 10.7 도구 빠른 참조 (PowerShell·Git Bash 공통)
+Run everything from the repo root. In **PowerShell** there is no MSYS path mangling (ignore `MSYS_NO_PATHCONV`); in **Git Bash** prefix commands that pass `/channels/...` with `MSYS_NO_PATHCONV=1`. Python always `python -I`. Long jobs (builds, crawls) as background tasks with completion notification; never poll with sleep loops.
+
+**Orca computer use** (`orca computer ...`, Windows UIA via Orca; read-mostly for us)
+- `orca computer list-apps` — running apps with pid. Our Rust app = `fluxer_client`; the user's personal official app is also named `Fluxer` → never target it; the comparison copy is identified by its executable path (see the private ops note; use `--app pid:N`).
+- `orca computer get-app-state --app fluxer_client --no-screenshot [--query Status] [--max-elements 120]` — accessibility tree (roles + names, no coordinates). Main uses: connection check (`Status: Online`), whether the mic is muted (`Unmute microphone` present = muted), which buttons exist.
+- `get-app-state` without `--no-screenshot` returns a screenshot path in JSON (`--json`).
+- `click/type-text/press-key/drag` exist but input is NOT background-capable (`capabilities`: background=false) — it takes the user's foreground/mouse. Do not use them for routine automation; drive the Rust app with the probe IPC and the official app with CDP instead. Never bypass input blocked by occluded windows.
+**Rust app (probe IPC, needs FLUXER_PARITY_PROBE=1)** — `python -I tools/parity_lab/rust_probe.py <cmd>`
+- `resize 1280 800` · `link fluxer://channels/<g>/<c>` (also `fluxer://scene/voice/<g>/<c>`, `scene/voice-leave`, `scene/settings/<tab>`, `scene/user-area-popout`, ...; list in `fluxer_client/app/src/deep_links.rs`) · `click <data-flx> [index]` · `hover <data-flx>` · `key escape` · `inspect` (JSON of tagged element rects) · `shot out.png`. From Python: `rp.send('probe_click', x=.., y=..)`.
+**Official app (CDP on port 9334)**
+- Capture a scene: `node tools/parity_lab/web_capture.mjs --attach 9334 --origin fluxer-app://app --out OUT --scenes scenes.json`.
+- Crawl all buttons (write guard on): `node tools/parity_lab/crawl.mjs --attach 9334 --origin fluxer-app://app --route /channels/<g>/<c> --out OUT --depth 2 --max 220`; then run the state check (docs/PARITY_LAB.md 10.5).
+- Icons on screen → Phosphor ids: `node tools/parity_lab/harvest_icons.mjs --attach 9334`.
+- Voice helpers: `node tools/parity_lab/voice_official.mjs --attach 9334 join|watch|share|stop|leave [--guild G --channel C]`.
+**Loops and checks**
+- Dev loop: `python -I tools/parity_lab/cycle.py [--release] [--worker] [--skip-tests] [--check OFFICIAL.dom.json OFFICIAL.png <link> OUT]`.
+- Scene diff: `python -I tools/parity_lab/check_scene.py OFFICIAL.dom.json OFFICIAL.png <link> OUT [--official-offset 0,32]`; generic join: `compare.py`; replay crawl graph on Rust: `replay.py GRAPH_DIR OUT --link <link>`.
+- Screen share both ways: `python -I tools/parity_lab/share_check.py --guild G --channel C --out OUT` (needs release client with worker).
+- Icons: `python -I tools/parity_lab/check_icons.py` (manifest + originals, must be 0 errors); ground truth list `tools/parity_lab/official_icons.json`.
+- Tests: `cd fluxer_client; $env:CARGO_TARGET_DIR="<repo>\target\fc-root"; cargo test --workspace -j 4 -- --test-threads=2`; voice_worker: `cd fluxer_client\voice_worker; $env:CARGO_TARGET_DIR="<repo>\target\vw"; cargo test --release -j 4`.

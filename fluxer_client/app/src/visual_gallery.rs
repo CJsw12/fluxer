@@ -924,8 +924,8 @@ mod tests {
         draw(vcx);
         let img0_sel: &'static str = Box::leak(format!("attachment-open-{}-0", msg_id(2).0).into_boxed_str());
         let img0 = vcx.debug_bounds(img0_sel).expect("first attachment box");
-        assert_eq!(img0.size.width, px(180.));
-        assert_eq!(img0.size.height, px(120.));
+        assert_eq!(img0.size.width, px(273.));
+        assert_eq!(img0.size.height, px(273.));
 
         drop(rt);
     }

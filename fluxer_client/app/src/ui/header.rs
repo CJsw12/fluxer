@@ -152,7 +152,43 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .gap(px(8.))
                 .relative()
                 .flx("channel.channel-header.header-right-section")
-                .when(view.selected_channel.is_some(), |d| {
+                .when(view.selected_channel.is_some() && is_dm, |d| {
+                    // Official `CallButtons`: voice and video call come first in a DM; the
+                    // notification bell and threads button are guild-channel only.
+                    d.child(render_header_icon_button(
+                        "header-voice-call-btn",
+                        "channel.channel-header-components.call-buttons.voice-call-button.channel-header-icon.click",
+                        AppIcon::PhoneFill,
+                        l10n::tr("Start voice call"),
+                        l10n::tr("Start voice call"),
+                        &[],
+                        false,
+                        false,
+                        view.hovered_header_item == Some(HeaderHoverTarget::VoiceCall),
+                        theme,
+                        cx.listener(|this, hovered: &bool, _, cx| {
+                            this.set_header_hover(HeaderHoverTarget::VoiceCall, *hovered, cx);
+                        }),
+                        cx.listener(|this, _, _, cx| this.start_dm_voice_call(cx)),
+                    ))
+                    .child(render_header_icon_button(
+                        "header-video-call-btn",
+                        "channel.channel-header-components.call-buttons.video-call-button.channel-header-icon.click",
+                        AppIcon::VideoCameraFill,
+                        l10n::tr("Start video call"),
+                        l10n::tr("Start video call"),
+                        &[],
+                        false,
+                        false,
+                        view.hovered_header_item == Some(HeaderHoverTarget::VideoCall),
+                        theme,
+                        cx.listener(|this, hovered: &bool, _, cx| {
+                            this.set_header_hover(HeaderHoverTarget::VideoCall, *hovered, cx);
+                        }),
+                        cx.listener(|this, _, _, cx| this.start_dm_video_call(cx)),
+                    ))
+                })
+                .when(view.selected_channel.is_some() && !is_dm, |d| {
                     let label = match (is_dm, channel_muted) {
                         (true, true) => l10n::tr("Unmute DM"),
                         (true, false) => l10n::tr("Mute DM"),
@@ -195,7 +231,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             this.toggle_threads_popout(ev.position(), window, cx);
                         }),
                     ))
-                    .child(render_header_icon_button(
+                })
+                .when(view.selected_channel.is_some(), |d| {
+                    d.child(render_header_icon_button(
                         "header-pins-btn",
                         "channel.channel-header-components.channel-pins-button.channel-header-icon",
                         AppIcon::PushPin,

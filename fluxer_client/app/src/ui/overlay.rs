@@ -2,7 +2,7 @@
 
 use std::rc::Rc;
 
-use gpui_kit::component::{Icon, Sizable as _};
+use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::{
     Anchor, AnyElement, App, FontWeight, Hsla, MouseButton, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString,
@@ -112,6 +112,12 @@ pub fn settings_modal(
 
     let close_button = div()
         .debug_selector(|| "settings-close".to_owned())
+        .size(px(34.))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .flx("app.settings-modal-header.button.close")
         .child(
             Button::new("settings-close")
                 .ghost()
@@ -122,10 +128,11 @@ pub fn settings_modal(
                 .on_click(move |_, window, cx| on_dismiss_btn(window, cx)),
         );
 
+    // `SettingsModalHeader`: 60px bar, 16px side padding, 18px/600 title.
     let header = div()
-        .h(px(theme.sizes.settings_header_height))
+        .h(px(60.))
         .flex_none()
-        .px_6()
+        .px(px(16.))
         .border_b_1()
         .border_color(modal_border)
         .flex()
@@ -137,34 +144,59 @@ pub fn settings_modal(
                 .flex()
                 .flex_row()
                 .items_center()
-                .gap_2()
-                .child(div().text_base().font_weight(FontWeight::SEMIBOLD).child(title))
-                .child(Icon::new(AppIcon::LinkSimple).with_size(px(14.)).text_color(theme.muted_foreground)),
+                .gap(px(8.))
+                .h(px(28.))
+                .flex_1()
+                .mr(px(15.))
+                .flx("app.settings-modal-header.title-wrapper")
+                .child(
+                    div()
+                        .text_size(px(18.))
+                        .line_height(px(24.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .flx("app.settings-modal-header.title")
+                        .child(title),
+                ),
         )
         .child(close_button);
 
+    // `.desktopScroll`: 20px top spacer, content centred at <=740px, 32px bottom spacer; the tab
+    // container carries the 48px inline padding (740 - 96 = 644).
     let content_scroll = div()
         .id("settings-content-scroll")
         .flex_1()
         .min_h_0()
         .overflow_y_scroll()
-        .px_10()
-        .py_6()
+        .pt(px(20.))
+        .pb(px(32.))
+        .flx("app.settings-modal-layout.settings-modal-desktop-scroll.desktop-scroll")
         .child(
             div()
                 .w_full()
                 .max_w(px(theme.sizes.settings_content_max_width))
                 .mx_auto()
+                .px(px(48.))
                 .flex()
                 .flex_col()
-                .gap_6()
-                .child(body),
+                .gap(px(20.))
+                .flx("app.settings-modal-layout.settings-modal-desktop-scroll.desktop-scroll-inner")
+                .child(
+                    div()
+                        .w_full()
+                        .flex()
+                        .flex_col()
+                        .gap(px(20.))
+                        .flx("app.settings-tab-layout.settings-tab-container.container")
+                        .child(body),
+                ),
         );
 
     let sidebar_pane = div()
         .flex_none()
         .min_w(px(theme.sizes.settings_sidebar_width))
-        .w(gpui_kit::relative(0.24))
+        // `.desktopSidebar` flex-basis clamp(15.75rem, 24% of the modal layer, 20rem); the layer is
+        // panel / 0.88 (6% padding each side), and the panel box is 1px narrower than the layer share.
+        .w(gpui_kit::relative(0.2737))
         .max_w(px(320.))
         .h_full()
         .bg(sidebar_bg)
@@ -176,6 +208,7 @@ pub fn settings_modal(
         .child(sidebar);
 
     let content_pane = div()
+        .flx("app.settings-modal-layout.settings-modal-desktop-content-component.desktop-content")
         .flex_1()
         .min_w_0()
         .h_full()

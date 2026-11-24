@@ -18,6 +18,7 @@ use gpui_kit::{
 use crate::backend::voice::VoiceAudioSettings;
 use crate::client_view::ClientView;
 use crate::icons::AppIcon;
+use crate::parity_probe::FlxExt as _;
 use crate::prefs::{DEFAULT_VOICE_VOLUME, MAX_VOICE_VOLUME, MIN_VOICE_VOLUME, ReducedMotionPref};
 use crate::settings_model::{FONT_SIZE_OPTIONS, LOCALES, SettingsEffect, THEME_OPTIONS, theme_patch_value};
 use crate::theme::{self, MAX_FONT_SIZE, MAX_UI_ZOOM, MIN_FONT_SIZE, MIN_UI_ZOOM, Theme, ThemeKind};
@@ -752,19 +753,28 @@ fn sidebar_section_heading(title: String, theme: &Theme) -> impl IntoElement {
 }
 
 fn section_heading(title: String, theme: &Theme) -> impl IntoElement {
+    // `SettingsSection`: 28px title row, 18px/600 title (line-height 1.3), 8px gap to the link icon.
     div()
+        .h(px(28.))
         .flex()
         .flex_row()
         .items_center()
-        .gap_2()
+        .gap(px(8.))
+        .flx("app.settings-section.section-title-row")
         .child(
             div()
-                .text_base()
+                .text_size(px(18.))
+                .line_height(px(23.4))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(theme.foreground)
+                .flx("app.settings-section.section-title")
                 .child(title),
         )
-        .child(Icon::new(AppIcon::LinkSimple).with_size(px(13.)).text_color(theme.muted_foreground))
+        .child(
+            div()
+                .flx("app.settings-heading-link-button.link-icon")
+                .child(Icon::new(AppIcon::LinkSimple).with_size(px(15.)).text_color(theme.muted_foreground)),
+        )
 }
 
 fn info_card_row(title: String, subtitle: String, badge: Option<String>, theme: &Theme) -> AnyElement {

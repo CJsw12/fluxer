@@ -272,9 +272,16 @@ pub fn render(
                 .map(|image| media_viewer::from_attachment(image, scale))
                 .collect(),
         );
-        let mut images_grid = div().flex().flex_row().flex_wrap().gap_2().mt_1();
+        // Official `AttachmentMosaic`: a block at most 550px wide; one media keeps its fitted
+        // size, two media share square 273px tiles (`getMosaicTileBox`, 4px gap).
+        let image_count = row.images.len();
+        let mut images_grid = div().flex().flex_row().when(image_count != 2, |d| d.flex_wrap()).gap(px(if image_count == 2 { 4. } else { 8. }));
+        if image_count == 2 {
+            images_grid = images_grid.flx("channel.embeds.attachments.attachment-layout-grid.div");
+        }
         for (ix, image) in row.images.iter().enumerate() {
             let cover = row.image_covers.get(ix).copied().unwrap_or_default();
+            let (tile_w, tile_h) = if image_count == 2 { (273., 273.) } else { (image.width, image.height) };
             if (cover.spoiler || cover.nsfw) && !is_attachment_revealed(row.id, ix, cx) {
                 let label = if cover.nsfw {
                     format!("NSFW · {}", l10n::tr("Click to reveal"))
@@ -287,8 +294,8 @@ pub fn render(
                     div()
                         .id(SharedString::from(format!("attachment-cover-{}-{ix}", row.id.0)))
                         .debug_selector(move || format!("attachment-cover-{}-{ix}", row.id.0))
-                        .w(px(image.width))
-                        .h(px(image.height))
+                        .w(px(tile_w))
+                        .h(px(tile_h))
                         .flex_none()
                         .rounded(px(4.))
                         .flex()
@@ -324,12 +331,16 @@ pub fn render(
                     .id(SharedString::from(format!("attachment-open-{}-{ix}", row.id.0)))
                     .debug_selector(move || format!("attachment-open-{}-{ix}", row.id.0))
                     .relative()
-                    .w(px(image.width))
-                    .h(px(image.height))
+                    .w(px(tile_w))
+                    .h(px(tile_h))
                     .flex_none()
                     .rounded(px(4.))
                     .overflow_hidden()
                     .bg(placeholder)
+                    .when(image_count == 2, |d| {
+                        d.flx("channel.embeds.attachments.attachment-grid-item.media-container")
+                    })
+                    .when(image_count == 1, |d| d.flx("channel.embeds.media.embed-image.image-element"))
                     .cursor_pointer()
                     .on_click(move |_, window, cx| {
                         let items = (*items_for_click).clone();
@@ -340,10 +351,13 @@ pub fn render(
                         d.child(
                             div()
                                 .debug_selector(move || format!("attachment-gif-badge-{}-{ix}", row.id.0))
+                                .when(image_count == 2, |d| {
+                                    d.flx("channel.embeds.attachments.attachment-grid-item.gif-indicator")
+                                })
                                 .absolute()
                                 .top_2()
                                 .left_2()
-                                .px_1p5()
+                                .px(px(8.))
                                 .py_0p5()
                                 .rounded(px(4.))
                                 .bg(badge_bg)
@@ -355,7 +369,23 @@ pub fn render(
                     }),
             );
         }
-        content = content.child(images_grid);
+        let container = div()
+            .w_full()
+            .max_w(px(550.))
+            .overflow_hidden()
+            .flx("channel.embeds.attachments.attachment-mosaic.attachment-mosaic-component.mosaic-container")
+            .child(images_grid);
+        // `.mosaicContainerWrapper` has no vertical margin; the 2px comes from the message container.
+        content = content.child(
+            div()
+                .relative()
+                .w_full()
+                .max_w(px(550.))
+                .mt(px(2.))
+                .overflow_hidden()
+                .flx("channel.embeds.attachments.attachment-mosaic.attachment-mosaic-component.mosaic-container-wrapper")
+                .child(container),
+        );
     }
     if !row.file_attachments.is_empty() {
         let mut list = div().flex().flex_col().gap_1().mt_1();

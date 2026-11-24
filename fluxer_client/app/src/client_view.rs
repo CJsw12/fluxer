@@ -84,6 +84,8 @@ pub(crate) enum RailHoverTarget {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum HeaderHoverTarget {
     Mute,
+    VoiceCall,
+    VideoCall,
     Threads,
     Pins,
     Favorite,
@@ -2163,6 +2165,22 @@ impl ClientView {
         self.voice = self.backend.voice_snapshot();
         self.voice_stage_open = self.voice.channel_id.is_some();
         cx.notify();
+    }
+
+    /// DM header voice-call button (`CallButtons.tsx` `VoiceCallButton`): joins the DM voice call.
+    /// TODO(backlog): official `requestStartCall` also rings the recipient; the ring request is not ported.
+    pub(crate) fn start_dm_voice_call(&mut self, cx: &mut Context<Self>) {
+        if let Some(channel_id) = self.selected_channel {
+            self.join_voice_channel(channel_id, cx);
+        }
+    }
+
+    /// DM header video-call button (`CallButtons.tsx` `VideoCallButton`).
+    /// TODO(backlog): no camera capture/publish path exists in the voice worker yet, so this only
+    /// joins the call without turning the camera on; the recipient ring request is not ported either.
+    pub(crate) fn start_dm_video_call(&mut self, cx: &mut Context<Self>) {
+        let Some(channel_id) = self.selected_channel else { return };
+        self.join_voice_channel(channel_id, cx);
     }
 
     pub(crate) fn leave_voice_channel(&mut self, cx: &mut Context<Self>) {

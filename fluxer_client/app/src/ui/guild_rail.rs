@@ -227,7 +227,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 !has_image,
                 g.unread,
                 theme,
-                theme.muted,
+                theme.guild_list_foreground,
             )
             .flx("app.sidebar-nav.guild-list-item-presentation.guild-icon")
             .when(in_voice, |d| d.child(rail_tooltip::voice_badge(theme))),

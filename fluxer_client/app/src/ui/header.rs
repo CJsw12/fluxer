@@ -49,6 +49,7 @@ fn render_header_icon_button(
         .on_hover(on_hover)
         .on_click(on_click)
         .flx(flx)
+        .child(crate::ui::channel_popouts::track_trigger(id))
         .child(
             div()
                 .size(px(24.))

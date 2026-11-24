@@ -198,3 +198,21 @@ fn header_and_composer_popouts_switch_cleanly_and_toggle_close(cx: &mut TestAppC
     assert_eq!(composer.read_with(cx, |s, _| composer_text::wire_text(s)), "");
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn escape_closes_user_area_popout_without_prior_focus(cx: &mut TestAppContext) {
+    let (rt, _backend, view, cx) = open_popouts_client(cx);
+    cx.update(|window, cx| window.blur(cx));
+    view.update_in(cx, |v, window, cx| {
+        v.toggle_user_area_popout(cx);
+        assert!(v.user_area_popout_open);
+        let _ = window;
+    });
+    cx.run_until_parked();
+    draw(cx);
+    cx.run_until_parked();
+    cx.simulate_keystrokes("escape");
+    cx.run_until_parked();
+    assert!(!view.read_with(cx, |v, _| v.user_area_popout_open));
+    drop(rt);
+}

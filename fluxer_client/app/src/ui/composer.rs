@@ -49,6 +49,7 @@ pub fn render_with(
             .ml(px(4.))
             .debug_selector(|| "composer-upload".to_owned())
             .flx("channel.lexical-channel-textarea-content.plus-button-above-backdrop.clear-slash-command")
+            .child(crate::ui::channel_popouts::track_trigger("composer-upload-btn"))
             .child(
                 Button::new("composer-upload-btn")
                     .ghost()
@@ -66,6 +67,7 @@ pub fn render_with(
         div()
             .debug_selector(|| "composer-gif".to_owned())
             .flx("channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--2")
+            .child(crate::ui::channel_popouts::track_trigger("composer-gif-btn"))
             .child(
                 Button::new("composer-gif-btn")
                     .ghost()
@@ -83,6 +85,7 @@ pub fn render_with(
         div()
             .debug_selector(|| "composer-sticker".to_owned())
             .flx("channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--3")
+            .child(crate::ui::channel_popouts::track_trigger("composer-sticker-btn"))
             .child(
                 Button::new("composer-sticker-btn")
                     .ghost()
@@ -100,6 +103,7 @@ pub fn render_with(
         div()
             .debug_selector(|| "composer-emoji".to_owned())
             .flx("channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--4")
+            .child(crate::ui::channel_popouts::track_trigger("composer-emoji-btn"))
             .child(
                 Button::new("composer-emoji-btn")
                     .ghost()

@@ -2562,10 +2562,7 @@ impl ClientView {
             self.composer.update(cx, |s, cx| s.unmark_text(window, cx));
             return true;
         }
-        if self.user_area_popout_open {
-            self.user_area_popout_open = false;
-            self.user_area_submenu = None;
-            cx.notify();
+        if self.close_floating_popouts(window, cx) {
             return true;
         }
         if self.autocomplete.take().is_some() {
@@ -2585,6 +2582,29 @@ impl ClientView {
         }
         self.mark_channel_read(cx);
         false
+    }
+
+    /// A popout, menu, picker or modal is open.
+    fn layer_open(&self) -> bool {
+        self.overlay.is_open()
+            || self.user_area_popout_open
+            || self.guild_header_popout_open
+            || self.voice_popout.is_some()
+    }
+
+    /// Closes the non-overlay popouts (user area, guild header, voice) and returns
+    /// focus to the composer; false when none was open.
+    fn close_floating_popouts(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if !(self.user_area_popout_open || self.guild_header_popout_open || self.voice_popout.is_some()) {
+            return false;
+        }
+        self.user_area_popout_open = false;
+        self.user_area_submenu = None;
+        self.guild_header_popout_open = false;
+        self.voice_popout = None;
+        self.focus_composer(window, cx);
+        cx.notify();
+        true
     }
 
     /// Leaves replying / editing (the edit's draft comes back).
@@ -3228,6 +3248,12 @@ impl Render for ClientView {
             self.window_title = title;
         }
         ui::composer::sync_placeholder(self, window, cx);
+        // An open layer needs focus inside the layout, otherwise key bindings of the
+        // `ClientView` context (Escape) are not on the dispatch path.
+        if self.layer_open() && window.focused(cx).is_none() {
+            let focus = self.focus.clone();
+            window.defer(cx, move |window, cx| window.focus(&focus, cx));
+        }
         crate::format::set_time_24h(self.prefs.data.time_format_24h);
         let theme = Theme::current(cx);
         let mut right_panel = if self.search.is_some() {
@@ -3290,6 +3316,11 @@ impl Render for ClientView {
             .bg(theme.background)
             .text_color(theme.foreground)
             .text_size(px(theme.sizes.text))
+            .capture_action(cx.listener(|v, _: &shortcuts::MarkChannelRead, window, cx| {
+                if v.close_floating_popouts(window, cx) {
+                    cx.stop_propagation();
+                }
+            }))
             .capture_any_mouse_down(cx.listener(|v, _, _, _| {
                 v.dismissed_expression_tab = None;
                 v.dismissed_channel_popout = None;

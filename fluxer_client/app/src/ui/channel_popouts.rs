@@ -7,9 +7,12 @@ use fluxer_client_core::state::{
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
 use gpui_kit::component::{Icon, Sizable as _};
+use std::cell::RefCell;
+use std::collections::HashMap;
+
 use gpui_kit::{
-    Anchor, AnyElement, Context, Div, Entity, Focusable as _, FontWeight, MouseButton, Pixels, Point, Role, SharedString,
-    Size, Stateful, Window, anchored, div, prelude::*, px, rgb, rgba,
+    Anchor, AnyElement, Bounds, Context, Div, Entity, Focusable as _, FontWeight, MouseButton, Pixels, Point, Role,
+    SharedString, Size, Stateful, Window, anchored, canvas, div, prelude::*, px, rgb, rgba,
 };
 
 use crate::client_view::ClientView;
@@ -20,6 +23,53 @@ use crate::ui::overlay::Overlay;
 use crate::ui::{attachments, composer_text, l10n};
 
 pub const POPOUT_CONTEXT: &str = "ChannelPopout";
+
+thread_local! {
+    /// Trigger rects recorded at prepaint (UI thread only), keyed by trigger id.
+    static TRIGGER_BOUNDS: RefCell<HashMap<&'static str, Bounds<Pixels>>> = RefCell::new(HashMap::new());
+}
+
+/// An invisible child for a trigger element that records the trigger's bounds each
+/// frame, so popouts anchor to the trigger rect like the official app does.
+pub fn track_trigger(id: &'static str) -> impl IntoElement {
+    canvas(
+        move |bounds, _, _| {
+            TRIGGER_BOUNDS.with(|m| m.borrow_mut().insert(id, bounds));
+        },
+        |_, (), _, _| {},
+    )
+    .absolute()
+    .size_full()
+}
+
+fn trigger_rect(id: &'static str) -> Option<Bounds<Pixels>> {
+    TRIGGER_BOUNDS.with(|m| m.borrow().get(id).copied())
+}
+
+/// Anchor for header popouts: the trigger's (right, bottom); a click at a
+/// 32px trigger's centre is the fallback while bounds are unknown.
+pub(crate) fn header_anchor(id: &'static str, click: Point<Pixels>) -> Point<Pixels> {
+    match trigger_rect(id) {
+        Some(b) => gpui_kit::point(b.right(), b.bottom()),
+        None => gpui_kit::point(click.x + px(16.), click.y + px(16.)),
+    }
+}
+
+/// Anchor for the composer `+` menu: the trigger's (left, top).
+pub(crate) fn plus_anchor(id: &'static str, click: Point<Pixels>) -> Point<Pixels> {
+    match trigger_rect(id) {
+        Some(b) => gpui_kit::point(b.left(), b.top()),
+        None => gpui_kit::point(click.x - px(16.), click.y - px(16.)),
+    }
+}
+
+/// Anchor for the expression picker: (trigger right + 16, trigger top - 8).
+pub(crate) fn picker_anchor(id: &'static str, click: Point<Pixels>) -> Point<Pixels> {
+    match trigger_rect(id) {
+        Some(b) => gpui_kit::point(b.right() + px(16.), b.top() - px(8.)),
+        None => gpui_kit::point(click.x + px(32.), click.y - px(24.)),
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ThreadsTab {
@@ -104,6 +154,7 @@ impl ClientView {
         if !self.toggle_channel_popout_key("notification-settings", window, cx) {
             return;
         }
+        let anchor = header_anchor("toggle-channel-mute", anchor);
         self.prepare_overlay_replace(cx);
         self.autocomplete = None;
         self.overlay = Overlay::ChannelPopout(ChannelPopout {
@@ -122,6 +173,7 @@ impl ClientView {
         if !self.toggle_channel_popout_key("threads", window, cx) {
             return;
         }
+        let anchor = header_anchor("header-threads-btn", anchor);
         self.open_threads_popout(anchor, window, cx);
     }
 
@@ -164,6 +216,7 @@ impl ClientView {
         if !self.toggle_channel_popout_key("pinned-messages", window, cx) {
             return;
         }
+        let anchor = header_anchor("header-pins-btn", anchor);
         self.prepare_overlay_replace(cx);
         self.autocomplete = None;
         self.pins_seq = self.pins_seq.wrapping_add(1);
@@ -220,6 +273,7 @@ impl ClientView {
         if !self.toggle_channel_popout_key("composer-plus-menu", window, cx) {
             return;
         }
+        let anchor = plus_anchor("composer-upload-btn", anchor);
         self.prepare_overlay_replace(cx);
         self.autocomplete = None;
         self.overlay = Overlay::ChannelPopout(ChannelPopout {
@@ -327,13 +381,13 @@ pub fn render(
     let ax = f32::from(pop.anchor.x);
     let ay = f32::from(pop.anchor.y);
     // Official anchoring (spec rects): header-button popouts are right-aligned to the
-    // trigger button (32px, anchor = click point at its centre) and sit 8px below it;
+    // trigger button (anchor = trigger right/bottom) and sit 8px below it;
     // the inbox keeps its fixed 52px / right-16px slot; the composer menu opens upward
     // from the trigger's left edge with a 4px gap.
     let (anchor_corner, left, top) = match &pop.kind {
         ChannelPopoutKind::Inbox { .. } => (Anchor::TopLeft, (vw - width - 16.).max(16.), 52.0_f32.min((vh - height - 12.).max(44.))),
-        ChannelPopoutKind::ComposerPlusMenu => (Anchor::BottomLeft, (ax - 16.).clamp(16., (vw - width - 16.).max(16.)), ay - 20.),
-        _ => (Anchor::TopRight, (ax + 16.).clamp(width + 16., vw - 16.), (ay + 24.).clamp(44., (vh - height - 16.).max(44.))),
+        ChannelPopoutKind::ComposerPlusMenu => (Anchor::BottomLeft, ax.clamp(16., (vw - width - 16.).max(16.)), ay - 4.),
+        _ => (Anchor::TopRight, ax.clamp(width + 16., vw - 16.), (ay + 8.).clamp(44., (vh - height - 16.).max(44.))),
     };
 
     let weak_dismiss = cx.weak_entity();
@@ -1178,7 +1232,7 @@ fn render_composer_plus(has_text: bool, theme: &Theme, hover_bg: gpui_kit::Hsla,
             item_row("composer-menu-create-thread", AppIcon::Chats, thread_lbl.clone(), None)
                 .flx_text("ui.action-menu.context-menu.menu-item.item", thread_lbl)
                 .on_click(cx.listener(|this, _, window, cx| {
-                    let anchor = gpui_kit::point(px(660.), px(70.));
+                    let anchor = header_anchor("header-threads-btn", gpui_kit::point(px(660.), px(70.)));
                     this.open_threads_popout(anchor, window, cx);
                 })),
         )

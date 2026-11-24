@@ -3,6 +3,8 @@
     python -I tools/parity_lab/rust_probe.py inspect > out.json
     python -I tools/parity_lab/rust_probe.py resize 1280 800
     python -I tools/parity_lab/rust_probe.py click <flx> [index]
+    python -I tools/parity_lab/rust_probe.py dblclick <flx> [index]
+    python -I tools/parity_lab/rust_probe.py drag <flx> <to_x> <to_y> [index] [steps]
     python -I tools/parity_lab/rust_probe.py key escape
     python -I tools/parity_lab/rust_probe.py link fluxer://channels/<g>/<c>
     python -I tools/parity_lab/rust_probe.py shot out.png
@@ -76,6 +78,17 @@ def main(argv: list[str]) -> int:
         r = send("probe_resize", w=float(rest[0]), h=float(rest[1]))
     elif cmd == "click":
         r = send("probe_click", flx=rest[0], **({"index": int(rest[1])} if len(rest) > 1 else {}))
+    elif cmd == "dblclick":
+        r = send("probe_dblclick", flx=rest[0], **({"index": int(rest[1])} if len(rest) > 1 else {}))
+    elif cmd == "drag":
+        r = send(
+            "probe_drag",
+            flx=rest[0],
+            to_x=float(rest[1]),
+            to_y=float(rest[2]),
+            **({"index": int(rest[3])} if len(rest) > 3 else {}),
+            **({"steps": int(rest[4])} if len(rest) > 4 else {}),
+        )
     elif cmd == "hover":
         r = send("probe_hover", flx=rest[0], **({"index": int(rest[1])} if len(rest) > 1 else {}))
     elif cmd == "key":

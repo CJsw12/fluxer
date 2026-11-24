@@ -1,24 +1,28 @@
 //! Emoji picker view: search bar, skin-tone menu, category rail,
-//! 9-column `uniform_list` grid and hovered-emoji inspector.
+//! resizable `uniform_list` grid, and hovered-emoji inspector.
 
 use fluxer_client_core::search::emoji::{EmojiCategory, EmojiChoice};
 use gpui_kit::component::input::{Enter, Escape, Input, MoveDown, MoveLeft, MoveRight, MoveUp};
 use gpui_kit::{
-    AnyElement, Context, FontWeight, ObjectFit, SharedString, div, img, prelude::*, px, uniform_list,
+    AnyElement, Context, FontWeight, KeyDownEvent, MouseButton, MouseDownEvent, ObjectFit, Pixels, SharedString,
+    Size, div, img, prelude::*, px, uniform_list,
 };
 
-use super::sections::{COLUMNS, SKIN_TONES, SectionKind};
+use super::sections::{SKIN_TONES, SectionKind};
 use super::{CONTEXT, EmojiPicker};
-use crate::client_view::ClientView;
+use crate::client_view::{ClientView, ResizeEdge};
 use crate::format::initials;
+use crate::parity_probe::FlxExt as _;
+use crate::prefs::{
+    EMOJI_PICKER_HEIGHT_MAX, EMOJI_PICKER_HEIGHT_MIN, EMOJI_PICKER_WIDTH_MAX, EMOJI_PICKER_WIDTH_MIN,
+    snap_emoji_picker_width,
+};
 use crate::theme::Theme;
 use crate::ui::{l10n, overlay};
 
-const PANEL_WIDTH: f32 = 500.;
 const RAIL_WIDTH: f32 = 46.;
 const ROW_HEIGHT: f32 = 48.;
-const CELL_SIZE: f32 = 42.;
-const GRID_HEIGHT: f32 = 288.;
+const CELL_SIZE: f32 = 44.;
 
 fn rail_icon(kind: SectionKind, title: &str) -> SharedString {
     match kind {
@@ -57,7 +61,9 @@ fn render_emoji_cell(
             .id(SharedString::from(format!("picker-custom-emoji-{id}")))
             .size(px(26.))
             .object_fit(ObjectFit::Contain)
-            .with_fallback(move || div().text_xs().text_color(fallback_color).child(fallback_name.clone()).into_any_element())
+            .with_fallback(move || {
+                div().text_xs().text_color(fallback_color).child(fallback_name.clone()).into_any_element()
+            })
             .into_any_element()
     } else if choice.custom_id.is_some() {
         div().text_xs().truncate().child(format!(":{}:", choice.name)).into_any_element()
@@ -79,7 +85,7 @@ fn render_emoji_cell(
         .rounded(px(6.))
         .cursor_pointer()
         .when(selected, |d| d.bg(theme.accent))
-        .hover(|s| s.bg(theme.muted))
+        .hover(|s| s.bg(theme.hover_bg))
         .on_mouse_move(move |_, window, cx| {
             let _ = view_hover.update(cx, |v, cx| v.emoji_picker_hover(hover_choice.clone(), window, cx));
         })
@@ -91,15 +97,33 @@ fn render_emoji_cell(
         .into_any_element()
 }
 
-pub fn render(picker: &EmojiPicker, media: Option<&str>, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+pub fn render(
+    view: &ClientView,
+    picker: &EmojiPicker,
+    media: Option<&str>,
+    viewport: Size<Pixels>,
+    theme: &Theme,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
     let tone = picker.tone;
     let searching = picker.search_results.is_some();
     let rows = picker.rows.clone();
+    let cols = picker.columns.max(1);
     let selected_index = picker.selected_index;
     let empty = picker.active_choices().is_empty();
     let weak = cx.weak_entity();
     let theme_copy = *theme;
     let media_owned = media.map(str::to_owned);
+
+    let vw = f32::from(viewport.width);
+    let vh = f32::from(viewport.height);
+    let min_top = if vh >= 700. { 44. } else { 16. };
+    let eff_right = f32::from(picker.anchor.x).clamp((EMOJI_PICKER_WIDTH_MIN as f32 + 16.).min(vw - 16.), (vw - 16.).max(EMOJI_PICKER_WIDTH_MIN as f32 + 16.));
+    let eff_bottom = f32::from(picker.anchor.y).clamp((min_top + EMOJI_PICKER_HEIGHT_MIN as f32).min(vh - 16.), (vh - 16.).max(min_top + EMOJI_PICKER_HEIGHT_MIN as f32));
+    let max_w = (eff_right - 16.).clamp(EMOJI_PICKER_WIDTH_MIN as f32, EMOJI_PICKER_WIDTH_MAX as f32);
+    let max_h = (eff_bottom - min_top).clamp(EMOJI_PICKER_HEIGHT_MIN as f32, EMOJI_PICKER_HEIGHT_MAX as f32);
+    let panel_w = snap_emoji_picker_width(view.emoji_picker_width, max_w) as f32;
+    let panel_h = view.emoji_picker_height.clamp(EMOJI_PICKER_HEIGHT_MIN as f32, max_h);
 
     let search_placeholder = picker
         .inspected()
@@ -117,7 +141,7 @@ pub fn render(picker: &EmojiPicker, media: Option<&str>, theme: &Theme, cx: &mut
         .border_1()
         .border_color(theme.border)
         .cursor_pointer()
-        .hover(|s| s.bg(theme.muted))
+        .hover(|s| s.bg(theme.hover_bg))
         .child(SKIN_TONES[tone])
         .on_click(cx.listener(|this, _, _, cx| this.emoji_picker_toggle_tone_menu(cx)));
 
@@ -143,7 +167,7 @@ pub fn render(picker: &EmojiPicker, media: Option<&str>, theme: &Theme, cx: &mut
                     .rounded(px(4.))
                     .cursor_pointer()
                     .when(i == tone, |d| d.bg(theme.accent))
-                    .hover(|s| s.bg(theme.muted))
+                    .hover(|s| s.bg(theme.hover_bg))
                     .child(SKIN_TONES[i])
                     .on_click(cx.listener(move |this, _, _, cx| this.emoji_picker_set_tone(i, cx)))
             }))
@@ -163,14 +187,16 @@ pub fn render(picker: &EmojiPicker, media: Option<&str>, theme: &Theme, cx: &mut
                 .cursor_pointer()
                 .text_sm()
                 .when(active, |d| d.bg(theme.accent))
-                .hover(|s| s.bg(theme.muted))
+                .hover(|s| s.bg(theme.hover_bg))
                 .child(rail_icon(section.kind, &section.title))
                 .on_click(cx.listener(move |this, _, _, cx| this.emoji_picker_select_section(ix, cx)))
         });
         div()
             .id("emoji-category-rail")
             .w(px(RAIL_WIDTH))
-            .h(px(GRID_HEIGHT))
+            .h_full()
+            .min_h_0()
+            .flex_none()
             .flex()
             .flex_col()
             .items_center()
@@ -185,7 +211,7 @@ pub fn render(picker: &EmojiPicker, media: Option<&str>, theme: &Theme, cx: &mut
     let grid = if empty {
         div()
             .flex_1()
-            .h(px(GRID_HEIGHT))
+            .min_h_0()
             .flex()
             .items_center()
             .justify_center()
@@ -202,7 +228,7 @@ pub fn render(picker: &EmojiPicker, media: Option<&str>, theme: &Theme, cx: &mut
                     let mut cells = Vec::new();
                     if let Some(row) = row {
                         for (col_ix, choice) in row.iter().enumerate() {
-                            let idx = row_ix * COLUMNS + col_ix;
+                            let idx = row_ix * cols + col_ix;
                             cells.push(render_emoji_cell(
                                 choice,
                                 tone,
@@ -220,7 +246,7 @@ pub fn render(picker: &EmojiPicker, media: Option<&str>, theme: &Theme, cx: &mut
                         .flex()
                         .flex_row()
                         .items_center()
-                        .gap(px(2.))
+                        .gap(px(4.))
                         .px_2()
                         .children(cells)
                         .into_any_element()
@@ -229,7 +255,8 @@ pub fn render(picker: &EmojiPicker, media: Option<&str>, theme: &Theme, cx: &mut
         })
         .track_scroll(&picker.scroll)
         .w_full()
-        .h(px(GRID_HEIGHT));
+        .flex_1()
+        .min_h_0();
         list.into_any_element()
     };
 
@@ -237,6 +264,7 @@ pub fn render(picker: &EmojiPicker, media: Option<&str>, theme: &Theme, cx: &mut
         div()
             .px_2()
             .pt_1()
+            .flex_none()
             .text_xs()
             .font_weight(FontWeight::SEMIBOLD)
             .text_color(theme.muted_foreground)
@@ -244,6 +272,7 @@ pub fn render(picker: &EmojiPicker, media: Option<&str>, theme: &Theme, cx: &mut
     });
 
     let inspector = div()
+        .flex_none()
         .flex()
         .flex_row()
         .items_center()
@@ -273,29 +302,97 @@ pub fn render(picker: &EmojiPicker, media: Option<&str>, theme: &Theme, cx: &mut
             None => div().text_color(theme.muted_foreground).child(search_placeholder).into_any_element(),
         });
 
+    let make_handle = |id: &'static str, edge: ResizeEdge, aria: String| {
+        div()
+            .id(id)
+            .debug_selector(move || id.to_owned())
+            .aria_label(aria)
+            .absolute()
+            .track_focus(&view.emoji_resize_focus)
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, ev: &MouseDownEvent, window, cx| {
+                    cx.stop_propagation();
+                    this.begin_emoji_picker_resize(edge, ev, window, cx);
+                }),
+            )
+            .on_key_down(cx.listener(|this, ev: &KeyDownEvent, window, cx| {
+                this.handle_emoji_resize_key(ev, window, cx);
+            }))
+            .flx("ui.resizable-pane.resizable-pane-handles.handle.button")
+    };
+
+    let top_handle = make_handle(
+        "emoji-resize-top",
+        ResizeEdge::Top,
+        l10n::tr("Resize expression picker from the top edge"),
+    )
+    .top_0()
+    .left_0()
+    .right_0()
+    .h(px(8.))
+    .cursor_n_resize();
+
+    let left_handle = make_handle(
+        "emoji-resize-left",
+        ResizeEdge::Left,
+        l10n::tr("Resize expression picker from the left edge"),
+    )
+    .top_0()
+    .bottom_0()
+    .left_0()
+    .w(px(8.))
+    .cursor_w_resize();
+
+    let corner_handle = make_handle(
+        "emoji-resize-top-left",
+        ResizeEdge::TopLeft,
+        l10n::tr("Resize expression picker from top left"),
+    )
+    .top_0()
+    .left_0()
+    .size(px(20.))
+    .cursor_nwse_resize();
+
     let content = div()
         .id("emoji-picker-popover")
         .key_context(CONTEXT)
-        .w(px(PANEL_WIDTH))
+        .relative()
+        .size_full()
         .flex()
         .flex_col()
         .capture_action(cx.listener(|this, _: &MoveUp, window, cx| {
+            if this.emoji_resize_focus.is_focused(window) {
+                return;
+            }
             this.emoji_picker_move(-1, 0, window, cx);
             cx.stop_propagation();
         }))
         .capture_action(cx.listener(|this, _: &MoveDown, window, cx| {
+            if this.emoji_resize_focus.is_focused(window) {
+                return;
+            }
             this.emoji_picker_move(1, 0, window, cx);
             cx.stop_propagation();
         }))
         .capture_action(cx.listener(|this, _: &MoveLeft, window, cx| {
+            if this.emoji_resize_focus.is_focused(window) {
+                return;
+            }
             this.emoji_picker_move(0, -1, window, cx);
             cx.stop_propagation();
         }))
         .capture_action(cx.listener(|this, _: &MoveRight, window, cx| {
+            if this.emoji_resize_focus.is_focused(window) {
+                return;
+            }
             this.emoji_picker_move(0, 1, window, cx);
             cx.stop_propagation();
         }))
         .capture_action(cx.listener(|this, ev: &Enter, window, cx| {
+            if this.emoji_resize_focus.is_focused(window) {
+                return;
+            }
             cx.stop_propagation();
             this.emoji_picker_accept_selected(ev.shift, window, cx);
         }))
@@ -305,6 +402,7 @@ pub fn render(picker: &EmojiPicker, media: Option<&str>, theme: &Theme, cx: &mut
         }))
         .child(
             div()
+                .flex_none()
                 .flex()
                 .flex_row()
                 .items_center()
@@ -316,6 +414,8 @@ pub fn render(picker: &EmojiPicker, media: Option<&str>, theme: &Theme, cx: &mut
         .children(tone_strip)
         .child(
             div()
+                .flex_1()
+                .min_h_0()
                 .flex()
                 .flex_row()
                 .border_t_1()
@@ -327,14 +427,37 @@ pub fn render(picker: &EmojiPicker, media: Option<&str>, theme: &Theme, cx: &mut
                         .flex_col()
                         .flex_1()
                         .min_w_0()
+                        .h_full()
+                        .min_h_0()
                         .children(section_header)
                         .child(grid),
                 ),
         )
-        .child(inspector);
+        .child(inspector)
+        .child(top_handle)
+        .child(left_handle)
+        .child(corner_handle);
 
-    let view = cx.weak_entity();
-    overlay::popover(content, picker.anchor, theme, move |window, cx| {
-        let _ = view.update(cx, |v, cx| v.close_overlay(window, cx));
-    })
+    let view_dismiss = cx.weak_entity();
+    let view_move = cx.weak_entity();
+    let view_up = cx.weak_entity();
+    overlay::resizable_popover(
+        "emoji-picker-container",
+        "expressions.expression-picker-popout.container",
+        content,
+        picker.anchor,
+        panel_w,
+        panel_h,
+        viewport,
+        theme,
+        move |window, cx| {
+            let _ = view_dismiss.update(cx, |v, cx| v.close_overlay(window, cx));
+        },
+        move |ev, window, cx| {
+            let _ = view_move.update(cx, |v, cx| v.handle_resize_move(ev, window, cx));
+        },
+        move |_, _, cx| {
+            let _ = view_up.update(cx, |v, cx| v.finish_resize(cx));
+        },
+    )
 }

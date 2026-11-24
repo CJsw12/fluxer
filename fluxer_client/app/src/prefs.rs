@@ -17,6 +17,32 @@ pub const MIN_VOICE_VOLUME: u16 = 0;
 pub const MAX_VOICE_VOLUME: u16 = 200;
 pub const DEFAULT_VOICE_VOLUME: u16 = 100;
 
+/// Live-measured official layout resize bounds (`Logs/parity/m93_official/resize_spec.json`).
+pub const SIDEBAR_WIDTH_MIN: u16 = 200;
+pub const SIDEBAR_WIDTH_MAX: u16 = 480;
+pub const SIDEBAR_WIDTH_DEFAULT: u16 = 320;
+pub const VOICE_CALL_HEIGHT_MIN: u16 = 320;
+pub const VOICE_CALL_HEIGHT_MAX: u16 = 1049;
+pub const VOICE_CALL_HEIGHT_DEFAULT: u16 = 320;
+pub const EMOJI_PICKER_WIDTH_MIN: u16 = 400;
+pub const EMOJI_PICKER_WIDTH_MAX: u16 = 1200;
+pub const EMOJI_PICKER_WIDTH_DEFAULT: u16 = 592;
+pub const EMOJI_PICKER_WIDTH_STEP: u16 = 48;
+pub const EMOJI_PICKER_HEIGHT_MIN: u16 = 360;
+pub const EMOJI_PICKER_HEIGHT_MAX: u16 = 1040;
+pub const EMOJI_PICKER_HEIGHT_DEFAULT: u16 = 686;
+
+/// Snaps `raw` emoji picker width to official 48px grid track steps (`400 + 48 * k`), clamped within `max_w`.
+pub fn snap_emoji_picker_width(raw: f32, max_w: f32) -> u16 {
+    let min_w = EMOJI_PICKER_WIDTH_MIN as f32;
+    let step = EMOJI_PICKER_WIDTH_STEP as f32;
+    let cap = max_w.clamp(min_w, EMOJI_PICKER_WIDTH_MAX as f32);
+    let max_steps = ((cap - min_w) / step).floor().max(0.0);
+    let snapped_max = min_w + max_steps * step;
+    let steps = ((raw - min_w) / step).round().max(0.0);
+    (min_w + steps * step).clamp(min_w, snapped_max).round() as u16
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ReducedMotionPref {
     #[default]
@@ -90,6 +116,10 @@ pub struct Prefs {
     pub unread_badge_enabled: bool,
     pub time_format_24h: bool,
     pub reduced_motion: ReducedMotionPref,
+    pub sidebar_width: u16,
+    pub voice_call_height: u16,
+    pub emoji_picker_width: u16,
+    pub emoji_picker_height: u16,
 }
 
 impl Default for Prefs {
@@ -140,6 +170,10 @@ impl Default for Prefs {
             unread_badge_enabled: true,
             time_format_24h: false,
             reduced_motion: ReducedMotionPref::System,
+            sidebar_width: SIDEBAR_WIDTH_DEFAULT,
+            voice_call_height: VOICE_CALL_HEIGHT_DEFAULT,
+            emoji_picker_width: EMOJI_PICKER_WIDTH_DEFAULT,
+            emoji_picker_height: EMOJI_PICKER_HEIGHT_DEFAULT,
         }
     }
 }
@@ -361,53 +395,86 @@ impl Prefs {
                 .and_then(Value::as_str)
                 .map(ReducedMotionPref::from_str)
                 .unwrap_or(default.reduced_motion),
+            sidebar_width: value
+                .get("sidebar_width")
+                .and_then(Value::as_u64)
+                .and_then(|n| u16::try_from(n).ok())
+                .unwrap_or(default.sidebar_width)
+                .clamp(SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX),
+            voice_call_height: value
+                .get("voice_call_height")
+                .and_then(Value::as_u64)
+                .and_then(|n| u16::try_from(n).ok())
+                .unwrap_or(default.voice_call_height)
+                .clamp(VOICE_CALL_HEIGHT_MIN, VOICE_CALL_HEIGHT_MAX),
+            emoji_picker_width: value
+                .get("emoji_picker_width")
+                .and_then(Value::as_u64)
+                .map(|n| snap_emoji_picker_width(n as f32, EMOJI_PICKER_WIDTH_MAX as f32))
+                .unwrap_or(default.emoji_picker_width),
+            emoji_picker_height: value
+                .get("emoji_picker_height")
+                .and_then(Value::as_u64)
+                .and_then(|n| u16::try_from(n).ok())
+                .unwrap_or(default.emoji_picker_height)
+                .clamp(EMOJI_PICKER_HEIGHT_MIN, EMOJI_PICKER_HEIGHT_MAX),
         }
     }
 
     fn to_value(&self) -> Value {
-        json!({
-            "theme": self.theme.as_str(),
-            "notifications": self.notifications,
-            "sounds": self.sounds,
-            "locale": self.locale,
-            "autostart": self.autostart,
-            "close_to_tray": self.close_to_tray,
-            "font_size": self.font_size.clamp(MIN_FONT_SIZE, MAX_FONT_SIZE),
-            "ui_zoom": self.ui_zoom.clamp(MIN_UI_ZOOM, MAX_UI_ZOOM),
-            "compact": self.compact,
-            "trusted_domains": self.trusted_domains,
-            "voice_input_device": normalize_device_name(self.voice_input_device.as_deref()),
-            "voice_output_device": normalize_device_name(self.voice_output_device.as_deref()),
-            "voice_input_volume": self.voice_input_volume.clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME),
-            "voice_output_volume": self.voice_output_volume.clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME),
-            "voice_push_to_talk": self.voice_push_to_talk,
-            "voice_noise_suppression": self.voice_noise_suppression,
-            "voice_processing_mode": self.voice_processing_mode,
-            "voice_echo_cancellation": self.voice_echo_cancellation,
-            "voice_noise_suppression_backend": self.voice_noise_suppression_backend,
-            "voice_auto_gain_control": self.voice_auto_gain_control,
-            "voice_vad_auto_threshold": self.voice_vad_auto_threshold,
-            "voice_vad_threshold": self.voice_vad_threshold.clamp(0, 100),
-            "voice_ptt_release_delay_ms": self.voice_ptt_release_delay_ms.clamp(20, 2000),
-            "camera_resolution": self.camera_resolution,
-            "mirror_camera": self.mirror_camera,
-            "streaming_mode": self.streaming_mode,
-            "video_resolution": self.video_resolution,
-            "video_fps": self.video_fps,
-            "video_codec": self.video_codec,
-            "video_bitrate_kbps": self.video_bitrate_kbps,
-            "video_hardware_acceleration": self.video_hardware_acceleration,
-            "allow_guild_dms": self.allow_guild_dms,
-            "friend_request_access": self.friend_request_access,
-            "spoiler_display": self.spoiler_display,
-            "inline_media_previews": self.inline_media_previews,
-            "render_embeds": self.render_embeds,
-            "render_reactions": self.render_reactions,
-            "convert_emoticons": self.convert_emoticons,
-            "unread_badge_enabled": self.unread_badge_enabled,
-            "time_format_24h": self.time_format_24h,
-            "reduced_motion": self.reduced_motion.as_str(),
-        })
+        let mut map = serde_json::Map::with_capacity(45);
+        map.insert("theme".into(), json!(self.theme.as_str()));
+        map.insert("notifications".into(), json!(self.notifications));
+        map.insert("sounds".into(), json!(self.sounds));
+        map.insert("locale".into(), json!(self.locale));
+        map.insert("autostart".into(), json!(self.autostart));
+        map.insert("close_to_tray".into(), json!(self.close_to_tray));
+        map.insert("font_size".into(), json!(self.font_size.clamp(MIN_FONT_SIZE, MAX_FONT_SIZE)));
+        map.insert("ui_zoom".into(), json!(self.ui_zoom.clamp(MIN_UI_ZOOM, MAX_UI_ZOOM)));
+        map.insert("compact".into(), json!(self.compact));
+        map.insert("trusted_domains".into(), json!(self.trusted_domains));
+        map.insert("voice_input_device".into(), json!(normalize_device_name(self.voice_input_device.as_deref())));
+        map.insert("voice_output_device".into(), json!(normalize_device_name(self.voice_output_device.as_deref())));
+        map.insert("voice_input_volume".into(), json!(self.voice_input_volume.clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME)));
+        map.insert("voice_output_volume".into(), json!(self.voice_output_volume.clamp(MIN_VOICE_VOLUME, MAX_VOICE_VOLUME)));
+        map.insert("voice_push_to_talk".into(), json!(self.voice_push_to_talk));
+        map.insert("voice_noise_suppression".into(), json!(self.voice_noise_suppression));
+        map.insert("voice_processing_mode".into(), json!(self.voice_processing_mode));
+        map.insert("voice_echo_cancellation".into(), json!(self.voice_echo_cancellation));
+        map.insert("voice_noise_suppression_backend".into(), json!(self.voice_noise_suppression_backend));
+        map.insert("voice_auto_gain_control".into(), json!(self.voice_auto_gain_control));
+        map.insert("voice_vad_auto_threshold".into(), json!(self.voice_vad_auto_threshold));
+        map.insert("voice_vad_threshold".into(), json!(self.voice_vad_threshold.clamp(0, 100)));
+        map.insert("voice_ptt_release_delay_ms".into(), json!(self.voice_ptt_release_delay_ms.clamp(20, 2000)));
+        map.insert("camera_resolution".into(), json!(self.camera_resolution));
+        map.insert("mirror_camera".into(), json!(self.mirror_camera));
+        map.insert("streaming_mode".into(), json!(self.streaming_mode));
+        map.insert("video_resolution".into(), json!(self.video_resolution));
+        map.insert("video_fps".into(), json!(self.video_fps));
+        map.insert("video_codec".into(), json!(self.video_codec));
+        map.insert("video_bitrate_kbps".into(), json!(self.video_bitrate_kbps));
+        map.insert("video_hardware_acceleration".into(), json!(self.video_hardware_acceleration));
+        map.insert("allow_guild_dms".into(), json!(self.allow_guild_dms));
+        map.insert("friend_request_access".into(), json!(self.friend_request_access));
+        map.insert("spoiler_display".into(), json!(self.spoiler_display));
+        map.insert("inline_media_previews".into(), json!(self.inline_media_previews));
+        map.insert("render_embeds".into(), json!(self.render_embeds));
+        map.insert("render_reactions".into(), json!(self.render_reactions));
+        map.insert("convert_emoticons".into(), json!(self.convert_emoticons));
+        map.insert("unread_badge_enabled".into(), json!(self.unread_badge_enabled));
+        map.insert("time_format_24h".into(), json!(self.time_format_24h));
+        map.insert("reduced_motion".into(), json!(self.reduced_motion.as_str()));
+        map.insert("sidebar_width".into(), json!(self.sidebar_width.clamp(SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX)));
+        map.insert("voice_call_height".into(), json!(self.voice_call_height.clamp(VOICE_CALL_HEIGHT_MIN, VOICE_CALL_HEIGHT_MAX)));
+        map.insert(
+            "emoji_picker_width".into(),
+            json!(snap_emoji_picker_width(self.emoji_picker_width as f32, EMOJI_PICKER_WIDTH_MAX as f32)),
+        );
+        map.insert(
+            "emoji_picker_height".into(),
+            json!(self.emoji_picker_height.clamp(EMOJI_PICKER_HEIGHT_MIN, EMOJI_PICKER_HEIGHT_MAX)),
+        );
+        Value::Object(map)
     }
 }
 
@@ -514,6 +581,22 @@ impl PrefsStore {
 
     pub fn set_voice_noise_suppression(&mut self, enabled: bool) {
         self.data.voice_noise_suppression = enabled;
+        self.persist();
+    }
+
+    pub fn set_sidebar_width(&mut self, width: u16) {
+        self.data.sidebar_width = width.clamp(SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX);
+        self.persist();
+    }
+
+    pub fn set_voice_call_height(&mut self, height: u16) {
+        self.data.voice_call_height = height.clamp(VOICE_CALL_HEIGHT_MIN, VOICE_CALL_HEIGHT_MAX);
+        self.persist();
+    }
+
+    pub fn set_emoji_picker_size(&mut self, width: u16, height: u16) {
+        self.data.emoji_picker_width = snap_emoji_picker_width(width as f32, EMOJI_PICKER_WIDTH_MAX as f32);
+        self.data.emoji_picker_height = height.clamp(EMOJI_PICKER_HEIGHT_MIN, EMOJI_PICKER_HEIGHT_MAX);
         self.persist();
     }
 
@@ -839,6 +922,10 @@ mod tests {
                     ThemeKind::Dark => ReducedMotionPref::Off,
                     _ => ReducedMotionPref::System,
                 },
+                sidebar_width: if theme == ThemeKind::Light { 260 } else { 320 },
+                voice_call_height: if theme == ThemeKind::Darker { 420 } else { 320 },
+                emoji_picker_width: if theme == ThemeKind::Black { 640 } else { 592 },
+                emoji_picker_height: if theme == ThemeKind::Light { 500 } else { 686 },
             };
             store.save().expect("save");
             let loaded = PrefsStore::open(path.clone());
@@ -921,7 +1008,7 @@ mod tests {
             .keys()
             .map(String::as_str)
             .collect();
-        assert_eq!(keys.len(), 41);
+        assert_eq!(keys.len(), 45);
         for key in [
             "theme",
             "notifications",
@@ -964,6 +1051,10 @@ mod tests {
             "unread_badge_enabled",
             "time_format_24h",
             "reduced_motion",
+            "sidebar_width",
+            "voice_call_height",
+            "emoji_picker_width",
+            "emoji_picker_height",
         ] {
             assert!(keys.contains(&key), "{key}");
         }
@@ -1046,6 +1137,39 @@ mod tests {
         assert_eq!(store.data.reduced_motion, ReducedMotionPref::System);
         store.set_reduced_motion(ReducedMotionPref::On);
         assert_eq!(PrefsStore::open(path).data.reduced_motion, ReducedMotionPref::On);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn clamps_and_round_trips_resize_prefs() {
+        assert_eq!(snap_emoji_picker_width(200.0, 994.0), 400);
+        assert_eq!(snap_emoji_picker_width(592.0, 994.0), 592);
+        assert_eq!(snap_emoji_picker_width(644.0, 994.0), 640);
+        assert_eq!(snap_emoji_picker_width(730.0, 994.0), 736);
+        assert_eq!(snap_emoji_picker_width(1200.0, 994.0), 976);
+
+        let dir = temp_dir("resize-clamp");
+        std::fs::create_dir_all(&dir).expect("dir");
+        let path = dir.join(FILE_NAME);
+        std::fs::write(
+            &path,
+            br#"{"sidebar_width":50,"voice_call_height":9999,"emoji_picker_width":650,"emoji_picker_height":100}"#,
+        )
+        .expect("write");
+        let mut store = PrefsStore::open(path.clone());
+        assert_eq!(store.data.sidebar_width, SIDEBAR_WIDTH_MIN);
+        assert_eq!(store.data.voice_call_height, VOICE_CALL_HEIGHT_MAX);
+        assert_eq!(store.data.emoji_picker_width, 640);
+        assert_eq!(store.data.emoji_picker_height, EMOJI_PICKER_HEIGHT_MIN);
+
+        store.set_sidebar_width(480);
+        store.set_voice_call_height(590);
+        store.set_emoji_picker_size(736, 686);
+        let reloaded = PrefsStore::open(path);
+        assert_eq!(reloaded.data.sidebar_width, 480);
+        assert_eq!(reloaded.data.voice_call_height, 590);
+        assert_eq!(reloaded.data.emoji_picker_width, 736);
+        assert_eq!(reloaded.data.emoji_picker_height, 686);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

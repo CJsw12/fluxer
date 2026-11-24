@@ -21,11 +21,16 @@ use crate::ui::overlay::Overlay;
 pub mod sections;
 mod view;
 
-use sections::{COLUMNS, PickerSection, PickerTarget, build_sections, chunk_rows};
+use sections::{PickerSection, PickerTarget, build_sections, chunk_rows};
 pub use view::render;
 
 /// Key context of the emoji picker popover.
 pub const CONTEXT: &str = "EmojiPicker";
+
+/// Computes visible emoji grid column count from panel width (`48px` column track).
+pub fn columns_for_width(width: f32) -> usize {
+    ((width - 64.0) / 48.0).floor().clamp(5.0, 24.0) as usize
+}
 
 pub struct EmojiPicker {
     pub target: PickerTarget,
@@ -37,8 +42,9 @@ pub struct EmojiPicker {
     pub sections: Vec<PickerSection>,
     pub active_section: usize,
     pub search_results: Option<Vec<EmojiChoice>>,
-    /// Cached 9-column rows for the active view (used read-only by `uniform_list`).
+    /// Cached `columns`-wide rows for the active view (used read-only by `uniform_list`).
     pub rows: Arc<Vec<Vec<EmojiChoice>>>,
+    pub columns: usize,
     pub selected_index: usize,
     pub hovered: Option<EmojiChoice>,
     pub scroll: UniformListScrollHandle,
@@ -61,9 +67,18 @@ impl EmojiPicker {
     }
 
     pub fn rebuild_rows(&mut self) {
-        let rows = chunk_rows(self.active_choices(), COLUMNS);
+        let cols = self.columns.max(1);
+        let rows = chunk_rows(self.active_choices(), cols);
         self.rows = Arc::new(rows);
         self.scroll.scroll_to_item(0, ScrollStrategy::Top);
+    }
+
+    pub fn set_width(&mut self, width: f32) {
+        let next = columns_for_width(width);
+        if next != self.columns {
+            self.columns = next;
+            self.rebuild_rows();
+        }
     }
 
     pub fn selected_choice(&self) -> Option<&EmojiChoice> {
@@ -76,9 +91,10 @@ impl EmojiPicker {
 
     pub fn move_selection(&mut self, dr: i32, dc: i32) {
         let total = self.active_choices().len();
-        self.selected_index = sections::move_grid(self.selected_index, total, COLUMNS, dr, dc);
+        let cols = self.columns.max(1);
+        self.selected_index = sections::move_grid(self.selected_index, total, cols, dr, dc);
         if total > 0 {
-            self.scroll.scroll_to_item(self.selected_index / COLUMNS, ScrollStrategy::Nearest);
+            self.scroll.scroll_to_item(self.selected_index / cols, ScrollStrategy::Nearest);
         }
     }
 
@@ -101,8 +117,8 @@ impl ClientView {
             self.close_overlay(window, cx);
         } else {
             let bounds = window.bounds();
-            let x = (bounds.size.width - px(500.)).max(px(16.));
-            let y = (bounds.size.height - px(490.)).max(px(16.));
+            let x = (bounds.size.width - px(270.)).max(px(416.));
+            let y = (bounds.size.height - px(70.)).max(px(404.));
             self.open_emoji_picker(PickerTarget::Composer, point(x, y), window, cx);
         }
     }
@@ -148,6 +164,7 @@ impl ClientView {
             active_section: 0,
             search_results: None,
             rows: Arc::new(Vec::new()),
+            columns: columns_for_width(self.emoji_picker_width),
             selected_index: 0,
             hovered: None,
             scroll: UniformListScrollHandle::new(),

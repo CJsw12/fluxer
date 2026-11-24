@@ -13,7 +13,10 @@
 use fluxer_client_core::state::Snowflake;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Icon, Sizable as _};
-use gpui_kit::{AnyElement, Context, FontWeight, Hsla, Role, SharedString, div, prelude::*, px, rgb};
+use gpui_kit::{
+    AnyElement, Context, FontWeight, Hsla, KeyDownEvent, MouseButton, MouseDownEvent, Role, SharedString, div,
+    prelude::*, px, rgb,
+};
 
 use super::avatar::{AvatarSpec, render_avatar};
 use super::{l10n, video_viewer};
@@ -494,7 +497,7 @@ fn single_control_button(
 }
 
 /// Renders the central Voice/Video Call Stage (`CompactVoiceCallView` / `VoiceCallView`).
-pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Context<ClientView>) -> AnyElement {
     let Some(channel_id) = view.voice.channel_id else {
         return div().into_any_element();
     };
@@ -1175,6 +1178,16 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .child(control_pill);
 
     let is_split_view = !view.voice_stage_expanded && view.selected_channel.is_some();
+    let pill_opacity = if matches!(
+        view.active_resize,
+        Some(crate::client_view::ActiveResize::VoiceCallHeight { .. })
+    ) {
+        1.0
+    } else if view.voice_resize_hovered {
+        0.92
+    } else {
+        0.35
+    };
 
     div()
         .id("voice-stage")
@@ -1186,7 +1199,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .w_full()
         .when(!is_split_view, |d| d.flex_1().h_full())
         .when(is_split_view, |d| {
-            d.h(px(360.))
+            d.relative()
+                .h(px(split_height))
                 .flex_none()
                 .border_b_1()
                 .border_color(theme.border)
@@ -1197,5 +1211,46 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .child(header)
         .child(stage_body)
         .child(controls)
+        .when(is_split_view, |d| {
+            d.child(
+                div()
+                    .id("voice-split-resize-handle")
+                    .debug_selector(|| "voice-split-resize-handle".to_owned())
+                    .aria_label(l10n::tr("Resize call view"))
+                    .absolute()
+                    .bottom_0()
+                    .left_0()
+                    .right_0()
+                    .h(px(16.))
+                    .cursor_ns_resize()
+                    .track_focus(&view.voice_resize_focus)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
+                        this.set_voice_resize_hover(*hovered, cx);
+                    }))
+                    .on_mouse_down(
+                        MouseButton::Left,
+                        cx.listener(|this, ev: &MouseDownEvent, window, cx| {
+                            cx.stop_propagation();
+                            this.begin_voice_height_resize(ev, window, cx);
+                        }),
+                    )
+                    .on_key_down(cx.listener(|this, ev: &KeyDownEvent, window, cx| {
+                        this.handle_voice_resize_key(ev, window, cx);
+                    }))
+                    .flx("voice.compact-voice-call-view.compact-voice-call-view-inner.resize-handle.resize-key-down")
+                    .child(
+                        div()
+                            .w(px(36.))
+                            .h(px(4.))
+                            .rounded_full()
+                            .bg(rgb(0x69686d))
+                            .opacity(pill_opacity)
+                            .flx("voice.compact-voice-call-view.compact-voice-call-view-inner.resize-pill"),
+                    ),
+            )
+        })
         .into_any_element()
 }

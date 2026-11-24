@@ -15,8 +15,8 @@ use gpui_kit::component::input::{InputContent, InputEvent, InputState};
 use gpui_kit::component::message_scroller::MessageScrollerState;
 use gpui_kit::{
     AnyElement, AnyWindowHandle, Context, Entity, EntityInputHandler as _, EventEmitter, ExternalPaths, FocusHandle,
-    Focusable as _, RenderImage, ScrollHandle, SharedString, Subscription, Task, UniformListScrollHandle, Window, div,
-    prelude::*, px,
+    Focusable as _, KeyDownEvent, MouseButton, MouseDownEvent, MouseMoveEvent, RenderImage, ScrollHandle,
+    SharedString, Subscription, Task, UniformListScrollHandle, Window, div, prelude::*, px, rgb,
 };
 use tokio::sync::mpsc;
 
@@ -26,7 +26,12 @@ use crate::backend::{Backend, GatewayStatus, TypingSender, UiEvent};
 use crate::frecency::FrecencyStore;
 use crate::nav;
 use crate::notify::Notifier;
-use crate::prefs::PrefsStore;
+use crate::prefs::{
+    EMOJI_PICKER_HEIGHT_DEFAULT, EMOJI_PICKER_HEIGHT_MAX, EMOJI_PICKER_HEIGHT_MIN, EMOJI_PICKER_WIDTH_DEFAULT,
+    EMOJI_PICKER_WIDTH_MAX, EMOJI_PICKER_WIDTH_MIN, PrefsStore, SIDEBAR_WIDTH_DEFAULT, SIDEBAR_WIDTH_MAX,
+    SIDEBAR_WIDTH_MIN, VOICE_CALL_HEIGHT_DEFAULT, VOICE_CALL_HEIGHT_MAX, VOICE_CALL_HEIGHT_MIN,
+    snap_emoji_picker_width,
+};
 use crate::shortcuts;
 use crate::theme::{self, Theme, ThemeKind};
 use crate::ui;
@@ -92,6 +97,22 @@ pub(crate) enum UserControlHoverTarget {
     Mute,
     Deafen,
     Settings,
+}
+
+/// Drag edge for bottom-right anchored resizable popouts such as the emoji picker.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ResizeEdge {
+    Top,
+    Left,
+    TopLeft,
+}
+
+/// Active interactive in-app layout resize operation.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum ActiveResize {
+    Sidebar { start_x: f32, start_width: f32 },
+    VoiceCallHeight { start_y: f32, start_height: f32 },
+    EmojiPicker { edge: ResizeEdge, start_x: f32, start_y: f32, start_w: f32, start_h: f32 },
 }
 
 /// Emitted to the window root.
@@ -305,6 +326,17 @@ pub struct ClientView {
     /// Latest update check state for Settings -> About & Updates.
     pub(crate) update_status: crate::updater::UpdateStatus,
     _update_task: Option<Task<()>>,
+    /// Persisted interactive layout sizes and active resize drag state.
+    pub(crate) sidebar_width: f32,
+    pub(crate) voice_call_height: f32,
+    pub(crate) emoji_picker_width: f32,
+    pub(crate) emoji_picker_height: f32,
+    pub(crate) active_resize: Option<ActiveResize>,
+    pub(crate) sidebar_resize_hovered: bool,
+    pub(crate) voice_resize_hovered: bool,
+    pub(crate) sidebar_resize_focus: FocusHandle,
+    pub(crate) voice_resize_focus: FocusHandle,
+    pub(crate) emoji_resize_focus: FocusHandle,
     /// Keeps the layout's key context reachable when nothing inside has focus.
     focus: FocusHandle,
     /// Captured external URLs opened via `launch_external_url` in headless tests.
@@ -495,6 +527,16 @@ impl ClientView {
             pending_deep_link: None,
             update_status: crate::updater::UpdateStatus::Idle,
             _update_task: None,
+            sidebar_width: SIDEBAR_WIDTH_DEFAULT as f32,
+            voice_call_height: VOICE_CALL_HEIGHT_DEFAULT as f32,
+            emoji_picker_width: EMOJI_PICKER_WIDTH_DEFAULT as f32,
+            emoji_picker_height: EMOJI_PICKER_HEIGHT_DEFAULT as f32,
+            active_resize: None,
+            sidebar_resize_hovered: false,
+            voice_resize_hovered: false,
+            sidebar_resize_focus: cx.focus_handle(),
+            voice_resize_focus: cx.focus_handle(),
+            emoji_resize_focus: cx.focus_handle(),
             focus: cx.focus_handle(),
             #[cfg(test)]
             opened_urls: Vec::new(),
@@ -526,6 +568,13 @@ impl ClientView {
             self.refresh_status_text();
         }
         self.prefs = prefs;
+        self.sidebar_width = self.prefs.data.sidebar_width as f32;
+        self.voice_call_height = self.prefs.data.voice_call_height as f32;
+        self.emoji_picker_width = self.prefs.data.emoji_picker_width as f32;
+        self.emoji_picker_height = self.prefs.data.emoji_picker_height as f32;
+        if let crate::ui::overlay::Overlay::EmojiPicker(picker) = &mut self.overlay {
+            picker.set_width(self.emoji_picker_width);
+        }
         self.refresh(cx);
     }
 
@@ -1674,6 +1723,331 @@ impl ClientView {
         cx.notify();
     }
 
+    pub(crate) fn effective_sidebar_width(&self) -> f32 {
+        self.sidebar_width.clamp(SIDEBAR_WIDTH_MIN as f32, SIDEBAR_WIDTH_MAX as f32)
+    }
+
+    pub(crate) fn max_voice_call_height(&self, window: &Window) -> f32 {
+        let vh = f32::from(window.viewport_size().height);
+        // Reserve 32px desktop title bar + ~178px minimum split chat/composer space, capped at official 1049px.
+        ((vh - 32.0 - 178.0).min(VOICE_CALL_HEIGHT_MAX as f32)).max(VOICE_CALL_HEIGHT_MIN as f32)
+    }
+
+    pub(crate) fn effective_voice_call_height(&self, window: &Window) -> f32 {
+        self.voice_call_height.clamp(VOICE_CALL_HEIGHT_MIN as f32, self.max_voice_call_height(window))
+    }
+
+    fn max_emoji_picker_bounds(&self, window: &Window) -> (f32, f32) {
+        let viewport = window.viewport_size();
+        let vw = f32::from(viewport.width);
+        let vh = f32::from(viewport.height);
+        let min_top = if vh >= 700. { 44. } else { 16. };
+        let anchor = match &self.overlay {
+            crate::ui::overlay::Overlay::EmojiPicker(picker) => picker.anchor,
+            _ => gpui_kit::point(px((vw - 16.).max(0.)), px((vh - 16.).max(0.))),
+        };
+        let min_right = (EMOJI_PICKER_WIDTH_MIN as f32 + 16.).min(vw - 16.);
+        let max_right = (vw - 16.).max(EMOJI_PICKER_WIDTH_MIN as f32 + 16.);
+        let eff_right = f32::from(anchor.x).clamp(min_right, max_right);
+        let min_bottom = (min_top + EMOJI_PICKER_HEIGHT_MIN as f32).min(vh - 16.);
+        let max_bottom = (vh - 16.).max(min_top + EMOJI_PICKER_HEIGHT_MIN as f32);
+        let eff_bottom = f32::from(anchor.y).clamp(min_bottom, max_bottom);
+        let max_w = (eff_right - 16.).clamp(EMOJI_PICKER_WIDTH_MIN as f32, EMOJI_PICKER_WIDTH_MAX as f32);
+        let max_h = (eff_bottom - min_top).clamp(EMOJI_PICKER_HEIGHT_MIN as f32, EMOJI_PICKER_HEIGHT_MAX as f32);
+        (max_w, max_h)
+    }
+
+    fn apply_emoji_picker_size(&mut self, width: u16, height: u16, persist: bool, _cx: &mut Context<Self>) {
+        self.emoji_picker_width = width as f32;
+        self.emoji_picker_height = height as f32;
+        if let crate::ui::overlay::Overlay::EmojiPicker(picker) = &mut self.overlay {
+            picker.set_width(width as f32);
+        }
+        if persist {
+            self.prefs.set_emoji_picker_size(width, height);
+        }
+    }
+
+    pub(crate) fn set_sidebar_resize_hover(&mut self, hovered: bool, cx: &mut Context<Self>) {
+        if self.sidebar_resize_hovered != hovered {
+            self.sidebar_resize_hovered = hovered;
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn set_voice_resize_hover(&mut self, hovered: bool, cx: &mut Context<Self>) {
+        if self.voice_resize_hovered != hovered {
+            self.voice_resize_hovered = hovered;
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn begin_sidebar_resize(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if ev.button != MouseButton::Left {
+            return;
+        }
+        window.focus(&self.sidebar_resize_focus, cx);
+        if ev.click_count >= 2 {
+            self.active_resize = None;
+            self.sidebar_width = SIDEBAR_WIDTH_DEFAULT as f32;
+            self.prefs.set_sidebar_width(SIDEBAR_WIDTH_DEFAULT);
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
+        self.active_resize = Some(ActiveResize::Sidebar {
+            start_x: f32::from(ev.position.x),
+            start_width: self.effective_sidebar_width(),
+        });
+        cx.stop_propagation();
+        cx.notify();
+    }
+
+    pub(crate) fn begin_voice_height_resize(&mut self, ev: &MouseDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        if ev.button != MouseButton::Left {
+            return;
+        }
+        window.focus(&self.voice_resize_focus, cx);
+        if ev.click_count >= 2 {
+            self.active_resize = None;
+            self.voice_call_height = VOICE_CALL_HEIGHT_DEFAULT as f32;
+            self.prefs.set_voice_call_height(VOICE_CALL_HEIGHT_DEFAULT);
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
+        self.active_resize = Some(ActiveResize::VoiceCallHeight {
+            start_y: f32::from(ev.position.y),
+            start_height: self.effective_voice_call_height(window),
+        });
+        cx.stop_propagation();
+        cx.notify();
+    }
+
+    pub(crate) fn begin_emoji_picker_resize(
+        &mut self,
+        edge: ResizeEdge,
+        ev: &MouseDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if ev.button != MouseButton::Left {
+            return;
+        }
+        window.focus(&self.emoji_resize_focus, cx);
+        if ev.click_count >= 2 {
+            self.active_resize = None;
+            self.apply_emoji_picker_size(EMOJI_PICKER_WIDTH_DEFAULT, EMOJI_PICKER_HEIGHT_DEFAULT, true, cx);
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
+        self.active_resize = Some(ActiveResize::EmojiPicker {
+            edge,
+            start_x: f32::from(ev.position.x),
+            start_y: f32::from(ev.position.y),
+            start_w: self.emoji_picker_width,
+            start_h: self.emoji_picker_height,
+        });
+        cx.stop_propagation();
+        cx.notify();
+    }
+
+    pub(crate) fn handle_resize_move(&mut self, ev: &MouseMoveEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(active) = self.active_resize else {
+            return;
+        };
+        match active {
+            ActiveResize::Sidebar { start_x, start_width } => {
+                let next = (start_width + (f32::from(ev.position.x) - start_x))
+                    .round()
+                    .clamp(SIDEBAR_WIDTH_MIN as f32, SIDEBAR_WIDTH_MAX as f32);
+                if (next - self.sidebar_width).abs() > 0.5 {
+                    self.sidebar_width = next;
+                    cx.notify();
+                }
+            }
+            ActiveResize::VoiceCallHeight { start_y, start_height } => {
+                let max_h = self.max_voice_call_height(window);
+                let next = (start_height + (f32::from(ev.position.y) - start_y))
+                    .round()
+                    .clamp(VOICE_CALL_HEIGHT_MIN as f32, max_h);
+                if (next - self.voice_call_height).abs() > 0.5 {
+                    self.voice_call_height = next;
+                    cx.notify();
+                }
+            }
+            ActiveResize::EmojiPicker {
+                edge,
+                start_x,
+                start_y,
+                start_w,
+                start_h,
+            } => {
+                let (max_w, max_h) = self.max_emoji_picker_bounds(window);
+                let next_w = if matches!(edge, ResizeEdge::Left | ResizeEdge::TopLeft) {
+                    let dx = start_x - f32::from(ev.position.x);
+                    snap_emoji_picker_width(start_w + dx, max_w)
+                } else {
+                    self.emoji_picker_width.round() as u16
+                };
+                let next_h = if matches!(edge, ResizeEdge::Top | ResizeEdge::TopLeft) {
+                    let dy = start_y - f32::from(ev.position.y);
+                    (start_h + dy).round().clamp(EMOJI_PICKER_HEIGHT_MIN as f32, max_h) as u16
+                } else {
+                    self.emoji_picker_height.round() as u16
+                };
+                if (next_w as f32 - self.emoji_picker_width).abs() > 0.5
+                    || (next_h as f32 - self.emoji_picker_height).abs() > 0.5
+                {
+                    self.apply_emoji_picker_size(next_w, next_h, false, cx);
+                    cx.notify();
+                }
+            }
+        }
+    }
+
+    pub(crate) fn finish_resize(&mut self, cx: &mut Context<Self>) {
+        let Some(active) = self.active_resize.take() else {
+            return;
+        };
+        match active {
+            ActiveResize::Sidebar { .. } => {
+                self.prefs.set_sidebar_width(self.effective_sidebar_width().round() as u16);
+            }
+            ActiveResize::VoiceCallHeight { .. } => {
+                self.prefs.set_voice_call_height(self.voice_call_height.round() as u16);
+            }
+            ActiveResize::EmojiPicker { .. } => {
+                self.prefs.set_emoji_picker_size(
+                    self.emoji_picker_width.round() as u16,
+                    self.emoji_picker_height.round() as u16,
+                );
+            }
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn handle_sidebar_resize_key(
+        &mut self,
+        ev: &KeyDownEvent,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let step = if ev.keystroke.modifiers.shift { 48.0 } else { 12.0 };
+        let next = match ev.keystroke.key.as_str() {
+            "left" => Some((self.effective_sidebar_width() - step).clamp(SIDEBAR_WIDTH_MIN as f32, SIDEBAR_WIDTH_MAX as f32)),
+            "right" => Some((self.effective_sidebar_width() + step).clamp(SIDEBAR_WIDTH_MIN as f32, SIDEBAR_WIDTH_MAX as f32)),
+            "home" => Some(SIDEBAR_WIDTH_MIN as f32),
+            "end" => Some(SIDEBAR_WIDTH_MAX as f32),
+            "enter" | "backspace" | "delete" => Some(SIDEBAR_WIDTH_DEFAULT as f32),
+            _ => None,
+        };
+        if let Some(next) = next {
+            self.sidebar_width = next;
+            self.prefs.set_sidebar_width(next.round() as u16);
+            cx.stop_propagation();
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn handle_voice_resize_key(
+        &mut self,
+        ev: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let max_h = self.max_voice_call_height(window);
+        let min_h = VOICE_CALL_HEIGHT_MIN as f32;
+        let step = if ev.keystroke.modifiers.shift { 48.0 } else { 16.0 };
+        let cur = self.effective_voice_call_height(window);
+        let next = match ev.keystroke.key.as_str() {
+            "up" => Some((cur - step).clamp(min_h, max_h)),
+            "down" => Some((cur + step).clamp(min_h, max_h)),
+            "home" => Some(min_h),
+            "end" => Some(max_h),
+            "enter" | "backspace" | "delete" => Some(VOICE_CALL_HEIGHT_DEFAULT as f32),
+            _ => None,
+        };
+        if let Some(next) = next {
+            self.voice_call_height = next;
+            self.prefs.set_voice_call_height(next.round() as u16);
+            cx.stop_propagation();
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn handle_emoji_resize_key(
+        &mut self,
+        ev: &KeyDownEvent,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let (max_w, max_h) = self.max_emoji_picker_bounds(window);
+        let min_h = EMOJI_PICKER_HEIGHT_MIN as f32;
+        let step_w = if ev.keystroke.modifiers.shift { 96.0 } else { 48.0 };
+        let step_h = if ev.keystroke.modifiers.shift { 48.0 } else { 16.0 };
+        let next = match ev.keystroke.key.as_str() {
+            "left" => Some((snap_emoji_picker_width(self.emoji_picker_width + step_w, max_w), self.emoji_picker_height.round() as u16)),
+            "right" => Some((snap_emoji_picker_width(self.emoji_picker_width - step_w, max_w), self.emoji_picker_height.round() as u16)),
+            "up" => Some((snap_emoji_picker_width(self.emoji_picker_width, max_w), (self.emoji_picker_height + step_h).clamp(min_h, max_h).round() as u16)),
+            "down" => Some((snap_emoji_picker_width(self.emoji_picker_width, max_w), (self.emoji_picker_height - step_h).clamp(min_h, max_h).round() as u16)),
+            "home" => Some((EMOJI_PICKER_WIDTH_MIN, EMOJI_PICKER_HEIGHT_MIN)),
+            "enter" | "backspace" | "delete" => Some((EMOJI_PICKER_WIDTH_DEFAULT, EMOJI_PICKER_HEIGHT_DEFAULT)),
+            _ => None,
+        };
+        if let Some((w, h)) = next {
+            self.apply_emoji_picker_size(w, h, true, cx);
+            cx.stop_propagation();
+            cx.notify();
+        }
+    }
+
+    fn render_sidebar_resize_handle(&self, sidebar_w: f32, rail_width: f32, cx: &mut Context<Self>) -> AnyElement {
+        let dragging = matches!(self.active_resize, Some(ActiveResize::Sidebar { .. }));
+        let handle_bottom = if !matches!(self.voice.state, crate::backend::voice::VoiceConnectionState::Disconnected) {
+            261.0
+        } else {
+            66.0
+        };
+        let (indicator_w, indicator_opacity) = if dragging {
+            (6.0, 1.0)
+        } else if self.sidebar_resize_hovered {
+            (4.0, 0.92)
+        } else {
+            (2.0, 0.0)
+        };
+        div()
+            .id("sidebar-resize-handle")
+            .debug_selector(|| "sidebar-resize-handle".to_owned())
+            .aria_label(l10n::tr("Resize sidebar"))
+            .flx("app.sidebar-resize-handle")
+            .track_focus(&self.sidebar_resize_focus)
+            .absolute()
+            .left(px(rail_width + 1. + sidebar_w - 3.))
+            .top(px(1.))
+            .bottom(px(handle_bottom))
+            .w(px(6.))
+            .flex()
+            .items_center()
+            .justify_center()
+            .cursor_col_resize()
+            .on_hover(cx.listener(|v, hovered, _, cx| v.set_sidebar_resize_hover(*hovered, cx)))
+            .on_mouse_down(MouseButton::Left, cx.listener(Self::begin_sidebar_resize))
+            .on_key_down(cx.listener(Self::handle_sidebar_resize_key))
+            .child(
+                div()
+                    .debug_selector(|| "sidebar-resize-indicator".to_owned())
+                    .flx("app.sidebar-resize-handle.indicator")
+                    .w(px(indicator_w))
+                    .h_full()
+                    .rounded_full()
+                    .bg(rgb(0x69686d))
+                    .opacity(indicator_opacity),
+            )
+            .into_any_element()
+    }
+
     pub(crate) fn toggle_user_area_popout(&mut self, cx: &mut Context<Self>) {
         self.user_area_popout_open = !self.user_area_popout_open;
         self.user_area_submenu = None;
@@ -2678,7 +3052,7 @@ impl ClientView {
                 self.close_overlay(window, cx);
                 self.open_emoji_picker(
                     ui::emoji_picker::sections::PickerTarget::Composer,
-                    gpui_kit::point(px(900.), px(700.)),
+                    gpui_kit::point(px(1010.), px(730.)),
                     window,
                     cx,
                 );
@@ -2825,10 +3199,12 @@ impl Render for ClientView {
             && self.voice.channel_id.is_some()
             && self.voice.state != crate::backend::voice::VoiceConnectionState::Disconnected;
         let show_friends = !show_voice_stage && self.place == Place::Home && self.selected_channel.is_none();
+        let sidebar_w = self.effective_sidebar_width();
+        let split_height = self.effective_voice_call_height(window);
         let overlay = match &self.overlay {
             Overlay::QuickSwitcher(sw) => Some(ui::quick_switcher::render(sw, &theme, cx)),
             Overlay::EmojiPicker(picker) => {
-                Some(ui::emoji_picker::render(picker, self.backend.media(), &theme, cx))
+                Some(ui::emoji_picker::render(self, picker, self.backend.media(), window.viewport_size(), &theme, cx))
             }
             Overlay::Profile(pop) => Some(ui::profile_popout::render(pop, &theme, cx)),
             Overlay::Settings(modal) => Some(ui::settings::render(self, modal, &theme, cx)),
@@ -2865,13 +3241,16 @@ impl Render for ClientView {
             .bg(theme.background)
             .text_color(theme.foreground)
             .text_size(px(theme.sizes.text))
+            .on_mouse_move(cx.listener(Self::handle_resize_move))
+            .on_mouse_up(MouseButton::Left, cx.listener(|v, _, _, cx| v.finish_resize(cx)))
+            .on_mouse_up_out(MouseButton::Left, cx.listener(|v, _, _, cx| v.finish_resize(cx)))
             .child(
                 // Rail and sidebar run to the bottom; the user area floats
                 // over them (official `user-area-inner`: left 6, bottom 7,
-                // 381x58). Rail 72 + 1px gap + sidebar 320.
+                // 381x58 at default 320px sidebar). Rail 72 + 1px gap + sidebar_w.
                 div()
                     .relative()
-                    .w(px(theme.sizes.rail_width + 1. + theme.sizes.channel_list_width))
+                    .w(px(theme.sizes.rail_width + 1. + sidebar_w))
                     .h_full()
                     .flex_none()
                     .bg(theme.background_secondary)
@@ -2894,7 +3273,7 @@ impl Render for ClientView {
                             .left(px(6.))
                             .bottom(px(7.))
                             // Height is content-sized so the popout grows upward.
-                            .w(px(381.))
+                            .w(px(theme.sizes.rail_width + 1. + sidebar_w - 12.))
                             .child(ui::user_panel::render(self, &theme, cx)),
                     )
                     .children(ui::user_panel::render_popout(self, &theme, cx)),
@@ -2910,7 +3289,7 @@ impl Render for ClientView {
                         .min_w_0()
                         .h_full()
                         .on_drop(cx.listener(|v, paths: &ExternalPaths, _, cx| v.add_paths(paths.paths(), cx)))
-                        .child(ui::voice_stage::render(self, &theme, cx))
+                        .child(ui::voice_stage::render(self, &theme, split_height, cx))
                         .child(ui::message_list::render(self, handle, &theme))
                         .child(composer)
                 } else {
@@ -2920,7 +3299,7 @@ impl Render for ClientView {
                         .flex_1()
                         .min_w_0()
                         .h_full()
-                        .child(ui::voice_stage::render(self, &theme, cx))
+                        .child(ui::voice_stage::render(self, &theme, split_height, cx))
                         // Keep composer mounted in a 0px hidden slot so shortcut contexts stay live.
                         .child(div().h(px(0.)).overflow_hidden().child(composer))
                 }
@@ -3001,6 +3380,7 @@ impl Render for ClientView {
                     })
                     .flx("app.outline-frame.frame"),
             )
+            .child(self.render_sidebar_resize_handle(sidebar_w, theme.sizes.rail_width, cx))
             .children(overlay)
     }
 }

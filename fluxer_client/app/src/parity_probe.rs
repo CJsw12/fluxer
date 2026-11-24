@@ -68,9 +68,12 @@ fn record(flx: &str, bounds: Bounds<Pixels>, text: Option<&str>) {
     }
 }
 
-/// Entries of the last completed frame.
+/// Entries of the latest completed frame.
 pub fn snapshot() -> Vec<Entry> {
-    REGISTRY.lock().map(|r| r.last.clone()).unwrap_or_default()
+    REGISTRY
+        .lock()
+        .map(|r| if !r.building.is_empty() { r.building.clone() } else { r.last.clone() })
+        .unwrap_or_default()
 }
 
 /// First child of the root element: its prepaint (which runs before every
@@ -112,6 +115,8 @@ pub enum ProbeRequest {
     Inspect,
     Resize { w: f32, h: f32 },
     Click(Target),
+    DoubleClick(Target),
+    Drag { from: Target, to: (f32, f32), steps: usize },
     Hover(Target),
     Key(String),
 }
@@ -136,6 +141,23 @@ pub fn parse_request(action: &str, val: &Value) -> Option<ProbeRequest> {
             ((200.0..=8192.0).contains(&w) && (200.0..=8192.0).contains(&h)).then_some(ProbeRequest::Resize { w, h })
         }
         "probe_click" => parse_target(val).map(ProbeRequest::Click),
+        "probe_dblclick" => parse_target(val).map(ProbeRequest::DoubleClick),
+        "probe_drag" => {
+            let from = val.get("from").and_then(parse_target).or_else(|| parse_target(val))?;
+            let to_x = val.get("to_x").and_then(Value::as_f64)? as f32;
+            let to_y = val.get("to_y").and_then(Value::as_f64)? as f32;
+            let steps = val
+                .get("steps")
+                .and_then(Value::as_u64)
+                .and_then(|n| usize::try_from(n).ok())
+                .unwrap_or(8)
+                .clamp(1, 30);
+            (to_x.is_finite() && to_y.is_finite()).then_some(ProbeRequest::Drag {
+                from,
+                to: (to_x, to_y),
+                steps,
+            })
+        }
         "probe_hover" => parse_target(val).map(ProbeRequest::Hover),
         "probe_key" => {
             let k = val.get("keystroke").and_then(Value::as_str)?;
@@ -230,6 +252,86 @@ pub fn execute(req: ProbeRequest, window: &mut Window, cx: &mut App, reply: Send
             );
             ack_next_frame(window, reply, x, y);
         }
+        ProbeRequest::DoubleClick(target) => {
+            let Some((x, y)) = resolve(&target) else {
+                let _ = reply.send(error_reply("element not found"));
+                return;
+            };
+            dispatch_move(window, cx, x, y);
+            let position = point(px(x), px(y));
+            for click_count in [1, 2] {
+                window.dispatch_event(
+                    PlatformInput::MouseDown(MouseDownEvent {
+                        button: MouseButton::Left,
+                        position,
+                        modifiers: Modifiers::none(),
+                        click_count,
+                        first_mouse: false,
+                    }),
+                    cx,
+                );
+                window.dispatch_event(
+                    PlatformInput::MouseUp(MouseUpEvent {
+                        button: MouseButton::Left,
+                        position,
+                        modifiers: Modifiers::none(),
+                        click_count,
+                    }),
+                    cx,
+                );
+            }
+            ack_next_frame(window, reply, x, y);
+        }
+        ProbeRequest::Drag {
+            from,
+            to: (to_x, to_y),
+            steps,
+        } => {
+            let Some((x1, y1)) = resolve(&from) else {
+                let _ = reply.send(error_reply("element not found"));
+                return;
+            };
+            dispatch_move(window, cx, x1, y1);
+            window.dispatch_event(
+                PlatformInput::MouseDown(MouseDownEvent {
+                    button: MouseButton::Left,
+                    position: point(px(x1), px(y1)),
+                    modifiers: Modifiers::none(),
+                    click_count: 1,
+                    first_mouse: false,
+                }),
+                cx,
+            );
+            window.on_next_frame(move |window, cx| {
+                for step in 1..=steps {
+                    let t = step as f32 / steps as f32;
+                    let x = x1 + (to_x - x1) * t;
+                    let y = y1 + (to_y - y1) * t;
+                    window.dispatch_event(
+                        PlatformInput::MouseMove(MouseMoveEvent {
+                            position: point(px(x), px(y)),
+                            pressed_button: Some(MouseButton::Left),
+                            modifiers: Modifiers::none(),
+                        }),
+                        cx,
+                    );
+                }
+                window.on_next_frame(move |window, cx| {
+                    window.dispatch_event(
+                        PlatformInput::MouseUp(MouseUpEvent {
+                            button: MouseButton::Left,
+                            position: point(px(to_x), px(to_y)),
+                            modifiers: Modifiers::none(),
+                            click_count: 1,
+                        }),
+                        cx,
+                    );
+                    window.on_next_frame(move |_, _| {
+                        let _ = reply.send(json!({ "ok": true, "from": [x1, y1], "to": [to_x, to_y] }).to_string());
+                    });
+                });
+            });
+        }
         ProbeRequest::Key(spec) => {
             let Ok(keystroke) = Keystroke::parse_with_os(&spec, OperatingSystem::Windows) else {
                 let _ = reply.send(error_reply("invalid keystroke"));
@@ -314,6 +416,19 @@ mod tests {
             parse_request("probe_click", &v(r#"{"flx":"a.b","index":2}"#)),
             Some(ProbeRequest::Click(Target::Flx { flx: "a.b".into(), index: 2 }))
         );
+        assert_eq!(
+            parse_request("probe_dblclick", &v(r#"{"flx":"a.b"}"#)),
+            Some(ProbeRequest::DoubleClick(Target::Flx { flx: "a.b".into(), index: 0 }))
+        );
+        assert_eq!(
+            parse_request("probe_drag", &v(r#"{"flx":"h.b","to_x":250,"to_y":400,"steps":12}"#)),
+            Some(ProbeRequest::Drag {
+                from: Target::Flx { flx: "h.b".into(), index: 0 },
+                to: (250.0, 400.0),
+                steps: 12,
+            })
+        );
+        assert_eq!(parse_request("probe_drag", &v(r#"{"flx":"h.b"}"#)), None);
         assert_eq!(
             parse_request("probe_hover", &v(r#"{"x":5,"y":6}"#)),
             Some(ProbeRequest::Hover(Target::Point { x: 5.0, y: 6.0 }))

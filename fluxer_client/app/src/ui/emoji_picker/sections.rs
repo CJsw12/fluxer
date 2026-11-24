@@ -11,6 +11,7 @@ use fluxer_client_core::state::{ClientState, Snowflake};
 use crate::ui::l10n;
 
 /// Grid width of the picker (`EmojiPickerConstants.ts:19-34`; min 5, default 9).
+#[cfg(test)]
 pub const COLUMNS: usize = 9;
 
 /// Base emoji plus the five skin tones, in menu order.

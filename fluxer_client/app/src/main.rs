@@ -67,6 +67,8 @@ mod tests_notify_upload;
 #[cfg(test)]
 mod tests_profile;
 #[cfg(test)]
+mod tests_resize;
+#[cfg(test)]
 mod tests_search;
 #[cfg(test)]
 mod tests_settings;

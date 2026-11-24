@@ -397,7 +397,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     div()
         .flex()
         .flex_col()
-        .w(px(theme.sizes.channel_list_width))
+        .w(px(view.effective_sidebar_width()))
         .h_full()
         .flex_none()
         .bg(theme.background_secondary)

@@ -4,9 +4,13 @@ use std::rc::Rc;
 
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
-use gpui_kit::{Anchor, AnyElement, App, FontWeight, MouseButton, Pixels, Point, SharedString, Window, anchored, div, prelude::*, px};
+use gpui_kit::{
+    Anchor, AnyElement, App, FontWeight, Hsla, MouseButton, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString,
+    Size, Window, anchored, div, prelude::*, px, rgb, rgba,
+};
 
 use crate::icons::AppIcon;
+use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 use crate::ui::l10n;
 use crate::ui::account_switcher::AccountSwitcherModal;
@@ -219,5 +223,60 @@ pub fn popover(
                 .snap_to_window_with_margin(px(8.))
                 .child(panel),
         )
+        .into_any_element()
+}
+
+/// Anchored bottom-right resizable popover positioned relative to `anchor_br`
+/// within 16px viewport margins (official `ResizablePane` popout contract).
+#[allow(clippy::too_many_arguments)]
+pub fn resizable_popover(
+    id: &'static str,
+    flx: &'static str,
+    content: impl IntoElement,
+    anchor_br: Point<Pixels>,
+    width: f32,
+    height: f32,
+    viewport: Size<Pixels>,
+    theme: &Theme,
+    on_dismiss: impl Fn(&mut Window, &mut App) + 'static,
+    on_drag_move: impl Fn(&MouseMoveEvent, &mut Window, &mut App) + 'static,
+    on_drag_end: impl Fn(&MouseUpEvent, &mut Window, &mut App) + 'static,
+) -> AnyElement {
+    let dark = theme.background.l < 0.5;
+    let bg: Hsla = if dark { rgb(0x2a2730).into() } else { theme.background_secondary };
+    let border: Hsla = if dark { rgba(0xc9c5d326).into() } else { theme.border };
+    let vw = f32::from(viewport.width);
+    let vh = f32::from(viewport.height);
+    let min_top = if vh >= 700. { 44. } else { 16. };
+    let eff_right = f32::from(anchor_br.x).clamp((width + 16.).min(vw - 16.), (vw - 16.).max(width + 16.));
+    let eff_bottom = f32::from(anchor_br.y).clamp((min_top + height).min(vh - 16.), (vh - 16.).max(min_top + height));
+    let left = (eff_right - width).clamp(16., (vw - width - 16.).max(16.));
+    let top = (eff_bottom - height).clamp(min_top, (vh - height - 16.).max(min_top));
+    let panel = div()
+        .id(id)
+        .w(px(width))
+        .h(px(height))
+        .rounded(px(8.))
+        .border_1()
+        .border_color(border)
+        .bg(bg)
+        .shadow_lg()
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .flx(flx)
+        .child(content);
+    let on_drag_end = Rc::new(on_drag_end);
+    let on_drag_end_out = Rc::clone(&on_drag_end);
+    div()
+        .id("popover-backdrop")
+        .absolute()
+        .top_0()
+        .left_0()
+        .size_full()
+        .occlude()
+        .on_mouse_down(MouseButton::Left, move |_, window, cx| on_dismiss(window, cx))
+        .on_mouse_move(on_drag_move)
+        .on_mouse_up(MouseButton::Left, move |ev, window, cx| on_drag_end(ev, window, cx))
+        .on_mouse_up_out(MouseButton::Left, move |ev, window, cx| on_drag_end_out(ev, window, cx))
+        .child(anchored().position(gpui_kit::point(px(left), px(top))).anchor(Anchor::TopLeft).child(panel))
         .into_any_element()
 }

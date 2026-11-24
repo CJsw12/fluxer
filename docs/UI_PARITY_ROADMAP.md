@@ -92,30 +92,6 @@
 
 ---
 
-## 표준 검증·빌드 명령 (모든 에이전트 공통)
+## 검증·빌드 명령과 공통 규칙
 
-```powershell
-# 1. 앱 단위·헤드리스 GPUI 테스트 (target/fc-root 재사용, 부하 제한 준수)
-$env:CARGO_TARGET_DIR = (Join-Path $PWD "target\fc-root")
-cargo test --manifest-path fluxer_client/Cargo.toml -p fluxer_client_app --bin fluxer_client --jobs 4 -- --test-threads=2
-
-# 2. 전체 워크스페이스 테스트 + voice_worker 테스트
-cargo test --manifest-path fluxer_client/Cargo.toml --workspace --jobs 4 -- --test-threads=2
-cargo test --manifest-path fluxer_client/voice_worker/Cargo.toml --jobs 4 -- --test-threads=2
-
-# 3. Windows 릴리스 패키징 (dist/fluxer_client/fluxer_client.exe)
-pwsh -NoProfile -File scripts\package_fluxer_client.ps1
-
-# 4. 진행도 SVG 및 README 동기화 (progress.json 변경 시)
-python -I scripts/progress_svg.py
-```
-
----
-
-## 필수 불변 조건 (인계 시 반드시 준수)
-
-- **Safe Rust:** 비즈니스 로직·UI는 Safe Rust만 사용하며 비테스트 `unwrap()`/`expect()`/`unsafe`를 금지한다.
-- **GPUI 규칙:** `uniform_list` / `MessageScroller` 렌더·레이아웃 콜백에서 상태 변경이나 `cx.notify()`를 호출하지 않는다.
-- **실행 환경 보호:** 실행 중인 공식 앱(`Fluxer.exe`)을 종료하지 않으며 `HKCU\Software\Classes\fluxer`를 덮어쓰지 않는다(격리 실행 시 `--no-os-integration` + 별도 `LOCALAPPDATA` 사용).
-- **시험 안전:** 실기 검증은 자체 테스트 서버·시험 계정에서만 수행하며, CAPTCHA/ALTCHA를 스크립트로 우회하지 않는다. 공개 문서·커밋에 로컬 접속 정보·IP·도메인·개인 경로·토큰을 남기지 않는다.
-- **인계 갱신:** 각 마일스톤 완료 시 이 문서의 체크박스(`[x]`)와 루트 `PROGRESS.md`의 `Baseline`/`Done`/`Next Steps`를 함께 갱신하고 관련 파일만 선별해 `origin/desktop-rs`에 커밋·푸시한다.
+명령은 `docs/PARITY_LAB.md` 10.7, 공통 규칙(Safe Rust, GPUI, 빌드 부하, 시험 안전, 커밋 제외)은 `AGENTS.md`를 따른다. 마일스톤을 마치면 이 문서 체크박스와 `PROGRESS.md`를 함께 갱신한다.

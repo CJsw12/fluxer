@@ -420,7 +420,7 @@ def run_scenes(argv: list[str]) -> int:
 
     rows = []
     for sc in scenes:
-        slug, expect = sc["slug"], sc.get("expect_flx")
+        slug, expect = sc["slug"], sc.get("rust_expect_flx", sc.get("expect_flx"))
         row = {"scene": slug, "joined": 0, "deltas": 0, "missing": 0, "status": "ok", "error": None, "top": []}
         spec_file = spec_dir / f"{slug}.spec.json"
         try:

@@ -368,6 +368,11 @@ async function runScenes() {
 					if (DENY.test(label)) throw new Error(`write-guard deny label: ${label.slice(0, 60)}`);
 					const ok = await realClickExpr(`document.querySelector(${JSON.stringify(sel)})`, act.context ? 'right' : 'left');
 					if (!ok) throw new Error(`click failed: ${sel}`);
+				} else if (act.click_text) {
+					// click the element matching `sel` whose trimmed first line equals `click_text` (same deny list)
+					if (DENY.test(act.click_text)) throw new Error(`write-guard deny label: ${act.click_text}`);
+					const ok = await realClickExpr(`[...document.querySelectorAll(${JSON.stringify(act.within)})].find((e) => e.innerText.trim().split('\\n')[0] === ${JSON.stringify(act.click_text)})`, 'left');
+					if (!ok) throw new Error(`click_text failed: ${act.click_text}`);
 				} else if (act.key) {
 					await pressKey(act.key, {Escape: 27, Enter: 13}[act.key] ?? 0);
 				} else if (act.wait_ms) await sleep(act.wait_ms);
@@ -383,6 +388,14 @@ async function runScenes() {
 		} catch (e) {
 			rec.status = 'failed';
 			rec.error = String(e?.message ?? e);
+		}
+		// restore: optional scene-specific actions (e.g. leave a DM), then Escape until the state is gone
+		for (const act of sc.official_restore ?? []) {
+			try {
+				if (act.click) await realClickExpr(`document.querySelector(${JSON.stringify(act.click)})`, 'left');
+				else if (act.key) await pressKey(act.key, {Escape: 27}[act.key] ?? 0);
+				await sleep(700);
+			} catch {}
 		}
 		// restore: Escape until the state is gone, then verify the base route
 		const stillOpen = () => (sc.expect_flx ? cdp.eval(shown(sc.expect_flx)) : false);

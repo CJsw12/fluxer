@@ -1,0 +1,255 @@
+[
+ {
+  "slug": "dm-home",
+  "official": [
+   {
+    "click": "[data-flx=\"app.sidebar-nav.fluxer-button.fluxer-button.select\"]"
+   }
+  ],
+  "official_restore": [
+   {
+    "click": "[data-flx=\"app.sidebar-nav.guild-list-item-presentation.guild-list-item.click\"]"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://channels/@me"
+   }
+  ],
+  "expect_flx": "channel.direct-message.dm-layout.dm-layout-container",
+  "rust_expect_flx": "app.sidebar-nav.fluxer-button.guild-indicator",
+  "scope": [
+   "channel.direct-message.",
+   "channel.friends.",
+   "app.sidebar-nav.",
+   "app.user-area."
+  ]
+ },
+ {
+  "slug": "dm-conversation",
+  "official": [
+   {
+    "click": "[data-flx=\"app.sidebar-nav.fluxer-button.fluxer-button.select\"]"
+   },
+   {
+    "click": "[data-flx=\"channel.direct-message.dm-list-item.dm-item-selected.navigate-to\"]"
+   }
+  ],
+  "official_restore": [
+   {
+    "click": "[data-flx=\"app.sidebar-nav.guild-list-item-presentation.guild-list-item.click\"]"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://channels/@me/1572284491404148750"
+   }
+  ],
+  "expect_flx": "channel.channel-view.dm-channel-view.voice-active-header-wrapper",
+  "scope": [
+   "channel.",
+   "app.channel-",
+   "app.guild-sidebar.",
+   "app.user-area."
+  ],
+  "rust_expect_flx": "channel.channel-header.header-wrapper"
+ },
+ {
+  "slug": "explore",
+  "official": [
+   {
+    "click": "[data-flx=\"app.sidebar-nav.discovery-button.button.click\"]"
+   }
+  ],
+  "official_restore": [
+   {
+    "click": "[data-flx=\"app.sidebar-nav.guild-list-item-presentation.guild-list-item.click\"]"
+   }
+  ],
+  "rust": [
+   {
+    "click": "app.sidebar-nav.discovery-button.button.click"
+   }
+  ],
+  "expect_flx": "discovery.discovery.discovery-page.container",
+  "rust_expect_flx": "app.sidebar-nav.discovery-button.button.click",
+  "scope": [
+   "discovery.",
+   "app.discovery-"
+  ]
+ },
+ {
+  "slug": "settings-my-account",
+  "official": [
+   {
+    "click": "[data-flx=\"app.user-area.user-area-inner.control-button.settings-click\"]"
+   },
+   {
+    "click_text": "Account",
+    "within": "[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button\"],[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button--2\"]"
+   }
+  ],
+  "official_restore": [
+   {
+    "key": "Escape"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://scene/settings/account"
+   }
+  ],
+  "expect_flx": "user.user-settings-modal.modal-root",
+  "rust_expect_flx": "app.settings-modal-layout.settings-modal-desktop-sidebar.desktop-sidebar",
+  "scope": [
+   "user.",
+   "app.settings-",
+   "app.modal."
+  ]
+ },
+ {
+  "slug": "settings-appearance",
+  "official": [
+   {
+    "click": "[data-flx=\"app.user-area.user-area-inner.control-button.settings-click\"]"
+   },
+   {
+    "click_text": "Appearance",
+    "within": "[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button\"],[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button--2\"]"
+   }
+  ],
+  "official_restore": [
+   {
+    "key": "Escape"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://scene/settings/appearance"
+   }
+  ],
+  "expect_flx": "user.user-settings-modal.modal-root",
+  "rust_expect_flx": "app.settings-modal-layout.settings-modal-desktop-sidebar.desktop-sidebar",
+  "scope": [
+   "user.",
+   "app.settings-",
+   "app.modal."
+  ]
+ },
+ {
+  "slug": "settings-notifications",
+  "official": [
+   {
+    "click": "[data-flx=\"app.user-area.user-area-inner.control-button.settings-click\"]"
+   },
+   {
+    "click_text": "Notifications",
+    "within": "[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button\"],[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button--2\"]"
+   }
+  ],
+  "official_restore": [
+   {
+    "key": "Escape"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://scene/settings/notifications"
+   }
+  ],
+  "expect_flx": "user.user-settings-modal.modal-root",
+  "rust_expect_flx": "app.settings-modal-layout.settings-modal-desktop-sidebar.desktop-sidebar",
+  "scope": [
+   "user.",
+   "app.settings-",
+   "app.modal."
+  ]
+ },
+ {
+  "slug": "settings-voice-video",
+  "official": [
+   {
+    "click": "[data-flx=\"app.user-area.user-area-inner.control-button.settings-click\"]"
+   },
+   {
+    "click_text": "Voice & video",
+    "within": "[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button\"],[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button--2\"]"
+   }
+  ],
+  "official_restore": [
+   {
+    "key": "Escape"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://scene/settings/voice"
+   }
+  ],
+  "expect_flx": "user.user-settings-modal.modal-root",
+  "rust_expect_flx": "app.settings-modal-layout.settings-modal-desktop-sidebar.desktop-sidebar",
+  "scope": [
+   "user.",
+   "app.settings-",
+   "app.modal."
+  ]
+ },
+ {
+  "slug": "settings-keybinds",
+  "official": [
+   {
+    "click": "[data-flx=\"app.user-area.user-area-inner.control-button.settings-click\"]"
+   },
+   {
+    "click_text": "Keybinds",
+    "within": "[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button\"],[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button--2\"]"
+   }
+  ],
+  "official_restore": [
+   {
+    "key": "Escape"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://scene/settings/keybinds"
+   }
+  ],
+  "expect_flx": "user.user-settings-modal.modal-root",
+  "rust_expect_flx": "app.settings-modal-layout.settings-modal-desktop-sidebar.desktop-sidebar",
+  "scope": [
+   "user.",
+   "app.settings-",
+   "app.modal."
+  ]
+ },
+ {
+  "slug": "settings-language",
+  "official": [
+   {
+    "click": "[data-flx=\"app.user-area.user-area-inner.control-button.settings-click\"]"
+   },
+   {
+    "click_text": "Language",
+    "within": "[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button\"],[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button--2\"]"
+   }
+  ],
+  "official_restore": [
+   {
+    "key": "Escape"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://scene/settings/language"
+   }
+  ],
+  "expect_flx": "user.user-settings-modal.modal-root",
+  "rust_expect_flx": "app.settings-modal-layout.settings-modal-desktop-sidebar.desktop-sidebar",
+  "scope": [
+   "user.",
+   "app.settings-",
+   "app.modal."
+  ]
+ }
+]

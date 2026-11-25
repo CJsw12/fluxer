@@ -58,6 +58,33 @@ pub struct UserSettingsPatch {
     /// Guild IDs where DMs from bots in that community are restricted.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bot_restricted_guilds: Option<Vec<String>>,
+    /// Profile visibility level: `0` all guilds, `1` small guilds only, `2` friends only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile_privacy: Option<u8>,
+    /// Whether newly joined communities restrict non-friend DMs by default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_guilds_restricted: Option<bool>,
+    /// Whether newly joined communities restrict bot DMs by default.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bot_default_guilds_restricted: Option<bool>,
+    /// Bitfield for who can send friend requests (`FriendSourceFlags`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub friend_source_flags: Option<u32>,
+    /// Bitfield for who can start incoming calls (`IncomingCallFlags`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub incoming_call_flags: Option<u32>,
+    /// Bitfield for who can add this user to group DMs (`GroupDmAddPermissionFlags`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_dm_add_permission_flags: Option<u32>,
+    /// Sensitive media filter for friend DMs (`0` show, `1` blur, `2` block).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sensitive_content_friend_dm_filter: Option<u8>,
+    /// Sensitive media filter for non-friend DMs (`0` show, `1` blur, `2` block).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sensitive_content_non_friend_dm_filter: Option<u8>,
+    /// Sensitive media filter for community channels (`0` show, `1` blur, `2` block).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sensitive_content_guild_filter: Option<u8>,
 }
 
 /// `MuteConfigSchema`.
@@ -127,6 +154,26 @@ fn validate_user_settings_patch(patch: &UserSettingsPatch) -> Result<(), RestErr
         {
             return Err(RestError::InvalidArgument("trusted_domains"));
         }
+    }
+    if let Some(level) = patch.profile_privacy
+        && level > 2
+    {
+        return Err(RestError::InvalidArgument("profile_privacy"));
+    }
+    if let Some(level) = patch.sensitive_content_friend_dm_filter
+        && level > 2
+    {
+        return Err(RestError::InvalidArgument("sensitive_content_friend_dm_filter"));
+    }
+    if let Some(level) = patch.sensitive_content_non_friend_dm_filter
+        && level > 2
+    {
+        return Err(RestError::InvalidArgument("sensitive_content_non_friend_dm_filter"));
+    }
+    if let Some(level) = patch.sensitive_content_guild_filter
+        && level > 2
+    {
+        return Err(RestError::InvalidArgument("sensitive_content_guild_filter"));
     }
     Ok(())
 }

@@ -4,7 +4,9 @@
 //! categorized tabs with expandable sub-section tree `SidebarSections`, and sign-out footer)
 //! and right scrollable content pane with official section cards.
 
-use fluxer_client_core::rest::{UserSettingsPatch, WebAuthnCredential};
+use fluxer_client_core::rest::{
+    CONNECTION_VISIBILITY_EVERYONE, DeveloperApplication, UserConnection, UserSettingsPatch, WebAuthnCredential,
+};
 use fluxer_client_core::state::Status;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
@@ -35,6 +37,7 @@ pub enum SettingsTab {
     Profile,
     Account,
     PrivacySafety,
+    Connections,
     #[default]
     Appearance,
     Themes,
@@ -44,11 +47,17 @@ pub enum SettingsTab {
     Accessibility,
     Language,
     Keybinds,
+    WindowsApp,
     Advanced,
+    Applications,
 }
 
 impl SettingsTab {
-    const ACCOUNT_TABS: &[SettingsTab] = &[SettingsTab::Account, SettingsTab::PrivacySafety];
+    const ACCOUNT_TABS: &[SettingsTab] = &[
+        SettingsTab::Account,
+        SettingsTab::PrivacySafety,
+        SettingsTab::Connections,
+    ];
     const APP_TABS: &[SettingsTab] = &[
         SettingsTab::Appearance,
         SettingsTab::Themes,
@@ -58,12 +67,15 @@ impl SettingsTab {
         SettingsTab::Accessibility,
         SettingsTab::Language,
         SettingsTab::Keybinds,
+        SettingsTab::WindowsApp,
         SettingsTab::Advanced,
     ];
+    const DEVELOPER_TABS: &[SettingsTab] = &[SettingsTab::Applications];
     const ALL: &[SettingsTab] = &[
         SettingsTab::Profile,
         SettingsTab::Account,
         SettingsTab::PrivacySafety,
+        SettingsTab::Connections,
         SettingsTab::Appearance,
         SettingsTab::Themes,
         SettingsTab::Notifications,
@@ -72,7 +84,9 @@ impl SettingsTab {
         SettingsTab::Accessibility,
         SettingsTab::Language,
         SettingsTab::Keybinds,
+        SettingsTab::WindowsApp,
         SettingsTab::Advanced,
+        SettingsTab::Applications,
     ];
 
     pub fn label(self) -> String {
@@ -80,6 +94,7 @@ impl SettingsTab {
             Self::Profile => l10n::tr("Profile"),
             Self::Account => l10n::tr("Account"),
             Self::PrivacySafety => l10n::tr("Privacy"),
+            Self::Connections => l10n::tr("Connections"),
             Self::Appearance => l10n::tr("Appearance"),
             Self::Themes => l10n::tr("Themes"),
             Self::Notifications => l10n::tr("Notifications"),
@@ -88,7 +103,9 @@ impl SettingsTab {
             Self::Accessibility => l10n::tr("Accessibility"),
             Self::Language => l10n::tr("Language"),
             Self::Keybinds => l10n::tr("Keybinds"),
+            Self::WindowsApp => l10n::tr("Windows app"),
             Self::Advanced => l10n::tr("Advanced"),
+            Self::Applications => l10n::tr("Applications"),
         }
     }
 
@@ -97,6 +114,7 @@ impl SettingsTab {
             Self::Profile => "settings-tab-profile",
             Self::Account => "settings-tab-account",
             Self::PrivacySafety => "settings-tab-privacy",
+            Self::Connections => "settings-tab-connections",
             Self::Appearance => "settings-tab-appearance",
             Self::Themes => "settings-tab-themes",
             Self::Notifications => "settings-tab-notifications",
@@ -105,7 +123,9 @@ impl SettingsTab {
             Self::Accessibility => "settings-tab-accessibility",
             Self::Language => "settings-tab-language",
             Self::Keybinds => "settings-tab-keybinds",
+            Self::WindowsApp => "settings-tab-windows",
             Self::Advanced => "settings-tab-advanced",
+            Self::Applications => "settings-tab-applications",
         }
     }
 
@@ -114,6 +134,7 @@ impl SettingsTab {
             Self::Profile => AppIcon::UserCircle,
             Self::Account => AppIcon::Shield,
             Self::PrivacySafety => AppIcon::EyeSlash,
+            Self::Connections => AppIcon::Users,
             Self::Appearance => AppIcon::PaintBrush,
             Self::Themes => AppIcon::Swatches,
             Self::Notifications => AppIcon::Bell,
@@ -122,7 +143,9 @@ impl SettingsTab {
             Self::Accessibility => AppIcon::PersonSimpleCircle,
             Self::Language => AppIcon::Translate,
             Self::Keybinds => AppIcon::Keyboard,
-            Self::Advanced => AppIcon::Code,
+            Self::WindowsApp => AppIcon::Monitor,
+            Self::Advanced => AppIcon::Gear,
+            Self::Applications => AppIcon::Code,
         }
     }
 
@@ -140,10 +163,15 @@ impl SettingsTab {
                 ("danger-zone", "Danger zone"),
             ],
             Self::PrivacySafety => &[
-                ("friends-dms", "Friends & direct messages"),
+                ("profile-privacy", "Profile privacy"),
+                ("connections", "Friends & direct messages"),
+                ("communication", "Communication"),
+                ("active-now", "Activity sharing"),
                 ("sensitive-content", "Sensitive content"),
-                ("link-safety", "Link protection"),
+                ("data-export", "Data export"),
+                ("data-deletion", "Data deletion"),
             ],
+            Self::Connections => &[],
             Self::Appearance => &[
                 ("message-preview", "Preview"),
                 ("theme", "Theme"),
@@ -187,10 +215,12 @@ impl SettingsTab {
                 ("keybinds-chat", "Messages & chat"),
                 ("keybinds-window", "Window & zoom"),
             ],
-            Self::Advanced => &[
-                ("desktop-window", "Windows app"),
-                ("updates", "About & updates"),
+            Self::WindowsApp => &[
+                ("desktop-window", "Desktop window"),
+                ("tray-icon-color", "Tray icon color"),
             ],
+            Self::Advanced => &[("updates", "About & updates")],
+            Self::Applications => &[],
         }
     }
 
@@ -220,11 +250,27 @@ impl SettingsTab {
             Self::PrivacySafety => &[
                 "privacy",
                 "safety",
+                "profile privacy",
                 "direct message",
                 "friend request",
+                "communication",
+                "incoming call",
+                "group chat",
+                "activity sharing",
                 "sensitive",
                 "mature",
                 "filter",
+                "data export",
+                "data deletion",
+            ],
+            Self::Connections => &[
+                "connections",
+                "linked accounts",
+                "bluesky",
+                "domain",
+                "oauth",
+                "external",
+                "verify",
             ],
             Self::Appearance => &[
                 "appearance",
@@ -271,7 +317,28 @@ impl SettingsTab {
             Self::Accessibility => &["accessibility", "reduced", "motion", "animation", "contrast", "screen reader"],
             Self::Language => &["language", "locale", "translation", "time format", "date format"],
             Self::Keybinds => &["keybind", "shortcut", "hotkey", "keyboard shortcut"],
-            Self::Advanced => &["advanced", "startup", "autostart", "tray", "update", "version", "about", "windows app"],
+            Self::WindowsApp => &[
+                "windows",
+                "windows app",
+                "desktop",
+                "startup",
+                "autostart",
+                "login",
+                "tray",
+                "minimize",
+                "close to tray",
+            ],
+            Self::Advanced => &["advanced", "update", "version", "about"],
+            Self::Applications => &[
+                "applications",
+                "developer",
+                "bot",
+                "oauth",
+                "api",
+                "docs",
+                "documentation",
+                "client",
+            ],
         };
         keywords.iter().any(|kw| kw.contains(query_lower))
     }
@@ -289,6 +356,19 @@ pub struct SettingsModal {
     pub passkey_busy: bool,
     pub passkey_status: Option<SharedString>,
     pub passkey_error: Option<SharedString>,
+    pub connections: Vec<UserConnection>,
+    pub connections_loaded: bool,
+    pub connections_loading: bool,
+    pub connections_error: Option<SharedString>,
+    pub connections_notice: Option<SharedString>,
+    pub applications: Vec<DeveloperApplication>,
+    pub applications_loaded: bool,
+    pub applications_loading: bool,
+    pub applications_error: Option<SharedString>,
+    pub selected_application_id: Option<String>,
+    pub selected_application_loading: bool,
+    pub applications_notice: Option<SharedString>,
+    pub privacy_notice: Option<SharedString>,
     pub sidebar_scroll: ScrollHandle,
     pub locale_scroll: ScrollHandle,
     pub _subscription: Subscription,
@@ -329,6 +409,19 @@ impl ClientView {
             passkey_busy: false,
             passkey_status: None,
             passkey_error: None,
+            connections: Vec::new(),
+            connections_loaded: false,
+            connections_loading: false,
+            connections_error: None,
+            connections_notice: None,
+            applications: Vec::new(),
+            applications_loaded: false,
+            applications_loading: false,
+            applications_error: None,
+            selected_application_id: None,
+            selected_application_loading: false,
+            applications_notice: None,
+            privacy_notice: None,
             sidebar_scroll: ScrollHandle::new(),
             locale_scroll: ScrollHandle::new(),
             _subscription: subscription,
@@ -336,16 +429,39 @@ impl ClientView {
         cx.notify();
     }
 
+    fn trigger_tab_loads(&mut self, tab: SettingsTab) {
+        if let Overlay::Settings(modal) = &mut self.overlay {
+            match tab {
+                SettingsTab::Account if modal.passkeys.is_empty() && !modal.passkey_loading => {
+                    modal.passkey_loading = true;
+                    self.backend.load_webauthn_credentials();
+                }
+                SettingsTab::Connections if !modal.connections_loaded && !modal.connections_loading => {
+                    modal.connections_loading = true;
+                    modal.connections_error = None;
+                    self.backend.load_connections();
+                }
+                SettingsTab::Applications if !modal.applications_loaded && !modal.applications_loading => {
+                    modal.applications_loading = true;
+                    modal.applications_error = None;
+                    self.backend.load_applications();
+                }
+                _ => {}
+            }
+        }
+    }
+
     pub(crate) fn select_settings_tab(&mut self, tab: SettingsTab, cx: &mut Context<Self>) {
         if let Overlay::Settings(modal) = &mut self.overlay {
             modal.active_tab = tab;
             modal.active_section = tab.sections().first().map(|(id, _)| *id);
-            if tab == SettingsTab::Account && modal.passkeys.is_empty() && !modal.passkey_loading {
-                modal.passkey_loading = true;
-                self.backend.load_webauthn_credentials();
+            if tab != SettingsTab::Applications {
+                modal.selected_application_id = None;
+                modal.selected_application_loading = false;
             }
-            cx.notify();
         }
+        self.trigger_tab_loads(tab);
+        cx.notify();
     }
 
     pub(crate) fn select_settings_section(
@@ -357,12 +473,85 @@ impl ClientView {
         if let Overlay::Settings(modal) = &mut self.overlay {
             modal.active_tab = tab;
             modal.active_section = Some(section_id);
-            if tab == SettingsTab::Account && modal.passkeys.is_empty() && !modal.passkey_loading {
-                modal.passkey_loading = true;
-                self.backend.load_webauthn_credentials();
-            }
+        }
+        self.trigger_tab_loads(tab);
+        cx.notify();
+    }
+
+    pub(crate) fn settings_reload_connections(&mut self, cx: &mut Context<Self>) {
+        if let Overlay::Settings(modal) = &mut self.overlay {
+            modal.connections_loading = true;
+            modal.connections_error = None;
+            self.backend.load_connections();
             cx.notify();
         }
+    }
+
+    pub(crate) fn settings_toggle_connection_visibility(
+        &mut self,
+        kind: String,
+        connection_id: String,
+        currently_visible: bool,
+        cx: &mut Context<Self>,
+    ) {
+        let next_flags = if currently_visible { 0 } else { CONNECTION_VISIBILITY_EVERYONE };
+        self.backend
+            .update_connection_visibility(kind, connection_id, next_flags);
+        cx.notify();
+    }
+
+    pub(crate) fn settings_set_connections_notice(&mut self, message: String, cx: &mut Context<Self>) {
+        if let Overlay::Settings(modal) = &mut self.overlay {
+            modal.connections_notice = Some(message.into());
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn settings_reload_applications(&mut self, cx: &mut Context<Self>) {
+        if let Overlay::Settings(modal) = &mut self.overlay {
+            modal.applications_loading = true;
+            modal.applications_error = None;
+            self.backend.load_applications();
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn settings_select_application(&mut self, app_id: String, cx: &mut Context<Self>) {
+        if let Overlay::Settings(modal) = &mut self.overlay {
+            modal.selected_application_id = Some(app_id.clone());
+            modal.selected_application_loading = true;
+            modal.applications_notice = None;
+            self.backend.load_application_detail(app_id);
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn settings_back_to_applications(&mut self, cx: &mut Context<Self>) {
+        if let Overlay::Settings(modal) = &mut self.overlay {
+            modal.selected_application_id = None;
+            modal.selected_application_loading = false;
+            modal.applications_notice = None;
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn settings_set_applications_notice(&mut self, message: String, cx: &mut Context<Self>) {
+        if let Overlay::Settings(modal) = &mut self.overlay {
+            modal.applications_notice = Some(message.into());
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn settings_set_privacy_notice(&mut self, message: String, cx: &mut Context<Self>) {
+        if let Overlay::Settings(modal) = &mut self.overlay {
+            modal.privacy_notice = Some(message.into());
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn settings_update_privacy_patch(&mut self, patch: UserSettingsPatch, cx: &mut Context<Self>) {
+        self.backend.update_user_settings(patch);
+        cx.notify();
     }
 
     pub(crate) fn settings_register_passkey(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -746,7 +935,8 @@ fn sidebar_section_heading(title: String, theme: &Theme) -> impl IntoElement {
         theme.muted_foreground
     };
     div()
-        .text_xs()
+        .text_size(px(12.))
+        .line_height(px(16.))
         .font_weight(FontWeight::MEDIUM)
         .text_color(color)
         .child(title)
@@ -1432,237 +1622,1187 @@ fn render_account_tab(
         .into_any_element()
 }
 
-fn render_privacy_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+fn settings_section_block(title: String, description: Option<String>, content: AnyElement, theme: &Theme) -> AnyElement {
+    div()
+        .flex()
+        .flex_col()
+        .gap_3()
+        .flx("app.settings-section.section")
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .flx("app.settings-section.section-header")
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap_1()
+                        .flx("app.settings-section.section-header-text")
+                        .child(section_heading(title, theme))
+                        .when_some(description, |d, desc| {
+                            d.child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .flx("app.settings-section.section-description")
+                                    .child(desc),
+                            )
+                        }),
+                ),
+        )
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_2()
+                .flx("app.settings-section.section-content")
+                .child(content),
+        )
+        .into_any_element()
+}
+
+fn render_privacy_tab(
+    view: &ClientView,
+    modal: &SettingsModal,
+    theme: &Theme,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
+    const CALL_EVERYONE: u32 = 1 << 2;
+    const CALL_FRIENDS_ONLY: u32 = 1 << 3;
+    const CALL_NOBODY: u32 = 1 << 4;
+    const CALL_SILENT: u32 = 1 << 5;
+    const GDM_EVERYONE: u32 = 1 << 2;
+    const GDM_FRIENDS_ONLY: u32 = 1 << 3;
+    const GDM_NOBODY: u32 = 1 << 4;
+
     let trusted_count = view.effective_trusted_domains().len();
     let active_friend_req = view.prefs.data.friend_request_access.as_str();
     let active_spoiler = view.prefs.data.spoiler_display.as_str();
 
-    let friend_req_options: &[(&str, &str)] = &[
-        ("everyone", "Everyone"),
-        ("friends_of_friends", "Friends of Friends"),
-        ("no_one", "No one"),
+    let (
+        profile_privacy,
+        default_guilds_restricted,
+        bot_default_guilds_restricted,
+        incoming_call_flags,
+        group_dm_flags,
+        default_share_voice_activity,
+        friend_dm_filter,
+        non_friend_dm_filter,
+        guild_filter,
+    ) = {
+        let state = view.backend.state();
+        let raw = &state.user_settings.raw;
+        (
+            raw.get("profile_privacy").and_then(|v| v.as_u64()).unwrap_or(0) as u8,
+            raw.get("default_guilds_restricted")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(!view.prefs.data.allow_guild_dms),
+            raw.get("bot_default_guilds_restricted")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            raw.get("incoming_call_flags")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(u64::from(CALL_FRIENDS_ONLY)) as u32,
+            raw.get("group_dm_add_permission_flags")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(u64::from(GDM_FRIENDS_ONLY)) as u32,
+            raw.get("default_share_voice_activity")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            raw.get("sensitive_content_friend_dm_filter")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u8,
+            raw.get("sensitive_content_non_friend_dm_filter")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(1) as u8,
+            raw.get("sensitive_content_guild_filter")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u8,
+        )
+    };
+
+    let profile_privacy_options: &[(u8, &str, &str)] = &[
+        (
+            0,
+            "Friends and all communities",
+            "Your full profile is visible to friends and to anyone in your communities",
+        ),
+        (
+            1,
+            "Friends and small communities only",
+            "Your full profile is visible to friends and members of your communities with 200 or fewer members",
+        ),
+        (2, "Friends only", "Your full profile is only visible to your friends"),
     ];
+    let friend_req_options: &[(&str, &str, u32)] = &[
+        ("everyone", "Everyone", 1 << 2),
+        ("friends_of_friends", "Friends of Friends", 1 << 0),
+        ("no_one", "No one", 0),
+    ];
+    let call_options: &[(u32, &str)] = &[
+        (CALL_NOBODY, "Block all"),
+        (CALL_FRIENDS_ONLY, "Friends only"),
+        (CALL_EVERYONE, "Everyone"),
+    ];
+    let group_dm_options: &[(u32, &str)] = &[
+        (GDM_NOBODY, "No one"),
+        (GDM_FRIENDS_ONLY, "Friends only"),
+        (GDM_EVERYONE, "Everyone"),
+    ];
+    let sensitive_dm_options: &[(u8, &str)] = &[(0, "Show"), (1, "Blur"), (2, "Block")];
+    let sensitive_guild_options: &[(u8, &str)] = &[(0, "Show"), (1, "Blur")];
     let spoiler_options: &[(&str, &str)] = &[
         ("on_click", "On click"),
         ("moderator", "In channels I moderate"),
         ("always", "Always"),
     ];
 
+    let active_call_base = if (incoming_call_flags & CALL_NOBODY) != 0 {
+        CALL_NOBODY
+    } else if (incoming_call_flags & CALL_EVERYONE) != 0 {
+        CALL_EVERYONE
+    } else {
+        CALL_FRIENDS_ONLY
+    };
+    let silent_calls = (incoming_call_flags & CALL_SILENT) != 0;
+    let active_gdm_base = if (group_dm_flags & GDM_NOBODY) != 0 {
+        GDM_NOBODY
+    } else if (group_dm_flags & GDM_EVERYONE) != 0 {
+        GDM_EVERYONE
+    } else {
+        GDM_FRIENDS_ONLY
+    };
+
+    let profile_privacy_section = settings_section_block(
+        l10n::tr("Profile privacy"),
+        Some(l10n::tr("Who can see your full profile")),
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .children(profile_privacy_options.iter().map(|&(level, label, desc)| {
+                let selected = profile_privacy == level;
+                let sel_id = format!("settings-profile-privacy-{level}");
+                div()
+                    .id(SharedString::from(sel_id.clone()))
+                    .debug_selector(move || sel_id.clone())
+                    .p_3()
+                    .rounded(px(8.))
+                    .border_1()
+                    .border_color(if selected { theme.brand } else { settings_border(theme) })
+                    .bg(settings_card_bg(theme))
+                    .cursor_pointer()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .gap_3()
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.settings_update_privacy_patch(
+                            UserSettingsPatch {
+                                profile_privacy: Some(level),
+                                ..Default::default()
+                            },
+                            cx,
+                        );
+                    }))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_0p5()
+                            .min_w_0()
+                            .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(l10n::tr(label)))
+                            .child(div().text_xs().text_color(theme.muted_foreground).child(l10n::tr(desc))),
+                    )
+                    .when(selected, |d| {
+                        d.child(Icon::new(AppIcon::Check).with_size(px(16.)).text_color(theme.brand))
+                    })
+            }))
+            .into_any_element(),
+        theme,
+    );
+
+    let friends_dms_section = settings_section_block(
+        l10n::tr("Friends & direct messages"),
+        None,
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .py_2p5()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .gap_4()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_0p5()
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .child(l10n::tr("Allow direct messages from community members")),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .child(l10n::tr(
+                                        "Applies to communities you join from now on. You can also change it for each community.",
+                                    )),
+                            ),
+                    )
+                    .child(
+                        div().debug_selector(|| "settings-allow-guild-dms".to_owned()).child(
+                            Switch::new("settings-allow-guild-dms")
+                                .checked(!default_guilds_restricted)
+                                .on_change(cx.listener(|this, checked: &bool, window, cx| {
+                                    this.apply_settings_effect(
+                                        SettingsEffect::AllowGuildDmsChanged(*checked),
+                                        window,
+                                        cx,
+                                    );
+                                    this.settings_update_privacy_patch(
+                                        UserSettingsPatch {
+                                            default_guilds_restricted: Some(!*checked),
+                                            ..Default::default()
+                                        },
+                                        cx,
+                                    );
+                                })),
+                        ),
+                    ),
+            )
+            .child(
+                div()
+                    .py_2p5()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .gap_4()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_0p5()
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .child(l10n::tr("Allow direct messages from community bots")),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .child(l10n::tr(
+                                        "Applies to bots in communities you join from now on. You can also change it for each community.",
+                                    )),
+                            ),
+                    )
+                    .child(
+                        div().debug_selector(|| "settings-allow-bot-dms".to_owned()).child(
+                            Switch::new("settings-allow-bot-dms")
+                                .checked(!bot_default_guilds_restricted)
+                                .on_change(cx.listener(|this, checked: &bool, _, cx| {
+                                    this.settings_update_privacy_patch(
+                                        UserSettingsPatch {
+                                            bot_default_guilds_restricted: Some(!*checked),
+                                            ..Default::default()
+                                        },
+                                        cx,
+                                    );
+                                })),
+                        ),
+                    ),
+            )
+            .child(
+                div()
+                    .py_2p5()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .gap_4()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_0p5()
+                            .min_w_0()
+                            .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(l10n::tr("Friend requests")))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .child(l10n::tr("Choose who can send you a friend request.")),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .flex_wrap()
+                            .gap_1()
+                            .children(friend_req_options.iter().map(|&(val, label, flag_bits)| {
+                                let selected = active_friend_req == val;
+                                let sel_id = format!("settings-friend-req-{val}");
+                                let val_owned = val.to_owned();
+                                let mut btn = Button::new(SharedString::from(sel_id.clone()))
+                                    .small()
+                                    .label(l10n::tr(label));
+                                btn = if selected { btn.primary() } else { btn.ghost() };
+                                div().debug_selector(move || sel_id.clone()).child(btn.on_click(cx.listener(
+                                    move |this, _, window, cx| {
+                                        this.apply_settings_effect(
+                                            SettingsEffect::FriendRequestAccessChanged(val_owned.clone()),
+                                            window,
+                                            cx,
+                                        );
+                                        this.settings_update_privacy_patch(
+                                            UserSettingsPatch {
+                                                friend_source_flags: Some(flag_bits),
+                                                ..Default::default()
+                                            },
+                                            cx,
+                                        );
+                                    },
+                                )))
+                            })),
+                    ),
+            )
+            .into_any_element(),
+        theme,
+    );
+
+    let communication_section = settings_section_block(
+        l10n::tr("Communication"),
+        None,
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
+                div()
+                    .py_2p5()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .gap_4()
+                    .flx("user.privacy-safety-tab.communication-tab.communication-tab-content.select.incoming-call-base-change.row")
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_0p5()
+                            .min_w_0()
+                            .flx("user.privacy-safety-tab.communication-tab.communication-tab-content.select.incoming-call-base-change.text")
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .flx("user.privacy-safety-tab.communication-tab.communication-tab-content.select.incoming-call-base-change.label")
+                                    .child(l10n::tr("Allowed callers")),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .child(l10n::tr("Choose who can start a call with you.")),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .flex_wrap()
+                            .gap_1()
+                            .flx("user.privacy-safety-tab.communication-tab.communication-tab-content.select.incoming-call-base-change")
+                            .children(call_options.iter().map(|&(bits, label)| {
+                                let selected = active_call_base == bits;
+                                let sel_id = format!("settings-incoming-call-{bits}");
+                                let next_flags = if bits == CALL_NOBODY {
+                                    CALL_NOBODY
+                                } else if silent_calls {
+                                    bits | CALL_SILENT
+                                } else {
+                                    bits
+                                };
+                                let mut btn = Button::new(SharedString::from(sel_id.clone()))
+                                    .small()
+                                    .label(l10n::tr(label));
+                                btn = if selected { btn.primary() } else { btn.ghost() };
+                                div().debug_selector(move || sel_id.clone()).child(btn.on_click(cx.listener(
+                                    move |this, _, _, cx| {
+                                        this.settings_update_privacy_patch(
+                                            UserSettingsPatch {
+                                                incoming_call_flags: Some(next_flags),
+                                                ..Default::default()
+                                            },
+                                            cx,
+                                        );
+                                    },
+                                )))
+                            })),
+                    ),
+            )
+            .when(active_call_base != CALL_NOBODY, |d| {
+                d.child(
+                    div()
+                        .py_2p5()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap_4()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap_0p5()
+                                .min_w_0()
+                                .child(
+                                    div()
+                                        .text_sm()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .child(l10n::tr("Receive calls silently")),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(l10n::tr("Calls you allow still come through, but they don't ring.")),
+                                ),
+                        )
+                        .child(
+                            Switch::new("settings-silent-calls")
+                                .checked(silent_calls)
+                                .on_change(cx.listener(move |this, checked: &bool, _, cx| {
+                                    let next = if *checked {
+                                        active_call_base | CALL_SILENT
+                                    } else {
+                                        active_call_base & !CALL_SILENT
+                                    };
+                                    this.settings_update_privacy_patch(
+                                        UserSettingsPatch {
+                                            incoming_call_flags: Some(next),
+                                            ..Default::default()
+                                        },
+                                        cx,
+                                    );
+                                })),
+                        ),
+                )
+            })
+            .child(
+                div()
+                    .py_2p5()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .gap_4()
+                    .flx("user.privacy-safety-tab.communication-tab.communication-tab-content.select.group-dm-add-base-change.row")
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_0p5()
+                            .min_w_0()
+                            .flx("user.privacy-safety-tab.communication-tab.communication-tab-content.select.group-dm-add-base-change.text")
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .flx("user.privacy-safety-tab.communication-tab.communication-tab-content.select.group-dm-add-base-change.label")
+                                    .child(l10n::tr("Allowed group chat invites")),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .child(l10n::tr("Choose who can add you to a group chat without asking first.")),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .flex_wrap()
+                            .gap_1()
+                            .flx("user.privacy-safety-tab.communication-tab.communication-tab-content.select.group-dm-add-base-change")
+                            .children(group_dm_options.iter().map(|&(bits, label)| {
+                                let selected = active_gdm_base == bits;
+                                let sel_id = format!("settings-group-dm-add-{bits}");
+                                let mut btn = Button::new(SharedString::from(sel_id.clone()))
+                                    .small()
+                                    .label(l10n::tr(label));
+                                btn = if selected { btn.primary() } else { btn.ghost() };
+                                div().debug_selector(move || sel_id.clone()).child(btn.on_click(cx.listener(
+                                    move |this, _, _, cx| {
+                                        this.settings_update_privacy_patch(
+                                            UserSettingsPatch {
+                                                group_dm_add_permission_flags: Some(bits),
+                                                ..Default::default()
+                                            },
+                                            cx,
+                                        );
+                                    },
+                                )))
+                            })),
+                    ),
+            )
+            .into_any_element(),
+        theme,
+    );
+
+    let activity_sharing_section = settings_section_block(
+        l10n::tr("Activity sharing"),
+        None,
+        info_card_row(
+            l10n::tr("Share your voice activity with friends"),
+            l10n::tr("Friends see which voice channel you're in on their Active now list. You can change this once every 24 hours."),
+            Some(if default_share_voice_activity {
+                l10n::tr("On")
+            } else {
+                l10n::tr("Off")
+            }),
+            theme,
+        ),
+        theme,
+    );
+
+    let sensitive_content_section = settings_section_block(
+        l10n::tr("Sensitive content"),
+        Some(l10n::tr(
+            "Choose what happens to images and videos flagged as sensitive. Show displays them as usual, Blur hides them until you click, and Block hides them completely.",
+        )),
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .flx("user.privacy-safety-tab.sensitive-content-tab.sensitive-content-tab-content.rows")
+            .child(
+                div()
+                    .py_2p5()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .gap_4()
+                    .flx("user.privacy-safety-tab.sensitive-content-tab.sensitive-content-tab-content.select.set-friend-dm-filter.row")
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_0p5()
+                            .min_w_0()
+                            .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(l10n::tr("Direct messages from friends")))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .child(l10n::tr("Media your friends send you in direct messages.")),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .gap_1()
+                            .flx("user.privacy-safety-tab.sensitive-content-tab.sensitive-content-tab-content.select.set-friend-dm-filter")
+                            .children(sensitive_dm_options.iter().map(|&(lvl, label)| {
+                                let selected = friend_dm_filter == lvl;
+                                let sel_id = format!("settings-sensitive-friend-{lvl}");
+                                let mut btn = Button::new(SharedString::from(sel_id.clone()))
+                                    .small()
+                                    .label(l10n::tr(label));
+                                btn = if selected { btn.primary() } else { btn.ghost() };
+                                div().debug_selector(move || sel_id.clone()).child(btn.on_click(cx.listener(
+                                    move |this, _, _, cx| {
+                                        this.settings_update_privacy_patch(
+                                            UserSettingsPatch {
+                                                sensitive_content_friend_dm_filter: Some(lvl),
+                                                ..Default::default()
+                                            },
+                                            cx,
+                                        );
+                                    },
+                                )))
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .py_2p5()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .gap_4()
+                    .flx("user.privacy-safety-tab.sensitive-content-tab.sensitive-content-tab-content.select.set-non-friend-dm-filter.row")
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_0p5()
+                            .min_w_0()
+                            .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(l10n::tr("Direct messages from others")))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .child(l10n::tr("Media in group chats and in direct messages from people who aren't your friends.")),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .gap_1()
+                            .flx("user.privacy-safety-tab.sensitive-content-tab.sensitive-content-tab-content.select.set-non-friend-dm-filter")
+                            .children(sensitive_dm_options.iter().map(|&(lvl, label)| {
+                                let selected = non_friend_dm_filter == lvl;
+                                let sel_id = format!("settings-sensitive-other-{lvl}");
+                                let mut btn = Button::new(SharedString::from(sel_id.clone()))
+                                    .small()
+                                    .label(l10n::tr(label));
+                                btn = if selected { btn.primary() } else { btn.ghost() };
+                                div().debug_selector(move || sel_id.clone()).child(btn.on_click(cx.listener(
+                                    move |this, _, _, cx| {
+                                        this.settings_update_privacy_patch(
+                                            UserSettingsPatch {
+                                                sensitive_content_non_friend_dm_filter: Some(lvl),
+                                                ..Default::default()
+                                            },
+                                            cx,
+                                        );
+                                    },
+                                )))
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .py_2p5()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .gap_4()
+                    .flx("user.privacy-safety-tab.sensitive-content-tab.sensitive-content-tab-content.select.set-guild-filter.row")
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_0p5()
+                            .min_w_0()
+                            .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(l10n::tr("Messages in community channels")))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .child(l10n::tr("Media in channels that are not marked 18+.")),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .gap_1()
+                            .flx("user.privacy-safety-tab.sensitive-content-tab.sensitive-content-tab-content.select.set-guild-filter")
+                            .children(sensitive_guild_options.iter().map(|&(lvl, label)| {
+                                let selected = guild_filter == lvl;
+                                let sel_id = format!("settings-sensitive-guild-{lvl}");
+                                let mut btn = Button::new(SharedString::from(sel_id.clone()))
+                                    .small()
+                                    .label(l10n::tr(label));
+                                btn = if selected { btn.primary() } else { btn.ghost() };
+                                div().debug_selector(move || sel_id.clone()).child(btn.on_click(cx.listener(
+                                    move |this, _, _, cx| {
+                                        this.settings_update_privacy_patch(
+                                            UserSettingsPatch {
+                                                sensitive_content_guild_filter: Some(lvl),
+                                                ..Default::default()
+                                            },
+                                            cx,
+                                        );
+                                    },
+                                )))
+                            })),
+                    ),
+            )
+            .child(
+                div()
+                    .py_2p5()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .gap_4()
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_0p5()
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .child(l10n::tr("Spoilers & sensitive media")),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .child(l10n::tr("Choose when spoiler-tagged text and media are revealed.")),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .flex_wrap()
+                            .gap_1()
+                            .children(spoiler_options.iter().map(|&(val, label)| {
+                                let selected = active_spoiler == val;
+                                let sel_id = format!("settings-spoiler-mode-{val}");
+                                let val_owned = val.to_owned();
+                                let mut btn = Button::new(SharedString::from(sel_id.clone()))
+                                    .small()
+                                    .label(l10n::tr(label));
+                                btn = if selected { btn.primary() } else { btn.ghost() };
+                                div().debug_selector(move || sel_id.clone()).child(btn.on_click(cx.listener(
+                                    move |this, _, window, cx| {
+                                        this.apply_settings_effect(
+                                            SettingsEffect::SpoilerDisplayChanged(val_owned.clone()),
+                                            window,
+                                            cx,
+                                        );
+                                    },
+                                )))
+                            })),
+                    ),
+            )
+            .into_any_element(),
+        theme,
+    );
+
+    let link_protection_section = settings_section_block(
+        l10n::tr("Link protection"),
+        None,
+        div()
+            .py_2p5()
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .gap_4()
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap_0p5()
+                    .child(
+                        div()
+                            .text_sm()
+                            .font_weight(FontWeight::MEDIUM)
+                            .child(format!("{} ({trusted_count})", l10n::tr("Trusted external domains"))),
+                    )
+                    .child(
+                        div()
+                            .text_xs()
+                            .text_color(theme.muted_foreground)
+                            .child(l10n::tr("Untrusted external links show a confirmation dialog before opening.")),
+                    ),
+            )
+            .when(trusted_count > 0, |d| {
+                d.child(
+                    Button::new("settings-privacy-clear-trusted")
+                        .ghost()
+                        .small()
+                        .label(l10n::tr("Clear"))
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.apply_settings_effect(SettingsEffect::ClearTrustedDomains, window, cx);
+                        })),
+                )
+            })
+            .into_any_element(),
+        theme,
+    );
+
+    let data_export_section = settings_section_block(
+        l10n::tr("Data export"),
+        None,
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .flx("user.privacy-safety-tab.data-export-tab.data-export-tab-content.delete-section")
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .flx("user.privacy-safety-tab.data-export-tab.data-export-tab-content.warning-text")
+                    .child(l10n::tr(
+                        "Request a copy of your account data. Export execution requires verified confirmation.",
+                    )),
+            )
+            .child(
+                div()
+                    .debug_selector(|| "settings-privacy-data-export".to_owned())
+                    .flx("user.privacy-safety-tab.data-export-tab.data-export-tab-content.button.open-modal")
+                    .child(
+                        Button::new("settings-privacy-data-export")
+                            .primary()
+                            .small()
+                            .label(l10n::tr("Export my data"))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                // TODO(backlog, T3): Connect POST /users/@me/harvest data export flow.
+                                this.settings_set_privacy_notice(
+                                    l10n::tr("Data export requests are managed in the web client for now."),
+                                    cx,
+                                );
+                            })),
+                    ),
+            )
+            .into_any_element(),
+        theme,
+    );
+
+    let data_deletion_section = settings_section_block(
+        l10n::tr("Data deletion"),
+        None,
+        div()
+            .flex()
+            .flex_col()
+            .gap_3()
+            .flx("user.privacy-safety-tab.data-deletion-tab.data-deletion-tab-content.delete-section")
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .flx("user.privacy-safety-tab.data-deletion-tab.data-deletion-tab-content.warning-text")
+                    .child(l10n::tr(
+                        "Permanently delete your messages or account data. This action cannot be undone.",
+                    )),
+            )
+            .child(
+                div()
+                    .debug_selector(|| "settings-privacy-data-deletion".to_owned())
+                    .flx("user.privacy-safety-tab.data-deletion-tab.data-deletion-tab-content.button.open-modal")
+                    .child(
+                        Button::new("settings-privacy-data-deletion")
+                            .danger()
+                            .small()
+                            .label(l10n::tr("Delete my messages"))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                // TODO(backlog, T3): Connect verified message/account data deletion flow.
+                                this.settings_set_privacy_notice(
+                                    l10n::tr("Bulk data deletion requires verified confirmation in the web client."),
+                                    cx,
+                                );
+                            })),
+                    ),
+            )
+            .into_any_element(),
+        theme,
+    );
+
     div()
         .debug_selector(|| "settings-privacy-dm".to_owned())
         .flex()
         .flex_col()
         .gap_5()
+        .flx("user.privacy-safety-tab.privacy-dashboard-content.container")
+        .when_some(modal.privacy_notice.clone(), |d, notice| {
+            d.child(
+                div()
+                    .debug_selector(|| "settings-privacy-notice".to_owned())
+                    .p_3()
+                    .rounded(px(8.))
+                    .border_1()
+                    .border_color(settings_border(theme))
+                    .bg(settings_card_bg(theme))
+                    .text_xs()
+                    .text_color(theme.foreground)
+                    .child(notice),
+            )
+        })
+        .child(profile_privacy_section)
+        .child(settings_divider(theme))
+        .child(friends_dms_section)
+        .child(settings_divider(theme))
+        .child(communication_section)
+        .child(settings_divider(theme))
+        .child(activity_sharing_section)
+        .child(settings_divider(theme))
+        .child(sensitive_content_section)
+        .child(settings_divider(theme))
+        .child(link_protection_section)
+        .child(settings_divider(theme))
+        .child(data_export_section)
+        .child(settings_divider(theme))
+        .child(data_deletion_section)
+        .into_any_element()
+}
+
+fn render_connections_tab(modal: &SettingsModal, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+    let platform_row = div()
+        .flex()
+        .flex_row()
+        .flex_wrap()
+        .gap_2()
+        .flx("user.linked-accounts-tab.platform-row")
         .child(
             div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .child(section_heading(l10n::tr("Friends & direct messages"), theme))
+                .debug_selector(|| "settings-connections-add-domain".to_owned())
+                .flx("user.linked-accounts-tab.platform-icon-button.add-connection--2")
                 .child(
-                    div()
-                        .py_2p5()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .justify_between()
-                        .gap_4()
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_0p5()
-                                .min_w_0()
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .child(l10n::tr("Direct messages from community members")),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(theme.muted_foreground)
-                                        .child(l10n::tr(
-                                            "Allow members of shared communities to start direct messages with you.",
-                                        )),
-                                ),
-                        )
-                        .child(
-                            div().debug_selector(|| "settings-allow-guild-dms".to_owned()).child(
-                                Switch::new("settings-allow-guild-dms")
-                                    .checked(view.prefs.data.allow_guild_dms)
-                                    .on_change(cx.listener(|this, checked: &bool, window, cx| {
-                                        this.apply_settings_effect(
-                                            SettingsEffect::AllowGuildDmsChanged(*checked),
-                                            window,
+                    Button::new("settings-connections-add-domain")
+                        .ghost()
+                        .small()
+                        .icon(AppIcon::LinkSimple)
+                        .label(l10n::tr("Add domain"))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            // TODO(backlog, T3): Connect POST /users/@me/connections domain verification flow.
+                            this.settings_set_connections_notice(
+                                l10n::tr("Adding domain connections requires OAuth/DNS verification (coming soon)."),
+                                cx,
+                            );
+                        })),
+                ),
+        )
+        .child(
+            div()
+                .debug_selector(|| "settings-connections-add-oauth".to_owned())
+                .child(
+                    Button::new("settings-connections-add-oauth")
+                        .ghost()
+                        .small()
+                        .icon(AppIcon::Plus)
+                        .label(l10n::tr("Add external account"))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            // TODO(backlog, T3): Connect OAuth external account linking flow.
+                            this.settings_set_connections_notice(
+                                l10n::tr("Linking external OAuth accounts is not yet enabled in this client."),
+                                cx,
+                            );
+                        })),
+                ),
+        );
+
+    let list_body: AnyElement = if modal.connections_loading && modal.connections.is_empty() {
+        div()
+            .debug_selector(|| "settings-connections-loading".to_owned())
+            .p_4()
+            .text_xs()
+            .text_color(theme.muted_foreground)
+            .child(l10n::tr("Loading connections…"))
+            .into_any_element()
+    } else if let Some(err) = &modal.connections_error {
+        div()
+            .debug_selector(|| "settings-connections-error".to_owned())
+            .p_4()
+            .rounded(px(8.))
+            .border_1()
+            .border_color(settings_border(theme))
+            .bg(settings_card_bg(theme))
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .gap_3()
+            .child(div().text_xs().text_color(theme.danger).child(err.clone()))
+            .child(
+                Button::new("settings-connections-retry")
+                    .ghost()
+                    .small()
+                    .label(l10n::tr("Try again"))
+                    .on_click(cx.listener(|this, _, _, cx| this.settings_reload_connections(cx))),
+            )
+            .into_any_element()
+    } else if modal.connections.is_empty() {
+        div()
+            .debug_selector(|| "settings-connections-empty".to_owned())
+            .p_6()
+            .rounded(px(8.))
+            .border_1()
+            .border_color(settings_border(theme))
+            .bg(settings_card_bg(theme))
+            .flex()
+            .flex_col()
+            .items_center()
+            .gap_2()
+            .flx("user.linked-accounts-tab.empty-state")
+            .child(Icon::new(AppIcon::Users).with_size(px(28.)).text_color(theme.muted_foreground))
+            .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("No connections yet")))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(l10n::tr("Verify domain ownership or link accounts to display them on your profile.")),
+            )
+            .into_any_element()
+    } else {
+        div()
+            .debug_selector(|| "settings-connections-list".to_owned())
+            .flex()
+            .flex_col()
+            .gap_2()
+            .flx("user.linked-accounts-tab.connections-list")
+            .children(modal.connections.iter().map(|conn| {
+                let conn_id = conn.id.clone();
+                let conn_kind = conn.kind.clone();
+                let conn_name = conn.name.clone();
+                let verified = conn.verified;
+                let visible = (conn.visibility_flags & CONNECTION_VISIBILITY_EVERYONE) != 0;
+                let provider_label = match conn.kind.as_str() {
+                    "bsky" => "Bluesky",
+                    "domain" => "Domain",
+                    "oauth" => "OAuth",
+                    other => other,
+                };
+                let card_sel = format!("settings-connection-card-{}", conn.id);
+                let toggle_id = format!("settings-connection-visible-{}", conn.id);
+                let remove_id = format!("settings-connection-remove-{}", conn.id);
+                let toggle_kind = conn_kind.clone();
+                let toggle_conn_id = conn_id.clone();
+                let remove_name = conn_name.clone();
+                div()
+                    .debug_selector(move || card_sel.clone())
+                    .p_3()
+                    .rounded(px(8.))
+                    .border_1()
+                    .border_color(settings_border(theme))
+                    .bg(settings_card_bg(theme))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .gap_3()
+                    .flx("user.linked-accounts-tab.connection-card.card")
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap_0p5()
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap_2()
+                                    .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(conn_name))
+                                    .child(
+                                        div()
+                                            .px_1p5()
+                                            .py_0p5()
+                                            .rounded(px(4.))
+                                            .bg(theme.muted)
+                                            .text_size(px(11.))
+                                            .text_color(if verified { theme.brand } else { theme.muted_foreground })
+                                            .child(if verified {
+                                                l10n::tr("Verified")
+                                            } else {
+                                                l10n::tr("Unverified")
+                                            }),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(theme.muted_foreground)
+                                    .child(format!("{provider_label} · {}", if visible { "Shown on profile" } else { "Hidden" })),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap_2()
+                            .child(
+                                Switch::new(SharedString::from(toggle_id))
+                                    .checked(visible)
+                                    .on_change(cx.listener(move |this, _, _, cx| {
+                                        this.settings_toggle_connection_visibility(
+                                            toggle_kind.clone(),
+                                            toggle_conn_id.clone(),
+                                            visible,
+                                            cx,
+                                        );
+                                    })),
+                            )
+                            .child(
+                                Button::new(SharedString::from(remove_id))
+                                    .ghost()
+                                    .small()
+                                    .icon(AppIcon::Trash)
+                                    .tooltip(l10n::tr("Remove connection"))
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        // TODO(backlog, T3): Connect DELETE /users/@me/connections/{type}/{id}.
+                                        this.settings_set_connections_notice(
+                                            format!(
+                                                "{} ({remove_name})",
+                                                l10n::tr("Removing connections is deferred to the T3 workflow.")
+                                            ),
                                             cx,
                                         );
                                     })),
                             ),
-                        ),
-                )
-                .child(
-                    div()
-                        .py_2p5()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .justify_between()
-                        .gap_4()
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_0p5()
-                                .min_w_0()
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .child(l10n::tr("Friend requests")),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(theme.muted_foreground)
-                                        .child(l10n::tr("Control who can send you friend requests.")),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .flex_wrap()
-                                .gap_1()
-                                .children(friend_req_options.iter().map(|&(val, label)| {
-                                    let selected = active_friend_req == val;
-                                    let sel_id = format!("settings-friend-req-{val}");
-                                    let val_owned = val.to_owned();
-                                    let mut btn = Button::new(SharedString::from(sel_id.clone()))
-                                        .small()
-                                        .label(l10n::tr(label));
-                                    btn = if selected { btn.primary() } else { btn.ghost() };
-                                    div().debug_selector(move || sel_id.clone()).child(btn.on_click(cx.listener(
-                                        move |this, _, window, cx| {
-                                            this.apply_settings_effect(
-                                                SettingsEffect::FriendRequestAccessChanged(val_owned.clone()),
-                                                window,
-                                                cx,
-                                            );
-                                        },
-                                    )))
-                                })),
-                        ),
-                ),
-        )
-        .child(settings_divider(theme))
-        .child(
+                    )
+            }))
+            .into_any_element()
+    };
+
+    div()
+        .debug_selector(|| "settings-connections-tab".to_owned())
+        .flex()
+        .flex_col()
+        .gap_4()
+        .child(settings_section_block(
+            l10n::tr("Connections"),
+            Some(l10n::tr(
+                "Link external accounts and domains to your Fluxer profile. Verified connections will be displayed on your profile for others to see.",
+            )),
             div()
                 .flex()
                 .flex_col()
-                .gap_2()
-                .child(section_heading(l10n::tr("Sensitive content"), theme))
-                .child(
-                    div()
-                        .py_2p5()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .justify_between()
-                        .gap_4()
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_0p5()
-                                .min_w_0()
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .child(l10n::tr("Spoilers & sensitive media")),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(theme.muted_foreground)
-                                        .child(l10n::tr("Choose when spoiler-tagged text and media are revealed.")),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .flex_wrap()
-                                .gap_1()
-                                .children(spoiler_options.iter().map(|&(val, label)| {
-                                    let selected = active_spoiler == val;
-                                    let sel_id = format!("settings-spoiler-mode-{val}");
-                                    let val_owned = val.to_owned();
-                                    let mut btn = Button::new(SharedString::from(sel_id.clone()))
-                                        .small()
-                                        .label(l10n::tr(label));
-                                    btn = if selected { btn.primary() } else { btn.ghost() };
-                                    div().debug_selector(move || sel_id.clone()).child(btn.on_click(cx.listener(
-                                        move |this, _, window, cx| {
-                                            this.apply_settings_effect(
-                                                SettingsEffect::SpoilerDisplayChanged(val_owned.clone()),
-                                                window,
-                                                cx,
-                                            );
-                                        },
-                                    )))
-                                })),
-                        ),
-                ),
-        )
-        .child(settings_divider(theme))
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .gap_2()
-                .child(section_heading(l10n::tr("Link protection"), theme))
-                .child(
-                    div()
-                        .py_2p5()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .justify_between()
-                        .gap_4()
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap_0p5()
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .child(format!("{} ({trusted_count})", l10n::tr("Trusted external domains"))),
-                                )
-                                .child(
-                                    div()
-                                        .text_xs()
-                                        .text_color(theme.muted_foreground)
-                                        .child(l10n::tr("Untrusted external links show a confirmation dialog before opening.")),
-                                ),
-                        )
-                        .when(trusted_count > 0, |d| {
-                            d.child(
-                                Button::new("settings-privacy-clear-trusted")
-                                    .ghost()
-                                    .small()
-                                    .label(l10n::tr("Clear"))
-                                    .on_click(cx.listener(|this, _, window, cx| {
-                                        this.apply_settings_effect(SettingsEffect::ClearTrustedDomains, window, cx);
-                                    })),
-                            )
-                        }),
-                ),
-        )
+                .gap_3()
+                .child(platform_row)
+                .when_some(modal.connections_notice.clone(), |d, notice| {
+                    d.child(
+                        div()
+                            .debug_selector(|| "settings-connections-notice".to_owned())
+                            .p_2p5()
+                            .rounded(px(8.))
+                            .border_1()
+                            .border_color(settings_border(theme))
+                            .bg(settings_card_bg(theme))
+                            .text_xs()
+                            .text_color(theme.foreground)
+                            .child(notice),
+                    )
+                })
+                .child(list_body)
+                .into_any_element(),
+            theme,
+        ))
         .into_any_element()
 }
 
@@ -4081,13 +5221,14 @@ fn render_keybinds_tab(theme: &Theme) -> AnyElement {
         .into_any_element()
 }
 
-fn render_advanced_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+fn render_windows_app_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
     let autostart_row = div()
+        .debug_selector(|| "settings-windows-autostart".to_owned())
         .p_3()
         .rounded(px(8.))
         .border_1()
-        .border_color(theme.border)
-        .bg(theme.background_secondary)
+        .border_color(settings_border(theme))
+        .bg(settings_card_bg(theme))
         .flex()
         .flex_row()
         .items_center()
@@ -4114,11 +5255,12 @@ fn render_advanced_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Client
         );
 
     let close_to_tray_row = div()
+        .debug_selector(|| "settings-windows-close-to-tray".to_owned())
         .p_3()
         .rounded(px(8.))
         .border_1()
-        .border_color(theme.border)
-        .bg(theme.background_secondary)
+        .border_color(settings_border(theme))
+        .bg(settings_card_bg(theme))
         .flex()
         .flex_row()
         .items_center()
@@ -4144,180 +5286,559 @@ fn render_advanced_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Client
                 })),
         );
 
-    let updates_section = div()
+    let desktop_window_section = settings_section_block(
+        l10n::tr("Desktop window"),
+        None,
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(autostart_row)
+            .child(close_to_tray_row)
+            .into_any_element(),
+        theme,
+    );
+
+    let tray_icon_section = settings_section_block(
+        l10n::tr("Tray icon color"),
+        None,
+        info_card_row(
+            l10n::tr("Match the taskbar"),
+            l10n::tr("Pick white or black from the color of your taskbar or panel."),
+            Some(l10n::tr("Auto")),
+            theme,
+        ),
+        theme,
+    );
+
+    div()
+        .debug_selector(|| "settings-windows-app-tab".to_owned())
         .flex()
         .flex_col()
-        .gap_2()
-        .child(section_heading(l10n::tr("About & Updates"), theme))
-        .child(
-            div()
-                .p_3()
-                .rounded(px(8.))
-                .border_1()
-                .border_color(theme.border)
-                .bg(theme.background_secondary)
-                .flex()
-                .flex_row()
-                .items_center()
-                .justify_between()
-                .gap_2()
-                .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(format!("v{CURRENT_VERSION}")))
-                .child(
-                    div().debug_selector(|| "settings-check-updates".to_owned()).child(
-                        Button::new("settings-check-updates")
-                            .ghost()
-                            .small()
-                            .label(l10n::tr("Check for updates"))
-                            .accessibility_label(l10n::tr("Check for updates"))
-                            .disabled(matches!(
-                                view.update_status,
-                                UpdateStatus::Checking | UpdateStatus::Downloading { .. }
-                            ))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.check_for_updates(cx);
-                            })),
-                    ),
-                ),
-        )
-        .map(|d| match &view.update_status {
-            UpdateStatus::Idle => d,
-            UpdateStatus::Checking => d.child(
+        .gap_5()
+        .child(desktop_window_section)
+        .child(settings_divider(theme))
+        .child(tray_icon_section)
+        .into_any_element()
+}
+
+fn render_advanced_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+    let updates_section = settings_section_block(
+        l10n::tr("About & Updates"),
+        None,
+        div()
+            .flex()
+            .flex_col()
+            .gap_2()
+            .child(
                 div()
-                    .debug_selector(|| "settings-update-checking".to_owned())
-                    .text_xs()
-                    .text_color(theme.muted_foreground)
-                    .child(l10n::tr("Checking for updates…")),
-            ),
-            UpdateStatus::UpToDate { .. } => d.child(
-                div()
-                    .debug_selector(|| "settings-update-uptodate".to_owned())
-                    .text_xs()
-                    .text_color(theme.muted_foreground)
-                    .child(l10n::tr("Up to date")),
-            ),
-            UpdateStatus::Available {
-                latest,
-                release_url,
-                asset_name,
-                asset_url,
-                ..
-            } => {
-                let release_url = release_url.clone();
-                let has_asset = asset_name.is_some() && asset_url.is_some();
-                d.child(
-                    div()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .justify_between()
-                        .gap_2()
-                        .child(
-                            div()
-                                .debug_selector(|| "settings-update-available".to_owned())
-                                .text_xs()
-                                .text_color(theme.foreground)
-                                .child(format!("{}: v{latest}", l10n::tr("Update available"))),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .gap_2()
-                                .when(has_asset, |row| {
-                                    row.child(
-                                        div()
-                                            .debug_selector(|| "settings-download-update".to_owned())
-                                            .child(
-                                                Button::new("settings-download-update")
-                                                    .primary()
-                                                    .small()
-                                                    .label(l10n::tr("Download update"))
-                                                    .on_click(cx.listener(|this, _, _, cx| {
-                                                        this.download_available_update(cx);
-                                                    })),
-                                            ),
-                                    )
-                                })
-                                .child(
-                                    div().debug_selector(|| "settings-open-release".to_owned()).child(
-                                        Button::new("settings-open-release")
-                                            .ghost()
-                                            .small()
-                                            .label(l10n::tr("Open release page"))
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                #[cfg(test)]
-                                                this.launch_external_url(&release_url, cx);
-                                                #[cfg(not(test))]
-                                                {
-                                                    let _ = this;
-                                                    cx.open_url(&release_url);
-                                                }
-                                            })),
-                                    ),
-                                ),
+                    .p_3()
+                    .rounded(px(8.))
+                    .border_1()
+                    .border_color(settings_border(theme))
+                    .bg(settings_card_bg(theme))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .gap_2()
+                    .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(format!("v{CURRENT_VERSION}")))
+                    .child(
+                        div().debug_selector(|| "settings-check-updates".to_owned()).child(
+                            Button::new("settings-check-updates")
+                                .ghost()
+                                .small()
+                                .label(l10n::tr("Check for updates"))
+                                .accessibility_label(l10n::tr("Check for updates"))
+                                .disabled(matches!(
+                                    view.update_status,
+                                    UpdateStatus::Checking | UpdateStatus::Downloading { .. }
+                                ))
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.check_for_updates(cx);
+                                })),
                         ),
-                )
-            }
-            UpdateStatus::Downloading { latest } => d.child(
-                div()
-                    .debug_selector(|| "settings-update-downloading".to_owned())
-                    .text_xs()
-                    .text_color(theme.muted_foreground)
-                    .child(format!("{} v{latest}…", l10n::tr("Downloading"))),
-            ),
-            UpdateStatus::Downloaded {
-                latest,
-                path,
-                sha256,
-                verified,
-            } => {
-                let short_hash = &sha256[..sha256.len().min(16)];
-                let verify_label = if *verified {
-                    l10n::tr("SHA-256 verified")
-                } else {
-                    l10n::tr("Unverified")
-                };
-                d.child(
+                    ),
+            )
+            .map(|d| match &view.update_status {
+                UpdateStatus::Idle => d,
+                UpdateStatus::Checking => d.child(
                     div()
-                        .debug_selector(|| "settings-update-downloaded".to_owned())
-                        .flex()
-                        .flex_col()
-                        .gap_1()
+                        .debug_selector(|| "settings-update-checking".to_owned())
                         .text_xs()
-                        .text_color(theme.foreground)
-                        .child(format!(
-                            "{} v{latest} ({verify_label} · {short_hash})",
-                            l10n::tr("Downloaded")
-                        ))
-                        .child(div().text_color(theme.muted_foreground).child(path.clone())),
-                )
-            }
-            UpdateStatus::Error(err) => d.child(
-                div()
-                    .debug_selector(|| "settings-update-error".to_owned())
-                    .text_xs()
-                    .text_color(theme.danger)
-                    .child(err.clone()),
-            ),
-        });
+                        .text_color(theme.muted_foreground)
+                        .child(l10n::tr("Checking for updates…")),
+                ),
+                UpdateStatus::UpToDate { .. } => d.child(
+                    div()
+                        .debug_selector(|| "settings-update-uptodate".to_owned())
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child(l10n::tr("Up to date")),
+                ),
+                UpdateStatus::Available {
+                    latest,
+                    release_url,
+                    asset_name,
+                    asset_url,
+                    ..
+                } => {
+                    let release_url = release_url.clone();
+                    let has_asset = asset_name.is_some() && asset_url.is_some();
+                    d.child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_between()
+                            .gap_2()
+                            .child(
+                                div()
+                                    .debug_selector(|| "settings-update-available".to_owned())
+                                    .text_xs()
+                                    .text_color(theme.foreground)
+                                    .child(format!("{}: v{latest}", l10n::tr("Update available"))),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap_2()
+                                    .when(has_asset, |row| {
+                                        row.child(
+                                            div()
+                                                .debug_selector(|| "settings-download-update".to_owned())
+                                                .child(
+                                                    Button::new("settings-download-update")
+                                                        .primary()
+                                                        .small()
+                                                        .label(l10n::tr("Download update"))
+                                                        .on_click(cx.listener(|this, _, _, cx| {
+                                                            this.download_available_update(cx);
+                                                        })),
+                                                ),
+                                        )
+                                    })
+                                    .child(
+                                        div().debug_selector(|| "settings-open-release".to_owned()).child(
+                                            Button::new("settings-open-release")
+                                                .ghost()
+                                                .small()
+                                                .label(l10n::tr("Open release page"))
+                                                .on_click(cx.listener(move |this, _, _, cx| {
+                                                    #[cfg(test)]
+                                                    this.launch_external_url(&release_url, cx);
+                                                    #[cfg(not(test))]
+                                                    {
+                                                        let _ = this;
+                                                        cx.open_url(&release_url);
+                                                    }
+                                                })),
+                                        ),
+                                    ),
+                            ),
+                    )
+                }
+                UpdateStatus::Downloading { latest } => d.child(
+                    div()
+                        .debug_selector(|| "settings-update-downloading".to_owned())
+                        .text_xs()
+                        .text_color(theme.muted_foreground)
+                        .child(format!("{} v{latest}…", l10n::tr("Downloading"))),
+                ),
+                UpdateStatus::Downloaded {
+                    latest,
+                    path,
+                    sha256,
+                    verified,
+                } => {
+                    let short_hash = &sha256[..sha256.len().min(16)];
+                    let verify_label = if *verified {
+                        l10n::tr("SHA-256 verified")
+                    } else {
+                        l10n::tr("Unverified")
+                    };
+                    d.child(
+                        div()
+                            .debug_selector(|| "settings-update-downloaded".to_owned())
+                            .flex()
+                            .flex_col()
+                            .gap_1()
+                            .text_xs()
+                            .text_color(theme.foreground)
+                            .child(format!(
+                                "{} v{latest} ({verify_label} · {short_hash})",
+                                l10n::tr("Downloaded")
+                            ))
+                            .child(div().text_color(theme.muted_foreground).child(path.clone())),
+                    )
+                }
+                UpdateStatus::Error(err) => d.child(
+                    div()
+                        .debug_selector(|| "settings-update-error".to_owned())
+                        .text_xs()
+                        .text_color(theme.danger)
+                        .child(err.clone()),
+                ),
+            })
+            .into_any_element(),
+        theme,
+    );
 
     div()
         .flex()
         .flex_col()
         .gap_5()
-        .when(cfg!(any(target_os = "windows", test)), |d| {
-            d.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(section_heading(l10n::tr("Windows app"), theme))
-                    .child(autostart_row)
-                    .child(close_to_tray_row),
-            )
-        })
         .child(updates_section)
+        .into_any_element()
+}
+
+fn render_applications_tab(modal: &SettingsModal, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+    const DOCS_URL: &str = "https://docs.fluxer.app";
+
+    if let Some(selected_id) = &modal.selected_application_id {
+        let selected_app = modal.applications.iter().find(|a| &a.id == selected_id);
+        let detail_body: AnyElement = if let Some(app) = selected_app {
+            let app_name = app.name.clone();
+            let app_id = app.id.clone();
+            let redirect_summary = if app.redirect_uris.is_empty() {
+                l10n::tr("None configured")
+            } else {
+                app.redirect_uris.join(", ")
+            };
+            let bot_summary = match &app.bot {
+                Some(bot) => format!("{}#{} (ID: {})", bot.username, bot.discriminator, bot.id),
+                None => l10n::tr("No bot user attached"),
+            };
+            div()
+                .debug_selector(|| "settings-application-detail".to_owned())
+                .flex()
+                .flex_col()
+                .gap_3()
+                .child(info_card_row(
+                    l10n::tr("Application name"),
+                    app_name.clone(),
+                    Some(format!("ID: {app_id}")),
+                    theme,
+                ))
+                .child(info_card_row(
+                    l10n::tr("Bot user"),
+                    bot_summary,
+                    Some(if app.bot_public {
+                        l10n::tr("Public")
+                    } else {
+                        l10n::tr("Private")
+                    }),
+                    theme,
+                ))
+                .child(info_card_row(
+                    l10n::tr("OAuth2 redirect URIs"),
+                    redirect_summary,
+                    Some(if app.bot_require_code_grant {
+                        l10n::tr("Code grant required")
+                    } else {
+                        l10n::tr("Standard")
+                    }),
+                    theme,
+                ))
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .flex_wrap()
+                        .gap_2()
+                        .child(
+                            Button::new("settings-application-reset-token")
+                                .ghost()
+                                .small()
+                                .label(l10n::tr("Reset bot token"))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    // TODO(backlog, T3): Connect bot token reset flow with sudo confirmation.
+                                    this.settings_set_applications_notice(
+                                        l10n::tr("Resetting bot tokens is deferred to the T3 workflow."),
+                                        cx,
+                                    );
+                                })),
+                        )
+                        .child(
+                            Button::new("settings-application-delete")
+                                .danger()
+                                .small()
+                                .label(l10n::tr("Delete application"))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    // TODO(backlog, T3): Connect DELETE /oauth2/applications/{id} with confirmation.
+                                    this.settings_set_applications_notice(
+                                        format!(
+                                            "{} ({app_name})",
+                                            l10n::tr("Deleting applications is deferred to the T3 workflow.")
+                                        ),
+                                        cx,
+                                    );
+                                })),
+                        ),
+                )
+                .into_any_element()
+        } else if modal.selected_application_loading {
+            div()
+                .p_4()
+                .text_xs()
+                .text_color(theme.muted_foreground)
+                .child(l10n::tr("Loading application details…"))
+                .into_any_element()
+        } else {
+            div()
+                .p_4()
+                .text_xs()
+                .text_color(theme.danger)
+                .child(
+                    modal
+                        .applications_error
+                        .clone()
+                        .unwrap_or_else(|| l10n::tr("Unable to load application details.").into()),
+                )
+                .into_any_element()
+        };
+
+        return div()
+            .debug_selector(|| "settings-applications-tab".to_owned())
+            .flex()
+            .flex_col()
+            .gap_4()
+            .child(
+                div()
+                    .debug_selector(|| "settings-application-back".to_owned())
+                    .child(
+                        Button::new("settings-application-back")
+                            .ghost()
+                            .small()
+                            .icon(AppIcon::ArrowBendUpLeft)
+                            .label(l10n::tr("Back to applications"))
+                            .on_click(cx.listener(|this, _, _, cx| this.settings_back_to_applications(cx))),
+                    ),
+            )
+            .when_some(modal.applications_notice.clone(), |d, notice| {
+                d.child(
+                    div()
+                        .debug_selector(|| "settings-applications-notice".to_owned())
+                        .p_2p5()
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(settings_border(theme))
+                        .bg(settings_card_bg(theme))
+                        .text_xs()
+                        .text_color(theme.foreground)
+                        .child(notice),
+                )
+            })
+            .child(settings_section_block(l10n::tr("Application details"), None, detail_body, theme))
+            .into_any_element();
+    }
+
+    let action_bar = div()
+        .flex()
+        .flex_row()
+        .flex_wrap()
+        .items_center()
+        .gap_3()
+        .flx("user.applications-tab.button-container")
+        .child(
+            div()
+                .debug_selector(|| "settings-applications-create".to_owned())
+                .flx("user.applications-tab.button.open-create-modal--2")
+                .child(
+                    Button::new("settings-applications-create")
+                        .primary()
+                        .small()
+                        .label(l10n::tr("Create application"))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            // TODO(backlog, T3): Connect POST /oauth2/applications creation modal.
+                            this.settings_set_applications_notice(
+                                l10n::tr("Creating applications is deferred to the T3 workflow."),
+                                cx,
+                            );
+                        })),
+                ),
+        )
+        .child(
+            div()
+                .debug_selector(|| "settings-applications-docs".to_owned())
+                .flx("user.applications-tab.documentation-link")
+                .child(
+                    Button::new("settings-applications-docs")
+                        .ghost()
+                        .small()
+                        .icon(AppIcon::ArrowSquareOut)
+                        .label(l10n::tr("Read the documentation (docs.fluxer.app)"))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            #[cfg(test)]
+                            this.launch_external_url(DOCS_URL, cx);
+                            #[cfg(not(test))]
+                            {
+                                let _ = this;
+                                cx.open_url(DOCS_URL);
+                            }
+                        })),
+                ),
+        );
+
+    let list_body: AnyElement = if modal.applications_loading && modal.applications.is_empty() {
+        div()
+            .debug_selector(|| "settings-applications-loading".to_owned())
+            .p_4()
+            .text_xs()
+            .text_color(theme.muted_foreground)
+            .child(l10n::tr("Loading applications…"))
+            .into_any_element()
+    } else if let Some(err) = &modal.applications_error {
+        div()
+            .debug_selector(|| "settings-applications-error".to_owned())
+            .p_4()
+            .rounded(px(8.))
+            .border_1()
+            .border_color(settings_border(theme))
+            .bg(settings_card_bg(theme))
+            .flex()
+            .flex_row()
+            .items_center()
+            .justify_between()
+            .gap_3()
+            .child(div().text_xs().text_color(theme.danger).child(err.clone()))
+            .child(
+                Button::new("settings-applications-retry")
+                    .ghost()
+                    .small()
+                    .label(l10n::tr("Try again"))
+                    .on_click(cx.listener(|this, _, _, cx| this.settings_reload_applications(cx))),
+            )
+            .into_any_element()
+    } else if modal.applications.is_empty() {
+        div()
+            .debug_selector(|| "settings-applications-empty".to_owned())
+            .p_6()
+            .rounded(px(8.))
+            .border_1()
+            .border_color(settings_border(theme))
+            .bg(settings_card_bg(theme))
+            .flex()
+            .flex_col()
+            .items_center()
+            .gap_2()
+            .flx("user.applications-tab.applications-list.empty-state")
+            .child(Icon::new(AppIcon::Code).with_size(px(28.)).text_color(theme.muted_foreground))
+            .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("No applications yet")))
+            .child(
+                div()
+                    .text_xs()
+                    .text_color(theme.muted_foreground)
+                    .child(l10n::tr("Create your first application to get started with the Fluxer API.")),
+            )
+            .into_any_element()
+    } else {
+        div()
+            .debug_selector(|| "settings-applications-list".to_owned())
+            .flex()
+            .flex_col()
+            .gap_2()
+            .flx("user.applications-tab.applications-list.list-container")
+            .children(modal.applications.iter().map(|app| {
+                let app_id = app.id.clone();
+                let click_id = app.id.clone();
+                let sel_id = format!("settings-application-item-{}", app.id);
+                let initial = app
+                    .name
+                    .chars()
+                    .next()
+                    .map(|c| c.to_uppercase().to_string())
+                    .unwrap_or_else(|| "A".to_owned());
+                div()
+                    .id(SharedString::from(sel_id.clone()))
+                    .debug_selector(move || sel_id.clone())
+                    .p_3()
+                    .rounded(px(8.))
+                    .border_1()
+                    .border_color(settings_border(theme))
+                    .bg(settings_card_bg(theme))
+                    .cursor_pointer()
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .gap_3()
+                    .flx("user.applications-tab.applications-list.item-button.select-application")
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.settings_select_application(click_id.clone(), cx);
+                    }))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap_3()
+                            .min_w_0()
+                            .child(
+                                div()
+                                    .size(px(36.))
+                                    .rounded(px(8.))
+                                    .bg(theme.muted)
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .text_sm()
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .child(initial),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap_0p5()
+                                    .min_w_0()
+                                    .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(app.name.clone()))
+                                    .child(
+                                        div()
+                                            .text_xs()
+                                            .text_color(theme.muted_foreground)
+                                            .child(format!("ID: {app_id}")),
+                                    ),
+                            ),
+                    )
+                    .child(Icon::new(AppIcon::CaretRight).with_size(px(16.)).text_color(theme.muted_foreground))
+            }))
+            .into_any_element()
+    };
+
+    div()
+        .debug_selector(|| "settings-applications-tab".to_owned())
+        .flex()
+        .flex_col()
+        .gap_4()
+        .child(settings_section_block(
+            l10n::tr("Applications"),
+            None,
+            div()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .child(action_bar)
+                .when_some(modal.applications_notice.clone(), |d, notice| {
+                    d.child(
+                        div()
+                            .debug_selector(|| "settings-applications-notice".to_owned())
+                            .p_2p5()
+                            .rounded(px(8.))
+                            .border_1()
+                            .border_color(settings_border(theme))
+                            .bg(settings_card_bg(theme))
+                            .text_xs()
+                            .text_color(theme.foreground)
+                            .child(notice),
+                    )
+                })
+                .child(list_body)
+                .into_any_element(),
+            theme,
+        ))
         .into_any_element()
 }
 
@@ -4331,7 +5852,8 @@ fn render_tab_body(
     match tab {
         SettingsTab::Profile => render_profile_tab(view, theme, cx),
         SettingsTab::Account => render_account_tab(view, modal, theme, cx),
-        SettingsTab::PrivacySafety => render_privacy_tab(view, theme, cx),
+        SettingsTab::PrivacySafety => render_privacy_tab(view, modal, theme, cx),
+        SettingsTab::Connections => render_connections_tab(modal, theme, cx),
         SettingsTab::Appearance => render_appearance_tab(view, theme, cx),
         SettingsTab::Themes => render_themes_tab(view, theme, cx),
         SettingsTab::Notifications => render_notifications_tab(view, theme, cx),
@@ -4340,7 +5862,9 @@ fn render_tab_body(
         SettingsTab::Accessibility => render_accessibility_tab(view, theme, cx),
         SettingsTab::Language => render_language_tab(view, modal, theme, cx),
         SettingsTab::Keybinds => render_keybinds_tab(theme),
+        SettingsTab::WindowsApp => render_windows_app_tab(view, theme, cx),
         SettingsTab::Advanced => render_advanced_tab(view, theme, cx),
+        SettingsTab::Applications => render_applications_tab(modal, theme, cx),
     }
 }
 
@@ -4359,21 +5883,22 @@ fn render_sidebar_tab(
     let active_text: Hsla = if dark { rgb(0xf4f4f6).into() } else { theme.foreground };
     let idle_text: Hsla = if dark { rgb(0xcecbd4).into() } else { theme.muted_foreground };
     let sub_idle_text: Hsla = if dark { rgb(0xb1acbb).into() } else { theme.muted_foreground };
-    let has_tree = selected && show_sections && sections.len() > 1;
+    let has_sections = sections.len() > 1;
+    let has_tree = selected && show_sections && has_sections;
 
-    let mut item = div().flex().flex_col().gap_0p5().child(
+    let mut item = div().w_full().flex().flex_col().gap(px(3.)).child(
         div()
             .id(sel_id)
             .debug_selector(move || sel_id.to_owned())
+            .w_full()
             .h(px(34.))
-            .px_2p5()
+            .px(px(11.))
             .rounded(px(8.))
             .cursor_pointer()
             .flex()
             .flex_row()
             .items_center()
-            .justify_between()
-            .gap_2()
+            .gap(px(8.))
             .text_color(if selected { active_text } else { idle_text })
             .when(selected, |d| d.bg(selected_bg).font_weight(FontWeight::MEDIUM))
             .when(!selected, |d| {
@@ -4382,34 +5907,72 @@ fn render_sidebar_tab(
                         .text_color(active_text)
                 })
             })
+            .flx("app.settings-modal-layout.settings-modal-sidebar-item.button")
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.select_settings_tab(tab, cx);
             }))
             .child(
                 div()
+                    .size(px(20.))
+                    .flex_none()
                     .flex()
-                    .flex_row()
                     .items_center()
-                    .gap_2p5()
-                    .min_w_0()
-                    .child(Icon::new(tab.icon()).with_size(px(16.)))
-                    .child(div().text_size(px(13.)).truncate().child(tab.label())),
+                    .justify_center()
+                    .flx("app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon")
+                    .child(Icon::new(tab.icon()).with_size(px(20.))),
             )
-            .when(has_tree, |d| {
-                d.child(Icon::new(AppIcon::CaretDown).with_size(px(14.)).text_color(sub_idle_text))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .h(px(18.))
+                    .text_size(px(13.))
+                    .line_height(px(18.))
+                    .truncate()
+                    .flx("app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-label")
+                    .child(tab.label()),
+            )
+            .when(has_sections, |d| {
+                d.child(
+                    div()
+                        .size(px(16.))
+                        .ml(px(4.))
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .flx("app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-trailing")
+                        .child(
+                            div()
+                                .size(px(16.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .flx("app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-chevron")
+                                .child(
+                                    Icon::new(if has_tree {
+                                        AppIcon::CaretDown
+                                    } else {
+                                        AppIcon::CaretRight
+                                    })
+                                    .with_size(px(16.))
+                                    .text_color(sub_idle_text),
+                                ),
+                        ),
+                )
             }),
     );
 
     if has_tree {
         let mut sub_list = div()
-            .ml(px(18.))
-            .pl(px(10.))
+            .ml(px(21.))
+            .pl(px(6.))
             .border_l_1()
             .border_color(if dark { hsla(0., 0., 1., 0.08) } else { theme.border })
-            .mt(px(2.))
             .flex()
             .flex_col()
-            .gap(px(2.));
+            .gap(px(2.))
+            .flx("app.settings-modal-layout.settings-modal-sidebar-sub-items.sidebar-sub-items");
         for (idx, &(sec_id, sec_label)) in sections.iter().enumerate() {
             let is_active_sec = active_section == Some(sec_id) || (active_section.is_none() && idx == 0);
             let sub_sel = format!("settings-subitem-{sec_id}");
@@ -4418,28 +5981,46 @@ fn render_sidebar_tab(
                 div()
                     .id(sub_id)
                     .debug_selector(move || sub_sel.clone())
+                    .w_full()
                     .h(px(30.))
-                    .px_2p5()
+                    .px(px(11.))
                     .rounded(px(6.))
                     .cursor_pointer()
                     .flex()
                     .items_center()
                     .text_size(px(13.))
+                    .line_height(px(18.))
                     .text_color(if is_active_sec { active_text } else { sub_idle_text })
-                    .when(is_active_sec, |d| d.font_weight(FontWeight::MEDIUM).bg(selected_bg))
+                    .when(is_active_sec, |d| d.font_weight(FontWeight::SEMIBOLD).bg(selected_bg))
                     .when(!is_active_sec, |d| {
                         d.hover(move |s| {
                             s.bg(if dark { hsla(0., 0., 1., 0.05) } else { theme.muted })
                                 .text_color(active_text)
                         })
                     })
+                    .flx("app.settings-modal-layout.settings-modal-sidebar-sub-item.sidebar-sub-item.click.button")
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.select_settings_section(tab, sec_id, cx);
                     }))
-                    .child(l10n::tr(sec_label)),
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .h(px(18.))
+                            .line_height(px(18.))
+                            .truncate()
+                            .flx("app.settings-modal-layout.settings-modal-sidebar-sub-item.sidebar-sub-item-label")
+                            .child(l10n::tr(sec_label)),
+                    ),
             );
         }
-        item = item.child(sub_list);
+        item = item.child(
+            div()
+                .w_full()
+                .mt(px(3.))
+                .flx("app.settings-modal-layout.settings-modal-sidebar-sub-items.sidebar-sub-items-wrap")
+                .child(sub_list),
+        );
     }
 
     item.into_any_element()
@@ -4484,6 +6065,11 @@ fn render_sidebar(
         .filter(|t| t.matches_query(query_lower))
         .collect();
     let app_tabs: Vec<SettingsTab> = SettingsTab::APP_TABS
+        .iter()
+        .copied()
+        .filter(|t| t.matches_query(query_lower))
+        .collect();
+    let developer_tabs: Vec<SettingsTab> = SettingsTab::DEVELOPER_TABS
         .iter()
         .copied()
         .filter(|t| t.matches_query(query_lower))
@@ -4612,131 +6198,261 @@ fn render_sidebar(
     div()
         .flex_1()
         .min_h_0()
+        .w_full()
+        .px(px(12.))
+        .pt(px(16.))
         .flex()
         .flex_col()
         .child(
-            div().flex_none().px_3().pt_4().pb_2().child(
-                div()
-                    .debug_selector(|| "settings-search".to_owned())
-                    .h(px(34.))
-                    .px_2p5()
-                    .rounded(px(8.))
-                    .bg(sidebar_bg)
-                    .border_1()
-                    .border_color(settings_border(theme))
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_2()
-                    .child(Icon::new(AppIcon::MagnifyingGlass).with_size(px(15.)).text_color(theme.muted_foreground))
-                    .child(div().flex_1().min_w_0().child(Input::new(&modal.search).small())),
-            ),
-        )
-        .child(
             div()
-                .id("settings-profile-card")
-                .debug_selector(|| "settings-profile-card".to_owned())
+                .w_full()
+                .h(px(106.))
+                .pb(px(8.))
                 .flex_none()
-                .mx_3()
-                .mb_2()
-                .px_2()
-                .py_1p5()
-                .rounded(px(8.))
-                .bg(if profile_selected {
-                    settings_sub_selected_bg(theme)
-                } else {
-                    hsla(0., 0., 0., 0.)
-                })
-                .cursor_pointer()
-                .hover(move |s| s.bg(if dark { hsla(0., 0., 1., 0.06) } else { theme.muted }))
-                .on_click(cx.listener(|this, _, _, cx| {
-                    this.select_settings_tab(SettingsTab::Profile, cx);
-                }))
                 .flex()
-                .flex_row()
-                .items_center()
-                .gap_2p5()
-                .child(div().flex_none().child(avatar_el))
+                .flex_col()
+                .gap(px(10.))
+                .flx("app.settings-modal-layout.settings-modal-sidebar-nav.sidebar-header")
                 .child(
                     div()
-                        .flex_1()
-                        .min_w_0()
-                        .flex()
-                        .flex_col()
-                        .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).truncate().child(user_name))
+                        .w_full()
+                        .h(px(34.))
+                        .flex_none()
+                        .flx("app.settings-search.container")
                         .child(
                             div()
+                                .debug_selector(|| "settings-search".to_owned())
+                                .w_full()
+                                .h(px(34.))
+                                .px_2p5()
+                                .rounded(px(8.))
+                                .bg(sidebar_bg)
+                                .border_1()
+                                .border_color(settings_border(theme))
                                 .flex()
                                 .flex_row()
                                 .items_center()
-                                .gap_1()
-                                .text_xs()
-                                .text_color(theme.muted_foreground)
-                                .child(Icon::new(AppIcon::PencilBold).with_size(px(12.)))
-                                .child(div().truncate().child(l10n::tr("Edit your profile"))),
+                                .gap_2()
+                                .flx("app.settings-search.input-container")
+                                .child(
+                                    div()
+                                        .size(px(16.))
+                                        .flex_none()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .flx("app.settings-search.magnifying-glass-icon")
+                                        .child(
+                                            Icon::new(AppIcon::MagnifyingGlass)
+                                                .with_size(px(16.))
+                                                .text_color(theme.muted_foreground),
+                                        ),
+                                )
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .h(px(34.))
+                                        .flex()
+                                        .items_center()
+                                        .flx("app.settings-search.input.query-change.text")
+                                        .child(Input::new(&modal.search).small()),
+                                ),
+                        ),
+                )
+                .child(
+                    div()
+                        .id("settings-profile-card")
+                        .debug_selector(|| "settings-profile-card".to_owned())
+                        .w_full()
+                        .h(px(54.))
+                        .flex_none()
+                        .px(px(9.))
+                        .py(px(7.))
+                        .rounded(px(8.))
+                        .bg(if profile_selected {
+                            settings_sub_selected_bg(theme)
+                        } else {
+                            hsla(0., 0., 0., 0.)
+                        })
+                        .cursor_pointer()
+                        .hover(move |s| s.bg(if dark { hsla(0., 0., 1., 0.06) } else { theme.muted }))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.select_settings_tab(SettingsTab::Profile, cx);
+                        }))
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_2p5()
+                        .child(div().flex_none().child(avatar_el))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w_0()
+                                .flex()
+                                .flex_col()
+                                .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).truncate().child(user_name))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .gap_1()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(Icon::new(AppIcon::PencilBold).with_size(px(12.)))
+                                        .child(div().truncate().child(l10n::tr("Edit your profile"))),
+                                ),
                         ),
                 ),
         )
         .child(
             div()
-                .id("settings-sidebar-scroll")
+                .w_full()
+                .mt(px(4.))
                 .flex_1()
                 .min_h_0()
-                .overflow_y_scroll()
-                .track_scroll(&modal.sidebar_scroll)
-                .px_2()
-                .py_1()
                 .flex()
                 .flex_col()
-                .gap_3()
-                .when(!account_tabs.is_empty(), |d| {
-                    d.child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_0p5()
-                            .child(div().px_2().pb_1().child(sidebar_section_heading(l10n::tr("Your account"), theme)))
-                            .children(account_tabs.iter().map(|&tab| {
-                                render_sidebar_tab(
-                                    tab,
-                                    modal.active_tab == tab,
-                                    modal.active_section,
-                                    show_sections,
-                                    theme,
-                                    cx,
-                                )
-                            })),
-                    )
-                })
-                .when(!app_tabs.is_empty(), |d| {
-                    d.child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_0p5()
-                            .child(div().px_2().pb_1().child(sidebar_section_heading(l10n::tr("App settings"), theme)))
-                            .children(app_tabs.iter().map(|&tab| {
-                                render_sidebar_tab(
-                                    tab,
-                                    modal.active_tab == tab,
-                                    modal.active_section,
-                                    show_sections,
-                                    theme,
-                                    cx,
-                                )
-                            })),
-                    )
-                })
-                .when(account_tabs.is_empty() && app_tabs.is_empty(), |d| {
-                    d.child(
-                        div()
-                            .px_2()
-                            .py_2()
-                            .text_xs()
-                            .text_color(theme.muted_foreground)
-                            .child(l10n::tr("No results")),
-                    )
-                }),
+                .flx("app.settings-modal-layout.settings-modal-sidebar-nav.sidebar-nav-wrapper")
+                .child(
+                    div()
+                        .id("settings-sidebar-scroll")
+                        .w_full()
+                        .flex_1()
+                        .min_h_0()
+                        .overflow_y_scroll()
+                        .track_scroll(&modal.sidebar_scroll)
+                        .flex()
+                        .flex_col()
+                        .flx("app.settings-modal-layout.settings-modal-sidebar-nav.sidebar-nav")
+                        .child(
+                            div()
+                                .w_full()
+                                .flex()
+                                .flex_col()
+                                .flx("app.settings-modal-layout.settings-modal-sidebar-nav.sidebar-nav-content")
+                                .child(
+                                    div()
+                                        .w_full()
+                                        .flex()
+                                        .flex_col()
+                                        .gap(px(3.))
+                                        .flx("app.settings-modal-layout.settings-modal-sidebar-nav.sidebar-nav-list.sidebar-nav-key-down")
+                                        .when(!account_tabs.is_empty(), |d| {
+                                            d.child(
+                                                div()
+                                                    .w_full()
+                                                    .flex()
+                                                    .flex_col()
+                                                    .gap(px(3.))
+                                                    .flx("app.settings-modal-layout.settings-modal-sidebar-category.sidebar-category")
+                                                    .child(
+                                                        div()
+                                                            .w_full()
+                                                            .px(px(10.))
+                                                            .pt(px(4.))
+                                                            .pb(px(3.))
+                                                            .flx("app.settings-modal-layout.settings-modal-sidebar-category-title.sidebar-category-title")
+                                                            .child(sidebar_section_heading(
+                                                                l10n::tr("Your account"),
+                                                                theme,
+                                                            )),
+                                                    )
+                                                    .children(account_tabs.iter().map(|&tab| {
+                                                        render_sidebar_tab(
+                                                            tab,
+                                                            modal.active_tab == tab,
+                                                            modal.active_section,
+                                                            show_sections,
+                                                            theme,
+                                                            cx,
+                                                        )
+                                                    })),
+                                            )
+                                        })
+                                        .when(!app_tabs.is_empty(), |d| {
+                                            d.child(
+                                                div()
+                                                    .w_full()
+                                                    .mt(px(8.))
+                                                    .flex()
+                                                    .flex_col()
+                                                    .gap(px(3.))
+                                                    .flx("app.settings-modal-layout.settings-modal-sidebar-category.sidebar-category")
+                                                    .child(
+                                                        div()
+                                                            .w_full()
+                                                            .px(px(10.))
+                                                            .pt(px(4.))
+                                                            .pb(px(3.))
+                                                            .flx("app.settings-modal-layout.settings-modal-sidebar-category-title.sidebar-category-title")
+                                                            .child(sidebar_section_heading(
+                                                                l10n::tr("App settings"),
+                                                                theme,
+                                                            )),
+                                                    )
+                                                    .children(app_tabs.iter().map(|&tab| {
+                                                        render_sidebar_tab(
+                                                            tab,
+                                                            modal.active_tab == tab,
+                                                            modal.active_section,
+                                                            show_sections,
+                                                            theme,
+                                                            cx,
+                                                        )
+                                                    })),
+                                            )
+                                        })
+                                        .when(!developer_tabs.is_empty(), |d| {
+                                            d.child(
+                                                div()
+                                                    .w_full()
+                                                    .mt(px(8.))
+                                                    .flex()
+                                                    .flex_col()
+                                                    .gap(px(3.))
+                                                    .flx("app.settings-modal-layout.settings-modal-sidebar-category.sidebar-category")
+                                                    .child(
+                                                        div()
+                                                            .w_full()
+                                                            .px(px(10.))
+                                                            .pt(px(4.))
+                                                            .pb(px(3.))
+                                                            .flx("app.settings-modal-layout.settings-modal-sidebar-category-title.sidebar-category-title")
+                                                            .child(sidebar_section_heading(
+                                                                l10n::tr("Developer"),
+                                                                theme,
+                                                            )),
+                                                    )
+                                                    .children(developer_tabs.iter().map(|&tab| {
+                                                        render_sidebar_tab(
+                                                            tab,
+                                                            modal.active_tab == tab,
+                                                            modal.active_section,
+                                                            show_sections,
+                                                            theme,
+                                                            cx,
+                                                        )
+                                                    })),
+                                            )
+                                        })
+                                        .when(
+                                            account_tabs.is_empty() && app_tabs.is_empty() && developer_tabs.is_empty(),
+                                            |d| {
+                                                d.child(
+                                                    div()
+                                                        .px_2()
+                                                        .py_2()
+                                                        .text_xs()
+                                                        .text_color(theme.muted_foreground)
+                                                        .child(l10n::tr("No results")),
+                                                )
+                                            },
+                                        ),
+                                ),
+                        ),
+                ),
         )
         .child(footer)
         .into_any_element()

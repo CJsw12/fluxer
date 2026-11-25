@@ -10,9 +10,10 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use anyhow::{Context as _, Result};
 use fluxer_client_core::gateway::{self, Compression, GatewayConfig, GatewayEvent, GatewayHandle, IdentifyProperties};
 use fluxer_client_core::rest::{
-    AckRequest, ClientIdentity, DiscoveryCategory, DiscoveryGuildList, DiscoveryOptions,
-    Endpoints, GuildBanEntry, MessageQuery, MessageSearchOutcome, PinsQuery, RestClient, RestConfig, SecretToken,
-    SendMessageRequest, TransportPolicy, UserProfileFull, WebAuthnCredential, discover_with,
+    AckRequest, ClientIdentity, ConnectionPatch, DeveloperApplication, DiscoveryCategory, DiscoveryGuildList,
+    DiscoveryOptions, Endpoints, GuildBanEntry, MessageQuery, MessageSearchOutcome, PinsQuery, RestClient, RestConfig,
+    SecretToken, SendMessageRequest, TransportPolicy, UserConnection, UserProfileFull, WebAuthnCredential,
+    discover_with,
 };
 #[cfg(test)]
 use fluxer_client_core::rest::{
@@ -93,6 +94,14 @@ pub enum UiEvent {
     WebAuthnCredentialsLoaded { result: Result<Vec<WebAuthnCredential>, String> },
     /// Passkey registration or deletion finished (`error: None` means success).
     WebAuthnMutationFinished { status: Option<String>, error: Option<String> },
+    /// `GET /users/@me/connections` finished.
+    ConnectionsLoaded { result: Result<Vec<UserConnection>, String> },
+    /// `PATCH /users/@me/connections/{type}/{id}` finished.
+    ConnectionUpdated { result: Result<UserConnection, String> },
+    /// `GET /oauth2/applications/@me` finished.
+    ApplicationsLoaded { result: Result<Vec<DeveloperApplication>, String> },
+    /// `GET /oauth2/applications/{id}` finished.
+    ApplicationLoaded { app_id: String, result: Result<DeveloperApplication, String> },
     /// `GET /channels/{channel_id}/messages/pins` finished.
     PinsLoaded { seq: u64, channel_id: Snowflake, result: Result<Vec<Message>, String> },
     /// `GET /users/@me/saved-messages` finished.
@@ -449,6 +458,49 @@ impl Backend {
                 .await
                 .map_err(crate::login::describe_rest_error);
             let _ = events.send(UiEvent::WebAuthnCredentialsLoaded { result });
+        });
+    }
+
+    pub fn load_connections(&self) {
+        let rest = self.rest.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            let result = rest.list_connections().await.map_err(crate::login::describe_rest_error);
+            let _ = events.send(UiEvent::ConnectionsLoaded { result });
+        });
+    }
+
+    pub fn update_connection_visibility(&self, kind: String, connection_id: String, visibility_flags: i32) {
+        let rest = self.rest.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            let patch = ConnectionPatch {
+                visibility_flags: Some(visibility_flags),
+                sort_order: None,
+            };
+            let result = rest
+                .update_connection(&kind, &connection_id, &patch)
+                .await
+                .map_err(crate::login::describe_rest_error);
+            let _ = events.send(UiEvent::ConnectionUpdated { result });
+        });
+    }
+
+    pub fn load_applications(&self) {
+        let rest = self.rest.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            let result = rest.list_applications().await.map_err(crate::login::describe_rest_error);
+            let _ = events.send(UiEvent::ApplicationsLoaded { result });
+        });
+    }
+
+    pub fn load_application_detail(&self, app_id: String) {
+        let rest = self.rest.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            let result = rest.get_application(&app_id).await.map_err(crate::login::describe_rest_error);
+            let _ = events.send(UiEvent::ApplicationLoaded { app_id, result });
         });
     }
 

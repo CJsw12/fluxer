@@ -4,7 +4,9 @@
 //! guild/channel/DM lists come from the gateway READY payload.
 
 mod access;
+mod applications;
 mod channels;
+mod connections;
 mod guild_discovery;
 mod guild_membership;
 mod guilds;
@@ -22,6 +24,11 @@ mod typing;
 mod users;
 
 pub use access::{RolePatch, validate_role_name};
+pub use applications::{DeveloperApplication, DeveloperApplicationBot};
+pub use connections::{
+    CONNECTION_VISIBILITY_EVERYONE, CONNECTION_VISIBILITY_FRIENDS, CONNECTION_VISIBILITY_MUTUAL_GUILDS,
+    ConnectionPatch, MAX_CONNECTIONS_PER_USER, UserConnection,
+};
 pub use channels::{
     CreateGuildChannelRequest, GroupDmPatch, GuildChannelPatch, MAX_CHANNEL_NAME_UTF16,
     MAX_CHANNEL_RATE_LIMIT_PER_USER, MAX_CHANNEL_TOPIC_UTF16, MAX_GROUP_DM_OTHER_RECIPIENTS,

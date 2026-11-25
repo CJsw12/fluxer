@@ -162,17 +162,29 @@ pub fn settings_modal(
                 .flex_row()
                 .items_center()
                 .gap(px(8.))
-                .h(px(28.))
+                .h(px(34.))
                 .flex_1()
+                .min_w_0()
                 .mr(px(15.))
                 .flx("app.settings-modal-header.title-wrapper")
                 .child(
                     div()
-                        .text_size(px(18.))
-                        .line_height(px(24.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .flx("app.settings-modal-header.title")
-                        .child(title),
+                        .flex_1()
+                        .min_w_0()
+                        .h(px(34.))
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(8.))
+                        .flx("app.settings-modal-header.title-content")
+                        .child(
+                            div()
+                                .text_size(px(18.))
+                                .line_height(px(24.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .flx("app.settings-modal-header.title")
+                                .child(title),
+                        ),
                 ),
         )
         .child(close_button);
@@ -184,9 +196,15 @@ pub fn settings_modal(
         .flex_1()
         .min_h_0()
         .overflow_y_scroll()
-        .pt(px(20.))
         .pb(px(32.))
         .flx("app.settings-modal-layout.settings-modal-desktop-scroll.desktop-scroll")
+        .child(
+            div()
+                .w_full()
+                .h(px(20.))
+                .flex_none()
+                .flx("app.settings-modal-layout.settings-modal-desktop-scroll.desktop-scroll-spacer-top"),
+        )
         .child(
             div()
                 .w_full()
@@ -204,7 +222,15 @@ pub fn settings_modal(
                         .flex_col()
                         .gap(px(20.))
                         .flx("app.settings-tab-layout.settings-tab-container.container")
-                        .child(body),
+                        .child(
+                            div()
+                                .w_full()
+                                .flex()
+                                .flex_col()
+                                .gap(px(20.))
+                                .flx("app.settings-tab-layout.settings-tab-content.content")
+                                .child(body),
+                        ),
                 ),
         );
 
@@ -222,18 +248,45 @@ pub fn settings_modal(
         .flex()
         .flex_col()
         .flx("app.settings-modal-layout.settings-modal-desktop-sidebar.desktop-sidebar")
-        .child(sidebar);
+        .child(
+            div()
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .flex()
+                .flex_col()
+                .flx("app.settings-modal-layout.settings-modal-desktop-sidebar.desktop-sidebar-inner")
+                .child(sidebar),
+        );
 
     let content_pane = div()
-        .flx("app.settings-modal-layout.settings-modal-desktop-content-component.desktop-content")
         .flex_1()
         .min_w_0()
         .h_full()
         .bg(modal_bg)
         .flex()
         .flex_col()
-        .child(header)
-        .child(content_scroll);
+        .flx("app.settings-modal-layout.settings-modal-desktop-content-component.desktop-content")
+        .child(
+            div()
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .flex()
+                .flex_col()
+                .flx("app.settings-modal-layout.settings-modal-desktop-content-component.desktop-content-pad")
+                .child(
+                    div()
+                        .flex_1()
+                        .min_h_0()
+                        .w_full()
+                        .flex()
+                        .flex_col()
+                        .flx("app.settings-modal-layout.settings-modal-desktop-content-component.desktop-content-card")
+                        .child(header)
+                        .child(content_scroll),
+                ),
+        );
 
     let panel = div()
         .w_full()
@@ -251,8 +304,17 @@ pub fn settings_modal(
         .flex_row()
         .flx("user.user-settings-modal.modal-root")
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-        .child(sidebar_pane)
-        .child(content_pane);
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .h_full()
+                .flex()
+                .flex_row()
+                .flx("app.settings-modal-layout.settings-modal-container.container")
+                .child(sidebar_pane)
+                .child(content_pane),
+        );
 
     div()
         .id("settings-modal-backdrop")

@@ -850,3 +850,150 @@ fn m7_guild_rail_hover_indicator_and_full_video_voice_settings_work(cx: &mut Tes
 
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn settings_modal_new_tabs_deeplinks_search_and_privacy_work(cx: &mut TestAppContext) {
+    use fluxer_client_core::rest::{DeveloperApplication, DeveloperApplicationBot, UserConnection};
+
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, vcx) = open_client(cx, backend.clone(), events);
+
+    // Deep link: fluxer://scene/settings/windows -> WindowsApp tab
+    view.update_in(vcx, |v, window, cx| {
+        assert!(v.apply_scene_deep_link("settings/windows", window, cx));
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    view.read_with(vcx, |v, _| match &v.overlay {
+        Overlay::Settings(modal) => assert_eq!(modal.active_tab, SettingsTab::WindowsApp),
+        _ => panic!("expected settings overlay"),
+    });
+    assert!(vcx.debug_bounds("settings-windows-app-tab").is_some());
+    assert!(vcx.debug_bounds("settings-windows-autostart").is_some());
+    assert!(vcx.debug_bounds("settings-windows-close-to-tray").is_some());
+
+    // Deep link: fluxer://scene/settings/connections -> Connections tab + loaded event rendering
+    view.update_in(vcx, |v, window, cx| {
+        assert!(v.apply_scene_deep_link("settings/connections", window, cx));
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    view.read_with(vcx, |v, _| match &v.overlay {
+        Overlay::Settings(modal) => assert_eq!(modal.active_tab, SettingsTab::Connections),
+        _ => panic!("expected settings overlay"),
+    });
+    assert!(vcx.debug_bounds("settings-connections-tab").is_some());
+
+    view.update(vcx, |v, cx| {
+        v.handle_events(
+            vec![crate::backend::UiEvent::ConnectionsLoaded {
+                result: Ok(vec![UserConnection {
+                    id: "conn-1".to_owned(),
+                    kind: "domain".to_owned(),
+                    name: "fluxer.dev".to_owned(),
+                    verified: true,
+                    visibility_flags: 1,
+                    sort_order: 0,
+                    provider_id: None,
+                    url: Some("https://fluxer.dev".to_owned()),
+                }]),
+            }],
+            cx,
+        );
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("settings-connection-card-conn-1").is_some());
+
+    // Deep link: fluxer://scene/settings/applications -> Applications tab + detail view
+    view.update_in(vcx, |v, window, cx| {
+        assert!(v.apply_scene_deep_link("settings/applications", window, cx));
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    view.read_with(vcx, |v, _| match &v.overlay {
+        Overlay::Settings(modal) => assert_eq!(modal.active_tab, SettingsTab::Applications),
+        _ => panic!("expected settings overlay"),
+    });
+    assert!(vcx.debug_bounds("settings-applications-tab").is_some());
+    assert!(vcx.debug_bounds("settings-applications-create").is_some());
+    assert!(vcx.debug_bounds("settings-applications-docs").is_some());
+
+    view.update(vcx, |v, cx| {
+        v.handle_events(
+            vec![crate::backend::UiEvent::ApplicationsLoaded {
+                result: Ok(vec![DeveloperApplication {
+                    id: "700000000000000001".to_owned(),
+                    name: "My Test Bot".to_owned(),
+                    redirect_uris: vec!["https://example.org/cb".to_owned()],
+                    bot_public: true,
+                    bot_require_code_grant: false,
+                    bot: Some(DeveloperApplicationBot {
+                        id: "700000000000000002".to_owned(),
+                        username: "testbot".to_owned(),
+                        discriminator: "0001".to_owned(),
+                        avatar: None,
+                        bio: None,
+                        banner: None,
+                        flags: None,
+                    }),
+                }]),
+            }],
+            cx,
+        );
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("settings-application-item-700000000000000001").is_some());
+
+    view.update(vcx, |v, cx| {
+        v.settings_select_application("700000000000000001".to_owned(), cx);
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("settings-application-detail").is_some());
+    assert!(vcx.debug_bounds("settings-application-back").is_some());
+
+    // Privacy tab renders enhanced sections and sends non-destructive privacy patches
+    view.update(vcx, |v, cx| {
+        v.select_settings_tab(SettingsTab::PrivacySafety, cx);
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    for sel in [
+        "settings-profile-privacy-0",
+        "settings-profile-privacy-2",
+        "settings-allow-guild-dms",
+        "settings-allow-bot-dms",
+        "settings-incoming-call-8",
+        "settings-group-dm-add-16",
+        "settings-sensitive-friend-1",
+        "settings-sensitive-other-2",
+        "settings-sensitive-guild-1",
+        "settings-privacy-data-export",
+        "settings-privacy-data-deletion",
+    ] {
+        assert!(vcx.debug_bounds(sel).is_some(), "{sel} should be drawn in Privacy tab");
+    }
+
+    // Search filter finds Applications, Connections, and Windows app tabs
+    for (query, expected_sel, hidden_sel) in [
+        ("applications", "settings-tab-applications", "settings-tab-appearance"),
+        ("connections", "settings-tab-connections", "settings-tab-language"),
+        ("windows", "settings-tab-windows", "settings-tab-keybinds"),
+    ] {
+        view.update_in(vcx, |v, window, cx| {
+            if let Overlay::Settings(modal) = &v.overlay {
+                modal.search.update(cx, |input, cx| input.set_value(query, window, cx));
+            }
+            cx.notify();
+        });
+        vcx.run_until_parked();
+        draw(vcx);
+        assert!(vcx.debug_bounds(expected_sel).is_some(), "{expected_sel} should match query '{query}'");
+        assert!(vcx.debug_bounds(hidden_sel).is_none(), "{hidden_sel} should be filtered out for '{query}'");
+    }
+
+    drop(rt);
+}

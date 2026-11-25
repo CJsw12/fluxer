@@ -785,3 +785,148 @@ async fn guild_discovery_routes() {
         Err(RestError::InvalidArgument("guild_id"))
     ));
 }
+
+#[tokio::test]
+async fn connections_and_applications_and_privacy_settings_routes() {
+    let fx = Fixture::start(|req, _| match (req.method.as_str(), req.target.as_str()) {
+        ("GET", "/api/v1/users/@me/connections") => Resp::json(
+            200,
+            json!([
+                {
+                    "id": "conn-1",
+                    "type": "domain",
+                    "name": "example.org",
+                    "verified": true,
+                    "visibility_flags": 1,
+                    "sort_order": 0,
+                    "provider_id": null,
+                    "url": "https://example.org"
+                }
+            ]),
+        ),
+        ("PATCH", "/api/v1/users/@me/connections/domain/conn-1") => Resp::json(
+            200,
+            json!({
+                "id": "conn-1",
+                "type": "domain",
+                "name": "example.org",
+                "verified": true,
+                "visibility_flags": 0,
+                "sort_order": 0,
+                "provider_id": null,
+                "url": "https://example.org"
+            }),
+        ),
+        ("POST", "/api/v1/users/@me/connections/reorder") => Resp::empty(204),
+        ("GET", "/api/v1/oauth2/applications/@me") => Resp::json(
+            200,
+            json!([
+                {
+                    "id": "623456789012345678",
+                    "name": "Fluxer Bot",
+                    "redirect_uris": ["https://example.org/callback"],
+                    "bot_public": true,
+                    "bot_require_code_grant": false,
+                    "client_secret": "should-be-ignored",
+                    "bot": {
+                        "id": "623456789012345679",
+                        "username": "fluxbot",
+                        "discriminator": "0001",
+                        "avatar": null,
+                        "token": "secret-token-ignored"
+                    }
+                }
+            ]),
+        ),
+        ("GET", "/api/v1/oauth2/applications/623456789012345678") => Resp::json(
+            200,
+            json!({
+                "id": "623456789012345678",
+                "name": "Fluxer Bot",
+                "redirect_uris": ["https://example.org/callback"],
+                "bot_public": true,
+                "bot_require_code_grant": false
+            }),
+        ),
+        ("PATCH", "/api/v1/users/@me/settings") => Resp::json(200, json!({ "profile_privacy": 2 })),
+        _ => Resp::empty(204),
+    })
+    .await;
+    let client = authed(&fx).await;
+
+    let conns = client.list_connections().await.unwrap();
+    assert_eq!(conns.len(), 1);
+    assert_eq!(conns[0].id, "conn-1");
+    assert_eq!(conns[0].kind, "domain");
+    assert!(conns[0].verified);
+
+    let updated = client
+        .update_connection(
+            "domain",
+            "conn-1",
+            &ConnectionPatch {
+                visibility_flags: Some(0),
+                sort_order: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(updated.visibility_flags, 0);
+
+    client.reorder_connections(&["conn-1".to_owned()]).await.unwrap();
+
+    let apps = client.list_applications().await.unwrap();
+    assert_eq!(apps.len(), 1);
+    assert_eq!(apps[0].name, "Fluxer Bot");
+    assert_eq!(apps[0].bot.as_ref().unwrap().username, "fluxbot");
+
+    let app_detail = client.get_application("623456789012345678").await.unwrap();
+    assert_eq!(app_detail.id, "623456789012345678");
+    assert!(app_detail.bot_public);
+
+    let privacy_patch = UserSettingsPatch {
+        profile_privacy: Some(2),
+        default_guilds_restricted: Some(true),
+        bot_default_guilds_restricted: Some(true),
+        friend_source_flags: Some(1),
+        incoming_call_flags: Some(8),
+        group_dm_add_permission_flags: Some(16),
+        sensitive_content_friend_dm_filter: Some(1),
+        sensitive_content_non_friend_dm_filter: Some(2),
+        sensitive_content_guild_filter: Some(1),
+        ..Default::default()
+    };
+    client.update_user_settings(&privacy_patch).await.unwrap();
+
+    assert_eq!(
+        lines(&fx),
+        vec![
+            l("GET", "/api/v1/users/@me/connections".into()),
+            l("PATCH", "/api/v1/users/@me/connections/domain/conn-1".into()),
+            l("POST", "/api/v1/users/@me/connections/reorder".into()),
+            l("GET", "/api/v1/oauth2/applications/@me".into()),
+            l("GET", "/api/v1/oauth2/applications/623456789012345678".into()),
+            l("PATCH", "/api/v1/users/@me/settings".into()),
+        ]
+    );
+
+    assert!(matches!(
+        client.get_application("not-a-snowflake").await,
+        Err(RestError::InvalidArgument("application_id"))
+    ));
+    assert!(matches!(
+        client
+            .update_connection("../bad", "conn-1", &ConnectionPatch::default())
+            .await,
+        Err(RestError::InvalidArgument("connection type"))
+    ));
+    assert!(matches!(
+        client
+            .update_user_settings(&UserSettingsPatch {
+                profile_privacy: Some(9),
+                ..Default::default()
+            })
+            .await,
+        Err(RestError::InvalidArgument("profile_privacy"))
+    ));
+}

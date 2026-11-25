@@ -1094,6 +1094,75 @@ impl ClientView {
                         }
                     }
                 }
+                UiEvent::ConnectionsLoaded { result } => {
+                    if let Overlay::Settings(modal) = &mut self.overlay {
+                        modal.connections_loading = false;
+                        modal.connections_loaded = true;
+                        match result {
+                            Ok(mut items) => {
+                                items.sort_by_key(|c| c.sort_order);
+                                modal.connections = items;
+                                modal.connections_error = None;
+                            }
+                            Err(err) => {
+                                modal.connections_error = Some(err.into());
+                            }
+                        }
+                    }
+                }
+                UiEvent::ConnectionUpdated { result } => {
+                    if let Overlay::Settings(modal) = &mut self.overlay {
+                        match result {
+                            Ok(updated) => {
+                                if let Some(slot) = modal.connections.iter_mut().find(|c| c.id == updated.id) {
+                                    *slot = updated;
+                                } else {
+                                    modal.connections.push(updated);
+                                }
+                                modal.connections.sort_by_key(|c| c.sort_order);
+                                modal.connections_error = None;
+                            }
+                            Err(err) => {
+                                modal.connections_error = Some(err.into());
+                            }
+                        }
+                    }
+                }
+                UiEvent::ApplicationsLoaded { result } => {
+                    if let Overlay::Settings(modal) = &mut self.overlay {
+                        modal.applications_loading = false;
+                        modal.applications_loaded = true;
+                        match result {
+                            Ok(items) => {
+                                modal.applications = items;
+                                modal.applications_error = None;
+                            }
+                            Err(err) => {
+                                modal.applications_error = Some(err.into());
+                            }
+                        }
+                    }
+                }
+                UiEvent::ApplicationLoaded { app_id, result } => {
+                    if let Overlay::Settings(modal) = &mut self.overlay
+                        && modal.selected_application_id.as_deref() == Some(app_id.as_str())
+                    {
+                        modal.selected_application_loading = false;
+                        match result {
+                            Ok(app) => {
+                                if let Some(slot) = modal.applications.iter_mut().find(|a| a.id == app.id) {
+                                    *slot = app;
+                                } else {
+                                    modal.applications.push(app);
+                                }
+                                modal.applications_error = None;
+                            }
+                            Err(err) => {
+                                modal.applications_error = Some(err.into());
+                            }
+                        }
+                    }
+                }
                 UiEvent::PinsLoaded { seq, channel_id, result } => {
                     if let Overlay::ChannelPopout(pop) = &mut self.overlay
                         && let crate::ui::channel_popouts::ChannelPopoutKind::PinnedMessages {
@@ -3466,7 +3535,7 @@ impl ClientView {
         }
     }
 
-    fn apply_scene_deep_link(&mut self, route: &str, window: &mut Window, cx: &mut Context<Self>) -> bool {
+    pub(crate) fn apply_scene_deep_link(&mut self, route: &str, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let parts: Vec<&str> = route.split('/').filter(|s| !s.is_empty()).collect();
         self.user_area_popout_open = false;
         self.guild_header_popout_open = false;
@@ -3483,6 +3552,7 @@ impl ClientView {
                     "profile" => ui::settings::SettingsTab::Profile,
                     "account" => ui::settings::SettingsTab::Account,
                     "privacy" => ui::settings::SettingsTab::PrivacySafety,
+                    "connections" => ui::settings::SettingsTab::Connections,
                     "appearance" => ui::settings::SettingsTab::Appearance,
                     "themes" => ui::settings::SettingsTab::Themes,
                     "notifications" => ui::settings::SettingsTab::Notifications,
@@ -3491,7 +3561,9 @@ impl ClientView {
                     "accessibility" => ui::settings::SettingsTab::Accessibility,
                     "language" => ui::settings::SettingsTab::Language,
                     "keybinds" => ui::settings::SettingsTab::Keybinds,
+                    "windows" | "desktop" => ui::settings::SettingsTab::WindowsApp,
                     "advanced" => ui::settings::SettingsTab::Advanced,
+                    "applications" => ui::settings::SettingsTab::Applications,
                     _ => ui::settings::SettingsTab::Appearance,
                 };
                 self.select_settings_tab(target_tab, cx);

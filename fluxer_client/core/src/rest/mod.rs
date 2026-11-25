@@ -25,7 +25,11 @@ mod upload;
 mod tests;
 
 pub use altcha::{ALTCHA_MAX_COUNTER, ALTCHA_SOLVE_TIMEOUT, solve_altcha_challenge};
-pub use api::{RolePatch, validate_role_name};
+pub use api::{
+    CONNECTION_VISIBILITY_EVERYONE, CONNECTION_VISIBILITY_FRIENDS, CONNECTION_VISIBILITY_MUTUAL_GUILDS,
+    ConnectionPatch, DeveloperApplication, DeveloperApplicationBot, MAX_CONNECTIONS_PER_USER, RolePatch,
+    UserConnection, validate_role_name,
+};
 pub use api::{
     AckRequest, BanMemberRequest, ChannelOverride, CreateGuildChannelRequest, CreateInviteRequest,
     CreateThreadFromMessageRequest, CustomStatus, DiscoveryCategory, DiscoveryCategoryCount,

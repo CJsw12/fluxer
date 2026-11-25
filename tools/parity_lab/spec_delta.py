@@ -395,6 +395,25 @@ def _flx_set(elements: list[dict]) -> set[str]:
     return {e["flx"] for e in elements}
 
 
+def _exec_rust_action(rp, act: dict, time_mod) -> None:
+    if "click" in act:
+        r = rp.send("probe_click", flx=act["click"], **({"index": act["index"]} if "index" in act else {}))
+        if not r.get("ok", False):
+            raise RuntimeError(f"rust click failed: {act['click']}: {r}")
+    elif "hover" in act:
+        r = rp.send("probe_hover", flx=act["hover"], **({"index": act["index"]} if "index" in act else {}))
+        if not r.get("ok", False):
+            raise RuntimeError(f"rust hover failed: {act['hover']}: {r}")
+    elif "key" in act:
+        rp.send("probe_key", keystroke=act["key"])
+    elif "link" in act:
+        rp.deep_link(act["link"])
+    elif "wait_ms" in act:
+        time_mod.sleep(act["wait_ms"] / 1000)
+    else:
+        raise RuntimeError(f"unknown rust action {act}")
+
+
 def run_scenes(argv: list[str]) -> int:
     """Drives the Rust client through each scene's `rust` actions and diffs the open state."""
     import time  # noqa: PLC0415
@@ -429,22 +448,7 @@ def run_scenes(argv: list[str]) -> int:
             spec = json.loads(spec_file.read_text(encoding="utf-8"))
             reset()
             for act in sc.get("rust", []):
-                if "click" in act:
-                    r = rp.send("probe_click", flx=act["click"], **({"index": act["index"]} if "index" in act else {}))
-                    if not r.get("ok", False):
-                        raise RuntimeError(f"rust click failed: {act['click']}: {r}")
-                elif "hover" in act:
-                    r = rp.send("probe_hover", flx=act["hover"], **({"index": act["index"]} if "index" in act else {}))
-                    if not r.get("ok", False):
-                        raise RuntimeError(f"rust hover failed: {act['hover']}: {r}")
-                elif "key" in act:
-                    rp.send("probe_key", keystroke=act["key"])
-                elif "link" in act:
-                    rp.deep_link(act["link"])
-                elif "wait_ms" in act:
-                    time.sleep(act["wait_ms"] / 1000)
-                else:
-                    raise RuntimeError(f"unknown rust action {act}")
+                _exec_rust_action(rp, act, time)
                 time.sleep(0.3)
             elements: list[dict] = []
             for _ in range(20):
@@ -462,6 +466,12 @@ def run_scenes(argv: list[str]) -> int:
         except Exception as e:  # noqa: BLE001 - one broken scene must not stop the run
             row.update(status="failed", error=str(e))
         finally:
+            for act in sc.get("rust_restore", []):
+                try:
+                    _exec_rust_action(rp, act, time)
+                    time.sleep(0.3)
+                except Exception:  # noqa: BLE001
+                    pass
             try:
                 rp.send("probe_key", keystroke="escape")
                 time.sleep(0.3)
@@ -531,6 +541,25 @@ def selftest() -> None:
     props = [d["prop"] for d in r["deltas"]]
     assert props == ["height", "padding-top"], props
     assert "A.module.css .c" in r["deltas"][1]["rule"]
+
+    class _FakeRp:
+        def __init__(self):
+            self.calls = []
+        def send(self, action, **kw):
+            self.calls.append((action, kw))
+            return {"ok": True}
+        def deep_link(self, url):
+            self.calls.append(("deep_link", url))
+            return {"ok": True}
+
+    fake_rp = _FakeRp()
+    for act in [{"link": "fluxer://scene/voice-leave"}, {"click": "a.b", "index": 1}, {"key": "escape"}, {"wait_ms": 0}]:
+        _exec_rust_action(fake_rp, act, __import__("time"))
+    assert fake_rp.calls == [
+        ("deep_link", "fluxer://scene/voice-leave"),
+        ("probe_click", {"flx": "a.b", "index": 1}),
+        ("probe_key", {"keystroke": "escape"}),
+    ], fake_rp.calls
     print("selftest ok")
 
 

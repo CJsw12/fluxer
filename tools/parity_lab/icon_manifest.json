@@ -679,7 +679,7 @@
   {
    "rust_icon": "Users",
    "file": "fluxer_client/app/src/ui/friends.rs",
-   "line": 381,
+   "line": 393,
    "rust_asset": "fluxer_client/app/assets/icons/users.svg",
    "kind": "phosphor",
    "phosphor": "fill/users-fill.svg",
@@ -2747,7 +2747,7 @@
   {
    "rust_icon": "X",
    "file": "fluxer_client/app/src/ui/friends.rs",
-   "line": 500,
+   "line": 525,
    "rust_asset": "fluxer_client/app/assets/icons/x.svg",
    "kind": "phosphor",
    "phosphor": "bold/x-bold.svg",

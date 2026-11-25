@@ -97,6 +97,30 @@
       },
       "ignore": [],
       "updated": "2026-11-25"
+    },
+    "extra": {
+      "scenes": "tools/parity_lab/spec_scenes_extra.json",
+      "spec_dir": "target/parity-tmp/extra/spec",
+      "max": {
+        "friends-list": {
+          "deltas": 47,
+          "missing": 24
+        },
+        "light-theme": {
+          "deltas": 52,
+          "missing": 166
+        },
+        "threads-panel": {
+          "deltas": 3,
+          "missing": 11
+        },
+        "voice-channel": {
+          "deltas": 51,
+          "missing": 51
+        }
+      },
+      "ignore": [],
+      "updated": "2026-11-26"
     }
   }
 }

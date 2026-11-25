@@ -3812,6 +3812,16 @@ impl ClientView {
                 }
                 true
             }
+            ["theme", kind] => {
+                let Some(kind) = ThemeKind::parse(kind) else {
+                    return true;
+                };
+                self.close_overlay(window, cx);
+                theme::set_kind(kind, cx);
+                theme::apply(kind, window, cx);
+                cx.notify();
+                true
+            }
             ["close-overlays"] => {
                 self.close_overlay(window, cx);
                 if self.search.is_some() {

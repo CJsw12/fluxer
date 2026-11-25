@@ -353,3 +353,48 @@ fn parse_args_accepts_positional_and_url_flag_deep_links_and_blocks_smuggling() 
     assert!(crate::parse_args(["fluxer://a", "fluxer://b"].map(String::from)).is_err());
     assert!(crate::parse_args(["--instance", "https://evil", "fluxer://settings"].map(String::from)).is_err());
 }
+
+#[gpui_kit::test]
+fn scene_theme_deep_links_switch_theme_without_mutating_prefs_or_profile(cx: &mut TestAppContext) {
+    assert_eq!(
+        crate::deep_links::parse_protocol_deep_link("fluxer://scene/theme/light"),
+        Some(crate::deep_links::DeepLink::Scene("theme/light".to_owned()))
+    );
+    assert_eq!(
+        crate::deep_links::parse_protocol_deep_link("fluxer://scene/theme/dark"),
+        Some(crate::deep_links::DeepLink::Scene("theme/dark".to_owned()))
+    );
+
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, cx) = open_client(cx, backend.clone(), events);
+    let initial_prefs_theme = view.read_with(cx, |v, _| v.prefs.data.theme);
+
+    view.update_in(cx, |v, window, cx| {
+        v.open_external_url("fluxer://scene/theme/light", window, cx);
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert_eq!(cx.read(crate::theme::kind), crate::theme::ThemeKind::Light);
+    assert_eq!(
+        cx.read(|cx| gpui_kit::component::Theme::global(cx).mode),
+        gpui_kit::component::ThemeMode::Light
+    );
+    assert_eq!(view.read_with(cx, |v, _| v.prefs.data.theme), initial_prefs_theme);
+    assert!(lock_sent(&backend.sent_social).is_empty());
+
+    view.update_in(cx, |v, window, cx| {
+        v.open_external_url("fluxer://scene/theme/dark", window, cx);
+    });
+    cx.run_until_parked();
+    draw(cx);
+    assert_eq!(cx.read(crate::theme::kind), crate::theme::ThemeKind::Dark);
+    assert_eq!(
+        cx.read(|cx| gpui_kit::component::Theme::global(cx).mode),
+        gpui_kit::component::ThemeMode::Dark
+    );
+    assert_eq!(view.read_with(cx, |v, _| v.prefs.data.theme), initial_prefs_theme);
+    assert!(lock_sent(&backend.sent_social).is_empty());
+
+    drop(rt);
+}

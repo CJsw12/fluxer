@@ -351,85 +351,199 @@ const WRITE_GUARD = `(() => {
 
 async function runScenes() {
 	const scenes = JSON.parse(readFileSync(opts.scenes, 'utf8'));
-	const {realClickExpr, pressKey, waitFor} = helpers(cdp);
+	const {realClickExpr, realClick, pressKey, waitFor, clickText} = helpers(cdp);
+	await cdp.send('Page.enable').catch(() => {});
+	const guardDoc = await cdp.send('Page.addScriptToEvaluateOnNewDocument', {source: WRITE_GUARD}).catch(() => null);
 	await cdp.eval(WRITE_GUARD);
 	const shown = (flx) => `[...document.querySelectorAll('[data-flx]')].some((e) => e.getAttribute('data-flx') === ${JSON.stringify(flx)} && e.getClientRects().length > 0)`;
 	const route = () => cdp.eval('location.pathname + location.search');
 	const baseRoute = await route();
+	const baseOrigin = await cdp.eval('location.origin');
+	const MUTE_SEL = '[data-flx="app.user-area.user-area-inner.control-button.mute"]';
+	const DEAFEN_SEL = '[data-flx="app.user-area.user-area-inner.control-button.deafen"]';
+	const VOICE_CONN_SEL = '[data-flx="app.user-area.user-area-inner.voice-connection-wrapper"]';
+	const getAria = (sel) => cdp.eval(`document.querySelector(${JSON.stringify(sel)})?.getAttribute('aria-label') ?? null`).catch(() => null);
+	const initialMicLabel = await getAria(MUTE_SEL);
+	const initialDeafenLabel = await getAria(DEAFEN_SEL);
+	const initialThemeDark = await cdp.eval(`document.documentElement.classList.contains('theme-dark')`);
+	const initiallyInVoice = await cdp.eval(`!!document.querySelector(${JSON.stringify(VOICE_CONN_SEL)})`);
+	const blockedWrites = [];
+	const navigateTo = async (targetRoute) => {
+		const prevBlocked = await cdp.eval('window.__specBlocked || []').catch(() => []);
+		blockedWrites.push(...prevBlocked);
+		const dest = targetRoute === '__BASE__' ? baseRoute : targetRoute;
+		const url = /^https?:|^fluxer-app:/i.test(dest) ? dest : `${baseOrigin}${dest.startsWith('/') ? '' : '/'}${dest}`;
+		await cdp.send('Page.navigate', {url});
+		await waitFor(`document.readyState === 'complete' && document.querySelectorAll('[data-flx]').length > 10`, 20000);
+		await sleep(1500);
+		await cdp.eval(WRITE_GUARD).catch(() => {});
+		await clickText('^Not now$').catch(() => false);
+	};
+	const ensureMicMuted = async () => {
+		await waitFor(`!!document.querySelector('[data-flx="voice.voice-control-bar.voice-control-bar-inner.container"]')`, 8000);
+		const lbl = await getAria(MUTE_SEL);
+		if (lbl && /^Mute/i.test(lbl)) {
+			await realClick(MUTE_SEL);
+			await sleep(350);
+		}
+	};
+	const restoreAudioAndVoice = async () => {
+		if (!initiallyInVoice) {
+			const inVoice = await cdp.eval(`!!document.querySelector(${JSON.stringify(VOICE_CONN_SEL)})`).catch(() => false);
+			if (inVoice) {
+				await realClick('[data-flx="voice.voice-control-bar.voice-control-bar-inner.button.disconnect"]').catch(() => false);
+				if (await cdp.eval(`!!document.querySelector(${JSON.stringify(VOICE_CONN_SEL)})`).catch(() => false)) {
+					await realClick('[data-flx="voice.voice-connection-status.voice-connection-status-inner.control-button"]').catch(() => false);
+					await clickText('^Disconnect$').catch(() => false);
+				}
+				await waitFor(`!document.querySelector(${JSON.stringify(VOICE_CONN_SEL)})`, 5000);
+			}
+		}
+		const curDeaf = await getAria(DEAFEN_SEL);
+		if (initialDeafenLabel && curDeaf && /^Deafen/i.test(initialDeafenLabel) !== /^Deafen/i.test(curDeaf)) {
+			await realClick(DEAFEN_SEL).catch(() => false);
+			await sleep(350);
+		}
+		const curMic = await getAria(MUTE_SEL);
+		if (initialMicLabel && curMic && /^Mute/i.test(initialMicLabel) !== /^Mute/i.test(curMic)) {
+			await realClick(MUTE_SEL).catch(() => false);
+			await sleep(350);
+		}
+	};
+	const restoreThemeIfNeeded = async () => {
+		if (!initialThemeDark) return;
+		const isDark = await cdp.eval(`document.documentElement.classList.contains('theme-dark')`).catch(() => true);
+		if (isDark) return;
+		await realClick('[data-flx="app.user-area.user-area-inner.control-button.settings-click"]').catch(() => false);
+		await sleep(400);
+		await realClickExpr(`[...document.querySelectorAll('[data-flx="app.settings-modal-layout.settings-modal-sidebar-item.button"],[data-flx="app.settings-modal-layout.settings-modal-sidebar-item.button--2"]')].find((e) => e.innerText.trim().split('\\n')[0] === 'Themes')`).catch(() => false);
+		await sleep(400);
+		await realClick('[data-flx="user.appearance-tab.theme.theme-button.radio.click.button"][aria-label="Dark theme"]').catch(() => false);
+		await sleep(400);
+		for (let k = 0; k < 3 && (await cdp.eval(shown('user.user-settings-modal.modal-root')).catch(() => false)); k++) {
+			await pressKey('Escape', 27);
+			await sleep(300);
+		}
+	};
 	mkdirSync(resolve(opts.outDir), {recursive: true});
 	const report = [];
-	for (const sc of scenes) {
-		const rec = {slug: sc.slug, status: 'ok', error: null, elements: 0};
-		try {
-			for (const act of sc.official ?? []) {
-				if (act.click || act.context) {
-					const sel = act.click ?? act.context;
-					const nth = Number(act.index ?? 0);
-					const label = await cdp.eval(`(() => { const e = document.querySelectorAll(${JSON.stringify(sel)})[${nth}]; return e ? [e.getAttribute('aria-label'), e.innerText, e.getAttribute('data-flx')].filter(Boolean).join(' ') : null; })()`);
-					if (label === null) throw new Error(`target not found: ${sel}`);
-					if (DENY.test(label)) throw new Error(`write-guard deny label: ${label.slice(0, 60)}`);
-					const ok = await realClickExpr(`document.querySelectorAll(${JSON.stringify(sel)})[${nth}]`, act.context ? 'right' : 'left');
-					if (!ok) throw new Error(`click failed: ${sel}`);
-				} else if (act.hover) {
-					// real CDP mouseMoved to the element centre (kept through capture); `index` picks the nth match
-					const pt = await cdp.eval(`(() => { const e = document.querySelectorAll(${JSON.stringify(act.hover)})[${Number(act.index ?? 0)}];
-					  if (!e) return null; e.scrollIntoView({block: 'nearest'}); const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
-					if (!pt) throw new Error(`hover target not found: ${act.hover}`);
-					await cdp.send('Input.dispatchMouseEvent', {type: 'mouseMoved', x: pt[0] - 1, y: pt[1] - 1});
-					await cdp.send('Input.dispatchMouseEvent', {type: 'mouseMoved', x: pt[0], y: pt[1]});
-				} else if (act.click_text) {
-					// click the element matching `sel` whose trimmed first line equals `click_text` (same deny list)
-					if (DENY.test(act.click_text)) throw new Error(`write-guard deny label: ${act.click_text}`);
-					const ok = await realClickExpr(`[...document.querySelectorAll(${JSON.stringify(act.within)})].find((e) => e.innerText.trim().split('\\n')[0] === ${JSON.stringify(act.click_text)})`, 'left');
-					if (!ok) throw new Error(`click_text failed: ${act.click_text}`);
-				} else if (act.key) {
-					await pressKey(act.key, {Escape: 27, Enter: 13}[act.key] ?? 0);
-				} else if (act.wait_ms) await sleep(act.wait_ms);
-				else throw new Error(`unknown action ${JSON.stringify(act)}`);
-				await sleep(250);
-			}
-			if (sc.expect_flx && !(await waitFor(shown(sc.expect_flx), 4000))) throw new Error(`expect_flx not shown: ${sc.expect_flx}`);
-			await sleep(500); // let open animations settle
-			await cdp.eval(`window.__dropHidden = ${sc.drop_hidden ? 'true' : 'false'}`);
-			const spec = await capture([]);
-			spec.scene = sc.slug;
-			rec.elements = spec.elements.length;
-			writeFileSync(join(resolve(opts.outDir), `${sc.slug}.spec.json`), JSON.stringify(spec, null, 1), 'utf8');
-		} catch (e) {
-			rec.status = 'failed';
-			rec.error = String(e?.message ?? e);
-		}
-		// restore: optional scene-specific actions (e.g. leave a DM), then Escape until the state is gone
-		for (const act of sc.official_restore ?? []) {
+	try {
+		for (const sc of scenes) {
+			const rec = {slug: sc.slug, status: 'ok', error: null, elements: 0};
 			try {
-				if (act.click) await realClickExpr(`document.querySelector(${JSON.stringify(act.click)})`, 'left');
-				else if (act.key) await pressKey(act.key, {Escape: 27}[act.key] ?? 0);
-				await sleep(700);
-			} catch {}
+				for (const act of sc.official ?? []) {
+					if (act.if_not_flx && (await cdp.eval(shown(act.if_not_flx)))) continue;
+					if (act.click || act.context) {
+						const sel = act.click ?? act.context;
+						const nth = Number(act.index ?? 0);
+						const label = await cdp.eval(`(() => { const e = document.querySelectorAll(${JSON.stringify(sel)})[${nth}]; return e ? [e.getAttribute('aria-label'), e.innerText, e.getAttribute('data-flx')].filter(Boolean).join(' ') : null; })()`);
+						if (label === null) {
+							if (act.optional) continue;
+							throw new Error(`target not found: ${sel}`);
+						}
+						if (DENY.test(label)) throw new Error(`write-guard deny label: ${label.slice(0, 60)}`);
+						const ok = await realClickExpr(`document.querySelectorAll(${JSON.stringify(sel)})[${nth}]`, act.context ? 'right' : 'left');
+						if (!ok) throw new Error(`click failed: ${sel}`);
+					} else if (act.hover) {
+						// real CDP mouseMoved to the element centre (kept through capture); `index` picks the nth match
+						const pt = await cdp.eval(`(() => { const e = document.querySelectorAll(${JSON.stringify(act.hover)})[${Number(act.index ?? 0)}];
+						  if (!e) return null; e.scrollIntoView({block: 'nearest'}); const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+						if (!pt) throw new Error(`hover target not found: ${act.hover}`);
+						await cdp.send('Input.dispatchMouseEvent', {type: 'mouseMoved', x: pt[0] - 1, y: pt[1] - 1});
+						await cdp.send('Input.dispatchMouseEvent', {type: 'mouseMoved', x: pt[0], y: pt[1]});
+					} else if (act.click_text) {
+						// click the element matching `within` (or body leaf) whose text matches `click_text` (same deny list)
+						if (DENY.test(act.click_text)) throw new Error(`write-guard deny label: ${act.click_text}`);
+						const ok = act.within
+							? await realClickExpr(`[...document.querySelectorAll(${JSON.stringify(act.within)})].find((e) => e.innerText.trim().split('\\n')[0] === ${JSON.stringify(act.click_text)})`, 'left')
+							: await clickText(act.click_text);
+						if (!ok && !act.optional) throw new Error(`click_text failed: ${act.click_text}`);
+					} else if (act.navigate) {
+						await navigateTo(act.navigate);
+						continue;
+					} else if (act.voice_mute) {
+						await ensureMicMuted();
+					} else if (act.key) {
+						await pressKey(act.key, {Escape: 27, Enter: 13}[act.key] ?? 0);
+					} else if (act.wait_ms) {
+						await sleep(act.wait_ms);
+						continue;
+					} else throw new Error(`unknown action ${JSON.stringify(act)}`);
+					await sleep(250);
+				}
+				if (sc.expect_flx && !(await waitFor(shown(sc.expect_flx), 4000))) throw new Error(`expect_flx not shown: ${sc.expect_flx}`);
+				if (sc.expect_theme && !(await waitFor(`document.documentElement.classList.contains(${JSON.stringify(sc.expect_theme)})`, 4000))) {
+					throw new Error(`expect_theme not active: ${sc.expect_theme}`);
+				}
+				await sleep(500); // let open animations settle
+				await cdp.eval(`window.__dropHidden = ${sc.drop_hidden ? 'true' : 'false'}`);
+				const spec = await capture([]);
+				spec.scene = sc.slug;
+				rec.elements = spec.elements.length;
+				writeFileSync(join(resolve(opts.outDir), `${sc.slug}.spec.json`), JSON.stringify(spec, null, 1), 'utf8');
+			} catch (e) {
+				rec.status = 'failed';
+				rec.error = String(e?.message ?? e);
+			}
+			// restore: optional scene-specific actions (e.g. leave a DM, disconnect voice, restore dark theme), then Escape
+			for (const act of sc.official_restore ?? []) {
+				try {
+					if (act.click) await realClickExpr(`document.querySelectorAll(${JSON.stringify(act.click)})[${Number(act.index ?? 0)}]`, 'left');
+					else if (act.click_text) {
+						if (act.within) await realClickExpr(`[...document.querySelectorAll(${JSON.stringify(act.within)})].find((e) => e.innerText.trim().split('\\n')[0] === ${JSON.stringify(act.click_text)})`, 'left');
+						else await clickText(act.click_text);
+					} else if (act.navigate) {
+						await navigateTo(act.navigate);
+						continue;
+					} else if (act.key) await pressKey(act.key, {Escape: 27, Enter: 13}[act.key] ?? 0);
+					else if (act.wait_ms) {
+						await sleep(act.wait_ms);
+						continue;
+					}
+					await sleep(act.wait_ms ?? 700);
+				} catch {}
+			}
+			await restoreAudioAndVoice().catch(() => {});
+			await restoreThemeIfNeeded().catch(() => {});
+			if ((sc.official ?? []).some((a) => a.hover)) await cdp.send('Input.dispatchMouseEvent', {type: 'mouseMoved', x: 640, y: 4}).catch(() => {});
+			// restore: Escape until the state is gone, then verify the base route
+			const isBaseHeader = sc.expect_flx === 'channel.channel-header.header-wrapper';
+			const stillOpen = () => (sc.expect_flx && !isBaseHeader ? cdp.eval(shown(sc.expect_flx)) : false);
+			for (let k = 0; k < 3 && (await stillOpen()); k++) {
+				await pressKey('Escape', 27);
+				await sleep(400);
+			}
+			if (await stillOpen()) {
+				rec.status = 'failed';
+				rec.error = (rec.error ? rec.error + '; ' : '') + 'state did not close';
+			}
+			if (sc.expect_theme && initialThemeDark && !(await cdp.eval(`document.documentElement.classList.contains('theme-dark')`))) {
+				rec.status = 'failed';
+				rec.error = (rec.error ? rec.error + '; ' : '') + 'dark theme did not restore';
+			}
+			const r = await route();
+			if (r !== baseRoute) {
+				rec.status = 'failed';
+				rec.error = (rec.error ? rec.error + '; ' : '') + `route changed ${baseRoute} -> ${r}`;
+			}
+			console.log(`${rec.status.padEnd(6)} ${sc.slug} (${rec.elements} elements)${rec.error ? ' - ' + rec.error : ''}`);
+			report.push(rec);
 		}
-		if ((sc.official ?? []).some((a) => a.hover)) await cdp.send('Input.dispatchMouseEvent', {type: 'mouseMoved', x: 640, y: 4}).catch(() => {});
-		// restore: Escape until the state is gone, then verify the base route
-		const stillOpen = () => (sc.expect_flx ? cdp.eval(shown(sc.expect_flx)) : false);
-		for (let k = 0; k < 3 && (await stillOpen()); k++) {
-			await pressKey('Escape', 27);
-			await sleep(400);
+	} finally {
+		await restoreAudioAndVoice().catch(() => {});
+		await restoreThemeIfNeeded().catch(() => {});
+		if ((await route().catch(() => baseRoute)) !== baseRoute) {
+			await navigateTo(baseRoute).catch(() => {});
 		}
-		if (await stillOpen()) {
-			rec.status = 'failed';
-			rec.error = (rec.error ? rec.error + '; ' : '') + 'state did not close';
+		const tailBlocked = await cdp.eval('window.__specBlocked || []').catch(() => []);
+		blockedWrites.push(...tailBlocked);
+		await cdp.eval('window.__parityUnguard && window.__parityUnguard()').catch(() => {});
+		if (guardDoc?.identifier) {
+			await cdp.send('Page.removeScriptToEvaluateOnNewDocument', {identifier: guardDoc.identifier}).catch(() => {});
 		}
-		const r = await route();
-		if (r !== baseRoute) {
-			rec.status = 'failed';
-			rec.error = (rec.error ? rec.error + '; ' : '') + `route changed ${baseRoute} -> ${r}`;
-		}
-		console.log(`${rec.status.padEnd(6)} ${sc.slug} (${rec.elements} elements)${rec.error ? ' - ' + rec.error : ''}`);
-		report.push(rec);
 	}
-	const blockedList = await cdp.eval('window.__specBlocked || []').catch(() => []);
-	await cdp.eval('window.__parityUnguard && window.__parityUnguard()').catch(() => {});
-	writeFileSync(join(resolve(opts.outDir), 'scenes.report.json'), JSON.stringify({base_route: baseRoute, blocked_writes: blockedList, scenes: report}, null, 1), 'utf8');
-	if (blockedList.length) console.log(`blocked writes: ${blockedList.join('; ')}`);
+	writeFileSync(join(resolve(opts.outDir), 'scenes.report.json'), JSON.stringify({base_route: baseRoute, blocked_writes: blockedWrites, scenes: report}, null, 1), 'utf8');
+	if (blockedWrites.length) console.log(`blocked writes: ${blockedWrites.join('; ')}`);
 	if (report.some((r) => r.status !== 'ok')) exitCode = 1;
 }
 

@@ -1,0 +1,174 @@
+[
+ {
+  "slug": "voice-channel",
+  "official": [
+   {
+    "navigate": "/channels/1572284491404148736/1572284491404148740"
+   },
+   {
+    "wait_ms": 2000
+   },
+   {
+    "click_text": "^Join voice channel$",
+    "optional": true
+   },
+   {
+    "click_text": "^General$",
+    "optional": true,
+    "if_not_flx": "voice.voice-control-bar.voice-control-bar-inner.container"
+   },
+   {
+    "voice_mute": true
+   },
+   {
+    "wait_ms": 2500
+   }
+  ],
+  "official_restore": [
+   {
+    "click": "[data-flx=\"voice.voice-control-bar.voice-control-bar-inner.button.disconnect\"]"
+   },
+   {
+    "wait_ms": 800
+   },
+   {
+    "navigate": "__BASE__"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://scene/voice/1572284491404148736/1572284491404148740"
+   },
+   {
+    "wait_ms": 2000
+   }
+  ],
+  "rust_restore": [
+   {
+    "link": "fluxer://scene/voice-leave"
+   },
+   {
+    "wait_ms": 500
+   }
+  ],
+  "expect_flx": "voice.voice-control-bar.voice-control-bar-inner.container",
+  "scope": [
+   "voice.",
+   "app.user-area."
+  ]
+ },
+ {
+  "slug": "friends-list",
+  "official": [
+   {
+    "click": "[data-flx=\"app.sidebar-nav.fluxer-button.fluxer-button.select\"]"
+   },
+   {
+    "click": "[data-flx=\"channel.direct-message.dm-list.clickable-item.clickable-item.button\"]",
+    "index": 0
+   },
+   {
+    "click": "[data-flx=\"channel.direct-message.dm-friends-view.tab-button.set-active-tab--2\"]"
+   }
+  ],
+  "official_restore": [
+   {
+    "navigate": "__BASE__"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://channels/@me"
+   },
+   {
+    "click": "channel.direct-message.dm-friends-view.tab-button.set-active-tab--2"
+   }
+  ],
+  "expect_flx": "channel.direct-message.dm-friends-view.container",
+  "scope": [
+   "channel.direct-message.dm-friends-view.",
+   "channel.friends.",
+   "channel.active-now.",
+   "channel.channel-header."
+  ]
+ },
+ {
+  "slug": "threads-panel",
+  "official": [
+   {
+    "click": "[data-flx=\"threads.threads-button.channel-header-icon\"]"
+   }
+  ],
+  "rust": [
+   {
+    "click": "threads.threads-button.channel-header-icon"
+   }
+  ],
+  "expect_flx": "threads.thread-browser.container",
+  "scope": [
+   "threads.",
+   "ui.popover."
+  ]
+ },
+ {
+  "slug": "light-theme",
+  "official": [
+   {
+    "click": "[data-flx=\"app.user-area.user-area-inner.control-button.settings-click\"]"
+   },
+   {
+    "click_text": "Themes",
+    "within": "[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button\"],[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button--2\"]"
+   },
+   {
+    "click": "[data-flx=\"user.appearance-tab.theme.theme-button.radio.click.button\"][aria-label=\"Light theme\"]"
+   },
+   {
+    "wait_ms": 200
+   },
+   {
+    "key": "Escape"
+   },
+   {
+    "wait_ms": 300
+   }
+  ],
+  "official_restore": [
+   {
+    "click": "[data-flx=\"app.user-area.user-area-inner.control-button.settings-click\"]"
+   },
+   {
+    "click_text": "Themes",
+    "within": "[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button\"],[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button--2\"]"
+   },
+   {
+    "click": "[data-flx=\"user.appearance-tab.theme.theme-button.radio.click.button\"][aria-label=\"Dark theme\"]"
+   },
+   {
+    "wait_ms": 200
+   },
+   {
+    "key": "Escape"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://scene/theme/light"
+   },
+   {
+    "wait_ms": 300
+   }
+  ],
+  "rust_restore": [
+   {
+    "link": "fluxer://scene/theme/dark"
+   },
+   {
+    "wait_ms": 300
+   }
+  ],
+  "expect_flx": "channel.channel-header.header-wrapper",
+  "expect_theme": "theme-light",
+  "scope": []
+ }
+]

@@ -14,6 +14,7 @@ use super::profile_popout::find_1on1_dm;
 use crate::client_view::ClientView;
 use crate::format::{default_avatar_index, initials};
 use crate::icons::AppIcon;
+use crate::parity_probe::FlxExt as _;
 use crate::profile::format_username_tag;
 use crate::theme::Theme;
 use crate::ui::l10n;
@@ -216,7 +217,16 @@ fn tab_button(
             .hover(move |s| s.bg(accent).text_color(fg))
     };
 
+    let tab_flx = match tab {
+        FriendsTab::Online => Some("channel.direct-message.dm-friends-view.tab-button.set-active-tab"),
+        FriendsTab::All => Some("channel.direct-message.dm-friends-view.tab-button.set-active-tab--2"),
+        FriendsTab::Pending => Some("channel.direct-message.dm-friends-view.tab-button.set-active-tab--3"),
+        FriendsTab::AddFriend => Some("channel.direct-message.dm-friends-view.tab-button.set-active-tab--4"),
+        FriendsTab::Blocked => None,
+    };
+
     styled
+        .when_some(tab_flx, |d, f| d.flx(f))
         .child(label)
         .when(badge_count > 0, |d| d.child(badge(badge_count, theme)))
 }
@@ -372,22 +382,36 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .px_4()
         .border_b_1()
         .border_color(theme.border)
+        .flx("channel.channel-header.header-wrapper")
         .child(
             div()
                 .flex()
                 .flex_row()
                 .items_center()
                 .gap_2()
+                .flx("channel.direct-message.dm-friends-view.title-section")
                 .child(gpui_kit::component::Icon::new(crate::icons::AppIcon::Users).small().text_color(theme.muted_foreground))
-                .child(div().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("Friends"))),
+                .child(
+                    div()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .flx("channel.direct-message.dm-friends-view.title-text")
+                        .child(l10n::tr("Friends")),
+                ),
         )
-        .child(div().w(px(1.)).h(px(24.)).bg(theme.border))
+        .child(
+            div()
+                .w(px(1.))
+                .h(px(24.))
+                .bg(theme.border)
+                .flx("channel.direct-message.dm-friends-view.divider"),
+        )
         .child(
             div()
                 .flex()
                 .flex_row()
                 .items_center()
                 .gap_1p5()
+                .flx("channel.direct-message.dm-friends-view.tabs-inner")
                 .child(tab_button(
                     "friends-tab-online",
                     l10n::tr("Online"),
@@ -484,6 +508,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             .flex_row()
             .items_center()
             .gap_2()
+            .flx("channel.direct-message.dm-friends-view.search-wrapper")
             .child(
                 div()
                     .flex_1()
@@ -511,6 +536,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .items_center()
                 .justify_center()
                 .text_color(theme.muted_foreground)
+                .flx("channel.friends.empty-state-view.container")
                 .child(l10n::tr("No friends to show."))
                 .into_any_element()
         } else if filtered_rows.is_empty() {
@@ -520,6 +546,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .items_center()
                 .justify_center()
                 .text_color(theme.muted_foreground)
+                .flx("channel.friends.empty-state-view.container")
                 .child(l10n::tr("No friends match your search."))
                 .into_any_element()
         } else {
@@ -533,6 +560,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .flex()
                 .flex_col()
                 .gap_1()
+                .flx("channel.friends.views.friends-list.friends-list-container")
                 .children(filtered_rows.into_iter().map(|row| render_row(row, theme, cx)))
                 .into_any_element()
         };
@@ -541,6 +569,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             .min_h_0()
             .flex()
             .flex_col()
+            .flx("channel.direct-message.dm-friends-view.content")
             .child(search_bar)
             .child(list_content)
             .into_any_element()
@@ -552,6 +581,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .min_h_0()
         .flex()
         .flex_col()
+        .flx("channel.direct-message.dm-friends-view.container")
         .child(header)
         .children(
             view.error

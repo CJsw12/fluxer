@@ -524,14 +524,25 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                         .child(
                             div()
                                 .id("user-area-copy-username")
+                                .size(px(20.))
+                                .flex_none()
+                                .rounded(px(4.))
                                 .cursor_pointer()
                                 .flex()
                                 .items_center()
-                                .flx("app.floating.user-area-popout.copy-icon")
+                                .justify_center()
+                                .hover(|s| s.bg(theme.hover_bg))
+                                .flx("app.floating.user-area-popout.copy-username-button.copy-user-tag")
                                 .on_click(cx.listener(move |_, _, _, cx| {
                                     cx.write_to_clipboard(ClipboardItem::new_string(copy_name.clone()));
                                 }))
-                                .child(Icon::new(AppIcon::Copy).with_size(px(14.)).text_color(secondary)),
+                                .child(
+                                    div()
+                                        .size(px(14.))
+                                        .flex_none()
+                                        .flx("app.floating.user-area-popout.copy-icon")
+                                        .child(Icon::new(AppIcon::Copy).with_size(px(14.)).text_color(secondary)),
+                                ),
                         ),
                 ),
         )
@@ -667,7 +678,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
         .gap(px(8.))
         .rounded(px(8.))
         .border_1()
-        .border_color(theme.brand)
+        .border_color(theme.brand_button_border)
         .flx("app.floating.user-area-popout.edit-profile-button.open-edit-profile")
         .bg(rgb(BRAND_FILL))
         .cursor_pointer()

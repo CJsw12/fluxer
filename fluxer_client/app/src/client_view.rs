@@ -156,6 +156,9 @@ pub struct ClientView {
     _ack_timer: Option<Task<()>>,
     /// Rows shown by the scroller; shared with its row renderer.
     pub(crate) rows: Rc<RefCell<Vec<MessageRow>>>,
+    /// Contiguous ranges in [`Self::rows`] rendered as `channel.message-group.group`
+    /// items by [`Self::scroller`].
+    pub(crate) row_groups: Rc<RefCell<Vec<std::ops::Range<usize>>>>,
     has_more_before: bool,
     /// Newer messages were trimmed from the window (pages back towards the
     /// newest load when the list reaches its bottom).
@@ -489,6 +492,7 @@ impl ClientView {
             acks: AckScheduler::default(),
             _ack_timer: None,
             rows: Rc::new(RefCell::new(Vec::new())),
+            row_groups: Rc::new(RefCell::new(Vec::new())),
             has_more_before: false,
             has_more_after: false,
             unread_anchor: None,
@@ -1976,23 +1980,29 @@ impl ClientView {
         }
     }
 
-    /// Splices only the changed middle of the row list so the scroll anchor
+    /// Splices only the changed middle of the grouped row list so the scroll anchor
     /// survives prepends (older pages) and appends (new messages).
     fn sync_rows(&mut self, new_rows: Vec<MessageRow>, cx: &mut Context<Self>) {
+        let new_groups = ui::message_list::compute_row_groups(&new_rows);
         let (start, old_end, new_count) = {
             let old = self.rows.borrow();
-            let prefix = old.iter().zip(&new_rows).take_while(|(a, b)| a == b).count();
-            let max_suffix = old.len().min(new_rows.len()) - prefix;
-            let suffix = old
+            let old_groups = self.row_groups.borrow();
+            let group_eq = |a: &std::ops::Range<usize>, b: &std::ops::Range<usize>| {
+                old.get(a.clone()) == new_rows.get(b.clone())
+            };
+            let prefix = old_groups.iter().zip(&new_groups).take_while(|(a, b)| group_eq(a, b)).count();
+            let max_suffix = old_groups.len().min(new_groups.len()) - prefix;
+            let suffix = old_groups
                 .iter()
                 .rev()
-                .zip(new_rows.iter().rev())
+                .zip(new_groups.iter().rev())
                 .take(max_suffix)
-                .take_while(|(a, b)| a == b)
+                .take_while(|(a, b)| group_eq(a, b))
                 .count();
-            (prefix, old.len() - suffix, new_rows.len() - prefix - suffix)
+            (prefix, old_groups.len() - suffix, new_groups.len() - prefix - suffix)
         };
         *self.rows.borrow_mut() = new_rows;
+        *self.row_groups.borrow_mut() = new_groups;
         if start == old_end && new_count == 0 {
             return;
         }
@@ -2964,6 +2974,7 @@ impl ClientView {
         };
         // New channel: start from an empty list that follows the tail.
         self.rows.borrow_mut().clear();
+        self.row_groups.borrow_mut().clear();
         self.suppress_jump_scroll = false;
         self.scroller.update(cx, |s, cx| s.reset(0, cx));
         self.loading_history = needs_load && auto_load_latest;
@@ -3912,6 +3923,7 @@ impl ClientView {
         self.highlighted_message = None;
         self.loading_history = true;
         self.rows.borrow_mut().clear();
+        self.row_groups.borrow_mut().clear();
         self.suppress_jump_scroll = false;
         self.scroller.update(cx, |s, cx| s.reset(0, cx));
         self.backend.load_messages(channel_id, None);

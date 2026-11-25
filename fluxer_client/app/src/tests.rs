@@ -330,7 +330,9 @@ fn dispatches_and_older_pages_update_rows(cx: &mut TestAppContext) {
         let bodies: Vec<&str> = rows.iter().map(|r| r.body.as_ref()).collect();
         assert_eq!(bodies[..2], ["older 0", "older 1"]);
         assert_eq!(rows.len(), 6);
-        assert_eq!(v.scroller.read(cx).item_count(), 6);
+        // `older 0` and `older 1` share author & timestamp, forming one grouped scroller item.
+        assert_eq!(v.row_groups.borrow().len(), 5);
+        assert_eq!(v.scroller.read(cx).item_count(), 5);
     });
     drop(rt);
 }

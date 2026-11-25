@@ -32,13 +32,19 @@ impl JumpTarget {
 
 impl ClientView {
     pub(super) fn reveal_jump(&mut self, channel: Snowflake, target: JumpTarget, cx: &mut Context<Self>) -> bool {
-        let found = self.rows.borrow().iter().enumerate().find_map(|(index, row)| {
-            let matches = match target {
-                JumpTarget::Message(id) => row.id == id,
-                JumpTarget::FirstUnreadAfter(read) => row.id > read && row.state == MessageState::Sent,
-            };
-            matches.then_some((index, row.id))
-        });
+        let found = {
+            let rows = self.rows.borrow();
+            let groups = self.row_groups.borrow();
+            groups.iter().enumerate().find_map(|(group_index, range)| {
+                rows.get(range.clone())?.iter().find_map(|row| {
+                    let matches = match target {
+                        JumpTarget::Message(id) => row.id == id,
+                        JumpTarget::FirstUnreadAfter(read) => row.id > read && row.state == MessageState::Sent,
+                    };
+                    matches.then_some((group_index, row.id))
+                })
+            })
+        };
         let Some((index, id)) = found else { return false };
         self.cancel_ack();
         self.suppress_jump_scroll = true;

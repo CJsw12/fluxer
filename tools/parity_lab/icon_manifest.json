@@ -1307,7 +1307,7 @@
   {
    "rust_icon": "Copy",
    "file": "fluxer_client/app/src/ui/user_panel.rs",
-   "line": 534,
+   "line": 544,
    "rust_asset": "fluxer_client/app/assets/icons/copy.svg",
    "kind": "phosphor",
    "phosphor": "fill/copy-fill.svg",
@@ -1322,7 +1322,7 @@
   {
    "rust_icon": "CaretRight",
    "file": "fluxer_client/app/src/ui/user_panel.rs",
-   "line": 595,
+   "line": 606,
    "rust_asset": "fluxer_client/app/assets/icons/caret-right.svg",
    "kind": "phosphor",
    "phosphor": "bold/caret-right-bold.svg",
@@ -1337,7 +1337,7 @@
   {
    "rust_icon": "UsersThree",
    "file": "fluxer_client/app/src/ui/user_panel.rs",
-   "line": 632,
+   "line": 643,
    "rust_asset": "fluxer_client/app/assets/icons/users-three.svg",
    "kind": "phosphor",
    "phosphor": "bold/users-three-bold.svg",
@@ -1352,7 +1352,7 @@
   {
    "rust_icon": "IdentificationBadge",
    "file": "fluxer_client/app/src/ui/user_panel.rs",
-   "line": 651,
+   "line": 662,
    "rust_asset": "fluxer_client/app/assets/icons/identification-badge.svg",
    "kind": "phosphor",
    "phosphor": "bold/identification-badge-bold.svg",
@@ -1367,7 +1367,7 @@
   {
    "rust_icon": "CaretRight",
    "file": "fluxer_client/app/src/ui/user_panel.rs",
-   "line": 811,
+   "line": 822,
    "rust_asset": "fluxer_client/app/assets/icons/caret-right.svg",
    "kind": "phosphor",
    "phosphor": "bold/caret-right-bold.svg",
@@ -1382,7 +1382,7 @@
   {
    "rust_icon": "Check",
    "file": "fluxer_client/app/src/ui/user_panel.rs",
-   "line": 960,
+   "line": 971,
    "rust_asset": "fluxer_client/app/assets/icons/check.svg",
    "kind": "phosphor",
    "phosphor": "bold/check-bold.svg",
@@ -1397,7 +1397,7 @@
   {
    "rust_icon": "Gear",
    "file": "fluxer_client/app/src/ui/user_panel.rs",
-   "line": 983,
+   "line": 994,
    "rust_asset": "fluxer_client/app/assets/icons/gear.svg",
    "kind": "phosphor",
    "phosphor": "fill/gear-fill.svg",
@@ -2132,7 +2132,7 @@
   {
    "rust_icon": "SmileyRegular",
    "file": "fluxer_client/app/src/ui/user_panel.rs",
-   "line": 552,
+   "line": 563,
    "rust_asset": "fluxer_client/app/assets/icons/smiley-regular.svg",
    "kind": "phosphor",
    "phosphor": "regular/smiley.svg",
@@ -2147,7 +2147,7 @@
   {
    "rust_icon": "PencilBold",
    "file": "fluxer_client/app/src/ui/user_panel.rs",
-   "line": 688,
+   "line": 699,
    "rust_asset": "fluxer_client/app/assets/icons/pencil-bold.svg",
    "kind": "phosphor",
    "phosphor": "bold/pencil-bold.svg",
@@ -2207,7 +2207,7 @@
   {
    "rust_icon": "TextChannel",
    "file": "fluxer_client/app/src/ui/message_list.rs",
-   "line": 242,
+   "line": 301,
    "rust_asset": "fluxer_client/app/assets/icons/text-channel.svg",
    "kind": "phosphor",
    "phosphor": null,

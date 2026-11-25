@@ -199,6 +199,8 @@ pub struct Theme {
     pub divider: Hsla,
     /// `--brand-primary`.
     pub brand: Hsla,
+    /// `Button.module.css` primary button border (`color-mix(in srgb, var(--brand-primary) 82%, white 18%)`).
+    pub brand_button_border: Hsla,
     /// `--text-link`.
     pub text_link: Hsla,
     /// Unread channel pill (`--text-primary`).
@@ -609,6 +611,16 @@ impl Theme {
             background_modifier_accent: p.modifier_accent.color(),
             divider: p.border.color(),
             brand: BRAND_PRIMARY.color(),
+            brand_button_border: {
+                let b = BRAND_PRIMARY.color().to_rgb();
+                gpui_kit::Rgba {
+                    r: b.r * 0.82 + 0.18,
+                    g: b.g * 0.82 + 0.18,
+                    b: b.b * 0.82 + 0.18,
+                    a: 1.0,
+                }
+                .into()
+            },
             text_link: p.link.color(),
             unread_pill: text_primary.color(),
             danger: STATUS_DANGER.color(),
@@ -719,6 +731,10 @@ mod tests {
         let theme = Theme::from_kind(ThemeKind::Dark);
         assert_eq!(theme.background, hsla(258. / 360., 0.10, 0.05, 1.));
         assert_eq!(theme.brand, hsla(242. / 360., 0.70, 0.55, 1.));
+        let border_rgb = theme.brand_button_border.to_rgb();
+        assert_eq!((border_rgb.r * 255.).round() as u8, 0x63);
+        assert_eq!((border_rgb.g * 255.).round() as u8, 0x5f);
+        assert_eq!((border_rgb.b * 255.).round() as u8, 0xe3);
         assert_eq!(theme.status_online, hsla(152. / 360., 0.72, 0.40, 1.));
     }
 

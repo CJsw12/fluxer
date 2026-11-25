@@ -1,6 +1,8 @@
 //! Message list: the virtual scroller (or a placeholder), and per row the
 //! channel-start header, the date / "NEW" dividers and system messages.
 
+use std::ops::Range;
+
 use gpui_kit::component::message_scroller::MessageScroller;
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
@@ -17,6 +19,28 @@ use crate::icons::AppIcon;
 use crate::theme::Theme;
 use crate::ui::l10n;
 use crate::view_model::{MessageRow, SystemRow};
+
+/// Groups consecutive flat [`MessageRow`]s into scroller items matching the
+/// official `channel.message-group.group` structure. Dividers, channel-start
+/// banners, and system messages always start their own group.
+pub(crate) fn compute_row_groups(rows: &[MessageRow]) -> Vec<Range<usize>> {
+    let mut groups: Vec<Range<usize>> = Vec::new();
+    for (i, row) in rows.iter().enumerate() {
+        let starts_group = i == 0
+            || row.group_start
+            || row.channel_start.is_some()
+            || row.day_divider.is_some()
+            || row.new_divider
+            || row.system.is_some()
+            || rows[i - 1].system.is_some();
+        if starts_group {
+            groups.push(i..i + 1);
+        } else if let Some(last) = groups.last_mut() {
+            last.end = i + 1;
+        }
+    }
+    groups
+}
 
 /// `handle` is `view`'s own entity: row clicks (reactions, reply jumps,
 /// the action bar) go to it.
@@ -62,6 +86,7 @@ pub fn render(view: &ClientView, handle: WeakEntity<ClientView>, theme: &Theme) 
             .into_any_element();
     }
     let rows = view.rows.clone();
+    let row_groups = view.row_groups.clone();
     let leave = handle.clone();
     let (picker, hovered) = (view.reaction_picker, view.hovered_message);
     let highlighted_id = view
@@ -69,23 +94,17 @@ pub fn render(view: &ClientView, handle: WeakEntity<ClientView>, theme: &Theme) 
         .filter(|(ch, _)| Some(*ch) == view.selected_channel)
         .map(|(_, id)| id);
     let theme = *theme;
-    // Only reads the rows: the scroller calls this during layout.
+    // Only reads the rows and groups: the scroller calls this during layout.
     let list = MessageScroller::new("messages", view.scroller.clone(), move |ix, window, cx| {
         let rows = rows.borrow();
-        match rows.get(ix) {
-            Some(row) => {
-                let bar = if picker == Some(row.id) {
-                    RowBar::QuickReactions
-                } else if hovered == Some(row.id) {
-                    RowBar::Actions
-                } else {
-                    RowBar::None
-                };
-                let highlighted = highlighted_id == Some(row.id);
-                render_row(row, &theme, &handle, bar, highlighted, window.scale_factor(), cx)
-            }
-            None => div().into_any_element(),
-        }
+        let groups = row_groups.borrow();
+        let Some(range) = groups.get(ix).cloned() else {
+            return div().into_any_element();
+        };
+        let Some(group_rows) = rows.get(range) else {
+            return div().into_any_element();
+        };
+        render_group(group_rows, &theme, &handle, picker, hovered, highlighted_id, window.scale_factor(), cx)
     })
     // The scroller's default row wrapper adds 32px below and 12px beside
     // every row; rows carry their own spacing.
@@ -113,17 +132,23 @@ pub fn render(view: &ClientView, handle: WeakEntity<ClientView>, theme: &Theme) 
         .into_any_element()
 }
 
-/// One scroller row: the message (or system message) with the channel-start
-/// header, the date separator and the "NEW" divider above it when they apply.
-fn render_row(
-    row: &MessageRow,
+/// One scroller item: a group of consecutive user messages (or a single system
+/// message) with the channel-start header, the date separator and the "NEW"
+/// divider above it when they apply.
+#[allow(clippy::too_many_arguments)]
+fn render_group(
+    group_rows: &[MessageRow],
     theme: &Theme,
     handle: &WeakEntity<ClientView>,
-    bar: RowBar,
-    highlighted: bool,
+    picker: Option<fluxer_client_core::state::Snowflake>,
+    hovered: Option<fluxer_client_core::state::Snowflake>,
+    highlighted_id: Option<fluxer_client_core::state::Snowflake>,
     scale: f32,
     cx: &mut App,
 ) -> AnyElement {
+    let Some(first) = group_rows.first() else {
+        return div().into_any_element();
+    };
     // The parts above a message, and system messages, have no action bar:
     // the pointer over them hovers no message.
     let no_message = |part: AnyElement| {
@@ -136,29 +161,63 @@ fn render_row(
             .child(part)
     };
     let mut column = div().flex().flex_col().w_full();
-    if let Some(name) = &row.channel_start {
+    if let Some(name) = &first.channel_start {
         column = column.child(no_message(channel_start(name, theme)));
     }
-    if row.day_divider.is_some() || row.new_divider {
-        column = column.child(no_message(divider(row.day_divider.clone(), row.new_divider, theme)));
+    if first.day_divider.is_some() || first.new_divider {
+        column = column.child(no_message(divider(first.day_divider.clone(), first.new_divider, theme)));
     }
-    let message = match &row.system {
-        Some(system) => no_message(render_system(row, system, theme)).into_any_element(),
-        None => message_row::render(row, theme, handle, bar, scale, cx),
-    };
-    let message = if highlighted {
-        div()
-            .relative()
-            .w_full()
-            .bg(theme.mention_bg)
-            .debug_selector(|| "highlighted-message".to_owned())
-            .child(div().absolute().left_0().top_0().bottom_0().w(px(3.)).bg(theme.brand))
-            .child(message)
-            .into_any_element()
-    } else {
-        message
-    };
-    column.child(message).into_any_element()
+    if let Some(system) = &first.system {
+        let mut message = no_message(render_system(first, system, theme)).into_any_element();
+        if highlighted_id == Some(first.id) {
+            message = highlight_wrapper(message, theme);
+        }
+        return column.child(message).into_any_element();
+    }
+    if first.group_start {
+        let leave_view = handle.clone();
+        column = column.child(
+            div()
+                .w_full()
+                .h(px(theme.sizes.group_gap))
+                .on_mouse_move(move |_, _, cx| {
+                    let _ = leave_view.update(cx, |v, cx| v.hover_message(None, cx));
+                }),
+        );
+    }
+    // Official `channel.message-group.group`: normal-flow container inset 16px on
+    // each side; each child article bleeds -16px to full chat width.
+    let mut group_el = div()
+        .flex()
+        .flex_col()
+        .mx(px(16.))
+        .flx("channel.message-group.group");
+    for row in group_rows {
+        let bar = if picker == Some(row.id) {
+            RowBar::QuickReactions
+        } else if hovered == Some(row.id) {
+            RowBar::Actions
+        } else {
+            RowBar::None
+        };
+        let mut message = message_row::render(row, theme, handle, bar, scale, cx);
+        if highlighted_id == Some(row.id) {
+            message = highlight_wrapper(message, theme);
+        }
+        group_el = group_el.child(div().mx(px(-16.)).child(message));
+    }
+    column.child(group_el).into_any_element()
+}
+
+fn highlight_wrapper(message: AnyElement, theme: &Theme) -> AnyElement {
+    div()
+        .relative()
+        .w_full()
+        .bg(theme.mention_bg)
+        .debug_selector(|| "highlighted-message".to_owned())
+        .child(div().absolute().left_0().top_0().bottom_0().w(px(3.)).bg(theme.brand))
+        .child(message)
+        .into_any_element()
 }
 
 /// `SystemMessage`: icon in the avatar column, text with names in bold,
@@ -341,4 +400,60 @@ fn divider(label: Option<SharedString>, new: bool, theme: &Theme) -> AnyElement 
         );
     }
     row.into_any_element()
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::{DateTime, FixedOffset};
+    use fluxer_client_core::Dispatch;
+    use fluxer_client_core::state::{ClientState, LoadMode, Message, Snowflake};
+    use serde_json::json;
+
+    use super::compute_row_groups;
+    use crate::view_model::message_pane_at;
+
+    #[test]
+    fn compute_row_groups_merges_consecutive_same_group_messages() {
+        let mut state = ClientState::new();
+        state.apply(&Dispatch {
+            t: "READY".to_owned(),
+            s: 1,
+            d: json!({
+                "session_id": "s",
+                "user": { "id": "100", "username": "me" },
+                "guilds": [{
+                    "id": "1",
+                    "properties": { "name": "G", "owner_id": "100" },
+                    "roles": [{ "id": "1", "name": "@everyone", "permissions": "0" }],
+                    "channels": [{ "id": "11", "type": 0, "name": "general", "position": 0 }],
+                    "members": []
+                }],
+                "private_channels": [],
+                "read_states": []
+            }),
+        });
+        let msgs: Vec<Message> = vec![
+            serde_json::from_value(json!({
+                "id": "1003", "channel_id": "11", "content": "third",
+                "timestamp": "2026-11-18T10:02:00+00:00",
+                "author": { "id": "201", "username": "bob" }
+            })).expect("msg3"),
+            serde_json::from_value(json!({
+                "id": "1002", "channel_id": "11", "content": "second",
+                "timestamp": "2026-11-18T10:01:00+00:00",
+                "author": { "id": "200", "username": "alice" }
+            })).expect("msg2"),
+            serde_json::from_value(json!({
+                "id": "1001", "channel_id": "11", "content": "first",
+                "timestamp": "2026-11-18T10:00:00+00:00",
+                "author": { "id": "200", "username": "alice" }
+            })).expect("msg1"),
+        ];
+        state.messages.load(Snowflake(11), msgs, LoadMode::Replace);
+        let utc = FixedOffset::east_opt(0).expect("offset");
+        let now = DateTime::parse_from_rfc3339("2026-11-18T12:00:00+00:00").expect("now").with_timezone(&utc);
+        let rows = message_pane_at(&state, Snowflake(11), None, None, &now).rows;
+        assert_eq!(rows.len(), 3);
+        assert_eq!(compute_row_groups(&rows), vec![0..2, 2..3]);
+    }
 }

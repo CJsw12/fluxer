@@ -70,12 +70,14 @@ fn file_extension_badge(filename: &str) -> String {
         .unwrap_or_else(|| l10n::tr("File"))
 }
 
-/// `ExpiryFootnote.module.css .footnote`: 0.65rem tertiary text, 0.35rem top margin.
+/// `ExpiryFootnote.module.css .footnote`: inline-flex inside `.mosaicContainerWrapper`'s
+/// 24px line box, with 0.65rem tertiary text positioned 8px below the mosaic tiles.
 fn expiry_footnote(label: SharedString, theme: &Theme) -> AnyElement {
     div()
         .flex()
         .flex_row()
-        .mt(px(5.6))
+        .h(px(24.))
+        .pt(px(8.))
         .child(
             div()
                 .text_size(px(10.4))
@@ -263,20 +265,24 @@ pub fn render(
                 .w_full()
                 .max_w(px(760.))
                 .text_size(px(16.))
-                .line_height(px(24.))
+                .line_height(px(22.))
                 // `.messageText` bottom padding.
                 .pb(px(1.))
                 .text_color(theme.text_chat)
                 .flx("channel.user-message.message-text")
                 .flx("channel.user-message.message-text--2")
-                .child(body),
+                // Official `.markup` renders at 24px line height inside `.messageText` (22px).
+                .child(div().line_height(px(24.)).child(body)),
         );
     }
     if let (MessageState::Sending, Some(percent)) = (row.state, row.upload_percent) {
         content = content.child(upload_bar(percent, theme));
     }
+    let mut accessories = div().flex().flex_col().py(px(2.));
+    let mut has_accessories = false;
     let placeholder = theme.image_placeholder;
     if !row.images.is_empty() {
+        has_accessories = true;
         // The budgeted embed cache (decoded images are dropped when off
         // screen); the id lets GPUI animate GIFs.
         let cache = embed::image_cache(cx);
@@ -389,13 +395,12 @@ pub fn render(
             .overflow_hidden()
             .flx("channel.embeds.attachments.attachment-mosaic.attachment-mosaic-component.mosaic-container")
             .child(images_grid);
-        // `.mosaicContainerWrapper` has no vertical margin; the 2px comes from the message container.
-        content = content.child(
+        // `.mosaicContainerWrapper` sits inside `.container` (`padding-block: 2px`).
+        accessories = accessories.child(
             div()
                 .relative()
                 .w_full()
                 .max_w(px(550.))
-                .mt(px(2.))
                 .overflow_hidden()
                 .flx("channel.embeds.attachments.attachment-mosaic.attachment-mosaic-component.mosaic-container-wrapper")
                 .child(container)
@@ -403,6 +408,7 @@ pub fn render(
         );
     }
     if !row.file_attachments.is_empty() {
+        has_accessories = true;
         let mut list = div().flex().flex_col().gap_1().mt_1();
         for (ix, file) in row.file_attachments.iter().enumerate() {
             let ext = file_extension_badge(&file.filename);
@@ -476,16 +482,18 @@ pub fn render(
                     .children(file.expiry.clone().map(|label| expiry_footnote(label, theme))),
             );
         }
-        content = content.child(list);
+        accessories = accessories.child(list);
     }
     if !row.embeds.is_empty() {
-        content = content.child(embed::render(row.id, &row.embeds, theme, scale, view, cx));
+        has_accessories = true;
+        accessories = accessories.child(embed::render(row.id, &row.embeds, theme, scale, view, cx));
     }
     let (channel_id, message_id) = (row.actions.channel_id, row.id);
     if !row.reactions.is_empty() {
+        has_accessories = true;
         let view_toggle = view.clone();
         let view_add = view.clone();
-        content = content.child(reactions::reaction_bar(
+        accessories = accessories.child(reactions::reaction_bar(
             row.id.0,
             &row.reactions,
             theme,
@@ -497,6 +505,9 @@ pub fn render(
                 let _ = view_add.update(cx, |v, cx| v.open_reaction_emoji_picker(channel_id, message_id, pos, window, cx));
             },
         ));
+    }
+    if has_accessories {
+        content = content.child(accessories);
     }
     let is_hovered = !matches!(bar, RowBar::None);
     let mut main = div()
@@ -545,7 +556,8 @@ pub fn render(
                 .flx("channel.timestamp-with-tooltip.container")
                 .child(
                     div()
-                        .ml(px(-2.78))
+                        // Right-aligned inside the 40px container: 40 - 50.78 = -10.78 (x = 406.22).
+                        .ml(px(-10.78))
                         .w(px(50.78))
                         .h(px(22.))
                         .flex_none()
@@ -604,9 +616,6 @@ pub fn render(
                 let _ = rclick_view.update(cx, |v, cx| v.open_message_menu_at(target, pos, window, cx));
             })
         })
-        .when(row.group_start, |d| {
-            d.child(div().absolute().top_0().bottom_0().left(px(16.)).right(px(16.)).flx("channel.message-group.group"))
-        })
         .children(reply_line)
         .child(main);
     let bar = match bar {
@@ -647,28 +656,9 @@ pub fn render(
     let id = SharedString::from(format!("message-{}", row.id.0));
     // A message still being sent has no actions yet.
     let hover_target = (row.state != MessageState::Sending).then_some(message_id);
-    let leave_view = view.clone();
-    let interactive = message_actions::with_hover_actions(id, article, bar, move |_, cx| {
+    message_actions::with_hover_actions(id, article, bar, move |_, cx| {
         let _ = view.update(cx, |v, cx| v.hover_message(hover_target, cx));
-    });
-    if row.group_start {
-        div()
-            .flex()
-            .flex_col()
-            .w_full()
-            .child(
-                div()
-                    .w_full()
-                    .h(px(sizes.group_gap))
-                    .on_mouse_move(move |_, _, cx| {
-                        let _ = leave_view.update(cx, |v, cx| v.hover_message(None, cx));
-                    }),
-            )
-            .child(interactive)
-            .into_any_element()
-    } else {
-        interactive
-    }
+    })
 }
 
 /// What floats at the top right of a message row.

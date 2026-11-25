@@ -28,7 +28,8 @@ pub use altcha::{ALTCHA_MAX_COUNTER, ALTCHA_SOLVE_TIMEOUT, solve_altcha_challeng
 pub use api::{RolePatch, validate_role_name};
 pub use api::{
     AckRequest, BanMemberRequest, ChannelOverride, CreateGuildChannelRequest, CreateInviteRequest,
-    CreateThreadFromMessageRequest, CustomStatus, EditMessageRequest, GroupDmPatch, GuildBanEntry,
+    CreateThreadFromMessageRequest, CustomStatus, DiscoveryCategory, DiscoveryCategoryCount,
+    DiscoveryGuild, DiscoveryGuildList, DiscoveryGuildQuery, EditMessageRequest, GroupDmPatch, GuildBanEntry,
     GuildChannelPatch, GuildMemberPatch, GuildSettingsPatch, MAX_AUDIT_LOG_REASON_UTF16,
     MAX_BAN_DELETE_MESSAGE_SECONDS, MAX_CHANNEL_NAME_UTF16, MAX_CHANNEL_RATE_LIMIT_PER_USER,
     MAX_CHANNEL_TOPIC_UTF16, MAX_GROUP_DM_OTHER_RECIPIENTS, MAX_MEMBER_BIO_UTF16,

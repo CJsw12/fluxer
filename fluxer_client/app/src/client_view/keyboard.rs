@@ -36,6 +36,7 @@ impl ClientView {
                     None => self.clear_selection(cx),
                 }
             }
+            Place::Explore => {}
         }
     }
 
@@ -157,6 +158,7 @@ impl ClientView {
                 match entry.place {
                     Place::Home => ch.guild_id.is_none(),
                     Place::Guild(g) => state.guilds.contains_key(&g) && ch.guild_id == Some(g),
+                    Place::Explore => false,
                 }
             };
             if forward {
@@ -180,7 +182,7 @@ impl ClientView {
                 self.last_guild = Some(g);
                 self.select_place(Place::Home, cx);
             }
-            Place::Home => {
+            Place::Home | Place::Explore => {
                 let next = {
                     let state = self.backend.state();
                     self.last_guild

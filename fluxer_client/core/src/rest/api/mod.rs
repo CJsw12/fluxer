@@ -5,6 +5,7 @@
 
 mod access;
 mod channels;
+mod guild_discovery;
 mod guild_membership;
 mod guilds;
 mod invites;
@@ -32,6 +33,9 @@ pub use guilds::{
     MAX_MEMBER_BIO_UTF16, MAX_MEMBER_PRONOUNS_UTF16, MAX_NICKNAME_UTF16, MAX_TEMP_BAN_DURATION_SECONDS,
     MAX_TIMEOUT_DURATION_SECONDS, MIN_TEMP_BAN_DURATION_SECONDS, MemberQuery, normalize_audit_log_reason,
     validate_audit_log_reason, validate_ban_request, validate_member_patch,
+};
+pub use guild_discovery::{
+    DiscoveryCategory, DiscoveryCategoryCount, DiscoveryGuild, DiscoveryGuildList, DiscoveryGuildQuery,
 };
 pub use invites::CreateInviteRequest;
 pub use relationships::parse_user_tag;

@@ -14,7 +14,10 @@ use crate::theme::Theme;
 use crate::ui::l10n;
 use crate::view_model::{ChannelIcon, ChannelItem, Place};
 
-pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> impl IntoElement {
+pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
+    if view.place == Place::Explore {
+        return super::explore::render_sidebar(view, theme, cx);
+    }
     let header_bar = match view.place {
         Place::Home => div()
             .h(px(theme.sizes.header_height))
@@ -304,6 +307,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .children(popout)
                 .into_any_element()
         }
+        Place::Explore => return super::explore::render_sidebar(view, theme, cx),
     };
     let mut list = div()
         .id("channel-list")
@@ -444,6 +448,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .bg(theme.background_secondary)
         .child(header_bar)
         .child(list)
+        .into_any_element()
 }
 
 /// Parity tags of one `ClickableItem` row of the DM list.

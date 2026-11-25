@@ -9,7 +9,7 @@ use crate::view_model::{Place, opens_message_pane};
 /// the current-guild slot.
 pub fn place_key(place: Place) -> Option<Snowflake> {
     match place {
-        Place::Home => None,
+        Place::Home | Place::Explore => None,
         Place::Guild(id) => Some(id),
     }
 }

@@ -10,6 +10,7 @@ pub mod channel_popouts;
 pub mod composer;
 pub mod create_thread_modal;
 pub mod emoji_picker;
+pub mod explore;
 pub mod forward_modal;
 pub mod friends;
 pub mod group_dm;

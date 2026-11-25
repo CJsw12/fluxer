@@ -235,8 +235,10 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         ));
     }
 
+    let discover_selected = view.place == Place::Explore;
     let discover_hovered = view.hovered_rail_item == Some(RailHoverTarget::Discover);
-    let discover_fg = theme.foreground;
+    let discover_active = discover_selected || discover_hovered;
+    let discover_fg = if discover_selected { theme.on_fill } else { theme.foreground };
     let join_hovered = view.hovered_rail_item == Some(RailHoverTarget::Join);
 
     rail.child(slot(2., 68., 44., "app.sidebar-nav.discovery-button.button.click",
@@ -244,17 +246,18 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             .id("rail-discover-btn")
             .role(Role::Button)
             .aria_label(l10n::tr("Discover"))
+            .aria_selected(discover_selected)
             .debug_selector(|| "rail-discover-btn".to_owned())
             .size(px(theme.sizes.rail_button))
-            .rounded(px(if discover_hovered {
+            .rounded(px(if discover_active {
                 GUILD_RADIUS
             } else {
                 theme.sizes.rail_button / 2.
             }))
             .border_2()
-            .border_dashed()
-            .border_color(if discover_hovered { Hsla::from(rgb(0xf4f4f6)) } else { Hsla::from(rgba(0xc9c5d326)) })
-            .bg(gpui_kit::transparent_black())
+            .when(!discover_selected, |d| d.border_dashed())
+            .border_color(if discover_active { Hsla::from(rgb(0xf4f4f6)) } else { Hsla::from(rgba(0xc9c5d326)) })
+            .bg(if discover_selected { theme.brand } else { gpui_kit::transparent_black() })
             .text_color(discover_fg)
             .cursor_pointer()
             .flex()
@@ -263,7 +266,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             .on_hover(cx.listener(|this, hovered: &bool, _, cx| {
                 this.set_rail_hover(RailHoverTarget::Discover, *hovered, cx);
             }))
-            .on_click(cx.listener(|this, _, window, cx| this.open_join_guild(window, cx)))
+            .on_click(cx.listener(|this, _, _, cx| this.open_explore(cx)))
             .flx("app.sidebar-nav.discovery-button.div--2")
             .child(
                 div()

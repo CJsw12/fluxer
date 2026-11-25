@@ -2,7 +2,7 @@
 //! block/unblock, guild invites, and leaving communities.
 
 use fluxer_client_core::Dispatch;
-use fluxer_client_core::rest::{CreateInviteRequest, parse_user_tag};
+use fluxer_client_core::rest::{CreateInviteRequest, DiscoveryGuildQuery, parse_user_tag};
 use fluxer_client_core::state::Snowflake;
 use serde_json::{Value, json};
 
@@ -425,6 +425,45 @@ impl Backend {
                 Err(err) => Err(err.to_string()),
             };
             let _ = events.send(UiEvent::PersonalNotesPurged { seq, channel_id, result });
+        });
+    }
+
+    pub fn fetch_discovery_categories(&self) {
+        let rest = self.rest.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            let result = rest.list_discovery_categories().await.map_err(|err| err.to_string());
+            let _ = events.send(UiEvent::DiscoveryCategoriesLoaded { result });
+        });
+    }
+
+    pub fn search_discovery_guilds(&self, seq: u64, query: DiscoveryGuildQuery) {
+        #[cfg(test)]
+        super::lock_sent(&self.sent_discovery_searches).push(query.clone());
+        let rest = self.rest.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            let offset = query.offset;
+            let result = rest
+                .search_discovery_guilds(&query)
+                .await
+                .map_err(|err| err.to_string());
+            let _ = events.send(UiEvent::DiscoveryGuildsLoaded { seq, offset, result });
+        });
+    }
+
+    pub fn join_discovery_guild(&self, seq: u64, guild_id: Snowflake) {
+        #[cfg(test)]
+        super::lock_sent(&self.sent_discovery_joins).push(guild_id);
+        let rest = self.rest.clone();
+        let events = self.events.clone();
+        self.runtime.spawn(async move {
+            let error = rest
+                .join_discovery_guild(&guild_id.to_string())
+                .await
+                .err()
+                .map(|err| err.to_string());
+            let _ = events.send(UiEvent::DiscoveryGuildJoined { seq, guild_id, error });
         });
     }
 }

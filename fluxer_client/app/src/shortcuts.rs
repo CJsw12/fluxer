@@ -16,7 +16,7 @@ use gpui_kit::{Action, App, Context, Div, KeyBinding, NoAction, prelude::*};
 use crate::client_view::ClientView;
 use crate::nav::ChannelFilter;
 use crate::ui::{
-    access, account_switcher, channel_modal, create_thread_modal, forward_modal, guild_settings_modals,
+    access, account_switcher, channel_modal, create_thread_modal, explore, forward_modal, guild_settings_modals,
     invite_modal, moderation_modal, quick_switcher, search_panel,
 };
 
@@ -86,6 +86,7 @@ fn both<A: Action + Clone>(out: &mut Vec<KeyBinding>, keys: &'static str, action
     out.push(KeyBinding::new(keys, NoAction, Some(guild_settings_modals::PROFILE_CONTEXT)));
     out.push(KeyBinding::new(keys, NoAction, Some(guild_settings_modals::DELETE_MESSAGES_CONTEXT)));
     out.push(KeyBinding::new(keys, NoAction, Some(guild_settings_modals::PURGE_NOTES_CONTEXT)));
+    out.push(KeyBinding::new(keys, NoAction, Some(explore::PREVIEW_CONTEXT)));
 }
 
 /// Every shortcut binding of the client layout.
@@ -131,6 +132,7 @@ fn bindings() -> Vec<KeyBinding> {
     out.push(KeyBinding::new("ctrl-k", NoAction, Some(guild_settings_modals::DELETE_MESSAGES_CONTEXT)));
     out.push(KeyBinding::new("ctrl-k", NoAction, Some(IN_DELETE_GUILD_MESSAGES_INPUT)));
     out.push(KeyBinding::new("ctrl-k", NoAction, Some(guild_settings_modals::PURGE_NOTES_CONTEXT)));
+    out.push(KeyBinding::new("ctrl-k", NoAction, Some(explore::PREVIEW_CONTEXT)));
     both(&mut out, "ctrl-e", ToggleEmojiPicker);
     both(&mut out, "ctrl-,", OpenSettings);
     both(&mut out, "ctrl-=", ZoomIn);
@@ -198,6 +200,6 @@ mod tests {
             let key = (format!("{:?}", b.keystrokes()), b.predicate().map(|p| p.to_string()));
             assert!(seen.insert(key.clone()), "{key:?} bound twice");
         }
-        assert_eq!(seen.len(), 371);
+        assert_eq!(seen.len(), 391);
     }
 }

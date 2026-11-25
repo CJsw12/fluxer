@@ -10,12 +10,14 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use anyhow::{Context as _, Result};
 use fluxer_client_core::gateway::{self, Compression, GatewayConfig, GatewayEvent, GatewayHandle, IdentifyProperties};
 use fluxer_client_core::rest::{
-    AckRequest, ClientIdentity, DiscoveryOptions, Endpoints, GuildBanEntry, MessageQuery, MessageSearchOutcome,
-    PinsQuery, RestClient, RestConfig, SecretToken, SendMessageRequest, TransportPolicy, UserProfileFull,
-    WebAuthnCredential, discover_with,
+    AckRequest, ClientIdentity, DiscoveryCategory, DiscoveryGuildList, DiscoveryOptions,
+    Endpoints, GuildBanEntry, MessageQuery, MessageSearchOutcome, PinsQuery, RestClient, RestConfig, SecretToken,
+    SendMessageRequest, TransportPolicy, UserProfileFull, WebAuthnCredential, discover_with,
 };
 #[cfg(test)]
-use fluxer_client_core::rest::{CreateInviteRequest, GuildSettingsPatch, MessageSearchRequest, UserSettingsPatch};
+use fluxer_client_core::rest::{
+    CreateInviteRequest, DiscoveryGuildQuery, GuildSettingsPatch, MessageSearchRequest, UserSettingsPatch,
+};
 use fluxer_client_core::state::{ClientState, LoadMode, Message, PAGE_SIZE, Snowflake};
 use serde_json::{Value, json};
 use tokio::runtime::Handle;
@@ -105,6 +107,12 @@ pub enum UiEvent {
     GuildMessagesBulkDeleted { seq: u64, guild_id: Snowflake, error: Option<String> },
     /// `POST /channels/{c}/messages/purge` finished for personal notes.
     PersonalNotesPurged { seq: u64, channel_id: Snowflake, result: Result<u64, String> },
+    /// `GET /discovery/categories` finished.
+    DiscoveryCategoriesLoaded { result: Result<Vec<DiscoveryCategory>, String> },
+    /// `GET /discovery/guilds` finished for `seq` at `offset`.
+    DiscoveryGuildsLoaded { seq: u64, offset: u32, result: Result<DiscoveryGuildList, String> },
+    /// `POST /discovery/guilds/{g}/join` finished.
+    DiscoveryGuildJoined { seq: u64, guild_id: Snowflake, error: Option<String> },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -277,6 +285,12 @@ pub struct Backend {
     /// Recorded `POST /channels/{c}/call/ring` requests `(channel_id, recipients)` (tests).
     #[cfg(test)]
     pub(crate) sent_call_rings: Arc<Mutex<Vec<(Snowflake, Option<Vec<Snowflake>>)>>>,
+    /// Recorded `GET /discovery/guilds` requests (tests).
+    #[cfg(test)]
+    pub(crate) sent_discovery_searches: Arc<Mutex<Vec<DiscoveryGuildQuery>>>,
+    /// Recorded `POST /discovery/guilds/{g}/join` requests (tests).
+    #[cfg(test)]
+    pub(crate) sent_discovery_joins: Arc<Mutex<Vec<Snowflake>>>,
 }
 
 impl Backend {
@@ -406,6 +420,10 @@ impl Backend {
             sent_personal_notes_purges: Arc::default(),
             #[cfg(test)]
             sent_call_rings: Arc::default(),
+            #[cfg(test)]
+            sent_discovery_searches: Arc::default(),
+            #[cfg(test)]
+            sent_discovery_joins: Arc::default(),
         };
         (backend, rx)
     }

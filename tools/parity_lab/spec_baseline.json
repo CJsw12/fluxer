@@ -5,7 +5,7 @@
     "markdown": {
       "spec": "target/parity-tmp/md.1280.spec.json",
       "max_deltas": 33,
-      "max_missing": 155,
+      "max_missing": 154,
       "ignore": [
         "app.native-titlebar.wordmark|width",
         "channel.channel-header-components.channel-header-icon.button-icon|x"
@@ -60,15 +60,15 @@
       "max": {
         "dm-conversation": {
           "deltas": 77,
-          "missing": 95
+          "missing": 94
         },
         "dm-home": {
           "deltas": 6,
           "missing": 40
         },
         "explore": {
-          "deltas": 0,
-          "missing": 36
+          "deltas": 12,
+          "missing": 3
         },
         "settings-appearance": {
           "deltas": 14,

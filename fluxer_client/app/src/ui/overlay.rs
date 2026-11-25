@@ -19,6 +19,7 @@ use crate::ui::channel_modal::{CreateChannelModal, EditChannelModal};
 use crate::ui::channel_popouts::ChannelPopout;
 use crate::ui::create_thread_modal::CreateThreadModal;
 use crate::ui::emoji_picker::EmojiPicker;
+use crate::ui::explore::DiscoveryPreviewModal;
 use crate::ui::forward_modal::ForwardMessageModal;
 use crate::ui::group_dm::{CreateGroupDmModal, LeaveGroupDmModal};
 use crate::ui::guild_modal::{JoinGuildModal, LeaveGuildModal};
@@ -64,6 +65,7 @@ pub enum Overlay {
     GuildProfile(GuildProfileModal),
     DeleteMyGuildMessages(DeleteMyGuildMessagesModal),
     PurgePersonalNotes(PurgePersonalNotesModal),
+    DiscoveryPreview(Box<DiscoveryPreviewModal>),
 }
 
 impl Overlay {

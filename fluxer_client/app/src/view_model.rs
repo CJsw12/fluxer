@@ -23,11 +23,12 @@ use crate::ui::message_actions::ActionTarget;
 use crate::ui::reactions::{ReactionPill, reaction_pills};
 use crate::ui::reply::{ReplyLine, member_name, reply_line};
 
-/// What the guild rail has selected: the DM list or one guild.
+/// What the guild rail has selected: the DM list, a guild, or Explore communities.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Place {
     Home,
     Guild(Snowflake),
+    Explore,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -272,6 +273,16 @@ pub fn guild_icon_url(media: &str, guild_id: Snowflake, icon: Option<&str>) -> O
     ))
 }
 
+/// Guild banner URL (`getGuildBannerURL`, webp size 512).
+pub fn guild_banner_url(media: &str, guild_id: Snowflake, banner: Option<&str>) -> Option<String> {
+    let hash = banner.filter(|h| !h.is_empty())?;
+    let hash = hash.strip_prefix("a_").unwrap_or(hash);
+    Some(format!(
+        "{}/banners/{guild_id}/{hash}.webp?size=512",
+        media.trim_end_matches('/')
+    ))
+}
+
 #[allow(dead_code)]
 pub fn guild_items(state: &ClientState) -> Vec<GuildItem> {
     guild_items_with_media(state, None)
@@ -337,6 +348,7 @@ pub fn channel_items_with_active(
             .filter(|c| c.kind != ChannelKind::DmPersonalNotes)
             .map(|c| channel_item(state, c, false, now_ms, media))
             .collect(),
+        Place::Explore => Vec::new(),
         Place::Guild(guild_id) => {
             let hide_muted = state.guild_hides_muted_channels(guild_id);
             let mut items = Vec::new();

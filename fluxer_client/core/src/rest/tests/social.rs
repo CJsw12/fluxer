@@ -704,3 +704,84 @@ async fn purge_personal_notes_and_call_ring_routes() {
         Err(RestError::InvalidArgument("recipients"))
     ));
 }
+
+#[tokio::test]
+async fn guild_discovery_routes() {
+    let fx = Fixture::start(|req, _| {
+        if req.method == "GET" && req.target == "/api/v1/discovery/categories" {
+            return Resp::json(200, json!([
+                { "id": 0, "name": "Gaming" },
+                { "id": 4, "name": "Science & Technology" }
+            ]));
+        }
+        if req.method == "GET" && req.target.starts_with("/api/v1/discovery/guilds") {
+            return Resp::json(200, json!({
+                "guilds": [{
+                    "id": GUILD,
+                    "name": "Rust Lab",
+                    "icon": null,
+                    "banner": "bannerhash",
+                    "description": "Learn Systems Programming",
+                    "category_type": 4,
+                    "primary_language": "en-US",
+                    "custom_tags": ["rust", "systems"],
+                    "member_count": 420,
+                    "online_count": 64,
+                    "features": ["DISCOVERABLE"],
+                    "badge_ids": [],
+                    "verification_level": 1
+                }],
+                "total": 1,
+                "category_counts": [{ "category_type": 4, "count": 1 }]
+            }));
+        }
+        Resp::empty(204)
+    })
+    .await;
+    let client = authed(&fx).await;
+
+    let cats = client.list_discovery_categories().await.unwrap();
+    assert_eq!(cats.len(), 2);
+    assert_eq!(cats[1].name, "Science & Technology");
+
+    let results = client
+        .search_discovery_guilds(&DiscoveryGuildQuery {
+            query: Some("  rust  ".into()),
+            category: Some(4),
+            language: Some("en-US".into()),
+            limit: 36,
+            offset: 0,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(results.total, 1);
+    assert_eq!(results.guilds.len(), 1);
+    assert_eq!(results.guilds[0].name, "Rust Lab");
+    assert_eq!(results.guilds[0].custom_tags, vec!["rust", "systems"]);
+
+    client.join_discovery_guild(GUILD).await.unwrap();
+
+    assert_eq!(
+        lines(&fx),
+        vec![
+            l("GET", "/api/v1/discovery/categories".into()),
+            l("GET", "/api/v1/discovery/guilds?limit=36&offset=0&query=rust&category=4&language=en-US".into()),
+            l("POST", format!("/api/v1/discovery/guilds/{GUILD}/join")),
+        ]
+    );
+
+    assert!(matches!(
+        client
+            .search_discovery_guilds(&DiscoveryGuildQuery {
+                query: Some("x".repeat(101)),
+                ..Default::default()
+            })
+            .await,
+        Err(RestError::InvalidArgument("query"))
+    ));
+    assert!(matches!(
+        client.join_discovery_guild("bad-guild").await,
+        Err(RestError::InvalidArgument("guild_id"))
+    ));
+}

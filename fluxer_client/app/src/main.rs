@@ -60,6 +60,8 @@ mod tests_deep_links;
 #[cfg(test)]
 mod tests_emoji_picker;
 #[cfg(test)]
+mod tests_explore;
+#[cfg(test)]
 mod tests_group_dm;
 #[cfg(test)]
 mod tests_guild_popout;

@@ -29,6 +29,7 @@ const INSTANCE_DESIGNATING_KEYS: &[&str] = &[
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeepLink {
     Home,
+    Explore,
     DmChannel {
         channel_id: Snowflake,
         message_id: Option<Snowflake>,
@@ -160,6 +161,7 @@ fn parse_route_segments(segments: &[&str], allow_non_channel: bool) -> Option<De
             user_id: parse_snowflake(uid)?,
         }),
         ["friends"] if allow_non_channel => Some(DeepLink::Home),
+        ["discover" | "explore" | "discovery"] if allow_non_channel => Some(DeepLink::Explore),
         ["invite" | "i", code] | ["invite", code, "login"] if allow_non_channel => {
             extract_invite_code(code).map(|code| DeepLink::Invite { code })
         }
@@ -260,6 +262,9 @@ mod tests {
         assert_eq!(parse_protocol_deep_link("fluxer://-/channels/@me"), Some(DeepLink::Home));
         assert_eq!(parse_protocol_deep_link("fluxer:///channels/@me"), Some(DeepLink::Home));
         assert_eq!(parse_protocol_deep_link("fluxer://friends"), Some(DeepLink::Home));
+        assert_eq!(parse_protocol_deep_link("fluxer://discover"), Some(DeepLink::Explore));
+        assert_eq!(parse_protocol_deep_link("fluxer://explore"), Some(DeepLink::Explore));
+        assert_eq!(parse_protocol_deep_link("fluxer://discovery"), Some(DeepLink::Explore));
 
         assert_eq!(
             parse_protocol_deep_link("fluxer://channels/@me/123"),

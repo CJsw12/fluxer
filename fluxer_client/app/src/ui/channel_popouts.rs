@@ -123,6 +123,8 @@ pub enum ChannelPopoutKind {
     PersonalNotesMenu {
         channel_id: Snowflake,
     },
+    /// Explore page language filter (`DiscoveryLanguageDropdown`).
+    ExploreLanguage,
 }
 
 pub struct ChannelPopout {
@@ -141,6 +143,7 @@ impl ChannelPopoutKind {
             Self::MessageMenu { .. } => "message-menu",
             Self::SearchScope => "search-scope",
             Self::PersonalNotesMenu { .. } => "personal-notes-menu",
+            Self::ExploreLanguage => "explore-language",
         }
     }
 }
@@ -400,6 +403,25 @@ impl ClientView {
         cx.notify();
     }
 
+    pub(crate) fn toggle_explore_language_popout(
+        &mut self,
+        anchor: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self.toggle_channel_popout_key("explore-language", window, cx) {
+            return;
+        }
+        let anchor = header_anchor("explore-language-btn", anchor);
+        self.prepare_overlay_replace(cx);
+        self.autocomplete = None;
+        self.overlay = Overlay::ChannelPopout(ChannelPopout {
+            kind: ChannelPopoutKind::ExploreLanguage,
+            anchor,
+        });
+        cx.notify();
+    }
+
     pub(crate) fn set_threads_popout_tab(&mut self, tab: ThreadsTab, cx: &mut Context<Self>) {
         if let Overlay::ChannelPopout(pop) = &mut self.overlay
             && let ChannelPopoutKind::Threads { tab: active, .. } = &mut pop.kind
@@ -516,6 +538,12 @@ pub fn render(
             44.,
             "ui.action-menu.personal-notes-context-menu.menu-group",
             render_personal_notes_menu(*channel_id, hover_bg, cx),
+        ),
+        ChannelPopoutKind::ExploreLanguage => (
+            220.,
+            360.,
+            "discovery.discovery.discovery-language-dropdown.menu-group",
+            render_explore_language(view, theme, hover_bg, cx),
         ),
     };
 
@@ -2000,4 +2028,81 @@ fn render_personal_notes_menu(
                 ),
         )
         .into_any_element()
+}
+
+fn render_explore_language(
+    view: &ClientView,
+    theme: &Theme,
+    hover_bg: gpui_kit::Hsla,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
+    let active = view.explore.selected_language.as_deref();
+    let radio_row = |id: String, lang: Option<String>, label: String, selected: bool, flx_tag: &'static str| {
+        let radio_border = if selected { theme.brand } else { gpui_kit::Hsla::from(rgba(0xc9c5d326)) };
+        context_menu_item(id, hover_bg)
+            .aria_selected(selected)
+            .flx(flx_tag)
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.close_overlay(window, cx);
+                this.explore_select_language(lang.clone(), cx);
+            }))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .h(px(18.))
+                    .truncate()
+                    .text_size(px(13.))
+                    .text_color(theme.foreground)
+                    .child(label),
+            )
+            .child(
+                div()
+                    .size(px(18.))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(
+                        div()
+                            .size(px(16.))
+                            .rounded_full()
+                            .border_1()
+                            .border_color(radio_border)
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .when(selected, |d| {
+                                d.child(div().size(px(6.)).rounded_full().bg(gpui_kit::Hsla::from(rgb(0xffffff))))
+                            }),
+                    ),
+            )
+    };
+
+    let mut col = div()
+        .id("explore-lang-scroll")
+        .max_h(px(340.))
+        .overflow_y_scroll()
+        .p(px(6.))
+        .flex()
+        .flex_col()
+        .child(radio_row(
+            "explore-lang-all".to_owned(),
+            None,
+            l10n::tr("All languages"),
+            active.is_none(),
+            "discovery.discovery.discovery-language-dropdown.menu-item-radio.all",
+        ));
+
+    for (code, name) in crate::ui::explore::DISCOVERY_LANGUAGES {
+        col = col.child(radio_row(
+            format!("explore-lang-{code}"),
+            Some((*code).to_owned()),
+            (*name).to_owned(),
+            active == Some(*code),
+            "discovery.discovery.discovery-language-dropdown.menu-item-radio.language",
+        ));
+    }
+
+    col.into_any_element()
 }

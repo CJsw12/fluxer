@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 use std::sync::Arc;
 
-use fluxer_client_core::rest::UserProfileFull;
+use fluxer_client_core::rest::{DiscoveryGuild, DiscoveryGuildQuery, UserProfileFull};
 use fluxer_client_core::state::{MessageState, PartialEmoji, Snowflake, Status, Unread};
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -293,6 +293,8 @@ pub struct ClientView {
     guild_delete_seq: u64,
     /// Sequence counter for purging personal notes messages.
     purge_notes_seq: u64,
+    /// Explore communities directory state and inputs.
+    pub(crate) explore: ui::explore::ExploreState,
     /// Text-to-speech playback state for "Speak message".
     pub(crate) tts: crate::tts::TtsPlayer,
     /// Channel explicitly marked unread by the user; suppresses auto-ack until cleared.
@@ -383,6 +385,7 @@ impl ClientView {
         composer.update(cx, |s, cx| s.set_disabled(true, cx));
         let add_friend_input = cx.new(|cx| InputState::new(window, cx).placeholder("username#0000"));
         let friends_search_input = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Search")));
+        let explore_search_input = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Search communities")));
         let group_dm_rename = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Group name")));
         let subscriptions = vec![
             cx.subscribe_in(&add_friend_input, window, |this: &mut Self, _, ev: &InputEvent, _, cx| {
@@ -394,6 +397,11 @@ impl ClientView {
                 if matches!(ev, InputEvent::Change) {
                     cx.notify();
                 }
+            }),
+            cx.subscribe_in(&explore_search_input, window, |this: &mut Self, _, ev: &InputEvent, _, cx| match ev {
+                InputEvent::PressEnter { shift: false, .. } => this.submit_explore_search(cx),
+                InputEvent::Change => cx.notify(),
+                _ => {}
             }),
             cx.subscribe_in(&group_dm_rename, window, |this: &mut Self, input_entity, ev: &InputEvent, window, cx| {
                 if let InputEvent::PressEnter { shift: false, .. } = ev {
@@ -539,6 +547,7 @@ impl ClientView {
             invite_seq: 0,
             guild_delete_seq: 0,
             purge_notes_seq: 0,
+            explore: ui::explore::ExploreState::new(explore_search_input),
             tts: crate::tts::TtsPlayer::new(),
             manual_unread_channel: None,
             group_dm: None,
@@ -627,7 +636,7 @@ impl ClientView {
     pub(crate) fn current_guild_id(&self) -> Option<Snowflake> {
         match self.place {
             Place::Guild(id) => Some(id),
-            Place::Home => None,
+            Place::Home | Place::Explore => None,
         }
     }
 
@@ -670,6 +679,7 @@ impl ClientView {
                 | Overlay::GuildProfile(_)
                 | Overlay::DeleteMyGuildMessages(_)
                 | Overlay::PurgePersonalNotes(_)
+                | Overlay::DiscoveryPreview(_)
         );
         self.overlay = Overlay::None;
         if restore_composer {
@@ -1207,6 +1217,59 @@ impl ClientView {
                         }
                     }
                 }
+                UiEvent::DiscoveryCategoriesLoaded { result } => {
+                    if let Ok(cats) = result && !cats.is_empty() {
+                        self.explore.categories = cats;
+                    }
+                }
+                UiEvent::DiscoveryGuildsLoaded { seq, offset, result } => {
+                    if self.explore.search_seq == seq {
+                        self.explore.loading = false;
+                        self.explore.has_loaded = true;
+                        match result {
+                            Ok(page) => {
+                                if offset == 0 {
+                                    self.explore.guilds = page.guilds;
+                                } else {
+                                    for g in page.guilds {
+                                        if self.explore.guilds.iter().all(|existing| existing.id != g.id) {
+                                            self.explore.guilds.push(g);
+                                        }
+                                    }
+                                }
+                                self.explore.total = page.total;
+                                self.explore.error = None;
+                            }
+                            Err(err) => {
+                                self.explore.error = Some(err);
+                            }
+                        }
+                    }
+                }
+                UiEvent::DiscoveryGuildJoined { seq, guild_id, error } => {
+                    if matches!(&self.overlay, Overlay::DiscoveryPreview(m) if m.join_seq == Some(seq)) {
+                        match error {
+                            None => {
+                                self.overlay = Overlay::None;
+                                self.focus_composer_later(cx);
+                                self.pending_joined_channel = None;
+                                if self.backend.state().guilds.contains_key(&guild_id) {
+                                    self.pending_joined_guild = None;
+                                    self.select_place(Place::Guild(guild_id), cx);
+                                } else {
+                                    self.pending_joined_guild = Some(guild_id);
+                                }
+                            }
+                            Some(err) => {
+                                if let Overlay::DiscoveryPreview(modal) = &mut self.overlay {
+                                    modal.joining = false;
+                                    modal.join_seq = None;
+                                    modal.error = Some(err);
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
         if connected || guild_available {
@@ -1508,11 +1571,11 @@ impl ClientView {
             }
             self.can_ban_members = match self.place {
                 Place::Guild(gid) => state.can_ban_members(gid),
-                Place::Home => false,
+                Place::Home | Place::Explore => false,
             };
             let can_manage_guild = match self.place {
                 Place::Guild(gid) => state.can_manage_guild_channels(gid),
-                Place::Home => false,
+                Place::Home | Place::Explore => false,
             };
             let can_manage_selected = self
                 .selected_channel
@@ -1868,6 +1931,11 @@ impl ClientView {
             self.last_guild = Some(id);
             self.backend.subscribe_guild(id);
         }
+        if place == Place::Explore {
+            self.clear_selection(cx);
+            self.ensure_explore_loaded(cx);
+            return;
+        }
         self.refresh(cx);
         let opens = |id: Snowflake| self.channels.iter().any(|c| c.id == id && c.has_messages);
         let remembered = self.last_channel.get(&nav::place_key(place)).copied().filter(|id| opens(*id));
@@ -1876,6 +1944,135 @@ impl ClientView {
             Some(id) => self.select_channel(id, cx),
             None => self.clear_selection(cx),
         }
+    }
+
+    pub(crate) fn open_explore(&mut self, cx: &mut Context<Self>) {
+        self.select_place(Place::Explore, cx);
+    }
+
+    fn ensure_explore_loaded(&mut self, cx: &mut Context<Self>) {
+        if !self.explore.categories_fetched {
+            self.explore.categories_fetched = true;
+            self.backend.fetch_discovery_categories();
+        }
+        if !self.explore.has_loaded && !self.explore.loading {
+            self.fetch_explore_guilds(0, cx);
+        }
+    }
+
+    fn fetch_explore_guilds(&mut self, offset: u32, cx: &mut Context<Self>) {
+        self.explore.search_seq = self.explore.search_seq.wrapping_add(1);
+        let seq = self.explore.search_seq;
+        self.explore.loading = true;
+        self.explore.error = None;
+        if offset == 0 {
+            self.explore.guilds.clear();
+            self.explore.total = 0;
+        }
+        let query_text = self.explore.submitted_query.trim().to_owned();
+        let query = DiscoveryGuildQuery {
+            query: (!query_text.is_empty()).then_some(query_text),
+            category: self.explore.selected_category,
+            language: self.explore.selected_language.clone(),
+            tag: None,
+            sort_by: None,
+            limit: ui::explore::PAGE_SIZE,
+            offset,
+        };
+        self.backend.search_discovery_guilds(seq, query);
+        cx.notify();
+    }
+
+    pub(crate) fn explore_select_category(&mut self, category: Option<u32>, cx: &mut Context<Self>) {
+        self.explore.selected_category = category;
+        self.explore.submitted_query.clear();
+        self.fetch_explore_guilds(0, cx);
+    }
+
+    pub(crate) fn explore_select_language(&mut self, language: Option<String>, cx: &mut Context<Self>) {
+        self.explore.selected_language = language;
+        self.fetch_explore_guilds(0, cx);
+    }
+
+    pub(crate) fn submit_explore_search(&mut self, cx: &mut Context<Self>) {
+        let q = self.explore.search_input.read(cx).value().trim().to_owned();
+        self.explore.submitted_query = q;
+        self.fetch_explore_guilds(0, cx);
+    }
+
+    pub(crate) fn clear_explore_search(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.explore.submitted_query.clear();
+        self.explore.search_input.update(cx, |s, cx| s.set_value("", window, cx));
+        self.fetch_explore_guilds(0, cx);
+    }
+
+    pub(crate) fn explore_reset_to_all(&mut self, cx: &mut Context<Self>) {
+        self.explore.selected_category = None;
+        self.explore.submitted_query.clear();
+        let (input, handle) = (self.explore.search_input.clone(), self.window_handle);
+        cx.defer(move |cx| {
+            let _ = handle.update(cx, |_, window, cx| {
+                input.update(cx, |s, cx| s.set_value("", window, cx));
+            });
+        });
+        self.fetch_explore_guilds(0, cx);
+    }
+
+    pub(crate) fn explore_load_more(&mut self, cx: &mut Context<Self>) {
+        if self.explore.loading || (self.explore.guilds.len() as u64) >= self.explore.total {
+            return;
+        }
+        let offset = u32::try_from(self.explore.guilds.len()).unwrap_or(u32::MAX);
+        self.fetch_explore_guilds(offset, cx);
+    }
+
+    pub(crate) fn explore_retry(&mut self, cx: &mut Context<Self>) {
+        self.fetch_explore_guilds(0, cx);
+    }
+
+    pub(crate) fn open_discovery_preview(
+        &mut self,
+        guild: DiscoveryGuild,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.prepare_overlay_replace(cx);
+        self.autocomplete = None;
+        self.overlay = Overlay::DiscoveryPreview(Box::new(ui::explore::DiscoveryPreviewModal {
+            guild,
+            joining: false,
+            join_seq: None,
+            error: None,
+        }));
+        cx.notify();
+    }
+
+    pub(crate) fn confirm_join_discovery_guild(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Overlay::DiscoveryPreview(modal) = &mut self.overlay else {
+            return;
+        };
+        let Some(guild_id) = Snowflake::parse(&modal.guild.id) else {
+            modal.error = Some(l10n::tr("Invalid community ID."));
+            cx.notify();
+            return;
+        };
+        if self.backend.state().guilds.contains_key(&guild_id) {
+            self.close_overlay(window, cx);
+            self.select_place(Place::Guild(guild_id), cx);
+            return;
+        }
+        if modal.joining {
+            return;
+        }
+        self.explore.join_seq = self.explore.join_seq.wrapping_add(1);
+        let seq = self.explore.join_seq;
+        if let Overlay::DiscoveryPreview(modal) = &mut self.overlay {
+            modal.joining = true;
+            modal.join_seq = Some(seq);
+            modal.error = None;
+        }
+        self.backend.join_discovery_guild(seq, guild_id);
+        cx.notify();
     }
 
     pub(crate) fn select_favorites(&mut self, cx: &mut Context<Self>) {
@@ -3184,6 +3381,11 @@ impl ClientView {
                 self.clear_selection(cx);
                 true
             }
+            DeepLink::Explore => {
+                self.close_overlay(window, cx);
+                self.open_explore(cx);
+                true
+            }
             DeepLink::DmChannel { channel_id, message_id } => {
                 let valid = self
                     .backend
@@ -3625,43 +3827,21 @@ impl Render for ClientView {
             && self.voice.channel_id.is_some()
             && self.voice.state != crate::backend::voice::VoiceConnectionState::Disconnected;
         let show_friends = !show_voice_stage && self.place == Place::Home && self.selected_channel.is_none();
+        let show_explore = !show_voice_stage && self.place == Place::Explore;
         let sidebar_w = self.effective_sidebar_width();
         let split_height = self.effective_voice_call_height(window);
-        let overlay = match &self.overlay {
-            Overlay::QuickSwitcher(sw) => Some(ui::quick_switcher::render(sw, &theme, cx)),
-            Overlay::EmojiPicker(picker) => {
-                Some(ui::emoji_picker::render(self, picker, self.backend.media(), window.viewport_size(), &theme, cx))
-            }
-            Overlay::ChannelPopout(pop) => {
-                Some(ui::channel_popouts::render(self, pop, window.viewport_size(), &theme, cx))
-            }
-            Overlay::Profile(pop) => Some(ui::profile_popout::render(pop, &theme, cx)),
-            Overlay::Settings(modal) => Some(ui::settings::render(self, modal, &theme, cx)),
-            Overlay::AccountSwitcher(modal) => Some(ui::account_switcher::render(self, modal, &theme, cx)),
-            Overlay::JoinGuild(modal) => Some(ui::guild_modal::render_join(modal, &theme, cx)),
-            Overlay::LeaveGuild(modal) => Some(ui::guild_modal::render_leave(modal, &theme, cx)),
-            Overlay::CreateGroupDm(modal) => {
-                let query = modal.filter_input.read(cx).value().to_string();
-                Some(ui::group_dm::render_create_modal(modal, &theme, cx, &query))
-            }
-            Overlay::LeaveGroupDm(modal) => Some(ui::group_dm::render_leave_modal(modal, &theme, cx)),
-            Overlay::MediaViewer(modal) => Some(ui::media_viewer::render(modal, &theme, window, cx)),
-            Overlay::LinkWarning(modal) => Some(ui::link_warning::render(modal, &theme, cx)),
-            Overlay::CreateChannel(modal) => Some(ui::channel_modal::render_create(modal, &theme, cx)),
-            Overlay::EditChannel(modal) => Some(ui::channel_modal::render_edit(modal, &theme, cx)),
-            Overlay::MemberModeration(modal) => Some(ui::moderation_modal::render_action(modal, &theme, cx)),
-            Overlay::GuildBans(modal) => Some(ui::moderation_modal::render_bans(modal, &theme, cx)),
-            Overlay::Access(modal) => Some(ui::access::render(self, modal, &theme, cx)),
-            Overlay::ForwardMessage(modal) => Some(ui::forward_modal::render(self, modal, &theme, cx)),
-            Overlay::CreateThread(modal) => Some(ui::create_thread_modal::render(modal, &theme, cx)),
-            Overlay::InviteMembers(modal) => Some(ui::invite_modal::render(self, modal, &theme, cx)),
-            Overlay::GuildNotifications(modal) => Some(ui::guild_settings_modals::render_notifications(self, modal, &theme, cx)),
-            Overlay::GuildPrivacy(modal) => Some(ui::guild_settings_modals::render_privacy(self, modal, &theme, cx)),
-            Overlay::GuildProfile(modal) => Some(ui::guild_settings_modals::render_profile(modal, &theme, cx)),
-            Overlay::DeleteMyGuildMessages(modal) => Some(ui::guild_settings_modals::render_delete_messages(modal, &theme, cx)),
-            Overlay::PurgePersonalNotes(modal) => Some(ui::guild_settings_modals::render_purge_personal_notes(modal, &theme, cx)),
-            Overlay::None => None,
-        };
+        let overlay = self.render_overlay(&theme, window, cx);
+        let main_pane = self.render_main_pane(
+            handle,
+            composer,
+            &mut right_panel,
+            show_voice_stage,
+            show_explore,
+            show_friends,
+            split_height,
+            &theme,
+            cx,
+        );
         // Every image below without its own cache (avatars, custom emoji,
         // reactions) goes through the budgeted embed cache instead of
         // GPUI's app-wide asset cache, which never drops decoded images.
@@ -3710,97 +3890,13 @@ impl Render for ClientView {
                         div().h_full().flex_none().pt(px(1.)).pb(px(1.)).child(
                             div()
                                 .h_full()
-                                .pb(px(73.))
+                                .when(self.place != Place::Explore, |d| d.pb(px(73.)))
                                 .flx("app.guild-sidebar.guild-navbar")
                                 .child(ui::channel_list::render(self, &theme, cx)),
                         ),
                     ),
             )
-            .child(div().flex().flex_1().min_w_0().h_full().bg(theme.background_secondary_lighter).child(if show_voice_stage {
-                let split_chat = !self.voice_stage_expanded && self.selected_channel.is_some();
-                if split_chat {
-                    div()
-                        .debug_selector(|| "voice-stage-split-chat".to_owned())
-                        .flex()
-                        .flex_col()
-                        .flex_1()
-                        .min_w_0()
-                        .h_full()
-                        .on_drop(cx.listener(|v, paths: &ExternalPaths, _, cx| v.add_paths(paths.paths(), cx)))
-                        .child(ui::voice_stage::render(self, &theme, split_height, cx))
-                        .child(ui::message_list::render(self, handle, &theme))
-                        .child(composer)
-                } else {
-                    div()
-                        .flex()
-                        .flex_col()
-                        .flex_1()
-                        .min_w_0()
-                        .h_full()
-                        .child(ui::voice_stage::render(self, &theme, split_height, cx))
-                        // Keep composer mounted in a 0px hidden slot so shortcut contexts stay live.
-                        .child(div().h(px(0.)).overflow_hidden().child(composer))
-                }
-            } else if show_friends {
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_w_0()
-                    .h_full()
-                    .child(ui::friends::render(self, &theme, cx))
-                    // Keep the composer mounted in a 0px hidden slot so the
-                    // `ClientView > Composer > Input` shortcut context stays live.
-                    .child(div().h(px(0.)).overflow_hidden().child(composer))
-            } else {
-                div()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_w_0()
-                    .h_full()
-                    // OutlineFrame.module.css: the pane sits inside the 1px frame border.
-                    .pt(px(1.))
-                    .pb(px(1.))
-                    // Files dropped anywhere on the message pane go to the tray.
-                    .on_drop(cx.listener(|v, paths: &ExternalPaths, _, cx| v.add_paths(paths.paths(), cx)))
-                    .child(ui::header::render(self, &theme, cx))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .flex_1()
-                            .min_h_0()
-                            .w_full()
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .h_full()
-                            .when_some(self.voice.watched_video_track.as_ref(), |d, track| {
-                                let label = ui::video_viewer::participant_display_name(self, track);
-                                d.child(ui::video_viewer::render(
-                                    track,
-                                    label,
-                                    self.watched_video_frame.clone(),
-                                    &theme,
-                                    cx,
-                                ))
-                            })
-                            .when(!self.guild_unavailable && self.selected_channel.is_some() && self.unread_anchor.is_some(), |d| {
-                                d.child(self.render_unread_bar(&theme, cx))
-                            })
-                            .child(ui::message_list::render(self, handle, &theme))
-                            .when(self.has_more_after && self.selected_channel.is_some(), |d| {
-                                d.child(self.render_jump_to_present(&theme, cx))
-                            })
-                                    .child(composer),
-                            )
-                            .children(right_panel.take()),
-                    )
-            }))
+            .child(div().flex().flex_1().min_w_0().h_full().bg(theme.background_secondary_lighter).child(main_pane))
             .children(right_panel)
             // `OutlineFrame.module.css`: 1px `rgba(255,255,255,0.035)` border with a 14px
             // top-left radius around everything right of the 72px rail.
@@ -3838,6 +3934,170 @@ impl Render for ClientView {
 }
 
 impl ClientView {
+    #[inline(never)]
+    fn render_overlay(&self, theme: &Theme, window: &mut Window, cx: &mut Context<Self>) -> Option<AnyElement> {
+        match &self.overlay {
+            Overlay::QuickSwitcher(sw) => Some(ui::quick_switcher::render(sw, theme, cx)),
+            Overlay::EmojiPicker(picker) => {
+                Some(ui::emoji_picker::render(self, picker, self.backend.media(), window.viewport_size(), theme, cx))
+            }
+            Overlay::ChannelPopout(pop) => {
+                Some(ui::channel_popouts::render(self, pop, window.viewport_size(), theme, cx))
+            }
+            Overlay::Profile(pop) => Some(ui::profile_popout::render(pop, theme, cx)),
+            Overlay::Settings(modal) => Some(ui::settings::render(self, modal, theme, cx)),
+            Overlay::AccountSwitcher(modal) => Some(ui::account_switcher::render(self, modal, theme, cx)),
+            Overlay::JoinGuild(modal) => Some(ui::guild_modal::render_join(modal, theme, cx)),
+            Overlay::LeaveGuild(modal) => Some(ui::guild_modal::render_leave(modal, theme, cx)),
+            Overlay::CreateGroupDm(modal) => {
+                let query = modal.filter_input.read(cx).value().to_string();
+                Some(ui::group_dm::render_create_modal(modal, theme, cx, &query))
+            }
+            Overlay::LeaveGroupDm(modal) => Some(ui::group_dm::render_leave_modal(modal, theme, cx)),
+            Overlay::MediaViewer(modal) => Some(ui::media_viewer::render(modal, theme, window, cx)),
+            Overlay::LinkWarning(modal) => Some(ui::link_warning::render(modal, theme, cx)),
+            Overlay::CreateChannel(modal) => Some(ui::channel_modal::render_create(modal, theme, cx)),
+            Overlay::EditChannel(modal) => Some(ui::channel_modal::render_edit(modal, theme, cx)),
+            Overlay::MemberModeration(modal) => Some(ui::moderation_modal::render_action(modal, theme, cx)),
+            Overlay::GuildBans(modal) => Some(ui::moderation_modal::render_bans(modal, theme, cx)),
+            Overlay::Access(modal) => Some(ui::access::render(self, modal, theme, cx)),
+            Overlay::ForwardMessage(modal) => Some(ui::forward_modal::render(self, modal, theme, cx)),
+            Overlay::CreateThread(modal) => Some(ui::create_thread_modal::render(modal, theme, cx)),
+            Overlay::InviteMembers(modal) => Some(ui::invite_modal::render(self, modal, theme, cx)),
+            Overlay::GuildNotifications(modal) => {
+                Some(ui::guild_settings_modals::render_notifications(self, modal, theme, cx))
+            }
+            Overlay::GuildPrivacy(modal) => Some(ui::guild_settings_modals::render_privacy(self, modal, theme, cx)),
+            Overlay::GuildProfile(modal) => Some(ui::guild_settings_modals::render_profile(modal, theme, cx)),
+            Overlay::DeleteMyGuildMessages(modal) => {
+                Some(ui::guild_settings_modals::render_delete_messages(modal, theme, cx))
+            }
+            Overlay::PurgePersonalNotes(modal) => {
+                Some(ui::guild_settings_modals::render_purge_personal_notes(modal, theme, cx))
+            }
+            Overlay::DiscoveryPreview(modal) => Some(ui::explore::render_preview_modal(self, modal, theme, cx)),
+            Overlay::None => None,
+        }
+    }
+
+    #[inline(never)]
+    #[allow(clippy::too_many_arguments)]
+    fn render_main_pane(
+        &mut self,
+        handle: gpui_kit::WeakEntity<Self>,
+        composer: AnyElement,
+        right_panel: &mut Option<AnyElement>,
+        show_voice_stage: bool,
+        show_explore: bool,
+        show_friends: bool,
+        split_height: f32,
+        theme: &Theme,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        if show_voice_stage {
+            let split_chat = !self.voice_stage_expanded && self.selected_channel.is_some();
+            if split_chat {
+                div()
+                    .debug_selector(|| "voice-stage-split-chat".to_owned())
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_w_0()
+                    .h_full()
+                    .on_drop(cx.listener(|v, paths: &ExternalPaths, _, cx| v.add_paths(paths.paths(), cx)))
+                    .child(ui::voice_stage::render(self, theme, split_height, cx))
+                    .child(ui::message_list::render(self, handle, theme))
+                    .child(composer)
+                    .into_any_element()
+            } else {
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_w_0()
+                    .h_full()
+                    .child(ui::voice_stage::render(self, theme, split_height, cx))
+                    // Keep composer mounted in a 0px hidden slot so shortcut contexts stay live.
+                    .child(div().h(px(0.)).overflow_hidden().child(composer))
+                    .into_any_element()
+            }
+        } else if show_explore {
+            div()
+                .flex()
+                .flex_col()
+                .flex_1()
+                .min_w_0()
+                .h_full()
+                .pt(px(1.))
+                .pb(px(1.))
+                .child(ui::explore::render_page(self, theme, cx))
+                // Keep the composer mounted in a 0px hidden slot so shortcut contexts stay live.
+                .child(div().h(px(0.)).overflow_hidden().child(composer))
+                .into_any_element()
+        } else if show_friends {
+            div()
+                .flex()
+                .flex_col()
+                .flex_1()
+                .min_w_0()
+                .h_full()
+                .child(ui::friends::render(self, theme, cx))
+                // Keep the composer mounted in a 0px hidden slot so the
+                // `ClientView > Composer > Input` shortcut context stays live.
+                .child(div().h(px(0.)).overflow_hidden().child(composer))
+                .into_any_element()
+        } else {
+            div()
+                .flex()
+                .flex_col()
+                .flex_1()
+                .min_w_0()
+                .h_full()
+                // OutlineFrame.module.css: the pane sits inside the 1px frame border.
+                .pt(px(1.))
+                .pb(px(1.))
+                // Files dropped anywhere on the message pane go to the tray.
+                .on_drop(cx.listener(|v, paths: &ExternalPaths, _, cx| v.add_paths(paths.paths(), cx)))
+                .child(ui::header::render(self, theme, cx))
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .flex_1()
+                        .min_h_0()
+                        .w_full()
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .flex_1()
+                                .min_w_0()
+                                .h_full()
+                                .when_some(self.voice.watched_video_track.as_ref(), |d, track| {
+                                    let label = ui::video_viewer::participant_display_name(self, track);
+                                    d.child(ui::video_viewer::render(
+                                        track,
+                                        label,
+                                        self.watched_video_frame.clone(),
+                                        theme,
+                                        cx,
+                                    ))
+                                })
+                                .when(!self.guild_unavailable && self.selected_channel.is_some() && self.unread_anchor.is_some(), |d| {
+                                    d.child(self.render_unread_bar(theme, cx))
+                                })
+                                .child(ui::message_list::render(self, handle, theme))
+                                .when(self.has_more_after && self.selected_channel.is_some(), |d| {
+                                    d.child(self.render_jump_to_present(theme, cx))
+                                })
+                                .child(composer),
+                        )
+                        .children(right_panel.take()),
+                )
+                .into_any_element()
+        }
+    }
+
     /// The composer with its mode bar (reply / edit), the typing row and
     /// the Esc / Up hooks.
     fn render_composer(&mut self, theme: &Theme, cx: &mut Context<Self>) -> AnyElement {

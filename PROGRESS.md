@@ -9,41 +9,46 @@
 3. 상시 실행 구성(시험 서버 터널, 측정 기능을 켠 Rust 클라이언트, 비교용 공식 앱)을 `docs/PARITY_LAB.md` 10.1대로 확인·기동한다. 측정 전 점검 4가지: Rust `Status: Online`, Rust 멤버 목록 `Online—2`, CDP 9334 응답, 양쪽 마이크·스피커 켜짐(10.8 1단계).
 4. 아래 Next Steps 1번부터 **사용자에게 묻지 말고 바로** 진행한다(선택이 필요하면 추천안으로 진행하고 보고에 남긴다). 사용자 선호(자율 진행·커밋·push 상시 승인·빌드 부하 제한)는 `Logs/handoff/OPERATIONS.md` 첫 절에 있다.
 
-## 현재 상태 (2026-11-25)
+## 현재 상태 (2026-11-26)
 
-- **Baseline:** 브랜치 `desktop-rs`(작업, 최신 push `e41e87941` 이후 문서 커밋), `main` = `upstream/main`. 주력은 `fluxer_client/`(Rust GPUI + gpui-kit). 음성·화면 공유는 헬퍼 `fluxer_client/voice_worker`(LiveKit, 정적 CRT). `fluxer_desktop_rs/`는 WebView2 전환기 셸. 미커밋 변경 없음.
-- **Done(2026-11-24~25):**
-  - 검증 도구: 공식 CSS 명세 추출 `spec_official.mjs`(단일 화면·장면 모드, 쓰기 가드), 명세↔Rust 수치 차이 `spec_delta.py`(줄마다 CSS 규칙·Rust `파일:줄`), 프로브의 선언 스타일·소스 위치 출력과 테두리 상자 측정, 누락 분류 `coverage.py`, 래칫 게이트 `spec_gate.py`(#markdown + 장면 셋 `popouts`·`more`), 테마 토큰 추출 `theme_tokens.mjs`, 아이콘 호출 위치 동기화 `check_icons.py --sync`.
-  - 수렴 결과: #markdown 차이 61→실제 결함 0(래칫 33/155, 남은 것은 글꼴 메트릭·상속 줄높이·가상 목록 그룹 상자), 팝오버·모달 8장면 차이 163→11, 태그 커버리지 결합 96→176, DM(첨부 모자이크·통화 버튼·스포일러·반응·만료 문구·사이드바·헤더)·설정(사이드바·레이아웃·태그)·메시지 마우스 올림 바와 더보기 메뉴 공식화, 길드 헤더 팝오버 공식화, 팝오버 Escape·버튼 기준 정렬.
-  - 이전: M9.2 상태 행렬(`8f49ada84`), M9.3 크기 조절(`fc6c1d245`), M9.4 팝오버 작업 목록(`0e1561775`), M9.5 화면 공유 양방향 자동 시험 1차(`ac638a6a3`), 업스트림 병합(`3cc9d8ffb`).
+- **Baseline:** 브랜치 `desktop-rs`(작업), `main` = `upstream/main`(`3608a387c`). 주력은 `fluxer_client/`(Rust GPUI + gpui-kit). 음성·화면 공유는 헬퍼 `fluxer_client/voice_worker`(LiveKit, 정적 CRT). `fluxer_desktop_rs/`는 WebView2 전환기 셸.
+- **Done(2026-11-26, Feature 1~10):**
+  - `76723c648`: 설정 탭(Windows app 분리·Connections·Applications 조회·Privacy 보강·사이드바 `.flx()`, `750 tests`, `210 icon sites`).
+  - `226e8dc36`: Keybinds 편집기·단축키 영속화·런타임 연동(`Theme.background_modifier_accent`, `754 tests`, `225 icon sites`).
+  - `19a444ca7`: 명세 루프 확장 4장면(`voice-channel`, `friends-list`, `threads-panel`, `light-theme`, 10.5 복원 가드, `755 tests`).
+  - `6e5551ffc`: 남은 수치 차이 수렴(마크다운 22/24px line-height·`message-group`·`-10.78px`·`#635fe3`·DM 각주·`spec_baseline.json` 하향 래칫, `756 tests`).
+  - `ba88d064b`: M9.11 테마 토큰 자동 생성(`theme_tokens_generated.rs` dark 654·light 656 / 682 RGBA, `Theme::from_kind`, `757 tests`, 릴리스 SHA256 `1bc86b64`).
+  - `06811e7dd`: M9.9 공식 아이콘 수확(`official_icons.json` 244건, `icon_manifest.json` verified 80→113·unverified 145→112, `app_icons_load`, `check_icons.py --selftest`).
+  - `a47e88a9d`: M9.1 조작 요소 추출기(`extract_interactions.py`, `interactions.json` 5개 범주 770건: present 53·missing 643·differs 74·후속 717건).
+  - `0f3c2a4b3`: M9.7 요소 픽셀 MAE/SSIM·상위 10개 `worst_crops/` + M9.8 확장 스타일·`style_pixel_audit` (22개 장면 `spec_gate` 0회귀).
+  - `11d879106`: M9.5 화면 공유 선택(`ScreenSharePicker`)·화질/FPS/코덱/비트레이트·`"<이름>'s screen · <height>p <fps> FPS"`·`ActiveSpeakers`·`share_check.py --launch-rust`/`voice_audio` (`voice_worker` 14 + 워크스페이스 760 = 774 tests, 릴리스 `9a3b3479`, 워커 `9ada6a5a`, `check_resize` 25/25, `check_surface_parity` 10/10, `state_matrix --strict`, `spec_gate` 22개 장면 0회귀).
+  - M9.10·M9.12·M9.13·M9.6 문서화 및 도구 반영: `FLUXER_DISABLE_MODULE_UPDATES=1` 문서화, `spec_official.mjs`·`compare.py` 버전 경고(`version_warning`), M9.12(`gpui-pre 0.3.12` 헤드리스 렌더 미지원 결정)·M9.13(웹뷰 혼용 기준), M9.6 `verified` 기준 진행도(`progress.json`, `progress_svg.py`, 배지·지도·`README.md`).
 - **Decisions:**
   - 1:1 판정은 공식 데스크톱 앱 실측 수치가 기준이다. 스크린샷 육안 비교는 마지막 확인용, 정규식 감사·합성 갤러리는 보조다.
-  - 비교 기준 앱은 포터블 공식 데스크톱 사본(Web 2026.1120, 다크, tester2)이다. Rust는 tester1이므로 본인 시점·상대 이름·색 차이는 결함이 아니다. 사용자 개인 공식 앱은 조작하지 않는다.
-  - 색은 하드코딩하지 않고 공식 `ThemeVariableManifest.ts`·`ColorSystemPalette.ts` 규칙에 맞춘 `Theme` 필드로 넣는다(다크·라이트 모두).
+  - 비교 기준 앱은 포터블 공식 데스크톱 사본(다크, tester2)이며 자동 업데이트 방지를 위해 `FLUXER_DISABLE_MODULE_UPDATES=1`을 사용한다. Rust는 tester1이므로 본인 시점·상대 이름·색 차이는 결함이 아니다. 사용자 개인 공식 앱은 조작하지 않는다.
+  - 색은 하드코딩하지 않고 `ThemeVariableManifest.ts`에서 자동 생성한 `theme_tokens_generated.rs`와 `Theme` 필드를 사용한다(다크·라이트 모두).
   - 공식에 있지만 Rust 기능이 없는 메뉴 항목은 보이게 두고 각자 고유 핸들러(메뉴 닫기만)와 `TODO(backlog)`를 단다. 핸들러 복붙·숨은 호버 버튼은 금지.
   - Windows MSVC에서 `libwebrtc`가 정적 CRT를 요구해 LiveKit·오디오는 헬퍼 프로세스로 분리한다(비공개 JSON-lines IPC, 토큰 argv·로그 금지).
-  - 모델·위임은 도구별 지침을 따르되, 난이도에 맞게 배정하고 루트는 실측 판정·통합·커밋만 한다(`docs/PARITY_LAB.md` 10.3).
+  - M9.12: `gpui-pre 0.3.12`의 `TestWindow::render_to_image`가 `HeadlessRenderer` 미설정으로 동작하지 않으므로 구조적 `TestAppContext` + 동일 데스크톱 실기 프로브 스크린샷 체계를 유지한다.
+  - M9.13: 핵심 UI(채팅·레일·사이드바·설정·팝오버·음성 스테이지/화면 공유 뷰어)는 네이티브 GPUI를 유지하고, 향후 고비용 리치 임베드 등만 WebView2 혼용 후보로 제한한다.
+  - 모델·위임은 도구별 지침을 따르되, 난이도에 맞게 배정하고 루트는 실측 판정·통합·커밋만 한다(`docs/PARITY_LAB.md` 10.3·10.9).
 - **Blockers:**
-  - 진행도의 "93/93 구현"은 동작 확인 없이 센 값이라 신뢰하지 않는다(M9.6에서 집계 기준 변경).
-  - 기준 버전: 저장소는 업스트림 2026-11-23(`3608a387c`), 비교 앱은 Web 2026.1120(M9.10).
-  - 마크다운 인라인 요소(굵게·인용·목록·코드 등)는 gpui-component `TextView`가 그려 측정 태그를 붙일 수 없다. 비교 방법이 따로 필요하다.
+  - 공식 비교 앱(`Web 2026.1124.64728`)이 테스트 서버에서 `GatewayReadyTimeoutError`·`Voice server timeout`을 겪어 M9.5 양방향 `share_check` 최종 완료 판정은 버전 정렬 후 재검증이 필요하다(M9.10).
+  - `icon_manifest.json` 미검증 아이콘 112곳(M9.9)과 `interactions.json` 누락·차이 717건(M9.1 후속)은 별도 단계로 이어간다.
+  - 마크다운 인라인 요소(굵게·인용·목록·코드 등)는 gpui-component `TextView`가 그려 측정 태그를 붙일 수 없다.
   - 사람·하드웨어가 필요한 항목: 한글 IME 조합, OS 알림·소리, Windows Hello·FIDO2 실기, 장시간 부하, DM 통화 실제 음성.
 
 ## Next Steps
 
-1. **기능 백로그(공식에 있고 Rust에 없음, `TODO(backlog)` 검색).**
-   - 메시지 더보기 메뉴: Forward, Create thread, Translate, Pin, Bookmark, Mark unread, Copy link, Speak. 메시지 우클릭 메뉴 배선(프로브에 우클릭 없음).
-   - 길드 헤더 팝오버: Invite members, Create category, Notification settings, Privacy settings, Edit community profile, Delete my messages, Hide muted channels 필터.
-   - 탐색 페이지(나침반이 지금은 Join 모달을 엶), 설정 탭 목록(Connections·Windows app·Applications·Privacy), 키 설정 편집 행, 친구 검색, 업데이트 버튼, 검색 범위 버튼, 묶인 메시지 마우스 올림 시간, DM 영상 통화 카메라·호출, Personal notes 정리·메뉴.
-2. **명세 루프 확장(`docs/PARITY_LAB.md` 10.8).** 음성 화면(릴리스+워커 빌드), 친구 목록·스레드 열린 화면, 라이트 테마 장면 추가. 장면을 추가하면 `spec_gate.py --live --all --update --allow-raise`로 기준을 넣는다.
-3. **남은 수치 차이.** #markdown 메시지 줄높이 22≠24(상속), 연속 메시지 `message-group` 묶음 구조, 사용자 팝오버·스레드 글꼴 메트릭, DM 대화 77건(대부분 계정 방향·글꼴).
-4. **M9 잔여.** 미검증 아이콘 84곳 수확(M9.9), M9.11 테마 토큰을 Rust `Theme` 생성에 연결(추출기는 완료), M9.6·M9.10·M9.12·M9.13.
-5. **사람 실기 검증.** 위 Blockers의 하드웨어 항목을 확인한 뒤에만 `docs/progress/progress.json`을 `done`으로 올리고 `python -I scripts/progress_svg.py`로 배지를 갱신한다.
+1. **M9.5 양방향 화면 공유 재검증 (버전 정렬 후).** 비교 앱 버전을 테스트 서버·저장소와 맞춘 뒤(`FLUXER_DISABLE_MODULE_UPDATES=1`), 실기 `share_check.py --launch-rust`로 `rust_to_official`, `official_to_rust`, `voice_audio` 최종 통과를 확인하고 M9.5를 완료 처리한다.
+2. **T3 고위험 백로그 구현 및 교차 계열 검토.** 메시지 삭제·일괄 삭제·길드 탈퇴·밴·인증 등 서버 데이터 변경·삭제·권한 경로(`TODO(backlog)`)는 구현 후 다른 계열 모델의 독립 검토를 거쳐 반영한다.
+3. **M9.9 미검증 아이콘 수확 및 M9.1 후속.** `icon_manifest.json` 미검증 112곳을 공식 원본 SVG로 마저 검증하고, `interactions.json` 후속 717건을 우선순위대로 반영한다.
+4. **사람·하드웨어 실기 검증.** 위 Blockers의 하드웨어 항목(한글 IME·OS 알림·Windows Hello·장시간 부하·실제 음성)을 확인한 뒤에만 `docs/progress/progress.json`의 `verified`를 `true`로 올리고 `python -I scripts/progress_svg.py`로 배지를 갱신한다.
 
 ## 미디어 검증 경계
 
 - H.265는 로컬 LiveKit에서 Chrome·Rust 수신, 재구독 복구를 확인했다. 실제 Fluxer 채널·별도 기기·Rust UI 영상 표시·화면 오디오·E2EE·장시간 성능은 미검증이다.
-- 화면 공유는 M9.5 1차 자동 시험(`share_check.py`)에서 양방향 통과(Rust→공식 2560×1440 약 14fps, 공식→Rust 색 결함 수정 후 통과). 품질 설정(해상도·FPS·코덱) 전달과 공유 대상 선택 창은 미구현이다.
+- 화면 공유는 M9.5 1차 자동 시험(`share_check.py`)에서 양방향 통과(Rust→공식 2560×1440 약 14fps, 공식→Rust 색 결함 수정 후 통과)했고, 2차(`11d879106`)로 공유 대상 선택(`ScreenSharePicker`)·화질/FPS/코덱/비트레이트·뷰어 헤더(`"<이름>'s screen · <height>p <fps> FPS"`)·`ActiveSpeakers` 및 Rust 측 실기 피커/`Go Live`/`LIVE`/`speaking_state`까지 검증했다. 양방향 `share_check` 최종 통과는 공식 비교 앱(`Web 2026.1124.64728`)과 테스트 서버 버전 정렬 후 재검증이 필요하다.
 
 ## 문서 지도
 

@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-23",
+  "updated": "2026-11-26",
   "areas": [
     {
       "key": "core",
@@ -7,35 +7,43 @@
       "items": [
         {
           "name": "게이트웨이 연결·하트비트",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "zstd 스트림 수신",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "상태 디스패치·모델 확장",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "REST 클라이언트·레이트리밋",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "세션 저장(DPAPI·잠금)",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "op14 멤버 목록",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "op3 프레즌스 갱신",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "재연결·장시간 안정성",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         }
       ]
     },
@@ -45,31 +53,38 @@
       "items": [
         {
           "name": "인스턴스 로그인",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "캡차 자동 풀이",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "TOTP 2단계 인증",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "로그인 유지·자동 로그인",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "로그아웃",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "패스키·보안 키",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "다중 계정 전환",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         }
       ]
     },
@@ -79,43 +94,53 @@
       "items": [
         {
           "name": "길드·채널 트리",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "안읽음 배지·pill",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "메시지 그룹핑·구분선",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "마크다운 렌더",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "코드 블록 강조",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "멘션 pill·시스템 메시지",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "멤버 목록 사이드바",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "이전 메시지 페이지",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "인라인 이미지 표시",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "반응 pill 표시",
-          "status": "done"
+          "status": "done",
+          "verified": true
         }
       ]
     },
@@ -125,47 +150,58 @@
       "items": [
         {
           "name": "텍스트 전송·낙관적 표시",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "메시지 수정·저장",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "멘션 자동완성",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "이모지 단축코드",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "답장·미리보기",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "삭제 확인",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "반응 추가·토글",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "입력 중 표시",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "이모지 피커",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "첨부 업로드",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "드래프트 보존",
-          "status": "done"
+          "status": "done",
+          "verified": true
         }
       ]
     },
@@ -175,27 +211,33 @@
       "items": [
         {
           "name": "Ctrl+K 빠른 전환",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "단축키 등록·처리",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "길드·채널 순회",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "안읽음·멘션 점프",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "딥링크(fluxer://)",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "방문 기록·앞뒤 이동",
-          "status": "done"
+          "status": "done",
+          "verified": true
         }
       ]
     },
@@ -205,27 +247,33 @@
       "items": [
         {
           "name": "음소거·알림 레벨 로직",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "데스크톱 토스트",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "알림 소리",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "첨부 업로드 UI",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "비이미지 첨부 표시",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "클립보드·드래그 업로드",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         }
       ]
     },
@@ -235,27 +283,33 @@
       "items": [
         {
           "name": "임베드 모델(core)",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "임베드 카드 렌더",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "GIF·동영상 미리보기",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "미디어 뷰어",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "스포일러·NSFW 가림",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "신뢰 도메인 경고",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         }
       ]
     },
@@ -265,27 +319,33 @@
       "items": [
         {
           "name": "다크 테마",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "라이트 테마",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "사용자 설정 모델·REST",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "사용자 패널",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "설정 화면",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "글꼴·밀도·확대",
-          "status": "done"
+          "status": "done",
+          "verified": true
         }
       ]
     },
@@ -295,27 +355,33 @@
       "items": [
         {
           "name": "DM 목록·대화",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "DM 열기·생성",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "친구 목록",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "프로필 팝업",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "차단·관계 관리",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "그룹 DM",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         }
       ]
     },
@@ -325,27 +391,33 @@
       "items": [
         {
           "name": "초대 참가",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "길드 탈퇴",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "채널 생성·편집",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "역할·권한 편집",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "멤버 관리(킥·밴)",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "채널 음소거",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         }
       ]
     },
@@ -355,15 +427,18 @@
       "items": [
         {
           "name": "메시지 검색(REST)",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "검색 결과 화면",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "메시지로 점프",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         }
       ]
     },
@@ -373,27 +448,33 @@
       "items": [
         {
           "name": "i18n 크레이트·카탈로그",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "날짜·숫자 현지화",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "앱 UI 번역 적용",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "언어 전환 UI",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "접근성 설정",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "스크린리더 라벨",
-          "status": "done"
+          "status": "done",
+          "verified": true
         }
       ]
     },
@@ -403,31 +484,38 @@
       "items": [
         {
           "name": "단일 인스턴스",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "릴리스 exe·아이콘",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "콘솔 창 제거",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "시작 메뉴·AUMID",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "트레이·자동 시작",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "파일 로그",
-          "status": "done"
+          "status": "done",
+          "verified": true
         },
         {
           "name": "자동 업데이트",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         }
       ]
     },
@@ -437,23 +525,28 @@
       "items": [
         {
           "name": "음성 채널 참가",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "화면 공유 송신",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "화면 공유 수신",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "오디오 장치·볼륨",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         },
         {
           "name": "음성 UI",
-          "status": "implemented"
+          "status": "implemented",
+          "verified": false
         }
       ]
     }

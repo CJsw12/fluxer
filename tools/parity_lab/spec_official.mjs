@@ -13,8 +13,9 @@ import {Cdp, clientInfo, helpers, pageWsUrl, sleep} from './lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
+const DEFAULT_EXPECTED_WEB_BUILD = 'Web 2026.1120';
 const argv = process.argv.slice(2);
-const opts = {attach: null, out: null, viewport: null, hover: [], scenes: null, outDir: null};
+const opts = {attach: null, out: null, viewport: null, hover: [], scenes: null, outDir: null, expectedWebBuild: null};
 for (let i = 0; i < argv.length; i++) {
 	const a = argv[i];
 	if (a === '--attach') opts.attach = Number(argv[++i]);
@@ -23,11 +24,44 @@ for (let i = 0; i < argv.length; i++) {
 	else if (a === '--hover') opts.hover.push(argv[++i]);
 	else if (a === '--scenes') opts.scenes = argv[++i];
 	else if (a === '--out-dir') opts.outDir = argv[++i];
+	else if (a === '--expected-web-build') opts.expectedWebBuild = argv[++i];
 }
 if (!opts.attach || !(opts.out || (opts.scenes && opts.outDir))) {
-	console.error('usage: node spec_official.mjs --attach <port> --out <spec.json> [--hover <flx>]... [--viewport 1280x800]');
-	console.error('   or: node spec_official.mjs --attach <port> --scenes <scenes.json> --out-dir <dir> [--viewport 1280x800]');
+	console.error('usage: node spec_official.mjs --attach <port> --out <spec.json> [--hover <flx>]... [--viewport 1280x800] [--expected-web-build <ver>]');
+	console.error('   or: node spec_official.mjs --attach <port> --scenes <scenes.json> --out-dir <dir> [--viewport 1280x800] [--expected-web-build <ver>]');
 	process.exit(2);
+}
+
+function resolveExpectedWebBuild() {
+	if (opts.expectedWebBuild) return opts.expectedWebBuild.trim();
+	try {
+		const baseline = JSON.parse(readFileSync(join(HERE, 'spec_baseline.json'), 'utf8'));
+		if (typeof baseline.official_client === 'string' && baseline.official_client.trim()) {
+			return baseline.official_client.trim();
+		}
+	} catch {}
+	return DEFAULT_EXPECTED_WEB_BUILD;
+}
+
+function extractWebBuild(info) {
+	if (typeof info !== 'string') return null;
+	const m = info.match(/Web\s+(\d{4}\.\d+(?:\.\d+)?)/i);
+	return m ? `Web ${m[1]}` : null;
+}
+
+function checkVersionWarning(clientInfoStr, expectedRaw) {
+	const actualWeb = extractWebBuild(clientInfoStr);
+	const expectedWeb = extractWebBuild(expectedRaw) ?? (expectedRaw ? `Web ${expectedRaw.replace(/^Web\s+/i, '').trim()}` : null);
+	if (!actualWeb || !expectedWeb) return null;
+	const exact = actualWeb.toLowerCase() === expectedWeb.toLowerCase();
+	const prefixMatch = !expectedWeb.slice(4).includes('.') ? false : actualWeb.toLowerCase().startsWith(`${expectedWeb.toLowerCase()}.`);
+	if (exact || prefixMatch) return null;
+	return {
+		expected: expectedWeb,
+		actual: actualWeb,
+		client_info: clientInfoStr,
+		message: `official web build mismatch: expected ${expectedWeb}, got ${actualWeb} (${clientInfoStr})`,
+	};
 }
 
 const PROPS = [
@@ -315,9 +349,16 @@ async function capture(hoverList) {
 		if (Object.keys(hd).length) e.hover_delta = hd;
 	}
 
+	const client = await clientInfo(cdp);
+	const expectedWebBuild = resolveExpectedWebBuild();
+	const versionWarning = checkVersionWarning(client, expectedWebBuild);
+	if (versionWarning) console.error(`WARN: ${versionWarning.message}`);
+
 	const spec = {
 		version: 1,
-		client_info: await clientInfo(cdp),
+		client_info: client,
+		expected_web_build: expectedWebBuild,
+		...(versionWarning ? {version_warning: versionWarning} : {}),
 		theme_class: page.theme,
 		viewport: page.viewport,
 		hover_requests: hoverList,

@@ -24,6 +24,7 @@ FONT_STACK = (
 
 COLOR_DONE = "#3fb950"
 COLOR_IMPLEMENTED = "#58a6ff"
+COLOR_UNVERIFIED = "#a371f7"
 COLOR_PARTIAL = "#d29922"
 COLOR_TODO = "#484f58"
 COLOR_BG = "#0d1117"
@@ -31,34 +32,46 @@ COLOR_TEXT = "#e6edf3"
 COLOR_MUTED = "#8b949e"
 COLOR_TRACK = "#21262d"
 
-STATUS_ORDER = ("done", "implemented", "partial", "todo")
+STATUS_ORDER = ("done", "implemented", "unverified", "partial", "todo")
 STATUS_LABEL = {
     "done": "실기 완료",
     "implemented": "구현 완료",
+    "unverified": "미검증",
     "partial": "부분 구현",
     "todo": "미착수",
 }
 STATUS_ICON = {
     "done": "🟢",
     "implemented": "🔵",
+    "unverified": "🟣",
     "partial": "🟡",
     "todo": "⚪",
 }
 STATUS_COLOR = {
     "done": COLOR_DONE,
     "implemented": COLOR_IMPLEMENTED,
+    "unverified": COLOR_UNVERIFIED,
     "partial": COLOR_PARTIAL,
     "todo": COLOR_TODO,
 }
 STATUS_WEIGHT = {
     "done": 1.0,
     "implemented": 0.75,
+    "unverified": 0.5,
     "partial": 0.5,
     "todo": 0.0,
 }
 
 # Areas left out of the "daily driver" badge.
 DAILY_DRIVER_EXCLUDED = {"voice", "guilds", "search", "i18n"}
+
+
+def display_status(item: dict) -> str:
+    """Return effective status: implemented/done with verified=False maps to 'unverified'."""
+    status = item.get("status", "todo")
+    if status in ("done", "implemented") and not item.get("verified", False):
+        return "unverified"
+    return status
 
 
 def esc(text: str) -> str:
@@ -76,14 +89,14 @@ def esc(text: str) -> str:
 def count_statuses(items: list[dict]) -> dict[str, int]:
     counts = {status: 0 for status in STATUS_ORDER}
     for item in items:
-        status = item.get("status", "todo")
+        status = display_status(item)
         if status in counts:
             counts[status] += 1
     return counts
 
 
 def score(items: list[dict]) -> float:
-    return sum(STATUS_WEIGHT.get(item["status"], 0.0) for item in items)
+    return sum(STATUS_WEIGHT.get(display_status(item), 0.0) for item in items)
 
 
 def percent(items: list[dict]) -> float:
@@ -213,11 +226,12 @@ def write_map(path: Path, data: dict) -> None:
     all_items = [item for area in areas for item in area["items"]]
     counts = count_statuses(all_items)
     header_summary = (
-        "기준일 %s · 실기 %d · 구현 %d · 부분 %d · 미착수 %d"
+        "기준일 %s · 실기 %d · 구현 %d · 미검증 %d · 부분 %d · 미착수 %d"
         % (
             data.get("updated", ""),
             counts["done"],
             counts["implemented"],
+            counts["unverified"],
             counts["partial"],
             counts["todo"],
         )
@@ -270,7 +284,7 @@ def write_map(path: Path, data: dict) -> None:
         )
 
         for item_index, item in enumerate(items):
-            status = item["status"]
+            status = display_status(item)
             color = STATUS_COLOR.get(status, COLOR_TODO)
             x = grid_x + item_index * pitch
             tooltip = "%s : %s" % (
@@ -314,7 +328,7 @@ def write_map(path: Path, data: dict) -> None:
             legend_y + 10,
             COLOR_MUTED,
             esc(FONT_STACK),
-            esc("실기 1 · 구현 0.75 · 부분 0.5"),
+            esc("실기 1 · 구현 0.75 · 미검증 0.5 · 부분 0.5"),
         )
     )
     out.append("</svg>\n")
@@ -322,7 +336,7 @@ def write_map(path: Path, data: dict) -> None:
 
 
 def sync_readme(readme_path: Path, data: dict) -> bool:
-    """Update the block between <!-- progress:start --> and <!-- progress:end -->."""
+    """Update <!-- progress:start -->..<!-- progress:end --> and the <sub> legend line right below it."""
     if not readme_path.exists():
         return False
 
@@ -345,7 +359,7 @@ def sync_readme(readme_path: Path, data: dict) -> bool:
     )
 
     lines = [
-        "**기준일 %s** · 전체 **%s** · 일상 사용(%s 제외) **%s** · 실기 완료 %d · 구현 완료 %d · 부분 구현 %d · 미착수 %d"
+        "**기준일 %s** · 전체 **%s** · 일상 사용(%s 제외) **%s** · 실기 완료 %d · 구현 완료 %d · 미검증 %d · 부분 구현 %d · 미착수 %d"
         % (
             data.get("updated", ""),
             percent_label(all_items),
@@ -353,6 +367,7 @@ def sync_readme(readme_path: Path, data: dict) -> bool:
             percent_label(daily_items),
             counts["done"],
             counts["implemented"],
+            counts["unverified"],
             counts["partial"],
             counts["todo"],
         ),
@@ -368,7 +383,7 @@ def sync_readme(readme_path: Path, data: dict) -> bool:
         items = area["items"]
         grouped = []
         for status in STATUS_ORDER:
-            names = [item["name"] for item in items if item.get("status") == status]
+            names = [item["name"] for item in items if display_status(item) == status]
             if names:
                 grouped.append("%s %s" % (STATUS_ICON[status], ", ".join(names)))
         area_name = area["name"].replace("|", "\\|")
@@ -378,20 +393,64 @@ def sync_readme(readme_path: Path, data: dict) -> bool:
     lines.extend(["", "</details>"])
     block = "\n".join(lines)
 
+    tail = content[end_idx + len(end_marker) :]
+    legend_line = (
+        "<sub>초록 = 실기 완료(1.0), 파랑 = 구현 완료·자동 테스트 통과(0.75), "
+        "보라 = 미검증(0.5, 실기·자동 시험 미확인), 노랑 = 부분 구현(0.5), 회색 = 미착수(0.0). "
+        "퍼센트는 항목 수 가중 평균이며 작업량 비율이 아닙니다. "
+        "데이터: [`docs/progress/progress.json`](docs/progress/progress.json), "
+        "생성: `python -I scripts/progress_svg.py`. 상세 기록: [`PROGRESS.md`](PROGRESS.md).</sub>"
+    )
+    sub_start = tail.find("<sub>")
+    sub_end = tail.find("</sub>", sub_start) if sub_start != -1 else -1
+    if sub_start != -1 and sub_end != -1 and "\n\n" not in tail[:sub_start].replace("\r\n", "\n").lstrip("\n"):
+        tail = tail[:sub_start] + legend_line + tail[sub_end + len("</sub>") :]
+
     new_content = (
         content[: start_idx + len(start_marker)]
         + "\n"
         + block
         + "\n"
-        + content[end_idx:]
+        + end_marker
+        + tail
     )
     readme_path.write_text(new_content, encoding="utf-8")
     return True
 
 
+def selftest() -> None:
+    items = [
+        {"name": "a", "status": "done", "verified": True},
+        {"name": "b", "status": "implemented", "verified": True},
+        {"name": "c", "status": "implemented", "verified": False},
+        {"name": "d", "status": "partial", "verified": False},
+        {"name": "e", "status": "todo", "verified": False},
+    ]
+    assert [display_status(i) for i in items] == [
+        "done",
+        "implemented",
+        "unverified",
+        "partial",
+        "todo",
+    ]
+    counts = count_statuses(items)
+    assert counts == {"done": 1, "implemented": 1, "unverified": 1, "partial": 1, "todo": 1}, counts
+    assert abs(score(items) - (1.0 + 0.75 + 0.5 + 0.5 + 0.0)) < 1e-9
+    assert percent_label(items) == "55%"
+
+    data = json.loads(INPUT.read_text(encoding="utf-8"))
+    for area in data["areas"]:
+        for item in area["items"]:
+            assert isinstance(item.get("verified"), bool), f"missing boolean verified on {item}"
+    print("selftest ok")
+
+
 def main() -> None:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
+    if "--selftest" in sys.argv[1:]:
+        selftest()
+        return
 
     data = json.loads(INPUT.read_text(encoding="utf-8"))
     areas = data["areas"]
@@ -420,12 +479,13 @@ def main() -> None:
     synced = sync_readme(ROOT / "README.md", data)
 
     print(
-        "overall: %s (%d items: done=%d, implemented=%d, partial=%d, todo=%d)"
+        "overall: %s (%d items: done=%d, implemented=%d, unverified=%d, partial=%d, todo=%d)"
         % (
             percent_label(all_items),
             len(all_items),
             counts["done"],
             counts["implemented"],
+            counts["unverified"],
             counts["partial"],
             counts["todo"],
         )

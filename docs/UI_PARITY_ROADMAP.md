@@ -70,19 +70,24 @@
   - Rust 아이콘 자산을 이 원본으로 교체한다. Fluxer 자체 아이콘(`ui.icons.*`)과 굵기 차이를 포함한다.
   - 경로 일치를 확인하는 테스트를 추가한다.
   - 기준 세트에 공식 빌드 문자열을 함께 기록한다.
-- [ ] **M9.10 기준 버전 고정** — 진행(2026-11-24): 저장소 `main`을 업스트림 `3608a387c`(2026-11-23)로 맞추고 `desktop-rs`에 병합했다(`3cc9d8ffb`). 업스트림 44개 커밋 중 `fluxer_app/src` 64개 파일이 바뀌었고 아이콘·SVG 파일 변경은 없었다. 비교 앱은 Web 2026.1120이라 이제 저장소가 더 새롭다. 비교 앱을 최신으로 올리거나 저장소 `fluxer_app` 빌드를 기준으로 쓰는 일은 남았다.
-  - 비교 앱의 자동 업데이트를 막는다(`FLUXER_DISABLE_MODULE_UPDATES`).
-  - 저장소 `upstream/main`을 그 빌드(현재 Web 2026.1120)에 맞추거나, 저장소 `fluxer_app`을 직접 빌드해 기준으로 쓴다. 버전이 다르면 비교 결과에 경고를 낸다.
+- [ ] **M9.10 기준 버전 고정** — 진행(2026-11-26):
+  - `docs/PARITY_LAB.md` 10.1에 비교 앱 자동 업데이트 방지 환경변수(`FLUXER_DISABLE_MODULE_UPDATES=1`) 사용법을 문서화했다.
+  - `tools/parity_lab/spec_official.mjs`와 `tools/parity_lab/compare.py`에 공식 캡처 `client_info`(`Web YYYY.MMDD...`)와 기준 빌드(`--expected-web-build` 또는 `spec_baseline.json`의 `official_client`, 기본 `Web 2026.1120`)가 다를 때 stderr 경고 및 JSON `version_warning` 필드를 기록하는 기능을 추가했다(`--selftest` 통과).
+  - **남은 작업:** 저장소 `main`은 업스트림 `3608a387c`(2026-11-23, `desktop-rs` 병합 `3cc9d8ffb`)인 반면 현재 비교 앱은 `Web 2026.1124.64728`이라 테스트 서버와 세션/음성 타임아웃이 발생한다. 비교 앱 버전을 테스트 서버·저장소와 정렬하거나 저장소 `fluxer_app` 빌드를 기준으로 고정해야 완료된다.
 - [x] **M9.11 테마 토큰 자동 생성** — 완료(2026-11-26): `tools/parity_lab/theme_tokens_rs.py`에 `--multi` 모드와 `color(srgb ...)` 해석을 추가해 `fluxer_client/app/src/theme_tokens_generated.rs`(dark 654·light 656, 총 1,310개 토큰·682개 RGBA 상수)를 자동 생성하고, `Theme::from_kind(Dark/Light)` 공식 토큰 필드를 생성 상수에 연동 및 단위 테스트로 검증했다.
-- [ ] **M9.12 컴포넌트 헤드리스 스냅샷**
-  - GPUI 헤드리스 렌더로 주요 컴포넌트(레일 항목, 채널 행, 메시지, 팝오버)를 상태별로 그려 구조(JSON)와 픽셀(허용 오차) 스냅샷을 CI에서 비교한다.
-  - crates.io 릴리스에 오프스크린 렌더가 없으면 Zed 커밋 고정 여부를 먼저 검토한다.
-- [ ] **M9.13 웹뷰 혼용 판단 기준**
-  - Discord처럼 1:1 비용이 큰 영역(영상·화면 공유 뷰어 등)은 WebView2 혼용을 선택지로 평가한다.
-  - 영역마다 "네이티브 구현 / 웹뷰" 결정과 근거를 기록한다.
-- [ ] **M9.6 진행도 집계 기준 변경**
-  - `docs/progress/progress.json`에 `verified`(자동 기능 시험 또는 실측 비교 통과)를 따로 두고, 동작을 끝까지 확인하지 않은 항목은 "구현"이 아니라 "미검증"으로 센다.
-  - README 배지도 이 기준으로 다시 계산한다.
+- [x] **M9.12 컴포넌트 헤드리스 스냅샷** — 기술 검토·결정 완료(2026-11-26):
+  - `fluxer_client/app/Cargo.toml`의 `dev-dependencies`는 `gpui = { package = "gpui-pre", version = "=0.3.12", features = ["test-support"] }`를 사용하며(`gpui-kit`과 동일 핀), 실제 확인 결과 `gpui-pre 0.3.12`의 `TestWindow::render_to_image`는 `HeadlessRenderer` 팩토리가 설정되지 않아 `"render_to_image not available: no HeadlessRenderer configured"` 오류를 반환한다.
+  - **결정:** 현 단계에서는 `TestAppContext` 기반 구조적 단위 테스트와 동일 데스크톱 실기 프로브 스크린샷(`rust_probe.py`·`spec_gate.py`·`compare.py`) 체계를 유지하고, 추후 업스트림(`gpui-pre`/Zed)에서 헤드리스 렌더러가 제공될 때 컴포넌트 픽셀 스냅샷을 확장한다.
+- [x] **M9.13 웹뷰 혼용 판단 기준** — 기준 수립·결정 완료(2026-11-26):
+  - **결정:** 채팅·레일·사이드바·설정·팝오버·음성 스테이지 및 화면 공유 뷰어 등 핵심 UI는 모두 네이티브 GPUI를 유지한다. `fluxer_desktop_rs`(WebView2) 혼용은 향후 고비용 리치 임베드나 인터랙티브 웹 액티비티처럼 네이티브 구현 비용이 과도한 영역에만 제한적으로 검토한다.
+  - | 영역 | 결정 | 근거 |
+    |---|---|---|
+    | 채팅·메시지·마크다운·컴포저 | 네이티브 GPUI 유지 | 가상 목록 선택·단축키·응답성과 `.flx` 실측 패리티 이미 확보 |
+    | 길드 레일·사이드바·멤버 목록·DM | 네이티브 GPUI 유지 | `spec_gate` 수렴 완료, 저지연 상태 갱신 필수 |
+    | 설정·팝오버·모달·단축키 편집 | 네이티브 GPUI 유지 | 공식 토큰(`Theme`)·아이콘·`AppState` 직접 연동 |
+    | 음성 스테이지·화면 공유 피커/뷰어 | 네이티브 GPUI 유지 | `voice_worker` I420/BGRA 네이티브 파이프라인 및 피커 구현 완료 |
+    | 고비용 리치 임베드·외부 웹 액티비티(향후) | WebView2 혼용 후보 | 복잡한 동적 JS/HTML 위젯은 네이티브 재구현 대비 비용이 과도함 |
+- [x] **M9.6 진행도 집계 기준 변경** — 완료(2026-11-26): `docs/progress/progress.json` 모든 항목에 `"verified": true | false`를 명시하고 `scripts/progress_svg.py`·배지·진행 지도·`README.md` 범례에 `"미검증"`(`unverified`) 집계를 반영했다(`--selftest` 통과).
 
 ---
 

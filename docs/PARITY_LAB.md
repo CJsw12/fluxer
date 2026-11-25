@@ -136,7 +136,7 @@ Git Bash에서는 `/channels/...` 인자가 Windows 경로로 바뀌지 않도�
 세 프로세스를 띄워 둔 채로 개발한다. 접속 정보·키·계정은 저장소 밖 비공개 위치에 있다(경로는 에이전트 메모리와 비공개 메모 참고).
 1. **시험 서버 터널**: 로컬 443을 시험 서버로 포워딩하는 SSH 터널. hosts에 시험 도메인이 127.0.0.1로 등록돼 있고 서버 루트 인증서는 Windows 신뢰 저장소에 있다.
 2. **Rust 클라이언트**: `dist/fluxer_client/fluxer_client.exe --no-os-integration`을 `FLUXER_PARITY_PROBE=1`과 시험 프로필용 `LOCALAPPDATA`로 실행한다. `SSL_CERT_FILE`은 설정하지 않는다(없는 파일을 가리키면 TLS가 실패해 `Reconnecting…`에서 멈춘다). 연결 확인은 `orca computer get-app-state --app fluxer_client --no-screenshot --query Status` → `Status: Online`.
-3. **공식 비교 앱**: 포터블 공식 데스크톱 사본을 `--remote-debugging-port=9334`로 실행한다(다크 테마, tester2). 사용자가 평소 쓰는 공식 앱(`%LOCALAPPDATA%\fluxer_desktop`)과 같은 이름(`Fluxer.exe`)이므로 경로로 구분하고, 개인 앱에는 절대 붙지 않는다.
+3. **공식 비교 앱**: 포터블 공식 데스크톱 사본을 `--remote-debugging-port=9334`로 실행한다(다크 테마, tester2). 자동 업데이트로 기준 빌드가 바뀌지 않도록 실행 전 환경변수 `FLUXER_DISABLE_MODULE_UPDATES=1`(PowerShell: `$env:FLUXER_DISABLE_MODULE_UPDATES = "1"`)을 설정한다. 사용자가 평소 쓰는 공식 앱(`%LOCALAPPDATA%\fluxer_desktop`)과 같은 이름(`Fluxer.exe`)이므로 경로로 구분하고, 개인 앱에는 절대 붙지 않는다.
 
 - 세 프로세스는 에이전트 도구의 백그라운드 실행(최대 2시간)으로 띄우면 시간이 지나 강제 종료된다. `pwsh`의 `Start-Process`로 분리 실행한다. 클라이언트에 줄 `FLUXER_PARITY_PROBE`·`LOCALAPPDATA`는 같은 `pwsh` 세션에서 `$env:`로 설정한 뒤 실행하면 상속된다. SSH 키 경로에 공백이 있으면 인자에 따옴표를 넣어야 하며, 그렇지 않으면 터널이 조용히 바로 종료된다.
 

@@ -20,10 +20,74 @@ from collections import defaultdict
 from pathlib import Path
 
 SUFFIX = re.compile(r"--\d+$")
+WEB_BUILD_RE = re.compile(r"Web\s+(\d{4}\.\d+(?:\.\d+)?)", re.IGNORECASE)
+DEFAULT_EXPECTED_WEB_BUILD = "Web 2026.1120"
 
 
 def base(flx: str) -> str:
     return SUFFIX.sub("", flx)
+
+
+def _extract_web_build(info: str | None) -> str | None:
+    if not isinstance(info, str) or not info.strip():
+        return None
+    m = WEB_BUILD_RE.search(info)
+    return f"Web {m.group(1)}" if m else None
+
+
+def resolve_expected_web_build(cli_expected: str | None = None) -> str:
+    if cli_expected and cli_expected.strip():
+        return cli_expected.strip()
+    baseline = Path(__file__).resolve().with_name("spec_baseline.json")
+    if baseline.exists():
+        try:
+            data = json.loads(baseline.read_text(encoding="utf-8"))
+            oc = data.get("official_client")
+            if isinstance(oc, str) and oc.strip():
+                return oc.strip()
+        except Exception:
+            pass
+    return DEFAULT_EXPECTED_WEB_BUILD
+
+
+def check_version_warning(client_info: str | None, expected_raw: str | None) -> dict | None:
+    actual_web = _extract_web_build(client_info)
+    if not expected_raw:
+        return None
+    expected_web = _extract_web_build(expected_raw) or f"Web {expected_raw.strip().removeprefix('Web ').strip()}"
+    if not actual_web or not expected_web:
+        return None
+    if actual_web.lower() == expected_web.lower() or actual_web.lower().startswith(f"{expected_web.lower()}."):
+        return None
+    return {
+        "expected": expected_web,
+        "actual": actual_web,
+        "client_info": client_info,
+        "message": f"official web build mismatch: expected {expected_web}, got {actual_web} ({client_info})",
+    }
+
+
+def _read_official_client_info(official_path: Path, cli_client: str | None = None) -> str | None:
+    if cli_client and cli_client.strip():
+        return cli_client.strip()
+    try:
+        raw = json.loads(official_path.read_text(encoding="utf-8"))
+        if isinstance(raw, dict):
+            ci = raw.get("client_info") or raw.get("client")
+            if isinstance(ci, str) and ci.strip():
+                return ci.strip()
+    except Exception:
+        pass
+    manifest = official_path.parent / "manifest.json"
+    if manifest.exists():
+        try:
+            mdata = json.loads(manifest.read_text(encoding="utf-8"))
+            ci = mdata.get("client") or mdata.get("client_info")
+            if isinstance(ci, str) and ci.strip():
+                return ci.strip()
+        except Exception:
+            pass
+    return None
 
 
 def load_official(path: Path, offset: tuple[int, int] = (0, 0)) -> dict[str, list[dict]]:
@@ -625,6 +689,12 @@ def selftest() -> None:
             with Image.open(crop_file) as panel:
                 assert panel.width == item["rust"][2] * 3 and panel.height == item["rust"][3]
         assert rep_diff["style_pixel_audit"]["diff_targets"] >= 3, rep_diff["style_pixel_audit"]
+
+        # 3. Version warning check
+        warn = check_version_warning("Stable Desktop 2026.1117.40548, Web 2026.1124.64728", "Web 2026.1120")
+        assert warn is not None and warn["expected"] == "Web 2026.1120" and warn["actual"] == "Web 2026.1124.64728", warn
+        assert check_version_warning("Stable Desktop 2026.1117.40548, Web 2026.1120.1", "Web 2026.1120") is None
+        assert check_version_warning("Web 2026.1120", "Web 2026.1120") is None
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("selftest ok")
@@ -642,8 +712,18 @@ def main(argv: list[str]) -> int:
     out = Path(argv[2])
     out.mkdir(parents=True, exist_ok=True)
     off = tuple(int(v) for v in opts.get("--official-offset", "0,0").split(","))
-    report = compare(load_official(Path(argv[0]), off), load_rust(Path(argv[1])), int(opts.get("--tol", 2)))
+    official_path = Path(argv[0])
+    report = compare(load_official(official_path, off), load_rust(Path(argv[1])), int(opts.get("--tol", 2)))
     report["official_offset"] = list(off)
+    official_client = _read_official_client_info(official_path, opts.get("--official-client"))
+    expected_web = resolve_expected_web_build(opts.get("--expected-web-build"))
+    version_warning = check_version_warning(official_client, expected_web)
+    if official_client:
+        report["official_client"] = official_client
+    report["expected_web_build"] = expected_web
+    if version_warning:
+        report["version_warning"] = version_warning
+        print(f"WARN: {version_warning['message']}", file=sys.stderr)
     (out / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
     if "--official-png" in opts and "--rust-png" in opts:
         official_png = Path(opts["--official-png"])

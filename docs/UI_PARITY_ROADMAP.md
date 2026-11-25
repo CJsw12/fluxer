@@ -51,11 +51,11 @@
   - Rust가 화면 공유를 시작하면, 공식 비교 앱이 원격 영상 트랙의 프레임 수신(`getStats`·`videoWidth > 0`·프레임 증가)을 확인한다. 반대 방향도 시험한다.
   - 음성은 말하기 표시(speaking)와 오디오 레벨로 판정한다.
   - **수락 기준:** 화면 공유 실패가 자동 시험에서 재현되고, 수정 뒤 통과한다.
-- [ ] **M9.7 요소 단위 픽셀 비교**
+- [x] **M9.7 요소 단위 픽셀 비교** — 완료(2026-11-26): `tools/parity_lab/compare.py`에 `official_offset`을 반영한 4x4 이상 짝지은 요소 박스별 RGB `pixel_mae` 및 휘도 기반 `ssim`(`C1=(0.01*255)^2`, `C2=(0.03*255)^2`) 계산, SSIM 최저·MAE 최고 상위 10개 나란히 비교 이미지(`<out>/worst_crops/<rank>_<safe_flx>.png`, 공식 | Rust | 3배 증폭 diff), `element_pixel_summary` 기록, `compare.py --selftest`를 구현·검증했다.
   - 짝지은 요소마다 두 스크린샷의 같은 박스를 잘라 픽셀 차이·구조 유사도(SSIM)를 계산한다.
   - 글자 모양(서버 이니셜 등), 아이콘 모양, 테두리·모서리 차이를 수치로 잡고, 차이가 큰 요소를 잘라낸 비교 이미지와 함께 보고한다.
   - 중앙값 색 비교는 보조로만 쓴다.
-- [ ] **M9.8 스타일 속성 비교 확대**
+- [x] **M9.8 스타일 속성 비교 확대** — 완료(2026-11-26): `tools/parity_lab/spec_official.mjs`에 `outline`·`outlineWidth`·`outlineColor`·`textTransform` 등 확장 속성을 보강하고, `tools/parity_lab/spec_delta.py`에 `extended_style` 감사 및 `--extended-styles` 플래그(기본 실행은 기존 `spec_baseline.json` 0회귀 유지)를 추가했으며, `tools/parity_lab/compare.py`에 첫 대상 4개(메인 콘텐츠 프레임·사이드바/멤버 목록 프레임·사용자 영역 카드·서버 이니셜) 픽셀 기반 가장자리·모서리 감사(`style_pixel_audit`)를 추가했다.
   - 캡처 항목에 변별 테두리 두께·색, 모서리별 반경, `boxShadow`, `outline`, `letterSpacing`, `textTransform`을 추가하고, 비교기가 이 값을 판정한다.
   - Rust 쪽은 픽셀 기반(가장자리·모서리 샘플)으로 대조한다.
   - 첫 대상:

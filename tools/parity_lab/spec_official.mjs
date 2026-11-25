@@ -36,8 +36,8 @@ const PROPS = [
 	'borderTopWidth', 'borderRightWidth', 'borderBottomWidth', 'borderLeftWidth',
 	'borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor',
 	'borderTopLeftRadius', 'borderTopRightRadius', 'borderBottomRightRadius', 'borderBottomLeftRadius',
-	'backgroundColor', 'color', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'opacity',
-	'boxShadow', 'overflowX', 'overflowY', 'transform',
+	'backgroundColor', 'color', 'fontSize', 'fontWeight', 'lineHeight', 'letterSpacing', 'textTransform', 'opacity',
+	'boxShadow', 'outline', 'outlineWidth', 'outlineColor', 'overflowX', 'overflowY', 'transform',
 ];
 
 // Page side: every [data-flx] in document order. `rendered` = has a layout box; idx counts rendered

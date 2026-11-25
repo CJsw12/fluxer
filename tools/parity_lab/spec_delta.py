@@ -155,6 +155,10 @@ def declared_props(el: dict) -> set[str]:
                 out |= {f"bw-{s}" for s in SIDES} | {f"bc-{s}" for s in SIDES}
             elif m := re.fullmatch(r"border-(top|right|bottom|left)(-(width|color|style))?", n):
                 out |= {f"bw-{m.group(1)}", f"bc-{m.group(1)}"}
+            elif n == "outline":
+                out |= {"outline", "outline-width", "outline-color"}
+            elif n in ("outline-width", "outline-color"):
+                out.add(n)
             elif n in ("background", "background-color"):
                 out.add("background-color")
             elif n == "font":
@@ -170,7 +174,7 @@ def rule_label(el: dict, *names: str) -> str:
         if rule.get("state"):
             continue
         props = {k.lower() for k in rule.get("props", {})}
-        if any(n in props or any(p.startswith(n + "-") for p in props if n in ("border", "padding", "gap", "background", "font")) for n in names):
+        if any(n in props or any(p.startswith(n + "-") for p in props if n in ("border", "outline", "padding", "gap", "background", "font")) for n in names):
             cls = f" .{rule['class']}" if rule.get("class") else ""
             return f"[{Path(rule['file']).name}{cls}]"
     return "[computed]"
@@ -190,7 +194,12 @@ def _find_rust_parent(parent_flx: str | None, rect, by_flx):
     return None
 
 
-def spec_delta(spec: dict, rust_elements: list[dict], scope: list[str] | None = None) -> dict:
+def spec_delta(
+    spec: dict,
+    rust_elements: list[dict],
+    scope: list[str] | None = None,
+    include_extended: bool = False,
+) -> dict:
     scope = [s for s in (scope or []) if s]
     in_scope = (lambda f: any(f.startswith(p) for p in scope)) if scope else (lambda f: True)
 
@@ -199,6 +208,7 @@ def spec_delta(spec: dict, rust_elements: list[dict], scope: list[str] | None = 
         rust_by_flx.setdefault(e["flx"], []).append(e)
 
     deltas: list[dict] = []
+    ext_deltas: list[dict] = []
     joined = 0
     unknown = {"floating": 0, "no_style": 0}
     missing: dict[str, int] = {}
@@ -219,18 +229,22 @@ def spec_delta(spec: dict, rust_elements: list[dict], scope: list[str] | None = 
         cs = el.get("computed", {})
         src = _rust_src(rs.get("src"))
 
+        def _make_delta(prop, off, rust, *css_names):
+            return {
+                "flx": flx,
+                "idx": idx,
+                "prop": prop,
+                "official": off,
+                "rust": rust,
+                "rule": rule_label(el, *css_names) if css_names else "[box]",
+                "src": src,
+            }
+
         def add(prop, off, rust, *css_names):
-            deltas.append(
-                {
-                    "flx": flx,
-                    "idx": idx,
-                    "prop": prop,
-                    "official": off,
-                    "rust": rust,
-                    "rule": rule_label(el, *css_names) if css_names else "[box]",
-                    "src": src,
-                }
-            )
+            deltas.append(_make_delta(prop, off, rust, *css_names))
+
+        def add_ext(prop, off, rust, *css_names):
+            ext_deltas.append(_make_delta(prop, off, rust, *css_names))
 
         # rect (box metric, always declared)
         orect, rrect = el["rect"], rs.get("rect")
@@ -290,6 +304,10 @@ def spec_delta(spec: dict, rust_elements: list[dict], scope: list[str] | None = 
                 r, o = min(r, cap), min(o, cap)
             if r is not None and o is not None and f"radius-{key}" in decl and abs(r - o) > 0.5:
                 add("radius-" + key.replace("_", "-"), num(o), num(r), "border-radius")
+            elif r is None and o is not None and f"radius-{key}" in decl:
+                o_cap = min(o, cap) if cap is not None else o
+                if o_cap > 0.5:
+                    add_ext("radius-" + key.replace("_", "-"), num(o_cap), "0", "border-radius")
 
         # border widths and colour
         bws = style.get("border_widths") or {}
@@ -299,10 +317,22 @@ def spec_delta(spec: dict, rust_elements: list[dict], scope: list[str] | None = 
             o = parse_len(cs.get(f"border{s.capitalize()}Width"))
             if r is not None and o is not None and f"bw-{s}" in decl and abs(r - o) > 0.5:
                 add(f"border-{s}", num(o), num(r), "border")
+            elif r is None and o is not None and f"bw-{s}" in decl and o > 0.5:
+                add_ext(f"border-{s}", num(o), "0", "border")
+            elif r is not None and r > 0.5 and o is not None and o <= 0.5 and f"bw-{s}" not in decl:
+                add_ext(f"border-{s}", num(o), num(r), "border")
+
+            side_rc = parse_color(style.get(f"border_{s}_color")) if isinstance(style.get(f"border_{s}_color"), str) else rb_color
+            oc = parse_color(cs.get(f"border{s.capitalize()}Color"))
             if r and o and f"bc-{s}" in decl and rb_color is not None:
-                oc = parse_color(cs.get(f"border{s.capitalize()}Color"))
                 if colors_differ(oc, rb_color):
                     add(f"border-{s}-color", fmt_color(oc), fmt_color(rb_color), "border")
+            elif o and o > 0.5 and f"bc-{s}" in decl:
+                if side_rc is None:
+                    if oc is not None:
+                        add_ext(f"border-{s}-color", fmt_color(oc), "none", "border")
+                elif side_rc is not rb_color and colors_differ(oc, side_rc):
+                    add_ext(f"border-{s}-color", fmt_color(oc), fmt_color(side_rc), "border")
 
         # background
         if "background-color" in decl and style.get("background") is not None:
@@ -333,6 +363,47 @@ def spec_delta(spec: dict, rust_elements: list[dict], scope: list[str] | None = 
         if r is not None and o is not None and "line-height" in decl and abs(r - o) > 0.5:
             add("line-height", num(o), num(r), "line-height", "font")
 
+        # extended style audit (M9.8): boxShadow, outline, letterSpacing, textTransform
+        raw_shadow = (cs.get("boxShadow") or "").strip()
+        o_has_shadow = bool(raw_shadow) and raw_shadow.lower() != "none"
+        r_shadows = style.get("box_shadows")
+        if r_shadows is None and style.get("box_shadow") is not None:
+            r_shadows = [style["box_shadow"]]
+        r_has_shadow = bool(r_shadows)
+        if "box-shadow" in decl and o_has_shadow != r_has_shadow:
+            add_ext("box-shadow", raw_shadow if o_has_shadow else "none", f"{len(r_shadows)} shadow(s)" if r_has_shadow else "none", "box-shadow")
+
+        if any(k in decl for k in ("outline", "outline-width", "outline-color")):
+            raw_outline = f" {(cs.get('outline') or '').strip().lower()} "
+            o_ow = parse_len(cs.get("outlineWidth"))
+            r_ow = parse_len(style.get("outline_width"))
+            if o_ow is not None and o_ow > 0.5 and " none " not in raw_outline:
+                if r_ow is None or abs(r_ow - o_ow) > 0.5:
+                    add_ext("outline-width", num(o_ow), num(r_ow or 0.0), "outline", "outline-width")
+                o_oc = parse_color(cs.get("outlineColor"))
+                r_oc = parse_color(style.get("outline_color")) if isinstance(style.get("outline_color"), str) else None
+                if o_oc is not None and (r_oc is None or colors_differ(o_oc, r_oc)):
+                    add_ext("outline-color", fmt_color(o_oc), fmt_color(r_oc) if r_oc else "none", "outline", "outline-color")
+
+        if "letter-spacing" in decl:
+            raw_ls = (cs.get("letterSpacing") or "").strip().lower()
+            o_ls = 0.0 if raw_ls == "normal" else parse_len(raw_ls)
+            r_ls = parse_len(text.get("letter_spacing"))
+            if o_ls is not None and abs((r_ls or 0.0) - o_ls) > 0.1:
+                add_ext("letter-spacing", num(o_ls), num(r_ls or 0.0), "letter-spacing")
+
+        if "text-transform" in decl:
+            o_tt = (cs.get("textTransform") or "none").strip().lower()
+            r_tt = str(text.get("text_transform") or style.get("text_transform") or "none").strip().lower()
+            if o_tt != r_tt:
+                add_ext("text-transform", o_tt, r_tt, "text-transform")
+
+    ext_by_prop: dict[str, int] = {}
+    for d in ext_deltas:
+        ext_by_prop[d["prop"]] = ext_by_prop.get(d["prop"], 0) + 1
+    if include_extended:
+        deltas.extend(ext_deltas)
+
     by_prop: dict[str, int] = {}
     for d in deltas:
         by_prop[d["prop"]] = by_prop.get(d["prop"], 0) + 1
@@ -346,6 +417,21 @@ def spec_delta(spec: dict, rust_elements: list[dict], scope: list[str] | None = 
         "missing_in_rust": dict(sorted(missing.items())),
         "rust_only": rust_only,
         "deltas": deltas,
+        "extended_style": {
+            "enabled": include_extended,
+            "checked_properties": [
+                "border-sides",
+                "corner-radii",
+                "box-shadow",
+                "outline-width",
+                "outline-color",
+                "letter-spacing",
+                "text-transform",
+            ],
+            "delta_count": len(ext_deltas),
+            "by_property": dict(sorted(ext_by_prop.items(), key=lambda kv: -kv[1])),
+            "deltas": ext_deltas,
+        },
     }
 
 
@@ -356,6 +442,7 @@ def delta_line(d: dict) -> str:
 
 
 def render_md(res: dict, spec: dict) -> str:
+    ext = res.get("extended_style") or {}
     out = [
         "# Spec delta (official vs Rust probe)",
         "",
@@ -363,6 +450,7 @@ def render_md(res: dict, spec: dict) -> str:
         f"- joined {res['joined']} | deltas {res['delta_count']} | missing in Rust {len(res['missing_in_rust'])} flx | "
         f"unknown (style missing) {res['unknown']['no_style']} | rust-only {len(res['rust_only'])}",
         f"- by property: {res['by_property']}",
+        f"- extended_style (enabled={ext.get('enabled', False)}): {ext.get('delta_count', 0)} deltas {ext.get('by_property', {})}",
         "",
     ]
     groups: dict[str, list[dict]] = {}
@@ -458,7 +546,7 @@ def run_scenes(argv: list[str]) -> int:
                 time.sleep(0.25)
             else:
                 raise RuntimeError(f"expect_flx not shown in Rust: {expect}")
-            res = spec_delta(spec, elements, sc.get("scope"))
+            res = spec_delta(spec, elements, sc.get("scope"), include_extended="--extended-styles" in argv)
             row.update(joined=res["joined"], deltas=res["delta_count"], missing=len(res["missing_in_rust"]))
             row["top"] = [delta_line(d) for d in res["deltas"][:3]]
             (out_dir / f"{slug}.md").write_text(render_md(res, spec), encoding="utf-8")
@@ -507,14 +595,15 @@ def main(argv: list[str]) -> int:
     spec = json.loads(Path(argv[0]).read_text(encoding="utf-8"))
     scope = [argv[i + 1] for i, a in enumerate(argv) if a == "--scope" and i + 1 < len(argv)]
     opt = lambda k: argv[argv.index(k) + 1] if k in argv else None  # noqa: E731
-    res = spec_delta(spec, _load_rust(argv), scope)
+    res = spec_delta(spec, _load_rust(argv), scope, include_extended="--extended-styles" in argv)
     if opt("--out-md"):
         Path(opt("--out-md")).write_text(render_md(res, spec), encoding="utf-8")
     if opt("--out-json"):
         Path(opt("--out-json")).write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
     print(
         f"joined={res['joined']} deltas={res['delta_count']} by_property={res['by_property']} "
-        f"missing_in_rust={len(res['missing_in_rust'])} unknown={res['unknown']} rust_only={len(res['rust_only'])}"
+        f"missing_in_rust={len(res['missing_in_rust'])} unknown={res['unknown']} rust_only={len(res['rust_only'])} "
+        f"extended_deltas={res['extended_style']['delta_count']}"
     )
     for d in res["deltas"][:40]:
         print(delta_line(d))
@@ -560,6 +649,57 @@ def selftest() -> None:
         ("probe_click", {"flx": "a.b", "index": 1}),
         ("probe_key", {"keystroke": "escape"}),
     ], fake_rp.calls
+    # Extended style audit (M9.8): default keeps base deltas untouched; --extended-styles merges them.
+    ext_el = {
+        "flx": "app.outline-frame.frame",
+        "idx": 0,
+        "rect": [0, 0, 200, 100],
+        "computed": {
+            "borderTopWidth": "1px",
+            "borderRightWidth": "0px",
+            "borderBottomWidth": "0px",
+            "borderLeftWidth": "1px",
+            "borderTopColor": "rgba(255, 255, 255, 0.1)",
+            "borderLeftColor": "rgba(255, 255, 255, 0.1)",
+            "borderTopLeftRadius": "14px",
+            "boxShadow": "0px 4px 12px rgba(0, 0, 0, 0.4)",
+            "outline": "rgb(255, 0, 0) solid 2px",
+            "outlineWidth": "2px",
+            "outlineColor": "rgb(255, 0, 0)",
+            "letterSpacing": "0.5px",
+            "textTransform": "uppercase",
+        },
+        "css_rules": [{
+            "file": "x/Frame.module.css",
+            "class": "frame",
+            "state": None,
+            "props": {
+                "border-top": "1px solid rgba(255,255,255,0.1)",
+                "border-left": "1px solid rgba(255,255,255,0.1)",
+                "border-top-left-radius": "14px",
+                "box-shadow": "0 4px 12px rgba(0,0,0,0.4)",
+                "outline": "2px solid red",
+                "letter-spacing": "0.5px",
+                "text-transform": "uppercase",
+            },
+        }],
+    }
+    ext_rust = [{"flx": "app.outline-frame.frame", "rect": [0, 0, 200, 100], "src": "app/client_view.rs:1",
+                 "style": {"border_widths": {"top": "1px"}, "border_color": "#ffffff1a"}}]
+    res_base = spec_delta({"elements": [ext_el]}, ext_rust)
+    assert res_base["delta_count"] == 0, res_base
+    assert not res_base["extended_style"]["enabled"]
+    ext_props = {d["prop"] for d in res_base["extended_style"]["deltas"]}
+    assert ext_props == {
+        "radius-top-left", "border-left", "box-shadow",
+        "outline-width", "outline-color", "letter-spacing", "text-transform",
+    }, ext_props
+
+    res_ext = spec_delta({"elements": [ext_el]}, ext_rust, include_extended=True)
+    assert res_ext["extended_style"]["enabled"]
+    assert res_ext["delta_count"] == len(ext_props), res_ext
+    assert {d["prop"] for d in res_ext["deltas"]} == ext_props
+
     print("selftest ok")
 
 

@@ -42,15 +42,15 @@
   - `tools/parity_lab/replay.py`에 깔끔한 Rust 기준선 캡처, `toggle_reverted` 복원, 깊이 1 `duplicate_screen` 중복 화면 검출(`--strict-no-duplicates`), 추가 팝오버 프로브(`extra_user_area_popout` 5/5·`extra_settings_modal` 2/2), 상태별 작업 목록(`backlog.json`·`backlog.md`) 생성을 구현해 59개 크롤 상태(`duplicate_screen 0`, `trigger_missing 27`, `opened_partial 32`)를 분류했다.
   - 복붙 핸들러 대신 공식 UI 흐름에 맞춰 길드 헤더 팝오버(`007`), 채널 알림 설정(`013`), 스레드(`014`), 고정 메시지(`017`), 받은 편지함(`025`), 작성창 `+` 메뉴(`043`)를 구현하고 릴리스 실기 검증(`replay.py --strict-no-duplicates`·`check_surface_parity.py` 10/10·`state_matrix.py --strict`·`check_resize.py` 25/25)과 `cargo test --workspace` 709개를 통과했다.
   - 크롤은 쓰기 가드를 켠 상태로만 실행하고, 끝나면 `docs/PARITY_LAB.md` 10.5 복구 점검을 한다. 남은 미구현/부분 항목(`trigger_missing` 27·`opened_partial` 32)은 생성된 작업 목록의 우선순위에 따라 후속 단계에서 구현한다.
-- [ ] **M9.5 기능 자동 시험(사람 개입 없이)** — 1차 완료(2026-11-24): `tools/parity_lab/share_check.py` + `voice_official.mjs`로 양방향 화면 공유를 자동 시험한다(두 앱 음소거 참가 → Rust 공유 → 공식 시청·프레임 확인 → 공식이 Rust 창 공유 → Rust 시청·색·프레임 확인 → 정리). 결과: Rust→공식 2560×1440·약 14fps 통과. 공식→Rust는 수신 색이 틀어지는 결함(워커가 libyuv `RGBA`를 RGBA 바이트로 오인, `ABGR`이 맞음)을 찾아 고친 뒤 통과(붉은 기운 0.15→0.002). 남은 항목:
-  - 화면 공유 품질 설정(해상도·FPS·코덱·비트레이트)이 워커에 전달되지 않는다(`SetScreenShare`는 켜기/소리만). 실제 송출은 720p·약 14fps.
-  - Rust에는 공유 대상 선택 창(응용 프로그램/전체 화면/장치, 스트림 설정)이 없고 항상 주 모니터를 공유한다.
-  - Rust 시청 화면이 공식과 다르다(시청 버튼에 내부 식별자 `user_<id>_<세션>` 노출, 공식은 스테이지를 채우고 헤더에 "<이름>'s screen · 720p 14 FPS", 하단 참가자 줄).
-  - 음성(말하기 표시·오디오 레벨) 자동 판정은 아직 없다.
-  - 양쪽 앱이 시험 서버의 같은 음성 채널에 참가한다.
-  - Rust가 화면 공유를 시작하면, 공식 비교 앱이 원격 영상 트랙의 프레임 수신(`getStats`·`videoWidth > 0`·프레임 증가)을 확인한다. 반대 방향도 시험한다.
-  - 음성은 말하기 표시(speaking)와 오디오 레벨로 판정한다.
-  - **수락 기준:** 화면 공유 실패가 자동 시험에서 재현되고, 수정 뒤 통과한다.
+- [ ] **M9.5 기능 자동 시험(사람 개입 없이)** — 구현 완료(2026-11-26, 실기 `share_check.py` 게이트 통과 시 최종 완료):
+  - 1차(2026-11-24): `tools/parity_lab/share_check.py` + `voice_official.mjs` 양방향 화면 공유 자동 시험 구축 및 수신 색 변환(`ABGR`) 수정.
+  - 2차(2026-11-26):
+    - `voice_worker` + `voice_ipc.rs` + `voice.rs`에 `ListScreenSources`/`ScreenSources`, `SetScreenShare` 소스·해상도·FPS·코덱·비트레이트 전달(`bgra_to_i420_scaled`, `VideoEncoding`, `VideoCodec`), `RoomEvent::ActiveSpeakersChanged` -> `ActiveSpeakers` 파이프라인 구현.
+    - `Overlay::ScreenSharePicker`(`ui/screen_share_modal.rs`) 모달 구현(`Screens`/`Applications` 탭, 소스 선택, `720p`/`1080p`/`1440p`/`Source`, `15`/`30`/`60` FPS, `Auto`/`H264`/`VP8`/`VP9`/`AV1`, 시스템 오디오 토글, `Go Live`).
+    - `parse_participant_user_id` 공용 파서로 `"user_<id>_<session>"` 원시 노출 제거, `video_viewer::render_stage` 헤더를 `"<이름>'s screen · <height>p <fps> FPS"`(실시간 FPS) 및 하단 참가자 줄 레이아웃으로 개선, 음성 무대 말하기 테두리(speaking ring) 및 프로브 상태(`.flx_text`) 노출.
+    - `share_check.py`에 `--launch-rust`, `.flx` 기반 피커·시청 조작, `voice_audio` 오디오·말하기 자동 판정(`voice_official.mjs audio` + Rust 프로브), `finally` 양쪽 정리·`#markdown` 복원·프로세스 종료 추가.
+  - **실기 검증 현황(2026-11-26):** Rust 측 음성 참가·`ScreenSharePicker`(`source_count=4`)·`1080p`/`30fps` 선택·`Go Live`·`LIVE` 송출·`speaking_state` 노출은 `share_check.py --launch-rust` 실기 스크린샷으로 확인했으나, 공식 비교 앱(`Web 2026.1124.64728`)이 테스트 서버와 세션/음성 타임아웃(`GatewayReadyTimeoutError`·`Voice server timeout`)을 겪어 양방향 송수신 완료 판정은 버전 정렬 후 재검증이 필요하다.
+  - **수락 기준:** 단위 테스트 통과 후 실기 `share_check.py --launch-rust`에서 `rust_to_official`, `official_to_rust`(헤더 `'s screen`·`user_` 미노출·색·움직임), `voice_audio`가 모두 통과한다.
 - [x] **M9.7 요소 단위 픽셀 비교** — 완료(2026-11-26): `tools/parity_lab/compare.py`에 `official_offset`을 반영한 4x4 이상 짝지은 요소 박스별 RGB `pixel_mae` 및 휘도 기반 `ssim`(`C1=(0.01*255)^2`, `C2=(0.03*255)^2`) 계산, SSIM 최저·MAE 최고 상위 10개 나란히 비교 이미지(`<out>/worst_crops/<rank>_<safe_flx>.png`, 공식 | Rust | 3배 증폭 diff), `element_pixel_summary` 기록, `compare.py --selftest`를 구현·검증했다.
   - 짝지은 요소마다 두 스크린샷의 같은 박스를 잘라 픽셀 차이·구조 유사도(SSIM)를 계산한다.
   - 글자 모양(서버 이니셜 등), 아이콘 모양, 테두리·모서리 차이를 수치로 잡고, 차이가 큰 요소를 잘라낸 비교 이미지와 함께 보고한다.

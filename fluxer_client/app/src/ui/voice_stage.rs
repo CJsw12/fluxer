@@ -20,7 +20,9 @@ use gpui_kit::{
 
 use super::avatar::{AvatarSpec, render_avatar};
 use super::{l10n, video_viewer};
-use crate::backend::voice::{TrackSubscriptionKey, VoiceConnectionState, VoiceTrackSource};
+use crate::backend::voice::{
+    TrackSubscriptionKey, VoiceConnectionState, VoiceTrackSource, parse_participant_user_id,
+};
 use crate::client_view::ClientView;
 use crate::icons::AppIcon;
 use crate::parity_probe::FlxExt as _;
@@ -33,6 +35,8 @@ struct StageParticipant {
     muted: bool,
     deafened: bool,
     streaming: bool,
+    speaking: bool,
+    audio_level: u16,
     is_self: bool,
     watch_track: Option<TrackSubscriptionKey>,
 }
@@ -41,13 +45,11 @@ fn find_member_video_track(
     tracks: &[TrackSubscriptionKey],
     user_id: Snowflake,
 ) -> Option<TrackSubscriptionKey> {
-    let uid_str = user_id.to_string();
     tracks
         .iter()
         .find(|t| {
             matches!(t.source, VoiceTrackSource::ScreenShare | VoiceTrackSource::Camera)
-                && (t.participant_identity == uid_str
-                    || t.participant_identity.starts_with(&format!("{uid_str}:")))
+                && parse_participant_user_id(&t.participant_identity) == Some(user_id)
         })
         .cloned()
 }
@@ -91,6 +93,8 @@ fn build_participants(view: &ClientView, channel_id: Snowflake) -> Vec<StagePart
             muted,
             deafened,
             streaming,
+            speaking: view.voice.is_speaking(member.user_id),
+            audio_level: view.voice.audio_level_milli(member.user_id),
             is_self,
             watch_track,
         });
@@ -108,6 +112,8 @@ fn build_participants(view: &ClientView, channel_id: Snowflake) -> Vec<StagePart
                 muted: view.voice.effective_muted(),
                 deafened: view.voice.effective_deafened(),
                 streaming: view.voice.self_stream,
+                speaking: view.voice.is_speaking(user.id),
+                audio_level: view.voice.audio_level_milli(user.id),
                 is_self: true,
                 watch_track: None,
             },
@@ -124,12 +130,13 @@ fn render_audio_avatar_slot(
     theme: &Theme,
 ) -> AnyElement {
     let uid = participant.user_id;
-    let active_ring = connected && !participant.muted && !participant.deafened;
+    let active_ring = connected && participant.speaking && !participant.muted && !participant.deafened;
     let ring_color = if active_ring {
         theme.status_online
     } else {
         theme.border
     };
+    let speaking_meta = format!("{}:{}:{}", uid.0, active_ring, participant.audio_level);
     let name_label = if participant.is_self {
         format!("{} ({})", participant.display_name, l10n::tr("You"))
     } else {
@@ -139,6 +146,7 @@ fn render_audio_avatar_slot(
     div()
         .id(("voice-stage-tile", uid.0))
         .debug_selector(move || format!("voice-stage-tile-{}", uid.0))
+        .flx_text("voice.voice-stage.participant-speaking", speaking_meta)
         .flex()
         .flex_col()
         .items_center()
@@ -234,12 +242,13 @@ fn render_participant_tile(
     cx: &mut Context<ClientView>,
 ) -> AnyElement {
     let uid = participant.user_id;
-    let active_ring = connected && !participant.muted && !participant.deafened;
+    let active_ring = connected && participant.speaking && !participant.muted && !participant.deafened;
     let border_color = if active_ring {
         theme.status_online
     } else {
         theme.border
     };
+    let speaking_meta = format!("{}:{}:{}", uid.0, active_ring, participant.audio_level);
     let (tile_w, tile_h, avatar_size) = if compact {
         (168., 112., 44.)
     } else {
@@ -251,6 +260,7 @@ fn render_participant_tile(
     let mut tile = div()
         .id(("voice-stage-tile", uid.0))
         .debug_selector(move || format!("voice-stage-tile-{}", uid.0))
+        .flx_text("voice.voice-stage.participant-speaking", speaking_meta)
         .relative()
         .w(px(tile_w))
         .h(px(tile_h))
@@ -358,6 +368,7 @@ fn render_participant_tile(
                 .top_2()
                 .left_2()
                 .debug_selector(move || track_id_sel.clone())
+                .flx("voice.voice-stage.watch-stream")
                 .child(
                     Button::new(SharedString::from(format!("stage-watch-{}", track.track_sid)))
                         .primary()
@@ -619,11 +630,10 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
         .debug_selector(|| "voice-stage-grid".to_owned())
         .flex()
         .flex_row()
-        .flex_wrap()
+        .when(compact_tiles, |d| d.flex_none().overflow_x_scroll().py_2().px_4().gap_2())
+        .when(!compact_tiles, |d| d.flex_wrap().gap_4().p_4())
         .items_center()
-        .justify_center()
-        .gap_4()
-        .p_4();
+        .justify_center();
 
     if has_renderable_media {
         for p in &participants {
@@ -653,28 +663,39 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
         tiles_grid = tiles_grid.child(avatar_list);
     }
 
+    let speaking_entries: Vec<String> = view
+        .voice
+        .active_speakers
+        .iter()
+        .map(|uid| format!("{}:{}", uid.0, view.voice.audio_level_milli(*uid)))
+        .collect();
+    let speaking_summary = format!(
+        "active={};speakers={}",
+        view.voice.active_speakers.len(),
+        speaking_entries.join(",")
+    );
+
     let mut stage_body = div()
         .id("voice-stage-body")
+        .flx_text("voice.voice-stage.speaking-state", speaking_summary)
         .flex_1()
         .min_h_0()
-        .overflow_y_scroll()
+        .when(!compact_tiles, |d| d.overflow_y_scroll().justify_center().gap_3())
+        .when(compact_tiles, |d| d.overflow_hidden().justify_between().gap_2())
         .flex()
         .flex_col()
-        .justify_center()
-        .gap_3()
         .bg(rgb(0x000000));
 
     if let Some(track) = &watched_track {
         let label = video_viewer::participant_display_name(view, track);
-        stage_body = stage_body
-            .justify_start()
-            .child(video_viewer::render_stage(
-                track,
-                label,
-                view.watched_video_frame.clone(),
-                theme,
-                cx,
-            ));
+        stage_body = stage_body.child(video_viewer::render_stage(
+            track,
+            label,
+            view.watched_video_frame.clone(),
+            Some(view.watched_video_fps),
+            theme,
+            cx,
+        ));
     }
 
     if !extra_streams.is_empty() {
@@ -689,23 +710,27 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
             .gap_2();
         for track in extra_streams {
             let is_watching = watched_sid == Some(track.track_sid.as_str());
+            let display = video_viewer::participant_display_name(view, &track);
             let label = if is_watching {
-                format!("{} ({})", l10n::tr("Stop Watching"), track.participant_identity)
+                format!("{} ({display})", l10n::tr("Stop Watching"))
             } else {
-                format!("{} ({})", l10n::tr("Watch Stream"), track.participant_identity)
+                format!("{} ({display})", l10n::tr("Watch Stream"))
             };
             let sel = format!("voice-stage-watch-{}", track.track_sid);
             bar = bar.child(
-                div().debug_selector(move || sel.clone()).child(
-                    Button::new(SharedString::from(format!("stage-extra-watch-{}", track.track_sid)))
-                        .primary()
-                        .small()
-                        .icon(AppIcon::Monitor)
-                        .label(label)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.toggle_watch_video_track(track.clone(), cx);
-                        })),
-                ),
+                div()
+                    .debug_selector(move || sel.clone())
+                    .flx("voice.voice-stage.watch-stream")
+                    .child(
+                        Button::new(SharedString::from(format!("stage-extra-watch-{}", track.track_sid)))
+                            .primary()
+                            .small()
+                            .icon(AppIcon::Monitor)
+                            .label(label)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.toggle_watch_video_track(track.clone(), cx);
+                            })),
+                    ),
             );
         }
         stage_body = stage_body.child(bar);
@@ -805,7 +830,7 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
             view.voice.self_stream,
             !is_connected,
             theme,
-            cx.listener(|this, _, _, cx| this.toggle_screen_share(false, cx)),
+            cx.listener(|this, _, _, cx| this.handle_screen_share_button(cx)),
             cx.listener(|this, _, _, cx| {
                 this.toggle_voice_popout(crate::client_view::VoicePopoutKind::Stream, cx);
             }),

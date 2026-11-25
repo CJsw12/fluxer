@@ -33,6 +33,7 @@ use crate::ui::media_viewer::MediaViewerModal;
 use crate::ui::moderation_modal::{GuildBansModal, MemberModerationModal};
 use crate::ui::profile_popout::ProfilePopout;
 use crate::ui::quick_switcher::QuickSwitcher;
+use crate::ui::screen_share_modal::ScreenSharePickerModal;
 use crate::ui::settings::SettingsModal;
 
 /// What covers the client layout (at most one thing at a time).
@@ -66,6 +67,7 @@ pub enum Overlay {
     DeleteMyGuildMessages(DeleteMyGuildMessagesModal),
     PurgePersonalNotes(PurgePersonalNotesModal),
     DiscoveryPreview(Box<DiscoveryPreviewModal>),
+    ScreenSharePicker(ScreenSharePickerModal),
 }
 
 impl Overlay {

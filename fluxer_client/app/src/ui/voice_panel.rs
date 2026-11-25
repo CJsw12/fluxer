@@ -361,7 +361,11 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 for member in participants.iter().take(4) {
                                     let name = view.voice_member_name(member.guild_id, member.user_id);
                                     let avatar_url = view.voice_member_avatar_url(member.guild_id, member.user_id);
-                                    let speaking = !member.self_mute && !member.mute && !member.self_deaf && !member.deaf;
+                                    let speaking = view.voice.is_speaking(member.user_id)
+                                        && !member.self_mute
+                                        && !member.mute
+                                        && !member.self_deaf
+                                        && !member.deaf;
                                     stack = stack.child(
                                         div()
                                             .rounded_full()
@@ -451,7 +455,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                                     })
                                                 })
                                                 .on_click(cx.listener(|this, _, _, cx| {
-                                                    this.toggle_screen_share(false, cx);
+                                                    this.handle_screen_share_button(cx);
                                                 }))
                                         })
                                         .flx("voice.voice-connection-status.local-participant-controls.media-button.undefined")

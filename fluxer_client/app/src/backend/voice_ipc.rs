@@ -21,8 +21,9 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader
 use tokio::sync::{mpsc, oneshot};
 
 use super::voice::{
-    TrackSubscriptionKey, UnconfiguredVoiceTransport, VoiceAudioSettings, VoiceCredentials,
-    VoiceRoom, VoiceRoomEvent, VoiceTrackSource, VoiceTransport,
+    ScreenShareOptions, ScreenSourceInfo, SpeakerInfo, TrackSubscriptionKey,
+    UnconfiguredVoiceTransport, VoiceAudioSettings, VoiceCredentials, VoiceRoom, VoiceRoomEvent,
+    VoiceTrackSource, VoiceTransport,
 };
 
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
@@ -99,9 +100,24 @@ pub(crate) enum WorkerCommand {
     SetPlaybackMuted {
         muted: bool,
     },
+    ListScreenSources,
     SetScreenShare {
         active: bool,
         with_audio: bool,
+        #[serde(default)]
+        source_id: Option<u64>,
+        #[serde(default)]
+        source_kind: Option<String>,
+        #[serde(default)]
+        width: Option<u32>,
+        #[serde(default)]
+        height: Option<u32>,
+        #[serde(default)]
+        fps: Option<u32>,
+        #[serde(default)]
+        codec: Option<String>,
+        #[serde(default)]
+        max_bitrate: Option<u64>,
     },
     SetAudioSettings {
         input_device: Option<String>,
@@ -137,10 +153,28 @@ impl fmt::Debug for WorkerCommand {
             Self::SetPlaybackMuted { muted } => {
                 f.debug_struct("SetPlaybackMuted").field("muted", muted).finish()
             }
-            Self::SetScreenShare { active, with_audio } => f
+            Self::ListScreenSources => f.write_str("ListScreenSources"),
+            Self::SetScreenShare {
+                active,
+                with_audio,
+                source_id,
+                source_kind,
+                width,
+                height,
+                fps,
+                codec,
+                max_bitrate,
+            } => f
                 .debug_struct("SetScreenShare")
                 .field("active", active)
                 .field("with_audio", with_audio)
+                .field("source_id", source_id)
+                .field("source_kind", source_kind)
+                .field("width", width)
+                .field("height", height)
+                .field("fps", fps)
+                .field("codec", codec)
+                .field("max_bitrate", max_bitrate)
                 .finish(),
             Self::SetAudioSettings {
                 input_device,
@@ -164,12 +198,18 @@ impl fmt::Debug for WorkerCommand {
 }
 
 /// Events emitted by the voice worker over stdout.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub(crate) enum WorkerEvent {
     Connected,
     Error { message: String },
     Disconnected { reason: String },
+    ScreenSources {
+        sources: Vec<ScreenSourceInfo>,
+    },
+    ActiveSpeakers {
+        speakers: Vec<SpeakerInfo>,
+    },
     TrackPublished {
         participant_identity: String,
         participant_sid: String,
@@ -301,6 +341,8 @@ impl WorkerEvent {
             Self::Connected
             | Self::Error { .. }
             | Self::Disconnected { .. }
+            | Self::ScreenSources { .. }
+            | Self::ActiveSpeakers { .. }
             | Self::VideoFrame { .. } => None,
         }
     }
@@ -489,7 +531,35 @@ impl VoiceRoom for ProcessVoiceRoom {
     }
 
     fn set_screen_share(&self, active: bool, with_audio: bool) {
-        self.send_command(WorkerCommand::SetScreenShare { active, with_audio });
+        self.send_command(WorkerCommand::SetScreenShare {
+            active,
+            with_audio,
+            source_id: None,
+            source_kind: None,
+            width: None,
+            height: None,
+            fps: None,
+            codec: None,
+            max_bitrate: None,
+        });
+    }
+
+    fn set_screen_share_with_options(&self, active: bool, opts: &ScreenShareOptions) {
+        self.send_command(WorkerCommand::SetScreenShare {
+            active,
+            with_audio: opts.with_audio,
+            source_id: opts.source_id,
+            source_kind: opts.source_kind.clone(),
+            width: opts.width,
+            height: opts.height,
+            fps: opts.fps,
+            codec: opts.codec.clone(),
+            max_bitrate: opts.max_bitrate,
+        });
+    }
+
+    fn request_screen_sources(&self) {
+        self.send_command(WorkerCommand::ListScreenSources);
     }
 
     fn set_audio_settings(&self, settings: &VoiceAudioSettings) {
@@ -702,6 +772,12 @@ async fn run_event_reader<R>(
                 let _ = event_tx.send(VoiceRoomEvent::Disconnected(reason));
                 break;
             }
+            WorkerEvent::ScreenSources { sources } => {
+                let _ = event_tx.send(VoiceRoomEvent::ScreenSources(sources));
+            }
+            WorkerEvent::ActiveSpeakers { speakers } => {
+                let _ = event_tx.send(VoiceRoomEvent::ActiveSpeakers(speakers));
+            }
             WorkerEvent::VideoFrame {
                 track_sid,
                 width,
@@ -832,6 +908,8 @@ where
         | WorkerEvent::TrackUnpublished { .. }
         | WorkerEvent::TrackSubscribed { .. }
         | WorkerEvent::TrackUnsubscribed { .. }
+        | WorkerEvent::ScreenSources { .. }
+        | WorkerEvent::ActiveSpeakers { .. }
         | WorkerEvent::VideoFrame { .. } => {
             Err("unexpected track event before voice worker connected".to_owned())
         }
@@ -938,7 +1016,17 @@ mod tests {
                 vec![
                     WorkerCommand::SetMicMuted { muted: true },
                     WorkerCommand::SetPlaybackMuted { muted: true },
-                    WorkerCommand::SetScreenShare { active: true, with_audio: true },
+                    WorkerCommand::SetScreenShare {
+                        active: true,
+                        with_audio: true,
+                        source_id: None,
+                        source_kind: None,
+                        width: None,
+                        height: None,
+                        fps: None,
+                        codec: None,
+                        max_bitrate: None,
+                    },
                     WorkerCommand::SetAudioSettings {
                         input_device: Some("USB Mic".to_owned()),
                         output_device: None,

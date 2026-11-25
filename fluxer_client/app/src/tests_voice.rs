@@ -701,6 +701,11 @@ fn voice_stage_lifecycle_tiles_screen_share_controls_and_back_to_chat(cx: &mut T
     vcx.simulate_click(share_pos, gpui_kit::Modifiers::default());
     vcx.run_until_parked();
     draw(vcx);
+    assert!(vcx.debug_bounds("screen-share-picker-modal").is_some(), "clicking share opens picker modal");
+    let go_live_pos = vcx.debug_bounds("screen-share-go-live-btn").unwrap().center();
+    vcx.simulate_click(go_live_pos, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
     view.read_with(vcx, |v, _| {
         assert!(v.voice.self_mute);
         assert!(v.voice.self_deaf);
@@ -799,5 +804,243 @@ fn local_voice_state_machine_prevents_speaker_only_deafen_and_restores_mute(cx: 
         assert!(!v.voice.self_mute, "unmuting while deafened unmutes mic");
         assert!(!v.voice.self_deaf, "unmuting while deafened also clears deafen");
         assert!(!v.voice.should_unmute_on_undeafen);
+    });
+}
+
+#[test]
+fn parse_participant_user_id_handles_official_and_legacy_identities() {
+    use crate::backend::voice::parse_participant_user_id;
+
+    assert_eq!(parse_participant_user_id("user_200_abc123"), Some(Snowflake(200)));
+    assert_eq!(parse_participant_user_id("user_1572284491404148736_sess99"), Some(Snowflake(1572284491404148736)));
+    assert_eq!(parse_participant_user_id("user_200"), Some(Snowflake(200)));
+    assert_eq!(parse_participant_user_id("200:session"), Some(Snowflake(200)));
+    assert_eq!(parse_participant_user_id("200"), Some(Snowflake(200)));
+    assert_eq!(parse_participant_user_id("user_notanumber_abc"), None);
+    assert_eq!(parse_participant_user_id(""), None);
+    assert_eq!(parse_participant_user_id("   "), None);
+}
+
+#[test]
+fn voice_ipc_screen_share_options_sources_and_active_speakers_round_trip() {
+    use crate::backend::voice::{ScreenSourceInfo, SpeakerInfo};
+    use crate::backend::voice_ipc::{WorkerCommand, WorkerEvent};
+
+    let cmd = WorkerCommand::SetScreenShare {
+        active: true,
+        with_audio: true,
+        source_id: Some(99),
+        source_kind: Some("window".to_owned()),
+        width: Some(1920),
+        height: Some(1080),
+        fps: Some(60),
+        codec: Some("h264".to_owned()),
+        max_bitrate: Some(5_000_000),
+    };
+    let encoded = serde_json::to_string(&cmd).unwrap();
+    assert!(encoded.contains("\"type\":\"set_screen_share\""));
+    assert_eq!(serde_json::from_str::<WorkerCommand>(&encoded).unwrap(), cmd);
+
+    let list_cmd = WorkerCommand::ListScreenSources;
+    let list_json = serde_json::to_string(&list_cmd).unwrap();
+    assert!(list_json.contains("\"type\":\"list_screen_sources\""));
+    assert_eq!(serde_json::from_str::<WorkerCommand>(&list_json).unwrap(), list_cmd);
+
+    let sources_ev = WorkerEvent::ScreenSources {
+        sources: vec![
+            ScreenSourceInfo { id: 1, kind: "screen".into(), title: "Display 1".into(), display_id: 1 },
+            ScreenSourceInfo { id: 2, kind: "window".into(), title: "Fluxer".into(), display_id: 0 },
+        ],
+    };
+    let s_json = serde_json::to_string(&sources_ev).unwrap();
+    assert!(s_json.contains("\"type\":\"screen_sources\""));
+    assert_eq!(serde_json::from_str::<WorkerEvent>(&s_json).unwrap(), sources_ev);
+
+    let speakers_ev = WorkerEvent::ActiveSpeakers {
+        speakers: vec![SpeakerInfo {
+            participant_identity: format!("user_{}_sess", PEER.0),
+            audio_level: 0.62,
+        }],
+    };
+    let sp_json = serde_json::to_string(&speakers_ev).unwrap();
+    assert!(sp_json.contains("\"type\":\"active_speakers\""));
+    assert_eq!(serde_json::from_str::<WorkerEvent>(&sp_json).unwrap(), speakers_ev);
+}
+
+#[gpui_kit::test]
+fn screen_share_picker_modal_sources_quality_active_speakers_and_stage_header(cx: &mut TestAppContext) {
+    use crate::backend::voice::{ScreenShareOptions, ScreenSourceInfo, SpeakerInfo, VoiceRoomEvent};
+    use crate::ui::overlay::Overlay;
+    use crate::ui::screen_share_modal::ScreenShareTab;
+    use crate::ui::video_viewer::{format_stage_header, participant_display_name};
+
+    struct PickerVoiceRoom {
+        requested_sources: AtomicBool,
+        last_options: Mutex<Option<ScreenShareOptions>>,
+        event_rx: Mutex<Option<tokio::sync::mpsc::UnboundedReceiver<VoiceRoomEvent>>>,
+        published_tracks: Mutex<Vec<TrackSubscriptionKey>>,
+    }
+
+    impl VoiceRoom for PickerVoiceRoom {
+        fn set_microphone_muted(&self, _muted: bool) {}
+        fn set_playback_muted(&self, _muted: bool) {}
+        fn set_screen_share(&self, _active: bool, _with_audio: bool) {}
+        fn set_screen_share_with_options(&self, active: bool, opts: &ScreenShareOptions) {
+            if active {
+                *self.last_options.lock().unwrap() = Some(opts.clone());
+            } else {
+                *self.last_options.lock().unwrap() = None;
+            }
+        }
+        fn request_screen_sources(&self) {
+            self.requested_sources.store(true, Ordering::SeqCst);
+        }
+        fn published_tracks(&self) -> Vec<TrackSubscriptionKey> {
+            self.published_tracks.lock().unwrap().clone()
+        }
+        fn take_event_rx(&self) -> Option<tokio::sync::mpsc::UnboundedReceiver<VoiceRoomEvent>> {
+            self.event_rx.lock().unwrap().take()
+        }
+        fn close(&self) {}
+    }
+
+    struct PickerTransport(Arc<PickerVoiceRoom>);
+    impl VoiceTransport for PickerTransport {
+        fn connect(
+            &self,
+            _credentials: VoiceCredentials,
+        ) -> Pin<Box<dyn Future<Output = Result<Arc<dyn VoiceRoom>, String>> + Send>> {
+            let r = self.0.clone();
+            Box::pin(async move { Ok(r as Arc<dyn VoiceRoom>) })
+        }
+    }
+
+    let rt = runtime();
+    let (backend, rx) = Backend::new(rt.handle().clone(), offline_rest(), None);
+    let mut ready = voice_ready();
+    let perms = (bits::VIEW_CHANNEL | bits::CONNECT | bits::SPEAK | bits::STREAM).to_string();
+    ready.d["guilds"][0]["roles"][0]["permissions"] = json!(perms);
+    backend.state().apply(&ready);
+
+    let (ev_tx, ev_rx) = tokio::sync::mpsc::unbounded_channel();
+    let peer_track = TrackSubscriptionKey {
+        participant_identity: format!("user_{}_sess42", PEER.0),
+        participant_sid: "PA_peer".into(),
+        track_sid: "TR_peer_screen".into(),
+        source: VoiceTrackSource::ScreenShare,
+    };
+    let room = Arc::new(PickerVoiceRoom {
+        requested_sources: AtomicBool::new(false),
+        last_options: Mutex::new(None),
+        event_rx: Mutex::new(Some(ev_rx)),
+        published_tracks: Mutex::new(vec![peer_track.clone()]),
+    });
+    backend.set_voice_transport_for_test(Arc::new(PickerTransport(room.clone())));
+
+    let (view, vcx) = open_client(cx, backend.clone(), rx);
+    view.update(vcx, |v, cx| {
+        v.select_place(Place::Guild(GUILD), cx);
+        v.join_voice_channel(VOICE_OPEN, cx);
+    });
+    backend.feed_voice_dispatch_for_test(&Dispatch {
+        t: "VOICE_SERVER_UPDATE".into(),
+        s: 2,
+        d: json!({
+            "guild_id": GUILD.to_string(),
+            "channel_id": VOICE_OPEN.to_string(),
+            "connection_id": "conn-picker",
+            "endpoint": "wss://rtc.example.test",
+            "token": "jwt-picker"
+        }),
+    });
+    rt.block_on(async {
+        for _ in 0..30 {
+            if backend.voice_snapshot().state == VoiceConnectionState::Connected {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    });
+    view.update(vcx, |v, cx| v.refresh(cx));
+    draw(vcx);
+
+    // Deliver ScreenSources and ActiveSpeakers events from worker.
+    ev_tx
+        .send(VoiceRoomEvent::ScreenSources(vec![
+            ScreenSourceInfo { id: 10, kind: "screen".into(), title: "Main Monitor".into(), display_id: 1 },
+            ScreenSourceInfo { id: 20, kind: "window".into(), title: "Code Editor".into(), display_id: 0 },
+        ]))
+        .unwrap();
+    ev_tx
+        .send(VoiceRoomEvent::ActiveSpeakers(vec![SpeakerInfo {
+            participant_identity: format!("user_{}_sess42", PEER.0),
+            audio_level: 0.75,
+        }]))
+        .unwrap();
+    rt.block_on(async {
+        for _ in 0..30 {
+            let snap = backend.voice_snapshot();
+            if !snap.screen_sources.is_empty() && snap.is_speaking(PEER) {
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    });
+    view.update(vcx, |v, cx| v.refresh(cx));
+    draw(vcx);
+
+    view.read_with(vcx, |v, _| {
+        assert_eq!(v.voice.screen_sources.len(), 2);
+        assert!(v.voice.is_speaking(PEER));
+        assert_eq!(v.voice.audio_level_milli(PEER), 750);
+
+        // Official "user_<uid>_<session>" identity resolves to display name and never exposes "user_".
+        let name = participant_display_name(v, &peer_track);
+        assert_eq!(name.as_ref(), "Peer User");
+        let header = format_stage_header(&peer_track, name.as_ref(), Some((1280, 720)), Some(30));
+        assert_eq!(header, "Peer User's screen · 720p 30 FPS");
+        assert!(!header.contains("user_"));
+    });
+
+    // Opening picker requests sources and shows modal; selecting window + 1080p/60fps/h264 + Go Live starts share.
+    view.update(vcx, |v, cx| v.handle_screen_share_button(cx));
+    draw(vcx);
+    assert!(room.requested_sources.load(Ordering::SeqCst));
+    assert!(vcx.debug_bounds("screen-share-picker-modal").is_some());
+
+    view.update(vcx, |v, cx| {
+        v.set_screen_share_picker_tab(ScreenShareTab::Applications, cx);
+        v.select_screen_share_source(20, "window".to_owned(), cx);
+        v.set_screen_share_picker_resolution("1080p".to_owned(), cx);
+        v.set_screen_share_picker_fps(60, cx);
+        v.set_screen_share_picker_codec("h264".to_owned(), cx);
+        v.set_screen_share_picker_audio(true, cx);
+    });
+    draw(vcx);
+    let go_live_pos = vcx.debug_bounds("screen-share-go-live-btn").unwrap().center();
+    vcx.simulate_click(go_live_pos, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+
+    view.read_with(vcx, |v, _| {
+        assert!(matches!(v.overlay, Overlay::None), "picker closes after Go Live");
+        assert!(v.voice.self_stream);
+        assert!(v.voice.screen_share_audio);
+    });
+    let sent_opts = room.last_options.lock().unwrap().clone().expect("screen share options sent");
+    assert_eq!(sent_opts.source_id, Some(20));
+    assert_eq!(sent_opts.source_kind.as_deref(), Some("window"));
+    assert_eq!(sent_opts.width, Some(1920));
+    assert_eq!(sent_opts.height, Some(1080));
+    assert_eq!(sent_opts.fps, Some(60));
+    assert_eq!(sent_opts.codec.as_deref(), Some("h264"));
+    assert!(sent_opts.with_audio);
+
+    // Clicking share button while already streaming stops sharing without reopening picker.
+    view.update(vcx, |v, cx| v.handle_screen_share_button(cx));
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert!(!v.voice.self_stream);
+        assert!(matches!(v.overlay, Overlay::None));
     });
 }

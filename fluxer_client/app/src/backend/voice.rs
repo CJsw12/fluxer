@@ -69,6 +69,50 @@ pub enum VoiceTrackSource {
     Unknown,
 }
 
+/// Parses a LiveKit participant identity (`"user_<uid>_<session>"`, `"<uid>:<session>"`,
+/// or `"<uid>"`) into the corresponding Fluxer user `Snowflake`.
+pub fn parse_participant_user_id(identity: &str) -> Option<Snowflake> {
+    let trimmed = identity.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if let Some(rest) = trimmed.strip_prefix("user_") {
+        let uid_part = rest.split(['_', ':']).next()?;
+        return Snowflake::parse(uid_part);
+    }
+    let uid_part = trimmed.split(':').next()?;
+    Snowflake::parse(uid_part)
+}
+
+/// Enumerated desktop/window capture source returned by `fluxer_voice_worker`.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ScreenSourceInfo {
+    pub id: u64,
+    pub kind: String,
+    pub title: String,
+    pub display_id: i64,
+}
+
+/// Screen-share encoding and capture source options sent to `fluxer_voice_worker`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ScreenShareOptions {
+    pub with_audio: bool,
+    pub source_id: Option<u64>,
+    pub source_kind: Option<String>,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub fps: Option<u32>,
+    pub codec: Option<String>,
+    pub max_bitrate: Option<u64>,
+}
+
+/// Active speaker audio-level entry forwarded from LiveKit `ActiveSpeakersChanged`.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct SpeakerInfo {
+    pub participant_identity: String,
+    pub audio_level: f32,
+}
+
 /// Stable ownership key for a remote track subscription.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TrackSubscriptionKey {
@@ -114,6 +158,10 @@ pub struct VoiceSnapshot {
     pub subscribed_tracks: Vec<TrackSubscriptionKey>,
     pub published_tracks: Vec<TrackSubscriptionKey>,
     pub watched_video_track: Option<TrackSubscriptionKey>,
+    pub screen_sources: Vec<ScreenSourceInfo>,
+    pub active_speakers: BTreeSet<Snowflake>,
+    /// Quantized audio level per speaking participant (`0..=1000`, representing `0.0..=1.0`).
+    pub audio_levels: BTreeMap<Snowflake, u16>,
     pub channel_members: BTreeMap<(Option<Snowflake>, Snowflake), ChannelVoiceMember>,
 }
 
@@ -137,12 +185,24 @@ impl Default for VoiceSnapshot {
             subscribed_tracks: Vec::new(),
             published_tracks: Vec::new(),
             watched_video_track: None,
+            screen_sources: Vec::new(),
+            active_speakers: BTreeSet::new(),
+            audio_levels: BTreeMap::new(),
             channel_members: BTreeMap::new(),
         }
     }
 }
 
 impl VoiceSnapshot {
+    /// True when `user_id` is currently reported in LiveKit `ActiveSpeakersChanged`.
+    pub fn is_speaking(&self, user_id: Snowflake) -> bool {
+        self.active_speakers.contains(&user_id)
+    }
+
+    /// Quantized audio level (`0..=1000`) for `user_id` (`0` when not speaking).
+    pub fn audio_level_milli(&self, user_id: Snowflake) -> u16 {
+        self.audio_levels.get(&user_id).copied().unwrap_or(0)
+    }
     /// Members currently present in `channel_id`, sorted by user id.
     pub fn members_in_channel(&self, channel_id: Snowflake) -> Vec<ChannelVoiceMember> {
         self.channel_members
@@ -201,11 +261,13 @@ impl fmt::Debug for VoiceCredentials {
 
 /// Events emitted by an active `VoiceRoom` implementation (e.g. remote track
 /// subscription changes or unexpected worker termination).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum VoiceRoomEvent {
     TracksChanged,
     Disconnected(String),
     VideoFrameReady,
+    ScreenSources(Vec<ScreenSourceInfo>),
+    ActiveSpeakers(Vec<SpeakerInfo>),
     #[cfg(test)]
     VideoFrame {
         track_sid: String,
@@ -261,6 +323,10 @@ pub(crate) trait VoiceRoom: Send + Sync {
     fn set_microphone_muted(&self, muted: bool);
     fn set_playback_muted(&self, muted: bool);
     fn set_screen_share(&self, active: bool, with_audio: bool);
+    fn set_screen_share_with_options(&self, active: bool, opts: &ScreenShareOptions) {
+        self.set_screen_share(active, opts.with_audio);
+    }
+    fn request_screen_sources(&self) {}
     fn set_audio_settings(&self, _settings: &VoiceAudioSettings) {}
     fn set_watched_video_track(&self, _track_sid: Option<String>) {}
     fn subscribed_tracks(&self) -> Vec<TrackSubscriptionKey> {
@@ -503,6 +569,10 @@ pub(crate) struct VoiceManager {
     media: Option<OwnedVoiceMedia>,
     watched_video_track: Option<TrackSubscriptionKey>,
     video_frame_queue: LatestVideoFrameQueue,
+    screen_sources: Vec<ScreenSourceInfo>,
+    active_speakers: BTreeSet<Snowflake>,
+    audio_levels: BTreeMap<Snowflake, u16>,
+    last_screen_share_options: ScreenShareOptions,
     channel_members: BTreeMap<(Option<Snowflake>, Snowflake), ChannelVoiceMember>,
 }
 
@@ -531,6 +601,10 @@ impl VoiceManager {
             media: None,
             watched_video_track: None,
             video_frame_queue: LatestVideoFrameQueue::new(),
+            screen_sources: Vec::new(),
+            active_speakers: BTreeSet::new(),
+            audio_levels: BTreeMap::new(),
+            last_screen_share_options: ScreenShareOptions::default(),
             channel_members: BTreeMap::new(),
         }
     }
@@ -554,6 +628,9 @@ impl VoiceManager {
             subscribed_tracks: self.media.as_ref().map_or_else(Vec::new, OwnedVoiceMedia::subscribed_keys),
             published_tracks: self.media.as_ref().map_or_else(Vec::new, OwnedVoiceMedia::published_keys),
             watched_video_track: self.watched_video_track.clone(),
+            screen_sources: self.screen_sources.clone(),
+            active_speakers: self.active_speakers.clone(),
+            audio_levels: self.audio_levels.clone(),
             channel_members: self.channel_members.clone(),
         }
     }
@@ -597,6 +674,9 @@ impl VoiceManager {
 
     fn abort_active_media(&mut self) -> Vec<JoinHandle<()>> {
         self.stop_watching_video();
+        self.screen_sources.clear();
+        self.active_speakers.clear();
+        self.audio_levels.clear();
         let mut handles = Vec::new();
         if let Some(task) = self.connect_task.take() {
             task.abort();
@@ -1200,6 +1280,22 @@ impl VoiceManager {
                 }
                 true
             }
+            VoiceRoomEvent::ScreenSources(sources) => {
+                self.screen_sources = sources;
+                true
+            }
+            VoiceRoomEvent::ActiveSpeakers(speakers) => {
+                self.active_speakers.clear();
+                self.audio_levels.clear();
+                for s in speakers {
+                    if let Some(uid) = parse_participant_user_id(&s.participant_identity) {
+                        let milli = (s.audio_level.clamp(0.0, 1.0) * 1000.0).round() as u16;
+                        self.active_speakers.insert(uid);
+                        self.audio_levels.insert(uid, milli);
+                    }
+                }
+                true
+            }
             VoiceRoomEvent::Disconnected(_) => false,
             VoiceRoomEvent::VideoFrameReady => {
                 let Some((track_sid, width, height, rgba)) = self
@@ -1676,6 +1772,16 @@ fn on_gateway_dispatch_inner(
                                                 let _ = events_for_watcher.send(UiEvent::VoiceChanged);
                                             }
                                         }
+                                        ev @ (VoiceRoomEvent::ScreenSources(_)
+                                        | VoiceRoomEvent::ActiveSpeakers(_)) => {
+                                            let mut mgr = lock(&voice_for_events);
+                                            if mgr.attempt_id != attempt_id {
+                                                break;
+                                            }
+                                            if mgr.handle_room_event(ev) {
+                                                let _ = events_for_watcher.send(UiEvent::VoiceChanged);
+                                            }
+                                        }
                                         #[cfg(test)]
                                         ev @ VoiceRoomEvent::VideoFrame { .. } => {
                                             let mut mgr = lock(&voice_for_events);
@@ -1886,8 +1992,32 @@ impl Backend {
         }
     }
 
+    /// Requests an updated list of capturable screens and windows from the active voice worker.
+    pub fn request_screen_sources(&self) {
+        let mgr = lock(&self.voice);
+        if mgr.state == VoiceConnectionState::Connected
+            && let Some(media) = &mgr.media
+        {
+            media.room.request_screen_sources();
+        }
+    }
+
     /// Starts or updates screen sharing for the active connected voice session.
     pub fn start_screen_share(&self, include_audio: bool) -> Result<(), &'static str> {
+        let mut opts = {
+            let mgr = lock(&self.voice);
+            if mgr.self_stream {
+                mgr.last_screen_share_options.clone()
+            } else {
+                ScreenShareOptions::default()
+            }
+        };
+        opts.with_audio = include_audio;
+        self.start_screen_share_with_options(opts)
+    }
+
+    /// Starts or updates screen sharing with explicit source and encoding options.
+    pub fn start_screen_share_with_options(&self, opts: ScreenShareOptions) -> Result<(), &'static str> {
         let (guild_id, channel_id) = {
             let mgr = lock(&self.voice);
             if mgr.state != VoiceConnectionState::Connected {
@@ -1916,12 +2046,13 @@ impl Backend {
                 return Err("voice session is not connected");
             }
             mgr.self_stream = true;
-            mgr.screen_share_audio = include_audio;
+            mgr.screen_share_audio = opts.with_audio;
+            mgr.last_screen_share_options = opts.clone();
             if let Some(media) = &mut mgr.media {
-                if !include_audio {
+                if !opts.with_audio {
                     let _ = media.stop_screen_share_audio();
                 }
-                media.room.set_screen_share(true, include_audio);
+                media.room.set_screen_share_with_options(true, &opts);
             }
             mgr.current_state_update_payload()
         };

@@ -1,10 +1,12 @@
 // Drives the official desktop app (CDP) for voice / screen-share functional checks.
 //
-//   node voice_official.mjs --attach 9334 join   --guild G --channel C   (joins voice, mic muted)
-//   node voice_official.mjs --attach 9334 watch                          (clicks "Watch stream", reports video)
-//   node voice_official.mjs --attach 9334 share  --source "<regex>"      (in-app picker → shares matching window)
-//   node voice_official.mjs --attach 9334 stop                           (stops own share)
+//   node voice_official.mjs --attach 9334 join    --guild G --channel C   (joins voice, mic muted)
+//   node voice_official.mjs --attach 9334 watch                           (clicks "Watch stream", reports video)
+//   node voice_official.mjs --attach 9334 audio                           (inspects WebRTC audio & speaking UI)
+//   node voice_official.mjs --attach 9334 share   --source "<regex>"      (in-app picker → shares matching window)
+//   node voice_official.mjs --attach 9334 stop                            (stops own share)
 //   node voice_official.mjs --attach 9334 leave
+//   node voice_official.mjs --attach 9334 restore --guild G --channel C   (navigates back to text channel)
 // Every command prints one JSON line. Pick a harmless share source (e.g. the Rust client window):
 // the picker lists every open window of the machine.
 import {Cdp, helpers, pageWsUrl, sleep} from './lib.mjs';
@@ -33,6 +35,34 @@ async function videoReport() {
 	})()`);
 }
 
+async function audioReport() {
+	return cdp.eval(`(() => {
+	  const audioEls = [...document.querySelectorAll('audio')];
+	  let audioTracks = 0;
+	  let liveAudioTracks = 0;
+	  for (const a of audioEls) {
+	    const tracks = a.srcObject && typeof a.srcObject.getAudioTracks === 'function'
+	      ? a.srcObject.getAudioTracks()
+	      : [];
+	    audioTracks += tracks.length;
+	    liveAudioTracks += tracks.filter(t => t.readyState === 'live').length;
+	  }
+	  const speakingNodes = [...document.querySelectorAll('[class*="speaking" i], [data-speaking="true"], [data-flx*="speaking"]')];
+	  const muteEl = document.querySelector('${MUTE}');
+	  const micLabel = muteEl ? (muteEl.getAttribute('aria-label') || '') : '';
+	  const inVoice = [...document.querySelectorAll('button')].some(b => /^Share your screen$/i.test(b.getAttribute('aria-label') || '') || /^Disconnect$/i.test(b.getAttribute('aria-label') || ''));
+	  return {
+	    in_voice: inVoice,
+	    mic_label: micLabel,
+	    mic_muted: /^Unmute/i.test(micLabel),
+	    audio_elements: audioEls.length,
+	    audio_tracks: audioTracks,
+	    live_audio_tracks: liveAudioTracks,
+	    speaking_count: speakingNodes.length,
+	  };
+	})()`);
+}
+
 if (cmd === 'join') {
 	await cdp.send('Page.navigate', {url: `fluxer-app://app/channels/${opt('guild')}/${opt('channel')}`});
 	await sleep(5000);
@@ -52,6 +82,8 @@ if (cmd === 'join') {
 	await sleep(8000);
 	out.videos = await videoReport();
 	out.live_badges = await cdp.eval(`[...document.querySelectorAll('body *')].filter(e => e.children.length === 0 && /^LIVE$/.test((e.innerText||'').trim())).length`);
+} else if (cmd === 'audio') {
+	Object.assign(out, await audioReport());
 } else if (cmd === 'share') {
 	out.opened = await h.clickText('^Share your screen$');
 	await sleep(2500);
@@ -63,6 +95,14 @@ if (cmd === 'join') {
 	out.clicked = await h.clickText('^(End screen share|Stop (sharing|streaming))$');
 } else if (cmd === 'leave') {
 	out.clicked = await h.clickText('^Disconnect$');
+} else if (cmd === 'restore') {
+	const g = opt('guild');
+	const c = opt('channel');
+	if (g && c) {
+		await cdp.send('Page.navigate', {url: `fluxer-app://app/channels/${g}/${c}`});
+		await sleep(2000);
+		out.restored = `${g}/${c}`;
+	}
 }
 console.log(JSON.stringify({cmd, ...out}));
 await cdp.send('Emulation.clearDeviceMetricsOverride');

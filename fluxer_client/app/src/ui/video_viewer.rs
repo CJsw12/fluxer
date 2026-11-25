@@ -14,8 +14,9 @@ use gpui_kit::{
 };
 
 use super::l10n;
-use crate::backend::voice::{TrackSubscriptionKey, VoiceTrackSource};
+use crate::backend::voice::{TrackSubscriptionKey, VoiceTrackSource, parse_participant_user_id};
 use crate::client_view::ClientView;
+use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 
 /// Converts a decoded RGBA `DecodedVideoFrame` into a GPUI `RenderImage` (BGRA).
@@ -48,7 +49,7 @@ pub(crate) fn render(
     theme: &Theme,
     cx: &mut Context<ClientView>,
 ) -> impl IntoElement {
-    render_inner(track, participant_label, frame_image, false, theme, cx)
+    render_inner(track, participant_label, frame_image, None, false, theme, cx)
 }
 
 /// Expanded video viewer embedded inside `ui::voice_stage`.
@@ -56,41 +57,59 @@ pub(crate) fn render_stage(
     track: &TrackSubscriptionKey,
     participant_label: SharedString,
     frame_image: Option<(u32, u32, Arc<RenderImage>)>,
+    fps: Option<u32>,
     theme: &Theme,
     cx: &mut Context<ClientView>,
 ) -> impl IntoElement {
-    render_inner(track, participant_label, frame_image, true, theme, cx)
+    render_inner(track, participant_label, frame_image, fps, true, theme, cx)
 }
 
-/// Resolves a LiveKit participant identity (e.g. `"201:session"`) to the
-/// member's display name when it maps to a known Fluxer `Snowflake`.
+/// Resolves a LiveKit participant identity (e.g. `"user_201_sess"` or `"201:session"`)
+/// to the member's display name when it maps to a known Fluxer `Snowflake`.
+/// Never exposes raw `"user_..."` internal LiveKit identities in the UI.
 pub(crate) fn participant_display_name(view: &ClientView, track: &TrackSubscriptionKey) -> SharedString {
-    if let Some(id_part) = track.participant_identity.split(':').next()
-        && let Ok(uid) = id_part.parse::<u64>()
-    {
-        return view.voice_member_name(view.voice.guild_id, fluxer_client_core::state::Snowflake(uid));
+    if let Some(uid) = parse_participant_user_id(&track.participant_identity) {
+        return view.voice_member_name(view.voice.guild_id, uid);
+    }
+    if track.participant_identity.starts_with("user_") {
+        return l10n::tr("Participant").into();
     }
     track.participant_identity.clone().into()
+}
+
+/// Formats the official viewer header label, e.g. `"Alice's screen · 720p 30 FPS"`.
+pub(crate) fn format_stage_header(
+    track: &TrackSubscriptionKey,
+    participant_label: &str,
+    frame_dims: Option<(u32, u32)>,
+    fps: Option<u32>,
+) -> String {
+    let base = match track.source {
+        VoiceTrackSource::ScreenShare => format!("{participant_label}'s screen"),
+        VoiceTrackSource::Camera => format!("{participant_label} · {}", l10n::tr("Camera")),
+        VoiceTrackSource::Microphone
+        | VoiceTrackSource::ScreenShareAudio
+        | VoiceTrackSource::Unknown => format!("{participant_label} · {}", l10n::tr("Video Stream")),
+    };
+    match (frame_dims, fps.filter(|&f| f > 0)) {
+        (Some((_, h)), Some(f)) => format!("{base} · {h}p {f} FPS"),
+        (Some((_, h)), None) => format!("{base} · {h}p"),
+        (None, Some(f)) => format!("{base} · {f} FPS"),
+        (None, None) => base,
+    }
 }
 
 fn render_inner(
     track: &TrackSubscriptionKey,
     participant_label: SharedString,
     frame_image: Option<(u32, u32, Arc<RenderImage>)>,
+    fps: Option<u32>,
     expanded: bool,
     theme: &Theme,
     cx: &mut Context<ClientView>,
 ) -> impl IntoElement {
-    let source_label: SharedString = match track.source {
-        VoiceTrackSource::ScreenShare => l10n::tr("Screen Share").into(),
-        VoiceTrackSource::Camera => l10n::tr("Camera").into(),
-        VoiceTrackSource::Microphone | VoiceTrackSource::ScreenShareAudio | VoiceTrackSource::Unknown => {
-            l10n::tr("Video Stream").into()
-        }
-    };
-    let resolution_label: Option<SharedString> = frame_image
-        .as_ref()
-        .map(|(w, h, _)| format!("{w}x{h}").into());
+    let dims = frame_image.as_ref().map(|(w, h, _)| (*w, *h));
+    let header_text = format_stage_header(track, participant_label.as_ref(), dims, fps);
     let track_for_stop = track.clone();
 
     div()
@@ -98,6 +117,7 @@ fn render_inner(
         .role(Role::Region)
         .aria_label(l10n::tr("Watched video stream"))
         .debug_selector(|| "video-viewer".to_owned())
+        .flx("voice.video-viewer.stage")
         .flex()
         .flex_col()
         .when(expanded, |d| d.flex_1().min_h(px(320.)))
@@ -117,36 +137,16 @@ fn render_inner(
                 .gap_2()
                 .child(
                     div()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap_2()
+                        .id("video-viewer-header")
+                        .debug_selector(|| "video-viewer-header".to_owned())
+                        .flx_text("voice.video-viewer.header", header_text.clone())
+                        .flex_1()
                         .min_w_0()
-                        .child(
-                            div()
-                                .text_xs()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .text_color(theme.foreground)
-                                .child(source_label),
-                        )
-                        .child(
-                            div()
-                                .truncate()
-                                .text_xs()
-                                .text_color(theme.muted_foreground)
-                                .child(participant_label),
-                        )
-                        .when_some(resolution_label, |d, res| {
-                            d.child(
-                                div()
-                                    .px_1()
-                                    .rounded(px(4.))
-                                    .bg(theme.background)
-                                    .text_xs()
-                                    .text_color(theme.muted_foreground)
-                                    .child(res),
-                            )
-                        }),
+                        .truncate()
+                        .text_xs()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(theme.foreground)
+                        .child(header_text),
                 )
                 .child(
                     div()

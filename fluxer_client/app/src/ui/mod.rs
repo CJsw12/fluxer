@@ -26,6 +26,7 @@ pub mod message_list;
 pub mod message_row;
 pub mod moderation_modal;
 pub mod profile_popout;
+pub mod screen_share_modal;
 pub mod user_panel;
 pub(crate) mod video_viewer;
 pub mod voice_panel;

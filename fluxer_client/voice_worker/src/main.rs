@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use base64::Engine as _;
 use futures_util::StreamExt as _;
-use livekit::options::TrackPublishOptions;
+use livekit::options::{TrackPublishOptions, VideoCodec, VideoEncoding};
 use livekit::prelude::*;
 use livekit::webrtc::desktop_capturer::{
     CaptureError, DesktopCaptureSourceType, DesktopCapturer, DesktopCapturerOptions,
@@ -31,6 +31,22 @@ fn default_true() -> bool {
     true
 }
 
+/// Enumerated desktop/window capture source returned to `fluxer_client`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct ScreenSourceInfo {
+    id: u64,
+    kind: String,
+    title: String,
+    display_id: i64,
+}
+
+/// Active speaker audio-level entry forwarded from LiveKit `ActiveSpeakersChanged`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+struct SpeakerInfo {
+    participant_identity: String,
+    audio_level: f32,
+}
+
 /// Commands received from `fluxer_client` over private stdin.
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -50,9 +66,24 @@ enum WorkerCommand {
     SetPlaybackMuted {
         muted: bool,
     },
+    ListScreenSources,
     SetScreenShare {
         active: bool,
         with_audio: bool,
+        #[serde(default)]
+        source_id: Option<u64>,
+        #[serde(default)]
+        source_kind: Option<String>,
+        #[serde(default)]
+        width: Option<u32>,
+        #[serde(default)]
+        height: Option<u32>,
+        #[serde(default)]
+        fps: Option<u32>,
+        #[serde(default)]
+        codec: Option<String>,
+        #[serde(default)]
+        max_bitrate: Option<u64>,
     },
     SetAudioSettings {
         input_device: Option<String>,
@@ -89,10 +120,28 @@ impl fmt::Debug for WorkerCommand {
                 .debug_struct("SetPlaybackMuted")
                 .field("muted", muted)
                 .finish(),
-            Self::SetScreenShare { active, with_audio } => f
+            Self::ListScreenSources => f.write_str("ListScreenSources"),
+            Self::SetScreenShare {
+                active,
+                with_audio,
+                source_id,
+                source_kind,
+                width,
+                height,
+                fps,
+                codec,
+                max_bitrate,
+            } => f
                 .debug_struct("SetScreenShare")
                 .field("active", active)
                 .field("with_audio", with_audio)
+                .field("source_id", source_id)
+                .field("source_kind", source_kind)
+                .field("width", width)
+                .field("height", height)
+                .field("fps", fps)
+                .field("codec", codec)
+                .field("max_bitrate", max_bitrate)
                 .finish(),
             Self::SetAudioSettings {
                 input_device,
@@ -116,12 +165,18 @@ impl fmt::Debug for WorkerCommand {
 }
 
 /// Events emitted to `fluxer_client` over private stdout.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum WorkerEvent {
     Connected,
     Error { message: String },
     Disconnected { reason: String },
+    ScreenSources {
+        sources: Vec<ScreenSourceInfo>,
+    },
+    ActiveSpeakers {
+        speakers: Vec<SpeakerInfo>,
+    },
     TrackPublished {
         participant_identity: String,
         participant_sid: String,
@@ -293,6 +348,213 @@ fn bgra_to_i420(
     }
 
     true
+}
+
+/// Converts a BGRA8888 buffer into scaled planar I420 (YUV 4:2:0) using integer BT.601 math.
+/// Uses direct coordinate mapping so no intermediate BGRA allocation is required.
+#[allow(clippy::too_many_arguments)]
+fn bgra_to_i420_scaled(
+    bgra: &[u8],
+    stride: usize,
+    src_w: u32,
+    src_h: u32,
+    dst_w: u32,
+    dst_h: u32,
+    y_plane: &mut [u8],
+    y_stride: usize,
+    u_plane: &mut [u8],
+    u_stride: usize,
+    v_plane: &mut [u8],
+    v_stride: usize,
+) -> bool {
+    if src_w == dst_w && src_h == dst_h {
+        return bgra_to_i420(
+            bgra, stride, src_w, src_h, y_plane, y_stride, u_plane, u_stride, v_plane, v_stride,
+        );
+    }
+    if src_w < 2
+        || src_h < 2
+        || dst_w < 2
+        || dst_h < 2
+        || (dst_w & 1) != 0
+        || (dst_h & 1) != 0
+    {
+        return false;
+    }
+    let sw = src_w as usize;
+    let sh = src_h as usize;
+    let dw = dst_w as usize;
+    let dh = dst_h as usize;
+    let cw = dw / 2;
+    let ch = dh / 2;
+
+    let Some(min_bgra_row) = sw.checked_mul(4) else {
+        return false;
+    };
+    if stride < min_bgra_row || y_stride < dw || u_stride < cw || v_stride < cw {
+        return false;
+    }
+    let Some(req_bgra) = (sh - 1).checked_mul(stride).and_then(|o| o.checked_add(min_bgra_row)) else {
+        return false;
+    };
+    let Some(req_y) = (dh - 1).checked_mul(y_stride).and_then(|o| o.checked_add(dw)) else {
+        return false;
+    };
+    let Some(req_u) = (ch - 1).checked_mul(u_stride).and_then(|o| o.checked_add(cw)) else {
+        return false;
+    };
+    let Some(req_v) = (ch - 1).checked_mul(v_stride).and_then(|o| o.checked_add(cw)) else {
+        return false;
+    };
+    if bgra.len() < req_bgra
+        || y_plane.len() < req_y
+        || u_plane.len() < req_u
+        || v_plane.len() < req_v
+    {
+        return false;
+    }
+
+    for dy in 0..dh {
+        let sy = (dy * sh) / dh;
+        let src_row = &bgra[sy * stride..sy * stride + min_bgra_row];
+        let dst_y = &mut y_plane[dy * y_stride..dy * y_stride + dw];
+        for (dx, y_out) in dst_y.iter_mut().enumerate() {
+            let sx = ((dx * sw) / dw) * 4;
+            let b = i32::from(src_row[sx]);
+            let g = i32::from(src_row[sx + 1]);
+            let r = i32::from(src_row[sx + 2]);
+            let y = ((66 * r + 129 * g + 25 * b + 128) >> 8) + 16;
+            *y_out = y.clamp(0, 255) as u8;
+        }
+    }
+
+    for cy in 0..ch {
+        let sy0 = ((cy * 2) * sh) / dh;
+        let sy1 = ((cy * 2 + 1).min(dh - 1) * sh) / dh;
+        let r0 = &bgra[sy0 * stride..sy0 * stride + min_bgra_row];
+        let r1 = &bgra[sy1 * stride..sy1 * stride + min_bgra_row];
+        let dst_u = &mut u_plane[cy * u_stride..cy * u_stride + cw];
+        let dst_v = &mut v_plane[cy * v_stride..cy * v_stride + cw];
+
+        for cx in 0..cw {
+            let sx0 = (((cx * 2) * sw) / dw) * 4;
+            let sx1 = ((((cx * 2 + 1).min(dw - 1)) * sw) / dw) * 4;
+            let b = (i32::from(r0[sx0])
+                + i32::from(r0[sx1])
+                + i32::from(r1[sx0])
+                + i32::from(r1[sx1])
+                + 2)
+                >> 2;
+            let g = (i32::from(r0[sx0 + 1])
+                + i32::from(r0[sx1 + 1])
+                + i32::from(r1[sx0 + 1])
+                + i32::from(r1[sx1 + 1])
+                + 2)
+                >> 2;
+            let r = (i32::from(r0[sx0 + 2])
+                + i32::from(r0[sx1 + 2])
+                + i32::from(r1[sx0 + 2])
+                + i32::from(r1[sx1 + 2])
+                + 2)
+                >> 2;
+
+            let u = ((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128;
+            let v = ((112 * r - 94 * g - 18 * b + 128) >> 8) + 128;
+            dst_u[cx] = u.clamp(0, 255) as u8;
+            dst_v[cx] = v.clamp(0, 255) as u8;
+        }
+    }
+
+    true
+}
+
+fn parse_video_codec(raw: Option<&str>) -> VideoCodec {
+    match raw.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
+        Some("h264") => VideoCodec::H264,
+        Some("vp8") => VideoCodec::VP8,
+        Some("vp9") => VideoCodec::VP9,
+        Some("av1") => VideoCodec::AV1,
+        Some("h265" | "hevc") => VideoCodec::H265,
+        _ => VideoCodec::VP8,
+    }
+}
+
+fn default_bitrate_for_resolution(width: Option<u32>, height: Option<u32>) -> u64 {
+    let max_h = height.unwrap_or_else(|| {
+        width.map_or(1080, |w| if w <= 1280 { 720 } else if w <= 1920 { 1080 } else { 1440 })
+    });
+    if max_h <= 720 {
+        2_500_000
+    } else if max_h <= 1080 {
+        5_000_000
+    } else {
+        8_000_000
+    }
+}
+
+fn resolve_screen_share_encoding(
+    width: Option<u32>,
+    height: Option<u32>,
+    fps: Option<u32>,
+    max_bitrate: Option<u64>,
+) -> (u32, VideoEncoding) {
+    let fps_clamped = fps.unwrap_or(30).clamp(5, 60);
+    let bitrate = max_bitrate
+        .filter(|&b| b >= 100_000)
+        .unwrap_or_else(|| default_bitrate_for_resolution(width, height));
+    (
+        fps_clamped,
+        VideoEncoding {
+            max_bitrate: bitrate,
+            max_framerate: f64::from(fps_clamped),
+        },
+    )
+}
+
+fn enumerate_sources_for_type(
+    source_type: DesktopCaptureSourceType,
+    kind: &str,
+) -> Vec<ScreenSourceInfo> {
+    let mut opts = DesktopCapturerOptions::new(source_type);
+    opts.set_include_cursor(true);
+    let Some(capturer) = DesktopCapturer::new(opts) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for (idx, src) in capturer.get_source_list().into_iter().enumerate() {
+        let raw_title = src.title();
+        let trimmed = raw_title.trim();
+        if kind == "window" && trimmed.is_empty() {
+            continue;
+        }
+        let title = if trimmed.is_empty() {
+            format!("Display {}", idx + 1)
+        } else {
+            trimmed.to_owned()
+        };
+        out.push(ScreenSourceInfo {
+            id: src.id(),
+            kind: kind.to_owned(),
+            title,
+            display_id: src.display_id(),
+        });
+    }
+    out
+}
+
+async fn enumerate_screen_sources() -> Vec<ScreenSourceInfo> {
+    let mut screens = tokio::task::spawn_blocking(|| {
+        enumerate_sources_for_type(DesktopCaptureSourceType::Screen, "screen")
+    })
+    .await
+    .unwrap_or_default();
+    let windows = tokio::task::spawn_blocking(|| {
+        enumerate_sources_for_type(DesktopCaptureSourceType::Window, "window")
+    })
+    .await
+    .unwrap_or_default();
+    screens.extend(windows);
+    screens
 }
 
 fn spawn_video_decode_task(
@@ -717,15 +979,47 @@ async fn run_worker() -> i32 {
                                 playback_muted = muted;
                                 apply_playback_mute(&room, playback_muted);
                             }
-                            WorkerCommand::SetScreenShare { active, .. } => {
+                            WorkerCommand::ListScreenSources => {
+                                let sources = enumerate_screen_sources().await;
+                                emit_event(&mut stdout, &WorkerEvent::ScreenSources { sources }).await;
+                            }
+                            WorkerCommand::SetScreenShare {
+                                active,
+                                with_audio: _,
+                                source_id,
+                                source_kind,
+                                width,
+                                height,
+                                fps,
+                                codec,
+                                max_bitrate,
+                            } => {
                                 if !active {
                                     stop_screen_share(&mut active_screen_share, &room).await;
-                                } else if active_screen_share.is_none() {
-                                    let mut opts = DesktopCapturerOptions::new(
-                                        DesktopCaptureSourceType::Screen,
-                                    );
-                                    opts.set_include_cursor(true);
-                                    let Some(mut capturer) = DesktopCapturer::new(opts) else {
+                                } else {
+                                    if active_screen_share.is_some() {
+                                        stop_screen_share(&mut active_screen_share, &room).await;
+                                    }
+                                    let want_window = source_kind
+                                        .as_deref()
+                                        .is_some_and(|k| k.eq_ignore_ascii_case("window"));
+                                    let mut capturer_opt = if want_window {
+                                        let mut wopts = DesktopCapturerOptions::new(
+                                            DesktopCaptureSourceType::Window,
+                                        );
+                                        wopts.set_include_cursor(true);
+                                        DesktopCapturer::new(wopts)
+                                    } else {
+                                        None
+                                    };
+                                    if capturer_opt.is_none() {
+                                        let mut sopts = DesktopCapturerOptions::new(
+                                            DesktopCaptureSourceType::Screen,
+                                        );
+                                        sopts.set_include_cursor(true);
+                                        capturer_opt = DesktopCapturer::new(sopts);
+                                    }
+                                    let Some(mut capturer) = capturer_opt else {
                                         emit_event(
                                             &mut stdout,
                                             &WorkerEvent::Error {
@@ -735,12 +1029,33 @@ async fn run_worker() -> i32 {
                                         .await;
                                         continue;
                                     };
-                                    let primary_source =
-                                        capturer.get_source_list().into_iter().next();
+                                    let mut source_list = capturer.get_source_list();
+                                    let selected_source = if let Some(req_id) = source_id {
+                                        if let Some(pos) =
+                                            source_list.iter().position(|s| s.id() == req_id)
+                                        {
+                                            Some(source_list.swap_remove(pos))
+                                        } else {
+                                            source_list.into_iter().next()
+                                        }
+                                    } else {
+                                        source_list.into_iter().next()
+                                    };
+                                    let target_w = width.filter(|&w| w >= 2).map(|w| w & !1);
+                                    let target_h = height.filter(|&h| h >= 2).map(|h| h & !1);
+                                    let (fps_clamped, video_encoding) =
+                                        resolve_screen_share_encoding(
+                                            target_w,
+                                            target_h,
+                                            fps,
+                                            max_bitrate,
+                                        );
+                                    let capture_interval =
+                                        Duration::from_nanos(1_000_000_000 / u64::from(fps_clamped));
                                     let source = NativeVideoSource::new(
                                         VideoResolution {
-                                            width: 1280,
-                                            height: 720,
+                                            width: target_w.unwrap_or(1920),
+                                            height: target_h.unwrap_or(1080),
                                         },
                                         true,
                                     );
@@ -750,6 +1065,8 @@ async fn run_worker() -> i32 {
                                     );
                                     let publish_opts = TrackPublishOptions {
                                         source: TrackSource::Screenshare,
+                                        video_encoding: Some(video_encoding),
+                                        video_codec: parse_video_codec(codec.as_deref()),
                                         ..Default::default()
                                     };
                                     let pub_handle = match room
@@ -775,7 +1092,7 @@ async fn run_worker() -> i32 {
                                     let thread_stop_flag = Arc::clone(&stop_flag);
                                     let callback_stop_flag = Arc::clone(&stop_flag);
                                     let start_instant = Instant::now();
-                                    capturer.start_capture(primary_source, move |result| {
+                                    capturer.start_capture(selected_source, move |result| {
                                         match result {
                                             Ok(frame) => {
                                                 if callback_stop_flag.load(Ordering::Acquire) {
@@ -786,21 +1103,36 @@ async fn run_worker() -> i32 {
                                                 if raw_w <= 0 || raw_h <= 0 {
                                                     return;
                                                 }
-                                                let w = (raw_w as u32) & !1;
-                                                let h = (raw_h as u32) & !1;
-                                                if w < 2 || h < 2 {
+                                                let src_w = (raw_w as u32) & !1;
+                                                let src_h = (raw_h as u32) & !1;
+                                                if src_w < 2 || src_h < 2 {
                                                     return;
                                                 }
+                                                let (dst_w, dst_h) = match (target_w, target_h) {
+                                                    (Some(tw), Some(th)) => {
+                                                        match compute_scaled_dimensions(
+                                                            src_w, src_h, tw, th,
+                                                        ) {
+                                                            Some((sw, sh)) => {
+                                                                ((sw & !1).max(2), (sh & !1).max(2))
+                                                            }
+                                                            None => (src_w, src_h),
+                                                        }
+                                                    }
+                                                    _ => (src_w, src_h),
+                                                };
                                                 let src_stride = frame.stride() as usize;
                                                 let src_data = frame.data();
-                                                let mut i420 = I420Buffer::new(w, h);
+                                                let mut i420 = I420Buffer::new(dst_w, dst_h);
                                                 let (y_stride, u_stride, v_stride) = i420.strides();
                                                 let (y_plane, u_plane, v_plane) = i420.data_mut();
-                                                if !bgra_to_i420(
+                                                if !bgra_to_i420_scaled(
                                                     src_data,
                                                     src_stride,
-                                                    w,
-                                                    h,
+                                                    src_w,
+                                                    src_h,
+                                                    dst_w,
+                                                    dst_h,
                                                     y_plane,
                                                     y_stride as usize,
                                                     u_plane,
@@ -830,11 +1162,16 @@ async fn run_worker() -> i32 {
                                     });
                                     let capture_thread = std::thread::spawn(move || {
                                         while !thread_stop_flag.load(Ordering::Acquire) {
+                                            let tick = Instant::now();
                                             capturer.capture_frame();
                                             if thread_stop_flag.load(Ordering::Acquire) {
                                                 break;
                                             }
-                                            std::thread::sleep(VIDEO_FRAME_MIN_INTERVAL);
+                                            if let Some(remaining) =
+                                                capture_interval.checked_sub(tick.elapsed())
+                                            {
+                                                std::thread::sleep(remaining);
+                                            }
                                         }
                                     });
                                     active_screen_share = Some(ActiveScreenShare {
@@ -982,6 +1319,17 @@ async fn run_worker() -> i32 {
                             },
                         )
                         .await;
+                    }
+                    Some(RoomEvent::ActiveSpeakersChanged { speakers }) => {
+                        let list = speakers
+                            .into_iter()
+                            .map(|p| SpeakerInfo {
+                                participant_identity: p.identity().to_string(),
+                                audio_level: p.audio_level(),
+                            })
+                            .collect();
+                        emit_event(&mut stdout, &WorkerEvent::ActiveSpeakers { speakers: list })
+                            .await;
                     }
                     Some(RoomEvent::Disconnected { reason }) => {
                         abort_video_task(&mut active_video_task);
@@ -1407,5 +1755,97 @@ mod tests {
         assert!(!bgra_to_i420(&bgra, 16, 4, 4, &mut y[..15], 4, &mut u, 2, &mut v, 2));
         assert!(!bgra_to_i420(&bgra, 16, 4, 4, &mut y, 4, &mut u[..3], 2, &mut v, 2));
         assert!(!bgra_to_i420(&bgra, 16, 4, 4, &mut y, 4, &mut u, 2, &mut v[..3], 2));
+    }
+
+    #[test]
+    fn screen_share_quality_list_sources_and_active_speakers_json_round_trip() {
+        let list_cmd = WorkerCommand::ListScreenSources;
+        let list_json = serde_json::to_string(&list_cmd).unwrap();
+        assert!(list_json.contains("\"type\":\"list_screen_sources\""));
+        assert_eq!(serde_json::from_str::<WorkerCommand>(&list_json).unwrap(), list_cmd);
+
+        // Legacy minimal SetScreenShare payload still deserializes with None defaults.
+        let legacy: WorkerCommand =
+            serde_json::from_str(r#"{"type":"set_screen_share","active":true,"with_audio":false}"#)
+                .unwrap();
+        assert_eq!(
+            legacy,
+            WorkerCommand::SetScreenShare {
+                active: true,
+                with_audio: false,
+                source_id: None,
+                source_kind: None,
+                width: None,
+                height: None,
+                fps: None,
+                codec: None,
+                max_bitrate: None,
+            }
+        );
+
+        let full = WorkerCommand::SetScreenShare {
+            active: true,
+            with_audio: true,
+            source_id: Some(42),
+            source_kind: Some("window".to_owned()),
+            width: Some(1920),
+            height: Some(1080),
+            fps: Some(60),
+            codec: Some("h264".to_owned()),
+            max_bitrate: Some(6_000_000),
+        };
+        let full_json = serde_json::to_string(&full).unwrap();
+        assert_eq!(serde_json::from_str::<WorkerCommand>(&full_json).unwrap(), full);
+
+        let sources_ev = WorkerEvent::ScreenSources {
+            sources: vec![ScreenSourceInfo {
+                id: 7,
+                kind: "screen".to_owned(),
+                title: "Display 1".to_owned(),
+                display_id: 1,
+            }],
+        };
+        let s_json = serde_json::to_string(&sources_ev).unwrap();
+        assert!(s_json.contains("\"type\":\"screen_sources\""));
+        assert_eq!(serde_json::from_str::<WorkerEvent>(&s_json).unwrap(), sources_ev);
+
+        let speakers_ev = WorkerEvent::ActiveSpeakers {
+            speakers: vec![SpeakerInfo {
+                participant_identity: "user_12345_sess".to_owned(),
+                audio_level: 0.75,
+            }],
+        };
+        let sp_json = serde_json::to_string(&speakers_ev).unwrap();
+        assert!(sp_json.contains("\"type\":\"active_speakers\""));
+        assert_eq!(serde_json::from_str::<WorkerEvent>(&sp_json).unwrap(), speakers_ev);
+    }
+
+    #[test]
+    fn bgra_to_i420_scaled_downscales_cleanly() {
+        let bgra = make_solid_bgra_4x4([0, 0, 255, 255], 16); // 4x4 pure red
+        let mut y = vec![0u8; 4];
+        let mut u = vec![0u8; 1];
+        let mut v = vec![0u8; 1];
+        assert!(bgra_to_i420_scaled(
+            &bgra, 16, 4, 4, 2, 2, &mut y, 2, &mut u, 1, &mut v, 1
+        ));
+        assert_eq!(y, vec![82, 82, 82, 82]);
+        assert_eq!(u, vec![90]);
+        assert_eq!(v, vec![240]);
+    }
+
+    #[test]
+    fn parse_video_codec_and_encoding_defaults() {
+        assert_eq!(parse_video_codec(Some("H264")), VideoCodec::H264);
+        assert_eq!(parse_video_codec(Some("vp9")), VideoCodec::VP9);
+        assert_eq!(parse_video_codec(Some("av1")), VideoCodec::AV1);
+        assert_eq!(parse_video_codec(Some("h265")), VideoCodec::H265);
+        assert_eq!(parse_video_codec(Some("auto")), VideoCodec::VP8);
+        assert_eq!(parse_video_codec(None), VideoCodec::VP8);
+
+        let (fps, enc) = resolve_screen_share_encoding(Some(1920), Some(1080), Some(60), None);
+        assert_eq!(fps, 60);
+        assert_eq!(enc.max_bitrate, 5_000_000);
+        assert_eq!(enc.max_framerate, 60.0);
     }
 }

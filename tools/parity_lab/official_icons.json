@@ -1,11 +1,29 @@
 [
  {
   "flx": "app.channel-item-icon.icon",
+  "icon": "fill/chat-teardrop-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "app.channel-item-icon.icon",
+  "icon": "fill/gear-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "tester1:guild_menu"
+ },
+ {
+  "flx": "app.channel-item-icon.icon",
   "icon": "fill/user-plus-fill",
   "sizes": [
    16
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.channel-item.category-icon",
@@ -13,7 +31,17 @@
   "sizes": [
    12
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "app.channel-list-content.users-icon",
+  "icon": "fill/users-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "tester1:guild_menu"
  },
  {
   "flx": "app.channel-pins-content.sparkle-icon",
@@ -29,7 +57,9 @@
   "sizes": [
    12
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.favorites-guild-header.caret-down-icon",
@@ -56,12 +86,62 @@
   "example_state": "Inbox > Unread"
  },
  {
+  "flx": "app.floating.user-area-popout.action-button.action-chevron",
+  "icon": "bold/caret-right-bold",
+  "sizes": [
+   14
+  ],
+  "example_state": "tester1:user_area_popout"
+ },
+ {
+  "flx": "app.floating.user-area-popout.copy-icon",
+  "icon": "fill/copy-fill",
+  "sizes": [
+   14
+  ],
+  "example_state": "tester1:user_area_popout"
+ },
+ {
+  "flx": "app.floating.user-area-popout.custom-status-placeholder-icon",
+  "icon": "regular/smiley",
+  "sizes": [
+   14
+  ],
+  "example_state": "tester1:user_area_popout"
+ },
+ {
+  "flx": "app.floating.user-area-popout.identification-badge-icon",
+  "icon": "bold/identification-badge-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "tester1:user_area_popout"
+ },
+ {
+  "flx": "app.floating.user-area-popout.pencil-icon",
+  "icon": "bold/pencil-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "tester1:user_area_popout"
+ },
+ {
+  "flx": "app.floating.user-area-popout.users-three-icon",
+  "icon": "bold/users-three-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "tester1:user_area_popout"
+ },
+ {
   "flx": "app.guild-header.caret-icon",
   "icon": "bold/caret-down-bold",
   "sizes": [
    16
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.modal.header.x-icon",
@@ -69,7 +149,9 @@
   "sizes": [
    24
   ],
-  "example_state": "Create or join a community"
+  "example_state": "Create or join a community",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.native-titlebar.minus-icon",
@@ -77,7 +159,9 @@
   "sizes": [
    17
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.native-titlebar.toggle-maximize-icon",
@@ -85,7 +169,9 @@
   "sizes": [
    17
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.native-titlebar.x-icon",
@@ -93,7 +179,9 @@
   "sizes": [
    17
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.settings-heading-link-button.link-icon",
@@ -101,7 +189,9 @@
   "sizes": [
    15
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.settings-modal-header.icon",
@@ -109,7 +199,9 @@
   "sizes": [
    16
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-chevron",
@@ -117,7 +209,9 @@
   "sizes": [
    16
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
@@ -125,7 +219,9 @@
   "sizes": [
    20
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
@@ -133,7 +229,9 @@
   "sizes": [
    20
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
@@ -141,7 +239,9 @@
   "sizes": [
    20
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
@@ -149,7 +249,9 @@
   "sizes": [
    20
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
@@ -157,7 +259,9 @@
   "sizes": [
    20
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
@@ -165,7 +269,9 @@
   "sizes": [
    20
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
@@ -173,7 +279,9 @@
   "sizes": [
    20
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
@@ -181,7 +289,9 @@
   "sizes": [
    20
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
@@ -189,7 +299,9 @@
   "sizes": [
    20
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
@@ -197,7 +309,9 @@
   "sizes": [
    20
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
@@ -205,7 +319,9 @@
   "sizes": [
    20
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
@@ -213,7 +329,19 @@
   "sizes": [
    20
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+  "icon": "fill/sign-out-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "settings:Language",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
@@ -221,7 +349,9 @@
   "sizes": [
    20
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
@@ -229,7 +359,9 @@
   "sizes": [
    20
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.settings-search.magnifying-glass-icon",
@@ -237,7 +369,9 @@
   "sizes": [
    16
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.sidebar-nav.add-guild-button.icon-text",
@@ -245,7 +379,9 @@
   "sizes": [
    20
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.sidebar-nav.discovery-button.icon-text",
@@ -253,7 +389,17 @@
   "sizes": [
    20
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "app.sidebar-nav.download-button.icon-text",
+  "icon": "bold/download-simple-bold",
+  "sizes": [
+   20
+  ],
+  "example_state": "tester1:guild_menu"
  },
  {
   "flx": "app.sidebar-nav.favorites-button.favorites-icon",
@@ -261,7 +407,9 @@
   "sizes": [
    28
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.sidebar-nav.fluxer-button.message-bubble-icon",
@@ -269,7 +417,37 @@
   "sizes": [
    28
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "app.sidebar-nav.voice-badge.get-voice-badge-icon.speaker-high-icon",
+  "icon": "fill/speaker-high-fill",
+  "sizes": [
+   12
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "app.status-slate.icon",
+  "icon": "fill/app-window-fill",
+  "sizes": [
+   44
+  ],
+  "example_state": "settings:Applications",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "app.status-slate.icon",
+  "icon": "fill/user-list-fill",
+  "sizes": [
+   44
+  ],
+  "example_state": "settings:Connections",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "app.user-area.user-area-inner.control-icon",
@@ -296,6 +474,66 @@
   "example_state": ":relaxed:"
  },
  {
+  "flx": "app.user-area.user-area-inner.control-icon--2",
+  "icon": "fill/microphone-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "markdown-rest",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "app.user-area.user-area-inner.control-icon--4",
+  "icon": "fill/speaker-high-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "tester1:guild_menu",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "app.user-area.user-area-inner.control-icon--5",
+  "icon": "fill/gear-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "tester1:guild_menu",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "app.voice-state-icons.icon",
+  "icon": "fill/microphone-slash-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "app.voice-state-icons.icon",
+  "icon": "fill/speaker-slash-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "channel.active-now.active-now-sidebar.empty-icon",
+  "icon": "CUSTOM:0 0 24 24",
+  "sizes": [
+   48
+  ],
+  "example_state": "dm-home",
+  "viewBox": "0 0 24 24",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US",
+  "d": [
+   "M4 12h6l-6 8h6",
+   "M14 4h6l-6 8h6"
+  ]
+ },
+ {
   "flx": "channel.channel-header-components.channel-header-icon.button-icon",
   "icon": "CUSTOM:0 0 24 24",
   "sizes": [
@@ -303,7 +541,8 @@
   ],
   "example_state": ":relaxed:",
   "viewBox": "0 0 256 256",
-  "d": "M231.88,175.08A56.26,56.26,0,0,1,176,224C96.6,224,32,159.4,32,80A56.26,56.26,0,0,1,80.92,24.12a16,16,0,0,1,16.62,9.52l21.12,47.15,0,.12A16,16,0,0,1,117.39,96c-.18.27-.37.52-.57.77L96,121.45c7.49,15.22,23.41,31,38.83,38.51l24.34-20.71a8.12,8.12,0,0,1,.75-.56,16,16,0,0,1,15.17-1.4l.13.06,47.11,21.11A16,16,0,0,1,231.88,175.08Z"
+  "d": "M231.88,175.08A56.26,56.26,0,0,1,176,224C96.6,224,32,159.4,32,80A56.26,56.26,0,0,1,80.92,24.12a16,16,0,0,1,16.62,9.52l21.12,47.15,0,.12A16,16,0,0,1,117.39,96c-.18.27-.37.52-.57.77L96,121.45c7.49,15.22,23.41,31,38.83,38.51l24.34-20.71a8.12,8.12,0,0,1,.75-.56,16,16,0,0,1,15.17-1.4l.13.06,47.11,21.11A16,16,0,0,1,231.88,175.08Z",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.channel-header-components.channel-header-icon.button-icon",
@@ -311,7 +550,9 @@
   "sizes": [
    24
   ],
-  "example_state": "Explore communities"
+  "example_state": "Explore communities",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.channel-header-components.channel-header-icon.button-icon",
@@ -323,11 +564,21 @@
  },
  {
   "flx": "channel.channel-header-components.channel-header-icon.button-icon",
+  "icon": "fill/arrow-square-out-fill",
+  "sizes": [
+   21
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "channel.channel-header-components.channel-header-icon.button-icon",
   "icon": "fill/bell-fill",
   "sizes": [
    24
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.channel-header-components.channel-header-icon.button-icon",
@@ -335,7 +586,17 @@
   "sizes": [
    24
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "channel.channel-header-components.channel-header-icon.button-icon",
+  "icon": "fill/corners-out-fill",
+  "sizes": [
+   21
+  ],
+  "example_state": "voice_stage"
  },
  {
   "flx": "channel.channel-header-components.channel-header-icon.button-icon",
@@ -343,7 +604,9 @@
   "sizes": [
    24
   ],
-  "example_state": "Direct messages"
+  "example_state": "Direct messages",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.channel-header-components.channel-header-icon.button-icon",
@@ -351,7 +614,9 @@
   "sizes": [
    24
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.channel-header-components.channel-header-icon.button-icon",
@@ -359,7 +624,9 @@
   "sizes": [
    24
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.channel-header-components.channel-header-icon.button-icon",
@@ -367,7 +634,9 @@
   "sizes": [
    24
   ],
-  "example_state": "Direct messages"
+  "example_state": "Direct messages",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.channel-header-components.updater-icon.update-icon",
@@ -375,7 +644,9 @@
   "sizes": [
    24
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.channel-header.button-icon",
@@ -383,7 +654,9 @@
   "sizes": [
    24
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.channel-pins-popout.icon-large",
@@ -404,7 +677,8 @@
   ],
   "example_state": ":relaxed:",
   "viewBox": "0 0 256 256",
-  "d": "M164.193 37.8536c1.186-6.5205 7.433-10.8456 13.953-9.6602 6.521 1.1856 10.846 7.4327 9.661 13.9531L180.197 84H224c6.627 0 12 5.3726 12 12 0 6.627-5.373 12-12 12h-48.167l-7.272 40H208c6.627 0 12 5.373 12 12s-5.373 12-12 12h-43.803l-8.39 46.147c-1.186 6.52-7.433 10.845-13.953 9.66-6.521-1.186-10.846-7.433-9.661-13.953l7.61-41.854h-39.606l-8.3904 46.147c-1.1856 6.52-7.4327 10.845-13.9531 9.66-6.5204-1.186-10.8455-7.433-9.6601-13.953L75.8027 172H32c-6.6274 0-11.9999-5.373-12-12 0-6.627 5.3726-12 12-12h48.167l7.2725-40H48c-6.6274 0-11.9999-5.373-12-12 0-6.6274 5.3726-12 12-12h43.8027l8.3903-46.1464c1.186-6.5205 7.433-10.8456 13.953-9.6602 6.521 1.1856 10.846 7.4327 9.661 13.9531L116.197 84h39.606zM104.561 148h39.606l7.272-40h-39.606z"
+  "d": "M164.193 37.8536c1.186-6.5205 7.433-10.8456 13.953-9.6602 6.521 1.1856 10.846 7.4327 9.661 13.9531L180.197 84H224c6.627 0 12 5.3726 12 12 0 6.627-5.373 12-12 12h-48.167l-7.272 40H208c6.627 0 12 5.373 12 12s-5.373 12-12 12h-43.803l-8.39 46.147c-1.186 6.52-7.433 10.845-13.953 9.66-6.521-1.186-10.846-7.433-9.661-13.953l7.61-41.854h-39.606l-8.3904 46.147c-1.1856 6.52-7.4327 10.845-13.9531 9.66-6.5204-1.186-10.8455-7.433-9.6601-13.953L75.8027 172H32c-6.6274 0-11.9999-5.373-12-12 0-6.627 5.3726-12 12-12h48.167l7.2725-40H48c-6.6274 0-11.9999-5.373-12-12 0-6.6274 5.3726-12 12-12h43.8027l8.3903-46.1464c1.186-6.5205 7.433-10.8456 13.953-9.6602 6.521 1.1856 10.846 7.4327 9.661 13.9531L116.197 84h39.606zM104.561 148h39.606l7.272-40h-39.606z",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.channel-utils.get-icon.voice-channel-icon",
@@ -414,7 +688,18 @@
   ],
   "example_state": ":relaxed:",
   "viewBox": "0 0 256 256",
-  "d": "M116.693 32.0001C126.763 21.9201 144 29.056 144 43.3067V212.693c0 14.251-17.237 21.387-27.317 11.307l-48.0003-48H48.0958c-12.1705 0-24.725-7.094-28.3623-20.32-2.4426-8.821-3.7334-18.101-3.7334-27.68-.0115-9.351 1.2371-18.662 3.7119-27.68 3.648-13.237 16.2033-20.3199 28.374-20.3199h20.6074zm87.19 20.124c2.12 0 4.153.8417 5.653 2.3398 40.619 40.608 40.619 106.4541 0 147.0721-1.516 1.413-3.522 2.182-5.595 2.146-2.072-.037-4.049-.876-5.515-2.342s-2.305-3.443-2.342-5.516c-.036-2.072.733-4.078 2.146-5.594 8.172-8.172 14.656-17.874 19.079-28.551 4.423-10.678 6.699-22.122 6.699-33.679s-2.276-23.001-6.699-33.6786c-4.423-10.6774-10.907-20.3791-19.079-28.5508-1.499-1.5-2.34-3.5333-2.34-5.6533 0-2.1201.841-4.1534 2.34-5.6534 1.5-1.4981 3.533-2.3398 5.653-2.3398m-28.282 28.2724c1.051.0001 2.091.2071 3.062.6094.971.4024 1.853.992 2.596 1.7354 5.944 5.9431 10.659 12.9991 13.876 20.7647 3.217 7.765 4.873 16.089 4.873 24.494 0 8.406-1.656 16.729-4.873 24.494-3.217 7.766-7.932 14.822-13.876 20.765-1.51 1.456-3.531 2.261-5.628 2.242-2.098-.019-4.104-.861-5.587-2.345s-2.323-3.491-2.34-5.589c-.017-2.097.79-4.117 2.248-5.626 4.457-4.457 7.993-9.748 10.405-15.572 2.413-5.823 3.655-12.065 3.655-18.369 0-6.303-1.242-12.545-3.655-18.369-2.412-5.824-5.948-11.1151-10.405-15.5723-1.498-1.5-2.34-3.5334-2.34-5.6534 0-2.1199.842-4.1533 2.34-5.6533l-.011-.0107c.743-.7433 1.625-1.333 2.596-1.7354.971-.4023 2.013-.6094 3.064-.6094"
+  "d": "M116.693 32.0001C126.763 21.9201 144 29.056 144 43.3067V212.693c0 14.251-17.237 21.387-27.317 11.307l-48.0003-48H48.0958c-12.1705 0-24.725-7.094-28.3623-20.32-2.4426-8.821-3.7334-18.101-3.7334-27.68-.0115-9.351 1.2371-18.662 3.7119-27.68 3.648-13.237 16.2033-20.3199 28.374-20.3199h20.6074zm87.19 20.124c2.12 0 4.153.8417 5.653 2.3398 40.619 40.608 40.619 106.4541 0 147.0721-1.516 1.413-3.522 2.182-5.595 2.146-2.072-.037-4.049-.876-5.515-2.342s-2.305-3.443-2.342-5.516c-.036-2.072.733-4.078 2.146-5.594 8.172-8.172 14.656-17.874 19.079-28.551 4.423-10.678 6.699-22.122 6.699-33.679s-2.276-23.001-6.699-33.6786c-4.423-10.6774-10.907-20.3791-19.079-28.5508-1.499-1.5-2.34-3.5333-2.34-5.6533 0-2.1201.841-4.1534 2.34-5.6534 1.5-1.4981 3.533-2.3398 5.653-2.3398m-28.282 28.2724c1.051.0001 2.091.2071 3.062.6094.971.4024 1.853.992 2.596 1.7354 5.944 5.9431 10.659 12.9991 13.876 20.7647 3.217 7.765 4.873 16.089 4.873 24.494 0 8.406-1.656 16.729-4.873 24.494-3.217 7.766-7.932 14.822-13.876 20.765-1.51 1.456-3.531 2.261-5.628 2.242-2.098-.019-4.104-.861-5.587-2.345s-2.323-3.491-2.34-5.589c-.017-2.097.79-4.117 2.248-5.626 4.457-4.457 7.993-9.748 10.405-15.572 2.413-5.823 3.655-12.065 3.655-18.369 0-6.303-1.242-12.545-3.655-18.369-2.412-5.824-5.948-11.1151-10.405-15.5723-1.498-1.5-2.34-3.5334-2.34-5.6534 0-2.1199.842-4.1533 2.34-5.6533l-.011-.0107c.743-.7433 1.625-1.333 2.596-1.7354.971-.4023 2.013-.6094 3.064-.6094",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "channel.direct-message.dm-friends-view.search-icon",
+  "icon": "bold/magnifying-glass-bold",
+  "sizes": [
+   20
+  ],
+  "example_state": "dm-home",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.direct-message.dm-list-item.icon-size4",
@@ -422,7 +707,9 @@
   "sizes": [
    16
   ],
-  "example_state": "Direct messages"
+  "example_state": "Direct messages",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.direct-message.dm-list.icon-size4",
@@ -431,6 +718,16 @@
    16
   ],
   "example_state": "Direct messages"
+ },
+ {
+  "flx": "channel.direct-message.dm-list.icon-size4--2",
+  "icon": "bold/plus-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "dm-home",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.direct-message.dm-list.icon-size5",
@@ -449,12 +746,34 @@
   "example_state": "Direct messages"
  },
  {
+  "flx": "channel.direct-message.dm-list.icon-size5--4",
+  "icon": "fill/users-three-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "dm-home",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "channel.direct-message.dm-list.icon-size5--5",
+  "icon": "fill/note-pencil-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "dm-home",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
   "flx": "channel.embeds.media.media-container.download-simple-icon",
   "icon": "bold/download-simple-bold",
   "sizes": [
    18
   ],
-  "example_state": "Direct messages"
+  "example_state": "Direct messages",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.embeds.media.media-container.star-icon",
@@ -462,7 +781,9 @@
   "sizes": [
    18
   ],
-  "example_state": "Direct messages"
+  "example_state": "Direct messages",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.embeds.media.media-container.trash-icon",
@@ -470,7 +791,9 @@
   "sizes": [
    18
   ],
-  "example_state": "Direct messages"
+  "example_state": "Direct messages",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.emoji-picker.emoji-picker-category-list.icon-size",
@@ -561,12 +884,24 @@
   "example_state": "Emojis"
  },
  {
+  "flx": "channel.friends.empty-state-view.icon",
+  "icon": "fill/users-three-fill",
+  "sizes": [
+   64
+  ],
+  "example_state": "dm-home",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
   "flx": "channel.member-list-item.crown-icon",
   "icon": "fill/crown-fill",
   "sizes": [
    14
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.message-reactions.smiley-icon",
@@ -575,6 +910,16 @@
    20
   ],
   "example_state": "Direct messages"
+ },
+ {
+  "flx": "channel.message-reactions.smiley-icon--2",
+  "icon": "fill/smiley-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "dm-conversation",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.message-search-bar.message-search-bar.scope-icon-component",
@@ -590,7 +935,9 @@
   "sizes": [
    16
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.picker-empty-state.icon",
@@ -654,7 +1001,9 @@
   "sizes": [
    22
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.textarea.textarea-button.icon",
@@ -662,7 +1011,9 @@
   "sizes": [
    22
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.textarea.textarea-button.icon",
@@ -670,7 +1021,9 @@
   "sizes": [
    22
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.textarea.textarea-button.icon",
@@ -678,7 +1031,9 @@
   "sizes": [
    22
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "channel.textarea.textarea-plus-menu.microphone-icon",
@@ -710,7 +1065,9 @@
   "sizes": [
    56
   ],
-  "example_state": "Explore communities"
+  "example_state": "Explore communities",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "discovery.discovery.discovery-navbar.search-icon",
@@ -718,7 +1075,9 @@
   "sizes": [
    16
   ],
-  "example_state": "Explore communities"
+  "example_state": "Explore communities",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "discovery.discovery.discovery-sidebar.nav-item-icon",
@@ -726,7 +1085,9 @@
   "sizes": [
    20
   ],
-  "example_state": "Explore communities"
+  "example_state": "Explore communities",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "discovery.discovery.discovery-sidebar.nav-item-icon",
@@ -734,7 +1095,9 @@
   "sizes": [
    20
   ],
-  "example_state": "Explore communities"
+  "example_state": "Explore communities",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "discovery.discovery.discovery-sidebar.nav-item-icon",
@@ -742,7 +1105,9 @@
   "sizes": [
    20
   ],
-  "example_state": "Explore communities"
+  "example_state": "Explore communities",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "expressions.favorites-welcome-section.icon",
@@ -783,6 +1148,30 @@
    20
   ],
   "example_state": "Open community menu for Dev Lab"
+ },
+ {
+  "flx": "guild.guild-header-popout.guild-header-popout-item.icon-medium",
+  "icon": "fill/folder-plus-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "tester1:guild_menu"
+ },
+ {
+  "flx": "guild.guild-header-popout.guild-header-popout-item.icon-medium",
+  "icon": "fill/gear-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "tester1:guild_menu"
+ },
+ {
+  "flx": "guild.guild-header-popout.guild-header-popout-item.icon-medium",
+  "icon": "fill/plus-circle-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "tester1:guild_menu"
  },
  {
   "flx": "guild.guild-header-popout.guild-header-popout-item.icon-medium",
@@ -913,12 +1302,44 @@
   "example_state": "Inbox > Bookmarks"
  },
  {
+  "flx": "theme-settings.edit-next-to-app-button.icon",
+  "icon": "fill/picture-in-picture-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "settings:Themes",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "theme-settings.your-themes-section.file-css-icon",
+  "icon": "fill/file-css-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "settings:Themes",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "theme-settings.your-themes-section.folder-open-icon",
+  "icon": "fill/folder-open-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "settings:Themes",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
   "flx": "threads.thread-browser.empty-state.icon",
   "icon": "fill/chats-fill",
   "sizes": [
    40
   ],
-  "example_state": "Threads"
+  "example_state": "Threads",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "threads.thread-browser.header-icon",
@@ -926,7 +1347,9 @@
   "sizes": [
    20
   ],
-  "example_state": "Threads"
+  "example_state": "Threads",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "threads.thread-browser.search.magnifying-glass-icon",
@@ -934,7 +1357,9 @@
   "sizes": [
    16
   ],
-  "example_state": "Threads"
+  "example_state": "Threads",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "threads.thread-create-pane.icon-glyph",
@@ -958,7 +1383,73 @@
   "sizes": [
    20
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.bookmark-icon.bookmark-simple-icon",
+  "icon": "regular/bookmark-simple",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:msg_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.change-nickname-icon.pencil-simple-icon",
+  "icon": "fill/pencil-simple-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:member_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.copy-id-icon.snowflake-icon",
+  "icon": "regular/snowflake",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:msg_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.copy-link-icon.link-icon",
+  "icon": "bold/link-bold",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:msg_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.copy-message-text-icon.phosphor-copy-icon",
+  "icon": "fill/copy-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:msg_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.create-category-icon.folder-plus-icon",
+  "icon": "fill/folder-plus-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:channel_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.create-channel-icon.plus-circle-icon",
+  "icon": "fill/plus-circle-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:guild_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.create-icon.plus-icon",
+  "icon": "bold/plus-bold",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:channel_context"
  },
  {
   "flx": "ui.action-menu.context-menu-icons.create-thread-icon.chats-icon",
@@ -967,7 +1458,17 @@
    18,
    20
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.delete-icon.trash-icon",
+  "icon": "fill/trash-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:msg_context"
  },
  {
   "flx": "ui.action-menu.context-menu-icons.edit-message-icon.pencil-simple-icon",
@@ -976,7 +1477,17 @@
    18,
    20
   ],
-  "example_state": "Emojis > face_with_peeking_eye"
+  "example_state": "Emojis > face_with_peeking_eye",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.edit-profile-icon.user-circle-icon",
+  "icon": "fill/user-circle-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:guild_context"
  },
  {
   "flx": "ui.action-menu.context-menu-icons.forward-icon.arrow-bend-up-right-icon",
@@ -985,7 +1496,33 @@
    18,
    20
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.invite-icon.user-plus-icon",
+  "icon": "fill/user-plus-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:channel_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.mark-as-unread-icon.envelope-open-icon",
+  "icon": "fill/envelope-open-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:msg_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.mention-user-icon.at-icon",
+  "icon": "bold/at-bold",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:member_context"
  },
  {
   "flx": "ui.action-menu.context-menu-icons.more-icon.dots-three-icon",
@@ -993,7 +1530,43 @@
   "sizes": [
    20
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.more-options-vertical-icon.dots-three-vertical-icon",
+  "icon": "bold/dots-three-vertical-bold",
+  "sizes": [
+   18
+  ],
+  "example_state": "settings:Keybinds",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.notification-settings-icon.bell-icon",
+  "icon": "fill/bell-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:guild_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.pin-icon.push-pin-icon",
+  "icon": "fill/push-pin-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:msg_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.privacy-settings-icon.shield-icon",
+  "icon": "fill/shield-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:guild_context"
  },
  {
   "flx": "ui.action-menu.context-menu-icons.reply-icon.arrow-bend-up-left-icon",
@@ -1003,6 +1576,30 @@
    20
   ],
   "example_state": ":relaxed:"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.speak-message-icon.speaker-high-icon",
+  "icon": "fill/speaker-high-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:msg_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.translate-icon.phosphor-translate-icon",
+  "icon": "bold/translate-bold",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:msg_context"
+ },
+ {
+  "flx": "ui.action-menu.context-menu-icons.view-profile-icon.user-icon",
+  "icon": "fill/user-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "tester1:member_context"
  },
  {
   "flx": "ui.action-menu.context-menu.sub-menu.submenu-caret",
@@ -1055,6 +1652,14 @@
   "example_state": "Search scope: Current community"
  },
  {
+  "flx": "ui.avatars.avatar-with-presence.voice-indicator-icon",
+  "icon": "fill/speaker-slash-fill",
+  "sizes": [
+   8
+  ],
+  "example_state": "voice_stage"
+ },
+ {
   "flx": "ui.base-avatar.overlay",
   "icon": "CUSTOM:0 0 114.090625 114.090625",
   "sizes": [
@@ -1072,6 +1677,27 @@
   ],
   "example_state": "Direct messages",
   "viewBox": "0 0 32 32",
+  "d": "",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "ui.base-avatar.overlay",
+  "icon": "CUSTOM:0 0 192 192",
+  "sizes": [
+   141
+  ],
+  "example_state": "voice_stage",
+  "viewBox": "0 0 192 192",
+  "d": ""
+ },
+ {
+  "flx": "ui.base-avatar.overlay",
+  "icon": "CUSTOM:0 0 24 24",
+  "sizes": [
+   24
+  ],
+  "example_state": "voice_stage",
+  "viewBox": "0 0 24 24",
   "d": ""
  },
  {
@@ -1082,7 +1708,8 @@
   ],
   "example_state": ":relaxed:",
   "viewBox": "0 0 32 32",
-  "d": ""
+  "d": "",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "ui.base-avatar.overlay",
@@ -1092,7 +1719,8 @@
   ],
   "example_state": ":relaxed:",
   "viewBox": "0 0 32 32",
-  "d": ""
+  "d": "",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "ui.base-avatar.overlay",
@@ -1102,7 +1730,8 @@
   ],
   "example_state": "@tester2",
   "viewBox": "0 0 32 32",
-  "d": ""
+  "d": "",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "ui.base-avatar.status-indicator-svg.svg",
@@ -1115,7 +1744,8 @@
   ],
   "example_state": ":relaxed:",
   "viewBox": "0 0 1 1",
-  "d": ""
+  "d": "",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "ui.copy-button.check-circle-icon",
@@ -1131,7 +1761,9 @@
   "sizes": [
    16
   ],
-  "example_state": ":relaxed:"
+  "example_state": ":relaxed:",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "ui.form.combobox.trigger-icon",
@@ -1139,7 +1771,9 @@
   "sizes": [
    16
   ],
-  "example_state": "Open community menu for Dev Lab > Edit c"
+  "example_state": "Open community menu for Dev Lab > Edit c",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "ui.form.switch.icon-checked",
@@ -1147,7 +1781,9 @@
   "sizes": [
    12
   ],
-  "example_state": "Open community menu for Dev Lab > Notifi"
+  "example_state": "Open community menu for Dev Lab > Notifi",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "ui.form.switch.icon-unchecked",
@@ -1155,7 +1791,9 @@
   "sizes": [
    10
   ],
-  "example_state": "Open community menu for Dev Lab > Notifi"
+  "example_state": "Open community menu for Dev Lab > Notifi",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "ui.radio-group.radio-group.radio-option-item.radio-indicator",
@@ -1165,7 +1803,8 @@
   ],
   "example_state": "Open community menu for Dev Lab > Edit c",
   "viewBox": "0 0 40 40",
-  "d": ""
+  "d": "",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "ui.toast.toast.icon",
@@ -1174,6 +1813,76 @@
    20
   ],
   "example_state": "Add to favorites"
+ },
+ {
+  "flx": "ui.warning-alert.warning-alert.icon",
+  "icon": "fill/warning-fill",
+  "sizes": [
+   16
+  ],
+  "example_state": "settings:PrivacyReview needed",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "user.appearance-tab.theme.theme-button.theme-button-checkmark-icon",
+  "icon": "bold/check-bold",
+  "sizes": [
+   12
+  ],
+  "example_state": "settings:Themes",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "user.appearance-tab.theme.theme-tab-content.theme-options.arrows-counter-clockwise-icon",
+  "icon": "bold/arrows-counter-clockwise-bold",
+  "sizes": [
+   24
+  ],
+  "example_state": "settings:Themes",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "user.applications-tab.documentation-icon",
+  "icon": "fill/book-open-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "settings:Applications",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "user.keybinds-tab.custom-keybinds-list.plus-icon",
+  "icon": "bold/plus-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "settings:Keybinds",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "user.keybinds-tab.magnifying-glass-icon",
+  "icon": "bold/magnifying-glass-bold",
+  "sizes": [
+   16
+  ],
+  "example_state": "settings:Keybinds",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
+ },
+ {
+  "flx": "user.linked-accounts-tab.domain-icon",
+  "icon": "fill/globe-simple-fill",
+  "sizes": [
+   28
+  ],
+  "example_state": "settings:Connections",
+  "viewBox": "0 0 256 256",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "user.profile.profile-card.profile-card-actions.icon-medium",
@@ -1200,7 +1909,8 @@
   ],
   "example_state": "@tester2",
   "viewBox": "0 0 300 105",
-  "d": ""
+  "d": "",
+  "client": "Stable Desktop 2026.1117.40548, Web 2026.1124.64728, Windows 11 10.0.26300 (x64), Electron 44.10.0, Chrome 152.0.7977.169, Node 24.22.1, Locale en-US"
  },
  {
   "flx": "user.profile.profile-preview.message-icon",
@@ -1279,64 +1989,150 @@
   "d": "M121.272 233.143C107.829 233.143 96.5983 222.277 98.2527 208.935C100.041 194.517 103.743 182.243 109.359 172.114C118.044 156.724 129.321 145.524 143.187 138.514C157.206 131.505 171.987 128 187.53 128C203.073 128 217.168 131.505 229.816 138.514C242.616 145.371 257.473 155.886 274.387 170.057C285.816 179.657 294.806 186.514 301.359 190.629C308.063 194.59 315.53 196.571 323.759 196.571C337.016 196.571 347.454 191.848 355.073 182.4C358.706 177.895 361.421 172.385 363.218 165.87C366.904 152.504 377.243 140.8 391.107 140.8V140.8C404.499 140.8 415.745 151.539 414.202 164.842C412.521 179.332 408.811 191.661 403.073 201.829C394.387 217.219 383.035 228.419 369.016 235.429C354.997 242.438 340.216 245.943 324.673 245.943C309.13 245.943 294.959 242.667 282.159 236.114C269.359 229.41 254.578 218.667 237.816 203.886C226.844 194.286 217.93 187.505 211.073 183.543C204.216 179.429 196.673 177.371 188.444 177.371C176.101 177.371 165.892 181.638 157.816 190.171C153.612 194.613 150.564 200.623 148.673 208.202C145.336 221.569 135.05 233.143 121.272 233.143V233.143ZM121.272 371.2C107.829 371.2 96.5983 360.334 98.2527 346.993C100.041 332.574 103.743 320.3 109.359 310.171C118.044 294.781 129.321 283.581 143.187 276.571C157.206 269.562 171.987 266.057 187.53 266.057C203.073 266.057 217.168 269.562 229.816 276.571C242.616 283.429 257.473 293.943 274.387 308.114C285.816 317.714 294.806 324.571 301.359 328.686C308.063 332.648 315.53 334.629 323.759 334.629C337.016 334.629 347.454 329.905 355.073 320.457C358.706 315.952 361.421 310.442 363.218 303.927C366.904 290.561 377.243 278.857 391.107 278.857V278.857C404.499 278.857 415.745 289.597 414.202 302.899C412.521 317.389 408.811 329.718 403.073 339.886C394.387 355.276 383.035 366.476 369.016 373.486C354.997 380.495 340.216 384 324.673 384C309.13 384 294.959 380.724 282.159 374.171C269.359 367.467 254.578 356.724 237.816 341.943C226.844 332.343 217.93 325.562 211.073 321.6C204.216 317.486 196.673 315.429 188.444 315.429C176.101 315.429 165.892 319.695 157.816 328.229C153.612 332.67 150.564 338.68 148.673 346.259C145.336 359.626 135.05 371.2 121.272 371.2V371.2Z"
  },
  {
+  "flx": "voice.compact-voice-call-view.compact-call-height-toggle-button.chat-teardrop-icon",
+  "icon": "fill/chat-teardrop-fill",
+  "sizes": [
+   21
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.signal-strength-icon.svg",
+  "icon": "CUSTOM:0 0 16 16",
+  "sizes": [
+   16
+  ],
+  "example_state": "voice_stage",
+  "viewBox": "0 0 16 16",
+  "d": "M 1 11.5 A 3.5 3.5 0 0 1 4.5 15|M 1 8 A 7 7 0 0 1 8 15|M 1 4.5 A 10.5 10.5 0 0 1 11.5 15|M 1 1 A 14 14 0 0 1 15 15"
+ },
+ {
+  "flx": "voice.voice-connection-status.audio-processing-button.icon",
+  "icon": "fill/waveform-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-connection-status.local-participant-controls.media-icon",
+  "icon": "fill/camera-slash-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-connection-status.local-participant-controls.media-icon",
+  "icon": "fill/monitor-play-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-connection-status.voice-connection-status-inner.connection-id-icon",
+  "icon": "regular/desktop",
+  "sizes": [
+   16
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-connection-status.voice-connection-status-inner.icon",
+  "icon": "fill/phone-x-fill",
+  "sizes": [
+   20
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-control-bar.render-screen-share-menu.gear-icon",
+  "icon": "fill/gear-fill",
+  "sizes": [
+   18
+  ],
+  "example_state": "share_menu"
+ },
+ {
+  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon",
+  "icon": "bold/dots-three-bold",
+  "sizes": [
+   22
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon",
+  "icon": "fill/camera-slash-fill",
+  "sizes": [
+   22
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon",
+  "icon": "fill/microphone-slash-fill",
+  "sizes": [
+   22
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon",
+  "icon": "fill/monitor-play-fill",
+  "sizes": [
+   22
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon",
+  "icon": "fill/phone-x-fill",
+  "sizes": [
+   22
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon",
+  "icon": "fill/speaker-slash-fill",
+  "sizes": [
+   22
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon-small",
+  "icon": "bold/caret-down-bold",
+  "sizes": [
+   10
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon-small.output-settings",
+  "icon": "bold/caret-down-bold",
+  "sizes": [
+   10
+  ],
+  "example_state": "voice_stage"
+ },
+ {
+  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon-small.screen-share-settings",
+  "icon": "bold/caret-down-bold",
+  "sizes": [
+   10
+  ],
+  "example_state": "voice_stage"
+ },
+ {
   "flx": "voice.voice-message-composer-modal.stop-icon",
   "icon": "fill/stop-fill",
   "sizes": [
    16
   ],
   "example_state": "Open menu > Send voice message\nCTRL\nALT\n"
- },
- {
-  "flx": "app.sidebar-nav.voice-badge.get-voice-badge-icon.speaker-high-icon",
-  "icon": "fill/speaker-high-fill",
-  "sizes": [
-   12
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "app.channel-item-icon.icon",
-  "icon": "fill/chat-teardrop-fill",
-  "sizes": [
-   16
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "ui.base-avatar.overlay",
-  "icon": "CUSTOM:0 0 24 24",
-  "sizes": [
-   24
-  ],
-  "example_state": "voice_stage",
-  "viewBox": "0 0 24 24",
-  "d": ""
- },
- {
-  "flx": "app.voice-state-icons.icon",
-  "icon": "fill/microphone-slash-fill",
-  "sizes": [
-   16
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "app.voice-state-icons.icon",
-  "icon": "fill/speaker-slash-fill",
-  "sizes": [
-   16
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "ui.base-avatar.overlay",
-  "icon": "CUSTOM:0 0 192 192",
-  "sizes": [
-   141
-  ],
-  "example_state": "voice_stage",
-  "viewBox": "0 0 192 192",
-  "d": ""
  },
  {
   "flx": "voice.voice-participant-tile.voice-participant-tile-inner.participant-icon",
@@ -1363,176 +2159,6 @@
   "example_state": "voice_stage"
  },
  {
-  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon",
-  "icon": "fill/microphone-slash-fill",
-  "sizes": [
-   22
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon-small",
-  "icon": "bold/caret-down-bold",
-  "sizes": [
-   10
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon",
-  "icon": "fill/speaker-slash-fill",
-  "sizes": [
-   22
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon-small.output-settings",
-  "icon": "bold/caret-down-bold",
-  "sizes": [
-   10
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon",
-  "icon": "fill/camera-slash-fill",
-  "sizes": [
-   22
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon",
-  "icon": "fill/monitor-play-fill",
-  "sizes": [
-   22
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon-small.screen-share-settings",
-  "icon": "bold/caret-down-bold",
-  "sizes": [
-   10
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon",
-  "icon": "bold/dots-three-bold",
-  "sizes": [
-   22
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "voice.voice-control-bar.voice-control-bar-inner.icon",
-  "icon": "fill/phone-x-fill",
-  "sizes": [
-   22
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "voice.compact-voice-call-view.compact-call-height-toggle-button.chat-teardrop-icon",
-  "icon": "fill/chat-teardrop-fill",
-  "sizes": [
-   21
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "channel.channel-header-components.channel-header-icon.button-icon",
-  "icon": "fill/arrow-square-out-fill",
-  "sizes": [
-   21
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "channel.channel-header-components.channel-header-icon.button-icon",
-  "icon": "fill/corners-out-fill",
-  "sizes": [
-   21
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "voice.signal-strength-icon.svg",
-  "icon": "CUSTOM:0 0 16 16",
-  "sizes": [
-   16
-  ],
-  "example_state": "voice_stage",
-  "viewBox": "0 0 16 16",
-  "d": "M 1 11.5 A 3.5 3.5 0 0 1 4.5 15|M 1 8 A 7 7 0 0 1 8 15|M 1 4.5 A 10.5 10.5 0 0 1 11.5 15|M 1 1 A 14 14 0 0 1 15 15"
- },
- {
-  "flx": "voice.voice-connection-status.audio-processing-button.icon",
-  "icon": "fill/waveform-fill",
-  "sizes": [
-   20
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "voice.voice-connection-status.voice-connection-status-inner.icon",
-  "icon": "fill/phone-x-fill",
-  "sizes": [
-   20
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "voice.voice-connection-status.voice-connection-status-inner.connection-id-icon",
-  "icon": "regular/desktop",
-  "sizes": [
-   16
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "ui.avatars.avatar-with-presence.voice-indicator-icon",
-  "icon": "fill/speaker-slash-fill",
-  "sizes": [
-   8
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "voice.voice-connection-status.local-participant-controls.media-icon",
-  "icon": "fill/camera-slash-fill",
-  "sizes": [
-   20
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "voice.voice-connection-status.local-participant-controls.media-icon",
-  "icon": "fill/monitor-play-fill",
-  "sizes": [
-   20
-  ],
-  "example_state": "voice_stage"
- },
- {
-  "flx": "voice.voice-settings-menus.voice-settings-menu-item.icon",
-  "icon": "fill/gear-fill",
-  "sizes": [
-   16
-  ],
-  "example_state": "mic_menu"
- },
- {
-  "flx": "voice.voice-control-bar.render-screen-share-menu.gear-icon",
-  "icon": "fill/gear-fill",
-  "sizes": [
-   18
-  ],
-  "example_state": "share_menu"
- },
- {
   "flx": "voice.voice-settings-menus.voice-camera-settings-menu.icon",
   "icon": "fill/eye-fill",
   "sizes": [
@@ -1557,267 +2183,11 @@
   "example_state": "more_menu"
  },
  {
-  "flx": "app.channel-item-icon.icon",
+  "flx": "voice.voice-settings-menus.voice-settings-menu-item.icon",
   "icon": "fill/gear-fill",
   "sizes": [
    16
   ],
-  "example_state": "tester1:guild_menu"
- },
- {
-  "flx": "app.channel-list-content.users-icon",
-  "icon": "fill/users-fill",
-  "sizes": [
-   20
-  ],
-  "example_state": "tester1:guild_menu"
- },
- {
-  "flx": "app.floating.user-area-popout.action-button.action-chevron",
-  "icon": "bold/caret-right-bold",
-  "sizes": [
-   14
-  ],
-  "example_state": "tester1:user_area_popout"
- },
- {
-  "flx": "app.floating.user-area-popout.copy-icon",
-  "icon": "fill/copy-fill",
-  "sizes": [
-   14
-  ],
-  "example_state": "tester1:user_area_popout"
- },
- {
-  "flx": "app.floating.user-area-popout.custom-status-placeholder-icon",
-  "icon": "regular/smiley",
-  "sizes": [
-   14
-  ],
-  "example_state": "tester1:user_area_popout"
- },
- {
-  "flx": "app.floating.user-area-popout.identification-badge-icon",
-  "icon": "bold/identification-badge-bold",
-  "sizes": [
-   16
-  ],
-  "example_state": "tester1:user_area_popout"
- },
- {
-  "flx": "app.floating.user-area-popout.pencil-icon",
-  "icon": "bold/pencil-bold",
-  "sizes": [
-   16
-  ],
-  "example_state": "tester1:user_area_popout"
- },
- {
-  "flx": "app.floating.user-area-popout.users-three-icon",
-  "icon": "bold/users-three-bold",
-  "sizes": [
-   16
-  ],
-  "example_state": "tester1:user_area_popout"
- },
- {
-  "flx": "app.sidebar-nav.download-button.icon-text",
-  "icon": "bold/download-simple-bold",
-  "sizes": [
-   20
-  ],
-  "example_state": "tester1:guild_menu"
- },
- {
-  "flx": "app.user-area.user-area-inner.control-icon--4",
-  "icon": "fill/speaker-high-fill",
-  "sizes": [
-   20
-  ],
-  "example_state": "tester1:guild_menu"
- },
- {
-  "flx": "app.user-area.user-area-inner.control-icon--5",
-  "icon": "fill/gear-fill",
-  "sizes": [
-   20
-  ],
-  "example_state": "tester1:guild_menu"
- },
- {
-  "flx": "guild.guild-header-popout.guild-header-popout-item.icon-medium",
-  "icon": "fill/folder-plus-fill",
-  "sizes": [
-   20
-  ],
-  "example_state": "tester1:guild_menu"
- },
- {
-  "flx": "guild.guild-header-popout.guild-header-popout-item.icon-medium",
-  "icon": "fill/gear-fill",
-  "sizes": [
-   20
-  ],
-  "example_state": "tester1:guild_menu"
- },
- {
-  "flx": "guild.guild-header-popout.guild-header-popout-item.icon-medium",
-  "icon": "fill/plus-circle-fill",
-  "sizes": [
-   20
-  ],
-  "example_state": "tester1:guild_menu"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.bookmark-icon.bookmark-simple-icon",
-  "icon": "regular/bookmark-simple",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:msg_context"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.change-nickname-icon.pencil-simple-icon",
-  "icon": "fill/pencil-simple-fill",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:member_context"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.copy-id-icon.snowflake-icon",
-  "icon": "regular/snowflake",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:msg_context"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.copy-link-icon.link-icon",
-  "icon": "bold/link-bold",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:msg_context"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.copy-message-text-icon.phosphor-copy-icon",
-  "icon": "fill/copy-fill",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:msg_context"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.create-category-icon.folder-plus-icon",
-  "icon": "fill/folder-plus-fill",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:channel_context"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.create-channel-icon.plus-circle-icon",
-  "icon": "fill/plus-circle-fill",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:guild_context"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.create-icon.plus-icon",
-  "icon": "bold/plus-bold",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:channel_context"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.delete-icon.trash-icon",
-  "icon": "fill/trash-fill",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:msg_context"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.edit-profile-icon.user-circle-icon",
-  "icon": "fill/user-circle-fill",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:guild_context"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.invite-icon.user-plus-icon",
-  "icon": "fill/user-plus-fill",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:channel_context"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.mark-as-unread-icon.envelope-open-icon",
-  "icon": "fill/envelope-open-fill",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:msg_context"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.mention-user-icon.at-icon",
-  "icon": "bold/at-bold",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:member_context"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.notification-settings-icon.bell-icon",
-  "icon": "fill/bell-fill",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:guild_context"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.pin-icon.push-pin-icon",
-  "icon": "fill/push-pin-fill",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:msg_context"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.privacy-settings-icon.shield-icon",
-  "icon": "fill/shield-fill",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:guild_context"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.speak-message-icon.speaker-high-icon",
-  "icon": "fill/speaker-high-fill",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:msg_context"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.translate-icon.phosphor-translate-icon",
-  "icon": "bold/translate-bold",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:msg_context"
- },
- {
-  "flx": "ui.action-menu.context-menu-icons.view-profile-icon.user-icon",
-  "icon": "fill/user-fill",
-  "sizes": [
-   18
-  ],
-  "example_state": "tester1:member_context"
+  "example_state": "mic_menu"
  }
 ]

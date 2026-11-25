@@ -704,7 +704,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "no matching official context in harvest (native-only or unharvested state)"
+   "reason": "official ContextMenuIcons.tsx SuppressEmbedsIcon uses LinkBreakIcon (bold) whereas Rust uses Eye"
   },
   {
    "rust_icon": "EyeSlash",
@@ -719,7 +719,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "no matching official context in harvest (native-only or unharvested state)"
+   "reason": "official ContextMenuIcons.tsx SuppressEmbedsIcon uses LinkBreakIcon (bold) whereas Rust uses EyeSlash"
   },
   {
    "rust_icon": "Smiley",
@@ -779,7 +779,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "no matching official context in harvest (native-only or unharvested state)"
+   "reason": "official ContextMenuIcons.tsx RetryIcon uses ArrowsClockwiseIcon weight=\"fill\" whereas Rust uses bold/arrow-clockwise-bold.svg"
   },
   {
    "rust_icon": "Copy",
@@ -788,13 +788,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/copy.svg",
    "kind": "phosphor",
    "phosphor": "fill/copy-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "icon id matches official context menu (18px), but Rust shows it in the 20px hover action bar; official hover bar is React/Edit/Forward/Thread/More only (bar content mismatch, backlog)"
+   "status": "verified",
+   "official_component": "ui.action-menu.context-menu-icons.copy-message-text-icon.phosphor-copy-icon",
+   "official_icon": "copy-fill",
+   "weight": "fill",
+   "size": 18,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "Trash",
@@ -803,13 +803,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/trash.svg",
    "kind": "phosphor",
    "phosphor": "fill/trash-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "icon id matches official context menu (18px), but Rust shows it in the 20px hover action bar; official hover bar is React/Edit/Forward/Thread/More only (bar content mismatch, backlog)"
+   "status": "verified",
+   "official_component": "ui.action-menu.context-menu-icons.delete-icon.trash-icon",
+   "official_icon": "trash-fill",
+   "weight": "fill",
+   "size": 18,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "SlidersHorizontal",
@@ -863,13 +863,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/speaker-high.svg",
    "kind": "phosphor",
    "phosphor": "fill/speaker-high-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "no matching official context in harvest (native-only or unharvested state)"
+   "status": "verified",
+   "official_component": "app.sidebar-nav.voice-badge.get-voice-badge-icon.speaker-high-icon",
+   "official_icon": "speaker-high-fill",
+   "weight": "fill",
+   "size": 12,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "XCircle",
@@ -899,7 +899,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "no matching official context in harvest (native-only or unharvested state)"
+   "reason": "official app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon for Profile uses fill/user-list-fill [20] whereas Rust uses UserCircle"
   },
   {
    "rust_icon": "Shield",
@@ -1094,7 +1094,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "no matching official context in harvest (native-only or unharvested state)"
+   "reason": "official app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon uses fill/sign-out-fill [20] whereas Rust uses SignOut (bold/sign-out-bold.svg) at 16px"
   },
   {
    "rust_icon": "Users",
@@ -1782,7 +1782,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "reason": "official ui.action-menu.context-menu.sub-menu.submenu-caret uses CUSTOM:0 0 256 256 [14] whereas Rust uses CaretRight (bold/caret-right-bold.svg)"
   },
   {
    "rust_icon": "Chats",
@@ -1791,13 +1791,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/chats.svg",
    "kind": "phosphor",
    "phosphor": "fill/chats-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "threads.thread-browser.header-icon",
+   "official_icon": "chats-fill",
+   "weight": "fill",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "Chats",
@@ -1821,13 +1821,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/chats.svg",
    "kind": "phosphor",
    "phosphor": "fill/chats-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "threads.thread-browser.empty-state.icon",
+   "official_icon": "chats-fill",
+   "weight": "fill",
+   "size": 40,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "PushPin",
@@ -1836,13 +1836,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/push-pin.svg",
    "kind": "phosphor",
    "phosphor": "fill/push-pin-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "channel.channel-pins-popout.icon-large",
+   "official_icon": "push-pin-fill",
+   "weight": "fill",
+   "size": 24,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "Star",
@@ -2001,13 +2001,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/chats.svg",
    "kind": "phosphor",
    "phosphor": "fill/chats-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "ui.action-menu.context-menu-icons.create-thread-icon.chats-icon",
+   "official_icon": "chats-fill",
+   "weight": "fill",
+   "size": 18,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "Microphone",
@@ -2037,7 +2037,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "reason": "official ui.action-menu.context-menu.sub-menu.submenu-caret uses CUSTOM:0 0 256 256 [14] whereas Rust uses CaretRight (bold/caret-right-bold.svg)"
   },
   {
    "rust_icon": "Sticker",
@@ -2076,13 +2076,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/snowflake.svg",
    "kind": "phosphor",
    "phosphor": "regular/snowflake.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "icon id matches official context menu (18px), but Rust shows it in the 20px hover action bar; official hover bar is React/Edit/Forward/Thread/More only (bar content mismatch, backlog)"
+   "status": "verified",
+   "official_component": "ui.action-menu.context-menu-icons.copy-id-icon.snowflake-icon",
+   "official_icon": "snowflake",
+   "weight": "regular",
+   "size": 18,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "LinkSimple",
@@ -2097,7 +2097,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "reason": "official app.settings-heading-link-button.link-icon uses bold/link-bold [15] whereas Rust uses LinkSimple (bold/link-simple-bold.svg)"
   },
   {
    "rust_icon": "CaretDown",
@@ -2121,13 +2121,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/magnifying-glass.svg",
    "kind": "phosphor",
    "phosphor": "bold/magnifying-glass-bold.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "user.keybinds-tab.magnifying-glass-icon",
+   "official_icon": "magnifying-glass-bold",
+   "weight": "bold",
+   "size": 16,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "SmileyRegular",
@@ -2181,13 +2181,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/chats.svg",
    "kind": "phosphor",
    "phosphor": "fill/chats-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "ui.action-menu.context-menu-icons.create-thread-icon.chats-icon",
+   "official_icon": "chats-fill",
+   "weight": "fill",
+   "size": 18,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "CrownFill",
@@ -2196,13 +2196,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/crown-fill.svg",
    "kind": "phosphor",
    "phosphor": "fill/crown-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "channel.member-list-item.crown-icon",
+   "official_icon": "crown-fill",
+   "weight": "fill",
+   "size": 14,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "TextChannel",
@@ -2211,13 +2211,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/text-channel.svg",
    "kind": "phosphor",
    "phosphor": null,
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
+   "status": "verified",
+   "official_component": "channel.channel-utils.get-icon.text-channel-icon",
+   "official_icon": "CUSTOM:0 0 256 256",
    "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "size": 48,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "PhoneFill",
@@ -2226,13 +2226,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/phone.svg",
    "kind": "phosphor",
    "phosphor": "fill/phone-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "channel.channel-header-components.channel-header-icon.button-icon",
+   "official_icon": "phone-fill",
+   "weight": "fill",
+   "size": 24,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "VideoCameraFill",
@@ -2241,13 +2241,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/video-camera.svg",
    "kind": "phosphor",
    "phosphor": "fill/video-camera-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "channel.channel-header-components.channel-header-icon.button-icon",
+   "official_icon": "video-camera-fill",
+   "weight": "fill",
+   "size": 24,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "UsersThreeFill",
@@ -2256,13 +2256,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/users-three-fill.svg",
    "kind": "phosphor",
    "phosphor": "fill/users-three-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "channel.direct-message.dm-list.icon-size5--4",
+   "official_icon": "users-three-fill",
+   "weight": "fill",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "NotePencilFill",
@@ -2271,13 +2271,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/note-pencil-fill.svg",
    "kind": "phosphor",
    "phosphor": "fill/note-pencil-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "channel.direct-message.dm-list.icon-size5--5",
+   "official_icon": "note-pencil-fill",
+   "weight": "fill",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "Smiley",
@@ -2286,13 +2286,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/smiley.svg",
    "kind": "phosphor",
    "phosphor": "fill/smiley-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "channel.message-reactions.smiley-icon--2",
+   "official_icon": "smiley-fill",
+   "weight": "fill",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "CaretRight",
@@ -2316,13 +2316,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/dots-three-bold.svg",
    "kind": "phosphor",
    "phosphor": "bold/dots-three-bold.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "ui.action-menu.context-menu-icons.more-icon.dots-three-icon",
+   "official_icon": "dots-three-bold",
+   "weight": "bold",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "ArrowBendUpRight",
@@ -2331,13 +2331,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/arrow-bend-up-right.svg",
    "kind": "phosphor",
    "phosphor": "fill/arrow-bend-up-right-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "ui.action-menu.context-menu-icons.forward-icon.arrow-bend-up-right-icon",
+   "official_icon": "arrow-bend-up-right-fill",
+   "weight": "fill",
+   "size": 18,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "Chats",
@@ -2346,13 +2346,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/chats.svg",
    "kind": "phosphor",
    "phosphor": "fill/chats-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "ui.action-menu.context-menu-icons.create-thread-icon.chats-icon",
+   "official_icon": "chats-fill",
+   "weight": "fill",
+   "size": 18,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "Translate",
@@ -2361,13 +2361,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/translate-bold.svg",
    "kind": "phosphor",
    "phosphor": "bold/translate-bold.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "ui.action-menu.context-menu-icons.translate-icon.phosphor-translate-icon",
+   "official_icon": "translate-bold",
+   "weight": "bold",
+   "size": 18,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "PushPin",
@@ -2376,13 +2376,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/push-pin.svg",
    "kind": "phosphor",
    "phosphor": "fill/push-pin-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "ui.action-menu.context-menu-icons.pin-icon.push-pin-icon",
+   "official_icon": "push-pin-fill",
+   "weight": "fill",
+   "size": 18,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "BookmarkSimple",
@@ -2391,13 +2391,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/bookmark-simple.svg",
    "kind": "phosphor",
    "phosphor": "regular/bookmark-simple.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "ui.action-menu.context-menu-icons.bookmark-icon.bookmark-simple-icon",
+   "official_icon": "bookmark-simple",
+   "weight": "regular",
+   "size": 18,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "EnvelopeOpen",
@@ -2406,13 +2406,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/envelope-open.svg",
    "kind": "phosphor",
    "phosphor": "fill/envelope-open-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "ui.action-menu.context-menu-icons.mark-as-unread-icon.envelope-open-icon",
+   "official_icon": "envelope-open-fill",
+   "weight": "fill",
+   "size": 18,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "LinkBold",
@@ -2421,13 +2421,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/link-bold.svg",
    "kind": "phosphor",
    "phosphor": "bold/link-bold.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "ui.action-menu.context-menu-icons.copy-link-icon.link-icon",
+   "official_icon": "link-bold",
+   "weight": "bold",
+   "size": 18,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "SpeakerHigh",
@@ -2436,13 +2436,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/speaker-high.svg",
    "kind": "phosphor",
    "phosphor": "fill/speaker-high-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "ui.action-menu.context-menu-icons.speak-message-icon.speaker-high-icon",
+   "official_icon": "speaker-high-fill",
+   "weight": "fill",
+   "size": 18,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "SpeakerSlash",
@@ -2787,7 +2787,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "reason": "official channel.channel-header-components.updater-icon.update-icon uses bold/download-simple-bold [24] whereas Rust uses ArrowClockwise"
   },
   {
    "rust_icon": "UsersThreeFill",
@@ -2796,13 +2796,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/users-three-fill.svg",
    "kind": "phosphor",
    "phosphor": "fill/users-three-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "discovery.discovery.discovery-sidebar.nav-item-icon",
+   "official_icon": "users-three-fill",
+   "weight": "fill",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "Monitor",
@@ -2817,7 +2817,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "reason": "official discovery.discovery.discovery-sidebar.nav-item-icon for Apps uses bold/app-window-bold [20] whereas Rust uses Monitor (fill/monitor-fill.svg)"
   },
   {
    "rust_icon": "Swatches",
@@ -2832,7 +2832,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "reason": "official discovery.discovery.discovery-sidebar.nav-item-icon for Themes uses bold/palette-bold [20] whereas Rust uses Swatches (fill/swatches-fill.svg)"
   },
   {
    "rust_icon": "ArrowBendUpLeft",
@@ -2856,13 +2856,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/magnifying-glass.svg",
    "kind": "phosphor",
    "phosphor": "bold/magnifying-glass-bold.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "discovery.discovery.discovery-navbar.search-icon",
+   "official_icon": "magnifying-glass-bold",
+   "weight": "bold",
+   "size": 16,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "X",
@@ -2952,7 +2952,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "reason": "official app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon for WindowsApp uses fill/desktop-fill [20] whereas Rust uses Monitor"
   },
   {
    "rust_icon": "Gear",
@@ -2961,13 +2961,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/gear.svg",
    "kind": "phosphor",
    "phosphor": "fill/gear-fill.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon",
+   "official_icon": "gear-fill",
+   "weight": "fill",
+   "size": 20,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "LinkSimple",
@@ -3012,7 +3012,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "reason": "official user.linked-accounts-tab.domain-icon uses fill/globe-simple-fill [28] whereas Rust uses Users (fill/users-fill.svg)"
   },
   {
    "rust_icon": "Trash",
@@ -3072,7 +3072,7 @@
    "weight": null,
    "size": null,
    "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "reason": "official user.applications-tab.documentation-icon uses fill/book-open-fill [18] whereas Rust uses ArrowSquareOut"
   },
   {
    "rust_icon": "Code",
@@ -3096,13 +3096,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/caret-right.svg",
    "kind": "phosphor",
    "phosphor": "bold/caret-right-bold.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-chevron",
+   "official_icon": "caret-right-bold",
+   "weight": "bold",
+   "size": 16,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "CaretRight",
@@ -3111,13 +3111,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/caret-right.svg",
    "kind": "phosphor",
    "phosphor": "bold/caret-right-bold.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-chevron",
+   "official_icon": "caret-right-bold",
+   "weight": "bold",
+   "size": 16,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "Users",
@@ -3321,13 +3321,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/plus.svg",
    "kind": "phosphor",
    "phosphor": "bold/plus-bold.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "user.keybinds-tab.custom-keybinds-list.plus-icon",
+   "official_icon": "plus-bold",
+   "weight": "bold",
+   "size": 16,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   },
   {
    "rust_icon": "CaretDown",
@@ -3351,13 +3351,13 @@
    "rust_asset": "fluxer_client/app/assets/icons/magnifying-glass.svg",
    "kind": "phosphor",
    "phosphor": "bold/magnifying-glass-bold.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "new call site, not yet matched to official harvest"
+   "status": "verified",
+   "official_component": "app.settings-search.magnifying-glass-icon",
+   "official_icon": "magnifying-glass-bold",
+   "weight": "bold",
+   "size": 16,
+   "source_file": "tools/parity_lab/official_icons.json",
+   "reason": null
   }
  ]
 }

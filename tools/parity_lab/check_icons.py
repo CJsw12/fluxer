@@ -222,12 +222,35 @@ def sync_sites(manifest_sites: list[dict], pairs: list, new: list[dict], gone: l
     return sites
 
 
+def selftest() -> int:
+    """Run self-tests on official_icons.json, icon_manifest.json, and SVG assets."""
+    assert paths('<svg><path d=" M 0 0  L 10 10 "/></svg>') == ["M 0 0 L 10 10"]
+    official_path = ROOT / "tools/parity_lab/official_icons.json"
+    official = json.loads(official_path.read_text(encoding="utf-8"))
+    assert isinstance(official, list) and len(official) > 0, "official_icons.json must be a non-empty array"
+    for entry in official:
+        assert entry.get("flx") and entry.get("icon") and entry.get("sizes"), f"invalid official entry: {entry}"
+    for svg in sorted((ROOT / RUST_ASSET_PREFIX).glob("*.svg")):
+        svg_paths = paths(svg.read_text(encoding="utf-8"))
+        assert svg_paths and all(p for p in svg_paths), f"empty <path d=...> in {svg.name}"
+    manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    for site in manifest["sites"]:
+        if site.get("status") == "verified":
+            assert site.get("source_file"), f"verified site missing source_file: {site}"
+            assert (ROOT / site["source_file"]).is_file(), f"missing source_file: {site['source_file']}"
+    print(f"selftest ok: {len(official)} official entries, {len(manifest['sites'])} manifest sites")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--check-sync", action="store_true", help="compare call sites with the manifest (default)")
     parser.add_argument("--sync", action="store_true", help="rewrite icon_manifest.json from the call sites")
     parser.add_argument("--dry-run", action="store_true", help="with --sync, print the summary but do not write")
+    parser.add_argument("--selftest", action="store_true", help="run internal consistency and asset self-tests")
     args = parser.parse_args(argv)
+    if args.selftest:
+        return selftest()
     if args.dry_run and not args.sync:
         parser.error("--dry-run requires --sync")
 

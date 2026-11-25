@@ -466,6 +466,37 @@ mod tests {
             // Fluxer's own Inbox glyph uses a 24x24 viewBox.
             let expected = if icon == AppIcon::Inbox { "viewBox=\"0 0 24 24\"" } else { "viewBox=\"0 0 256 256\"" };
             assert!(text.contains(expected), "{icon:?} has an unexpected viewBox");
+            assert!(text.contains("<path"), "{icon:?} has no <path element");
+            let has_nonempty_d = text.split(" d=\"").skip(1).any(|rest| {
+                rest.split('"')
+                    .next()
+                    .is_some_and(|d| !d.trim().is_empty())
+            });
+            assert!(has_nonempty_d, "{icon:?} has no non-empty <path d=...> attribute");
+        }
+
+        // Verify every `rust_asset` referenced in tools/parity_lab/icon_manifest.json
+        // matches an embedded `AppIcon` asset path.
+        let manifest_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tools/parity_lab/icon_manifest.json");
+        if let Ok(manifest_text) = std::fs::read_to_string(&manifest_path) {
+            let embedded_assets: std::collections::HashSet<String> = AppIcon::ALL
+                .iter()
+                .map(|icon| {
+                    let file = icon.asset_path().rsplit('/').next().unwrap_or("");
+                    format!("fluxer_client/app/assets/icons/{file}")
+                })
+                .collect();
+            for line in manifest_text.lines() {
+                let trimmed = line.trim();
+                if let Some(rest) = trimmed.strip_prefix("\"rust_asset\": \"") {
+                    let asset = rest.trim_end_matches(',').trim_end_matches('"');
+                    assert!(
+                        embedded_assets.contains(asset),
+                        "manifest rust_asset {asset} is not in AppIcon::ALL"
+                    );
+                }
+            }
         }
 
         let used = [

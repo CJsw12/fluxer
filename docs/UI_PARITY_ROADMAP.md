@@ -64,6 +64,7 @@
     - 사용자 영역 카드
     - 서버 이니셜(16px/400)
 - [ ] **M9.9 공식 아이콘 원본 수확**
+  - 진행(2026-11-26): `target/parity-tmp/m99_harvest/harvest_all.json`(공식 빌드 `Stable Desktop 2026.1117.40548, Web 2026.1124.64728`, 1,589건/70개 고유 `data-flx`)을 `official_icons.json`(244개 항목)에 병합하고, `icon_manifest.json` 대조로 225곳 중 113곳을 `verified`(미검증 112곳, 불일치 사유 기록)로 갱신했으며 `app_icons_load`와 `check_icons.py --selftest`로 `<path d=...>` 및 자산 일치를 검증했다.
   - 진행(2026-11-24): 같은 계정(소유자) 공식 화면 9개(길드 메뉴·사용자 팝오버·메시지/채널/길드/멤버 우클릭 메뉴·설정)에서 SVG를 수확해 `official_icons.json`에 33개를 더했다. `check_icons.py --sync/--check-sync`로 소스 호출 위치와 매니페스트를 일치시키고, 크기까지 맞는 근거가 있을 때만 검증으로 표시한다(149곳 중 80곳 검증).
   - 실행 중인 공식 앱의 모든 상태(크롤 그래프 포함)에서 아이콘 `data-flx`의 SVG 마크업(경로·viewBox·크기·굵기)을 추출해 기준 세트로 저장한다.
   - Rust 아이콘 자산을 이 원본으로 교체한다. Fluxer 자체 아이콘(`ui.icons.*`)과 굵기 차이를 포함한다.

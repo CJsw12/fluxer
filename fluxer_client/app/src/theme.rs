@@ -193,6 +193,8 @@ pub struct Theme {
     pub accent: Hsla,
     /// `--border-color`.
     pub border: Hsla,
+    /// `--background-modifier-accent` (subtle surface/control border).
+    pub background_modifier_accent: Hsla,
     /// Divider lines; the same token as `border`.
     pub divider: Hsla,
     /// `--brand-primary`.
@@ -404,6 +406,7 @@ struct Palette {
     secondary_is_primary: bool,
     selected: Hsl,
     border: Hsl,
+    modifier_accent: Hsl,
     link: Hsl,
     online: Hsl,
     idle: Hsl,
@@ -436,6 +439,7 @@ fn dark_palette() -> Palette {
         secondary_is_primary: false,
         selected: Hsl::new(258., 10., 100.).alpha(0.1),
         border: Hsl::new(258., 10., 50.).alpha(0.2),
+        modifier_accent: Hsl::new(258., 13., 80.).alpha(0.15),
         link: Hsl::new(198., 92., 70.),
         online: Hsl::new(152., 72., 40.),
         idle: Hsl::new(45., 93., 50.),
@@ -449,6 +453,7 @@ fn coal_palette() -> Palette {
         surface_range: (1., 12.),
         secondary_is_primary: true,
         selected: Hsl::new(258., 10., 100.).alpha(0.08),
+        modifier_accent: Hsl::new(258., 10., 65.).alpha(0.18),
         ..dark_palette()
     }
 }
@@ -460,6 +465,7 @@ fn legacy_palette() -> Palette {
         text_range: (52., 96.),
         selected: Hsl::new(220., 13., 100.).alpha(0.1),
         border: Hsl::new(220., 13., 50.).alpha(0.2),
+        modifier_accent: Hsl::new(220., 13., 80.).alpha(0.15),
         link: Hsl::new(210., 100., 70.),
         online: Hsl::new(142., 76., 40.),
         ..dark_palette()
@@ -477,6 +483,7 @@ fn light_palette() -> Palette {
         secondary_is_primary: false,
         selected: Hsl::new(220., 10., 10.).alpha(0.1),
         border: Hsl::new(220., 10., 40.).alpha(0.15),
+        modifier_accent: Hsl::new(220., 10., 40.).alpha(0.22),
         link: Hsl::new(198., 92., 45.),
         online: Hsl::new(152., 70., 40.),
         idle: Hsl::new(45., 90., 45.),
@@ -599,6 +606,7 @@ impl Theme {
             muted_foreground: p.text(light, 0.55).color(),
             accent: p.selected.color(),
             border: p.border.color(),
+            background_modifier_accent: p.modifier_accent.color(),
             divider: p.border.color(),
             brand: BRAND_PRIMARY.color(),
             text_link: p.link.color(),

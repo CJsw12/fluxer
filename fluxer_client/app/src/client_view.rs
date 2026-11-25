@@ -435,6 +435,20 @@ impl ClientView {
                 this.scrolled(scrolled_up, at_top, cx);
             }),
         ];
+        let weak_for_keys = cx.weak_entity();
+        let target_window = window.window_handle();
+        let mut subscriptions = subscriptions;
+        subscriptions.push(cx.intercept_keystrokes(move |event, window, cx| {
+            if window.window_handle() != target_window {
+                return;
+            }
+            let handled = weak_for_keys
+                .update(cx, |this, cx| this.intercept_keystroke(&event.keystroke, window, cx))
+                .unwrap_or(false);
+            if handled {
+                cx.stop_propagation();
+            }
+        }));
         // tokio -> gpui: the receiver is runtime-agnostic, so it is awaited on
         // the GPUI foreground executor. Bursts are coalesced into one refresh.
         let events_task = cx.spawn(async move |this, cx| {
@@ -2429,6 +2443,93 @@ impl ClientView {
         cx.notify();
     }
 
+    pub(crate) fn focus_root(&self, window: &mut Window, cx: &mut Context<Self>) {
+        window.focus(&self.focus, cx);
+    }
+
+    pub(crate) fn is_recording_keybind(&self) -> bool {
+        matches!(
+            &self.overlay,
+            Overlay::Settings(modal) if modal.keybinds_recording_id.is_some()
+        )
+    }
+
+    pub(crate) fn should_run_builtin_shortcut(&self, action: &str) -> bool {
+        !self.is_recording_keybind() && shortcuts::is_builtin_action_active(&self.prefs.data, action)
+    }
+
+    pub(crate) fn dispatch_keybind_action(
+        &mut self,
+        action: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        match action {
+            "nav_channel_prev" => self.cycle_channel(-1, cx),
+            "nav_channel_next" => self.cycle_channel(1, cx),
+            "nav_unread_prev" => self.cycle_filtered(crate::nav::ChannelFilter::Unread, -1, cx),
+            "nav_unread_next" => self.cycle_filtered(crate::nav::ChannelFilter::Unread, 1, cx),
+            "nav_mention_prev" => self.cycle_filtered(crate::nav::ChannelFilter::Mentioned, -1, cx),
+            "nav_mention_next" => self.cycle_filtered(crate::nav::ChannelFilter::Mentioned, 1, cx),
+            "nav_guild_prev" => self.cycle_guild(-1, cx),
+            "nav_guild_next" => self.cycle_guild(1, cx),
+            "nav_history_back" => self.history_back(cx),
+            "nav_history_forward" => self.history_forward(cx),
+            "nav_toggle_last_guild_dms" => self.toggle_last_guild(cx),
+            "nav_add_guild" => self.open_join_guild(window, cx),
+            "misc_search" => self.open_search(window, cx),
+            "nav_quick_switcher" => self.toggle_quick_switcher(window, cx),
+            "chat_toggle_emoji" => self.toggle_emoji_picker(window, cx),
+            "system_toggle_settings" => self.open_settings(window, cx),
+            "system_zoom_in" => self.step_ui_zoom(10, cx),
+            "system_zoom_out" => self.step_ui_zoom(-10, cx),
+            "system_zoom_reset" => self.settings_set_zoom(100, cx),
+            "chat_mark_channel_read" => self.mark_channel_read(cx),
+            "chat_mark_guild_read" => self.mark_guild_read(cx),
+            "voice_toggle_mute" => self.toggle_voice_mute(cx),
+            "voice_toggle_deafen" => self.toggle_voice_deaf(cx),
+            _ => return false,
+        }
+        true
+    }
+
+    pub(crate) fn intercept_keystroke(
+        &mut self,
+        keystroke: &gpui_kit::Keystroke,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        if let Overlay::Settings(modal) = &self.overlay {
+            if let Some(recording_id) = modal.keybinds_recording_id.clone() {
+                if keystroke.key == "escape"
+                    && !keystroke.modifiers.control
+                    && !keystroke.modifiers.alt
+                    && !keystroke.modifiers.shift
+                    && !keystroke.modifiers.platform
+                {
+                    self.settings_cancel_record_keybind(cx);
+                    return true;
+                }
+                if let Some(combo) = shortcuts::keystroke_to_combo(keystroke) {
+                    self.settings_set_custom_keybind_combo(&recording_id, combo, cx);
+                    self.settings_cancel_record_keybind(cx);
+                }
+                return true;
+            }
+        }
+
+        if self.overlay.is_open() {
+            return false;
+        }
+        let Some(combo) = shortcuts::keystroke_to_combo(keystroke) else {
+            return false;
+        };
+        let Some(action) = shortcuts::matching_custom_action(&self.prefs.data, &combo).map(str::to_owned) else {
+            return false;
+        };
+        self.dispatch_keybind_action(&action, window, cx)
+    }
+
     pub(crate) fn handle_sidebar_resize_key(
         &mut self,
         ev: &KeyDownEvent,
@@ -3931,7 +4032,10 @@ impl Render for ClientView {
             .text_color(theme.foreground)
             .text_size(px(theme.sizes.text))
             .capture_action(cx.listener(|v, _: &shortcuts::MarkChannelRead, window, cx| {
-                if v.close_floating_popouts(window, cx) {
+                if v.is_recording_keybind() {
+                    v.settings_cancel_record_keybind(cx);
+                    cx.stop_propagation();
+                } else if v.close_floating_popouts(window, cx) {
                     cx.stop_propagation();
                 }
             }))

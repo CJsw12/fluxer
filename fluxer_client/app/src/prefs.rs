@@ -74,6 +74,55 @@ fn normalize_device_name(raw: Option<&str>) -> Option<String> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomKeybindEntry {
+    pub id: String,
+    pub action: Option<String>,
+    pub combo: String,
+    pub enabled: bool,
+}
+
+impl CustomKeybindEntry {
+    fn from_value(value: &Value, fallback_index: usize) -> Option<Self> {
+        let obj = value.as_object()?;
+        let id = obj
+            .get("id")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned)
+            .unwrap_or_else(|| format!("kb-{}", fallback_index + 1));
+        let action = obj
+            .get("action")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned);
+        let combo = obj
+            .get("combo")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .unwrap_or_default()
+            .to_owned();
+        let enabled = obj.get("enabled").and_then(Value::as_bool).unwrap_or(true);
+        Some(Self {
+            id,
+            action,
+            combo,
+            enabled,
+        })
+    }
+
+    fn to_value(&self) -> Value {
+        json!({
+            "id": self.id,
+            "action": self.action,
+            "combo": self.combo,
+            "enabled": self.enabled,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Prefs {
     pub theme: ThemeKind,
     pub notifications: bool,
@@ -120,6 +169,9 @@ pub struct Prefs {
     pub voice_call_height: u16,
     pub emoji_picker_width: u16,
     pub emoji_picker_height: u16,
+    pub custom_keybinds: Vec<CustomKeybindEntry>,
+    pub disable_builtin_keybinds: bool,
+    pub disabled_builtin_actions: Vec<String>,
 }
 
 impl Default for Prefs {
@@ -174,6 +226,9 @@ impl Default for Prefs {
             voice_call_height: VOICE_CALL_HEIGHT_DEFAULT,
             emoji_picker_width: EMOJI_PICKER_WIDTH_DEFAULT,
             emoji_picker_height: EMOJI_PICKER_HEIGHT_DEFAULT,
+            custom_keybinds: Vec::new(),
+            disable_builtin_keybinds: false,
+            disabled_builtin_actions: Vec::new(),
         }
     }
 }
@@ -418,11 +473,38 @@ impl Prefs {
                 .and_then(|n| u16::try_from(n).ok())
                 .unwrap_or(default.emoji_picker_height)
                 .clamp(EMOJI_PICKER_HEIGHT_MIN, EMOJI_PICKER_HEIGHT_MAX),
+            custom_keybinds: value
+                .get("custom_keybinds")
+                .and_then(Value::as_array)
+                .map(|items| {
+                    items
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(idx, item)| CustomKeybindEntry::from_value(item, idx))
+                        .collect()
+                })
+                .unwrap_or(default.custom_keybinds),
+            disable_builtin_keybinds: value
+                .get("disable_builtin_keybinds")
+                .and_then(Value::as_bool)
+                .unwrap_or(default.disable_builtin_keybinds),
+            disabled_builtin_actions: {
+                let mut actions = Vec::new();
+                if let Some(items) = value.get("disabled_builtin_actions").and_then(Value::as_array) {
+                    for raw in items.iter().filter_map(Value::as_str) {
+                        let trimmed = raw.trim();
+                        if !trimmed.is_empty() && !actions.iter().any(|existing: &String| existing == trimmed) {
+                            actions.push(trimmed.to_owned());
+                        }
+                    }
+                }
+                actions
+            },
         }
     }
 
     fn to_value(&self) -> Value {
-        let mut map = serde_json::Map::with_capacity(45);
+        let mut map = serde_json::Map::with_capacity(48);
         map.insert("theme".into(), json!(self.theme.as_str()));
         map.insert("notifications".into(), json!(self.notifications));
         map.insert("sounds".into(), json!(self.sounds));
@@ -474,6 +556,12 @@ impl Prefs {
             "emoji_picker_height".into(),
             json!(self.emoji_picker_height.clamp(EMOJI_PICKER_HEIGHT_MIN, EMOJI_PICKER_HEIGHT_MAX)),
         );
+        map.insert(
+            "custom_keybinds".into(),
+            Value::Array(self.custom_keybinds.iter().map(CustomKeybindEntry::to_value).collect()),
+        );
+        map.insert("disable_builtin_keybinds".into(), json!(self.disable_builtin_keybinds));
+        map.insert("disabled_builtin_actions".into(), json!(self.disabled_builtin_actions));
         Value::Object(map)
     }
 }
@@ -785,6 +873,110 @@ impl PrefsStore {
         }
     }
 
+    pub fn set_disable_builtin_keybinds(&mut self, disabled: bool) {
+        if self.data.disable_builtin_keybinds != disabled {
+            self.data.disable_builtin_keybinds = disabled;
+            self.persist();
+        }
+    }
+
+    pub fn add_custom_keybind(&mut self, action: Option<String>, combo: String) -> String {
+        let next_num = self
+            .data
+            .custom_keybinds
+            .iter()
+            .filter_map(|e| e.id.strip_prefix("kb-").and_then(|n| n.parse::<usize>().ok()))
+            .max()
+            .unwrap_or(0)
+            + 1;
+        let id = format!("kb-{next_num}");
+        self.data.custom_keybinds.push(CustomKeybindEntry {
+            id: id.clone(),
+            action: action.and_then(|s| {
+                let t = s.trim();
+                (!t.is_empty()).then(|| t.to_owned())
+            }),
+            combo: combo.trim().to_owned(),
+            enabled: true,
+        });
+        self.persist();
+        id
+    }
+
+    pub fn set_custom_keybind_action(&mut self, id: &str, action: Option<String>) {
+        if let Some(entry) = self.data.custom_keybinds.iter_mut().find(|e| e.id == id) {
+            entry.action = action.and_then(|s| {
+                let t = s.trim();
+                (!t.is_empty()).then(|| t.to_owned())
+            });
+            self.persist();
+        }
+    }
+
+    pub fn set_custom_keybind_combo(&mut self, id: &str, combo: String) {
+        if let Some(entry) = self.data.custom_keybinds.iter_mut().find(|e| e.id == id) {
+            entry.combo = combo.trim().to_owned();
+            self.persist();
+        }
+    }
+
+    pub fn set_custom_keybind_enabled(&mut self, id: &str, enabled: bool) {
+        if let Some(entry) = self.data.custom_keybinds.iter_mut().find(|e| e.id == id) {
+            if entry.enabled != enabled {
+                entry.enabled = enabled;
+                self.persist();
+            }
+        }
+    }
+
+    pub fn remove_custom_keybind(&mut self, id: &str) {
+        let before = self.data.custom_keybinds.len();
+        self.data.custom_keybinds.retain(|e| e.id != id);
+        if self.data.custom_keybinds.len() != before {
+            self.persist();
+        }
+    }
+
+    pub fn remove_custom_keybinds_for_action(&mut self, action: &str) {
+        let before = self.data.custom_keybinds.len();
+        self.data.custom_keybinds.retain(|e| e.action.as_deref() != Some(action));
+        if self.data.custom_keybinds.len() != before {
+            self.persist();
+        }
+    }
+
+    pub fn disable_builtin_action(&mut self, action: &str) {
+        let trimmed = action.trim();
+        if !trimmed.is_empty() && !self.data.disabled_builtin_actions.iter().any(|a| a == trimmed) {
+            self.data.disabled_builtin_actions.push(trimmed.to_owned());
+            self.persist();
+        }
+    }
+
+    pub fn enable_builtin_action(&mut self, action: &str) {
+        let before = self.data.disabled_builtin_actions.len();
+        self.data.disabled_builtin_actions.retain(|a| a != action);
+        if self.data.disabled_builtin_actions.len() != before {
+            self.persist();
+        }
+    }
+
+    pub fn is_builtin_action_disabled(&self, action: &str) -> bool {
+        self.data.disabled_builtin_actions.iter().any(|a| a == action)
+    }
+
+    pub fn reset_all_keybinds(&mut self) {
+        let changed = !self.data.custom_keybinds.is_empty()
+            || self.data.disable_builtin_keybinds
+            || !self.data.disabled_builtin_actions.is_empty();
+        self.data.custom_keybinds.clear();
+        self.data.disable_builtin_keybinds = false;
+        self.data.disabled_builtin_actions.clear();
+        if changed {
+            self.persist();
+        }
+    }
+
     /// A failed save is only logged: prefs stay valid in memory.
     fn persist(&self) {
         if let Err(err) = self.save() {
@@ -926,6 +1118,22 @@ mod tests {
                 voice_call_height: if theme == ThemeKind::Darker { 420 } else { 320 },
                 emoji_picker_width: if theme == ThemeKind::Black { 640 } else { 592 },
                 emoji_picker_height: if theme == ThemeKind::Light { 500 } else { 690 },
+                custom_keybinds: if theme == ThemeKind::Dark {
+                    vec![CustomKeybindEntry {
+                        id: "kb-1".to_owned(),
+                        action: Some("nav_quick_switcher".to_owned()),
+                        combo: "alt-j".to_owned(),
+                        enabled: true,
+                    }]
+                } else {
+                    Vec::new()
+                },
+                disable_builtin_keybinds: theme == ThemeKind::Black,
+                disabled_builtin_actions: if theme == ThemeKind::Light {
+                    vec!["misc_search".to_owned()]
+                } else {
+                    Vec::new()
+                },
             };
             store.save().expect("save");
             let loaded = PrefsStore::open(path.clone());
@@ -1008,7 +1216,7 @@ mod tests {
             .keys()
             .map(String::as_str)
             .collect();
-        assert_eq!(keys.len(), 45);
+        assert_eq!(keys.len(), 48);
         for key in [
             "theme",
             "notifications",
@@ -1020,6 +1228,9 @@ mod tests {
             "ui_zoom",
             "compact",
             "trusted_domains",
+            "custom_keybinds",
+            "disable_builtin_keybinds",
+            "disabled_builtin_actions",
             "voice_input_device",
             "voice_output_device",
             "voice_input_volume",
@@ -1170,6 +1381,52 @@ mod tests {
         assert_eq!(reloaded.data.voice_call_height, 590);
         assert_eq!(reloaded.data.emoji_picker_width, 736);
         assert_eq!(reloaded.data.emoji_picker_height, 686);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn keybinds_prefs_backwards_compat_and_round_trip() {
+        let dir = temp_dir("keybinds-round-trip");
+        std::fs::create_dir_all(&dir).expect("dir");
+        let path = dir.join(FILE_NAME);
+        // Legacy prefs.json without any keybinds fields loads safely with defaults.
+        std::fs::write(&path, br#"{"theme":"dark","notifications":true}"#).expect("write");
+        let mut store = PrefsStore::open(path.clone());
+        assert!(store.data.custom_keybinds.is_empty());
+        assert!(!store.data.disable_builtin_keybinds);
+        assert!(store.data.disabled_builtin_actions.is_empty());
+
+        let id1 = store.add_custom_keybind(Some("nav_quick_switcher".to_owned()), "alt-j".to_owned());
+        let id2 = store.add_custom_keybind(None, "".to_owned());
+        store.set_custom_keybind_action(&id2, Some("misc_search".to_owned()));
+        store.set_custom_keybind_combo(&id2, "ctrl-shift-f".to_owned());
+        store.set_custom_keybind_enabled(&id2, false);
+        store.set_disable_builtin_keybinds(true);
+        store.disable_builtin_action("nav_channel_prev");
+        store.disable_builtin_action("nav_channel_prev"); // deduped
+
+        let reloaded = PrefsStore::open(path.clone());
+        assert_eq!(reloaded.data.custom_keybinds.len(), 2);
+        assert_eq!(reloaded.data.custom_keybinds[0].id, id1);
+        assert_eq!(reloaded.data.custom_keybinds[0].action.as_deref(), Some("nav_quick_switcher"));
+        assert_eq!(reloaded.data.custom_keybinds[0].combo, "alt-j");
+        assert!(reloaded.data.custom_keybinds[0].enabled);
+        assert_eq!(reloaded.data.custom_keybinds[1].id, id2);
+        assert_eq!(reloaded.data.custom_keybinds[1].action.as_deref(), Some("misc_search"));
+        assert_eq!(reloaded.data.custom_keybinds[1].combo, "ctrl-shift-f");
+        assert!(!reloaded.data.custom_keybinds[1].enabled);
+        assert!(reloaded.data.disable_builtin_keybinds);
+        assert_eq!(reloaded.data.disabled_builtin_actions, vec!["nav_channel_prev".to_owned()]);
+
+        store.enable_builtin_action("nav_channel_prev");
+        assert!(!store.is_builtin_action_disabled("nav_channel_prev"));
+        store.remove_custom_keybind(&id1);
+        assert_eq!(store.data.custom_keybinds.len(), 1);
+        store.reset_all_keybinds();
+        let after_reset = PrefsStore::open(path);
+        assert!(after_reset.data.custom_keybinds.is_empty());
+        assert!(!after_reset.data.disable_builtin_keybinds);
+        assert!(after_reset.data.disabled_builtin_actions.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

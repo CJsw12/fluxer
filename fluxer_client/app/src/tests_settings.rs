@@ -997,3 +997,194 @@ fn settings_modal_new_tabs_deeplinks_search_and_privacy_work(cx: &mut TestAppCon
 
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn keybinds_tab_editing_recording_conflicts_search_reset_and_runtime_dispatch(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, vcx) = open_client(cx, backend, events);
+    vcx.update(|_, cx| crate::shortcuts::bind_keys(cx));
+
+    // Open settings and switch to Keybinds tab.
+    view.update_in(vcx, |v, window, cx| {
+        v.open_settings(window, cx);
+        v.select_settings_tab(SettingsTab::Keybinds, cx);
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+
+    assert!(vcx.debug_bounds("settings-keybinds-list").is_some());
+    assert!(vcx.debug_bounds("settings-keybinds-search").is_some());
+    assert!(vcx.debug_bounds("settings-keybinds-add").is_some());
+    assert!(vcx.debug_bounds("settings-keybinds-disable-builtins").is_some());
+    assert!(vcx.debug_bounds("settings-keybinds-custom-empty").is_some());
+    assert!(vcx.debug_bounds("settings-keybinds-reset-all").is_none());
+
+    // Add a custom keybind via the Add button.
+    let add_btn = vcx.debug_bounds("settings-keybinds-add").expect("add button drawn");
+    vcx.simulate_click(add_btn.center(), gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+
+    assert!(vcx.debug_bounds("settings-keybind-custom-row-kb-1").is_some());
+    assert!(vcx.debug_bounds("settings-keybinds-reset-all").is_some());
+
+    // Select action "nav_quick_switcher" from the dropdown.
+    let action_btn = vcx
+        .debug_bounds("settings-keybind-action-kb-1")
+        .expect("action dropdown drawn");
+    vcx.simulate_click(action_btn.center(), gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("settings-keybind-action-menu-kb-1").is_some());
+    view.update(vcx, |v, cx| {
+        v.settings_set_custom_keybind_action("kb-1", Some("nav_quick_switcher".to_owned()), cx);
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+
+    // Start recording and press Escape -> cancels recording without closing settings.
+    view.update_in(vcx, |v, window, cx| {
+        v.settings_toggle_record_keybind("kb-1".to_owned(), window, cx);
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(view.read_with(vcx, |v, _| v.is_recording_keybind()));
+
+    vcx.simulate_keystrokes("escape");
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(!view.read_with(vcx, |v, _| v.is_recording_keybind()));
+    assert!(view.read_with(vcx, |v, _| matches!(v.overlay, Overlay::Settings(_))));
+
+    // Start recording and press Ctrl+K -> pauses built-in QuickSwitcher and records "ctrl-k".
+    view.update_in(vcx, |v, window, cx| {
+        v.settings_toggle_record_keybind("kb-1".to_owned(), window, cx);
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    vcx.simulate_keystrokes("ctrl-k");
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(!view.read_with(vcx, |v, _| v.is_recording_keybind()));
+    assert!(view.read_with(vcx, |v, _| matches!(v.overlay, Overlay::Settings(_))));
+    view.read_with(vcx, |v, _| {
+        assert_eq!(v.prefs.data.custom_keybinds[0].combo, "ctrl-k");
+    });
+
+    // Re-record to Alt+J for runtime dispatch test.
+    view.update_in(vcx, |v, window, cx| {
+        v.settings_toggle_record_keybind("kb-1".to_owned(), window, cx);
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    vcx.simulate_keystrokes("alt-j");
+    vcx.run_until_parked();
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert_eq!(v.prefs.data.custom_keybinds[0].combo, "alt-j");
+    });
+
+    // Add a second custom keybind with the same combo -> conflict badge appears.
+    view.update(vcx, |v, cx| {
+        let id2 = v.settings_add_custom_keybind(Some("misc_search".to_owned()), cx);
+        v.settings_set_custom_keybind_combo(&id2, "alt-j".to_owned(), cx);
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("settings-keybind-conflict-kb-1").is_some());
+    assert!(vcx.debug_bounds("settings-keybind-conflict-kb-2").is_some());
+
+    // Disabling kb-2 clears the conflict badge.
+    view.update(vcx, |v, cx| {
+        v.settings_set_custom_keybind_enabled("kb-2", false, cx);
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("settings-keybind-conflict-kb-1").is_none());
+
+    // Real-time search filters custom and default keybinds.
+    view.update_in(vcx, |v, window, cx| {
+        if let Overlay::Settings(modal) = &v.overlay {
+            modal.keybinds_search.update(cx, |input, cx| input.set_value("zzzz-no-match", window, cx));
+        }
+        cx.notify();
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("settings-keybinds-custom-no-match").is_some());
+    assert!(vcx.debug_bounds("settings-keybinds-defaults-no-match").is_some());
+
+    view.update_in(vcx, |v, window, cx| {
+        if let Overlay::Settings(modal) = &v.overlay {
+            modal.keybinds_search.update(cx, |input, cx| input.set_value("", window, cx));
+        }
+        cx.notify();
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("settings-keybind-custom-row-kb-1").is_some());
+
+    // Close settings and verify runtime shortcut execution:
+    // 1. Built-in ToggleQuickSwitcher is overridden by kb-1, so dispatching it does nothing.
+    view.update_in(vcx, |v, window, cx| {
+        v.close_overlay(window, cx);
+        v.focus_root(window, cx);
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(view.read_with(vcx, |v, _| matches!(v.overlay, Overlay::None)));
+    vcx.dispatch_action(crate::shortcuts::ToggleQuickSwitcher);
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(
+        view.read_with(vcx, |v, _| matches!(v.overlay, Overlay::None)),
+        "overridden built-in ToggleQuickSwitcher should be suppressed"
+    );
+
+    // 2. Custom combo Alt+J opens QuickSwitcher.
+    vcx.simulate_keystrokes("alt-j");
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(
+        view.read_with(vcx, |v, _| matches!(v.overlay, Overlay::QuickSwitcher(_))),
+        "custom keybind alt-j should trigger nav_quick_switcher"
+    );
+
+    // 3. Disable built-ins suppresses built-in OpenSearch.
+    view.update_in(vcx, |v, window, cx| {
+        v.close_overlay(window, cx);
+        v.settings_set_disable_builtin_keybinds(true, cx);
+        v.focus_root(window, cx);
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    vcx.dispatch_action(crate::shortcuts::OpenSearch);
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(view.read_with(vcx, |v, _| v.search.is_none()));
+
+    // 4. Reset to defaults confirmation modal resets custom keybinds and disable_builtin_keybinds.
+    view.update_in(vcx, |v, window, cx| {
+        v.open_settings(window, cx);
+        v.select_settings_tab(SettingsTab::Keybinds, cx);
+        v.settings_set_keybinds_confirm_reset(true, cx);
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    assert!(vcx.debug_bounds("settings-keybinds-reset-confirm").is_some());
+    let confirm_btn = vcx
+        .debug_bounds("settings-keybinds-reset-confirm-btn")
+        .expect("confirm reset button drawn");
+    vcx.simulate_click(confirm_btn.center(), gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert!(v.prefs.data.custom_keybinds.is_empty());
+        assert!(!v.prefs.data.disable_builtin_keybinds);
+        assert!(v.prefs.data.disabled_builtin_actions.is_empty());
+    });
+    assert!(vcx.debug_bounds("settings-keybinds-custom-empty").is_some());
+
+    drop(rt);
+}

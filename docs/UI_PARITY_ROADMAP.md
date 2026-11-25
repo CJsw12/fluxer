@@ -32,7 +32,7 @@
 ### M9. 검증 사각지대 보완 — 상태 행렬 · 조작 · 기능 시험 (다음 세션 최우선)
 > **목적:** 2026-11-24 사용자가 지적한 7건(앱 내부 크기 조절 미구현, 화면 공유 송수신 미동작, 레일 호버 동작 차이, 왼쪽 아래 프로필 클릭 결과 차이, 서버 이니셜 글자 모양, 테두리·모서리·사용자 영역 카드 모양, SVG 아이콘 모양)을 고치고, 같은 종류의 차이가 다시 빠지지 않도록 Parity Lab의 비교 범위를 "정지 화면 모양"에서 "상태·조작·기능"으로 넓힌다. 원인 분석은 `docs/PARITY_LAB.md` 8장 첫 항목.
 
-- [ ] **M9.1 조작 요소 목록 자동 추출과 대조**
+- [x] **M9.1 조작 요소 목록 자동 추출과 대조** — 완료(2026-11-26): `tools/parity_lab/extract_interactions.py`로 공식 5개 범주 총 770건(`resize_drag` 27, `tooltips` 280, `context_menus` 292, `keybinds` 108, `hover_only` 63)을 추출해 `fluxer_client/app/src`와 대조(`present` 53·`missing` 643·`differs` 74, 후속 작업 717건)하고 `tools/parity_lab/interactions.json`에 저장했다(`--selftest` 통과).
   - 공식 소스(`fluxer_app/src`)에서 크기 조절·드래그 손잡이(`resize`, `drag-handle`, `splitter`, `resize-pill`), 툴팁, 우클릭 메뉴(`onContextMenu`), 키보드 단축키(keybind 정의), 호버 전용 요소(`:hover`로만 보이는 버튼·액션 바)를 스크립트로 뽑아 `tools/parity_lab/interactions.json`을 만든다.
   - Rust 쪽은 같은 `data-flx` 태그·기능 유무로 대조해 "없음/있음/동작 다름" 목록을 낸다.
   - **수락 기준:** 목록이 생성되고 누락 항목마다 작업 항목이 생긴다.

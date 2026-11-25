@@ -149,6 +149,8 @@ Git Bash에서는 `/channels/...` 인자가 Windows 경로로 바뀌지 않도�
 
 ### 10.3 위임 방식 (난이도 순)
 - 모델 선택은 도구별 지침을 따른다(Claude: Opus·Sonnet·Haiku + DeepSeek flash, Antigravity: 전역 GEMINI.md의 Hydrogen·Neon·Argon + DeepSeek flash). 배정은 난이도 기준이다: 명세가 분명한 스크립트·태그 목록은 저가 모델, GPUI 구현은 중급(Sonnet·Neon급), 전략·설계·T3 검토는 상위 모델. 영역별 수정 워커는 1~2개로 파일 소유권을 겹치지 않게 나누고(동시 빌드 최대 2개, 실기 클라이언트를 조작하는 워커는 한 번에 하나), 같은 `target/fc-root`를 쓰므로 잠금 대기·링크 실패는 재시도하게 한다. 루트는 목표 수치 추출, 재측정, 통합, 커밋만 맡는다.
+- **Antigravity `Orchestrator (Neon)` 모드(2026-11-25 점검):** 하네스가 계획(Neon)과 실행(`gemini-flash-worker-agy`)을 자동으로 나눈다. `invoke_subagent`·`swarm`을 부르지 않아도 실행 토큰의 약 80%가 Flash 워커로 가므로 이것도 위임으로 친다. 대신 실행 워커가 매 턴 약 25만~50만 토큰의 대화 전체를 다시 읽어 느려지므로, **기능 하나(커밋 하나)마다 새 세션**으로 시작하고, 대량 탐색·로그 요약은 DeepSeek(opencode)에 넘긴다. 수정은 함수·파일 단위로 묶는다.
+- **데이터를 지우는 기능은 T3:** 일괄 삭제·purge·탈퇴·밴처럼 서버 데이터를 지우는 경로는 구현 후 다른 계열 모델의 독립 검토를 받고 커밋한다. 실기에서 직접 실행해 시험 데이터를 지우지 않으며(확인 모달까지만), 끝나면 10.5 복구 점검을 한다.
 - 측정에서 얻은 사실을 브리프에 그대로 넣는다(예: GPUI 기본 줄높이는 글자 크기의 약 1.6배라 요소마다 `line_height`가 필요, 메시지 목록은 아래 고정이라 위쪽 위치는 아래 높이 합에 따라 결정, gpui-component `Button`은 아이콘 색을 덮어쓰므로 `Icon::new(..).text_color(..)`로 넘김).
 - 아이콘 SVG는 기억으로 쓰지 말고 Phosphor 원본 패키지(`@phosphor-icons/core` `assets/{regular,fill}`)에서 복사한다.
 

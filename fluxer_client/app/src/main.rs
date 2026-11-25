@@ -36,6 +36,7 @@ mod settings_model;
 mod shortcuts;
 mod single_instance;
 mod theme;
+mod theme_tokens_generated;
 mod tray;
 mod trusted_domains;
 mod tts;

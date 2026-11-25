@@ -72,9 +72,7 @@
 - [ ] **M9.10 기준 버전 고정** — 진행(2026-11-24): 저장소 `main`을 업스트림 `3608a387c`(2026-11-23)로 맞추고 `desktop-rs`에 병합했다(`3cc9d8ffb`). 업스트림 44개 커밋 중 `fluxer_app/src` 64개 파일이 바뀌었고 아이콘·SVG 파일 변경은 없었다. 비교 앱은 Web 2026.1120이라 이제 저장소가 더 새롭다. 비교 앱을 최신으로 올리거나 저장소 `fluxer_app` 빌드를 기준으로 쓰는 일은 남았다.
   - 비교 앱의 자동 업데이트를 막는다(`FLUXER_DISABLE_MODULE_UPDATES`).
   - 저장소 `upstream/main`을 그 빌드(현재 Web 2026.1120)에 맞추거나, 저장소 `fluxer_app`을 직접 빌드해 기준으로 쓴다. 버전이 다르면 비교 결과에 경고를 낸다.
-- [ ] **M9.11 테마 토큰 자동 생성**
-  - 공식 `fluxer_app/src/features/theme/variables/ThemeVariableManifest.ts`(다크·라이트·기타 테마 해석값)를 읽어 Rust 테마 상수를 생성한다.
-  - 손으로 옮긴 토큰을 대체하고, 생성 결과와 공식 값 일치를 테스트한다.
+- [x] **M9.11 테마 토큰 자동 생성** — 완료(2026-11-26): `tools/parity_lab/theme_tokens_rs.py`에 `--multi` 모드와 `color(srgb ...)` 해석을 추가해 `fluxer_client/app/src/theme_tokens_generated.rs`(dark 654·light 656, 총 1,310개 토큰·682개 RGBA 상수)를 자동 생성하고, `Theme::from_kind(Dark/Light)` 공식 토큰 필드를 생성 상수에 연동 및 단위 테스트로 검증했다.
 - [ ] **M9.12 컴포넌트 헤드리스 스냅샷**
   - GPUI 헤드리스 렌더로 주요 컴포넌트(레일 항목, 채널 행, 메시지, 팝오버)를 상태별로 그려 구조(JSON)와 픽셀(허용 오차) 스냅샷을 CI에서 비교한다.
   - crates.io 릴리스에 오프스크린 렌더가 없으면 Zed 커밋 고정 여부를 먼저 검토한다.

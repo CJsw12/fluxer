@@ -13,6 +13,19 @@
 use gpui_kit::component::{Theme as KitTheme, ThemeMode};
 use gpui_kit::{App, Global, Hsla, Window, WindowAppearance, hsla, rgb};
 
+use crate::theme_tokens_generated as generated_tokens;
+
+/// Converts a packed `0xRRGGBBAA` color from `theme_tokens_generated` into GPUI `Hsla`.
+fn rgba_u32(v: u32) -> Hsla {
+    gpui_kit::Rgba {
+        r: ((v >> 24) & 0xFF) as f32 / 255.0,
+        g: ((v >> 16) & 0xFF) as f32 / 255.0,
+        b: ((v >> 8) & 0xFF) as f32 / 255.0,
+        a: (v & 0xFF) as f32 / 255.0,
+    }
+    .into()
+}
+
 /// App-wide selected theme kind (`Theme::current` reads this global).
 #[derive(Debug, Clone, Copy)]
 pub struct Selected(pub ThemeKind);
@@ -582,7 +595,7 @@ impl Theme {
         } else {
             (0.82, 0.72, 0.38, 0.2)
         };
-        Self {
+        let mut theme = Self {
             background: primary.color(),
             background_secondary: secondary.color(),
             background_secondary_lighter: lighter.color(),
@@ -636,7 +649,49 @@ impl Theme {
             status_dnd: p.dnd.color(),
             status_offline: p.offline.color(),
             sizes: Sizes::DEFAULT,
+        };
+
+        macro_rules! apply_generated_tokens {
+            ($tokens:ident) => {{
+                use generated_tokens::$tokens as t;
+                theme.background = rgba_u32(t::BACKGROUND_PRIMARY_RGBA);
+                theme.background_secondary = rgba_u32(t::BACKGROUND_SECONDARY_RGBA);
+                theme.background_secondary_lighter = rgba_u32(t::BACKGROUND_SECONDARY_LIGHTER_RGBA);
+                theme.background_tertiary = rgba_u32(t::BACKGROUND_TERTIARY_RGBA);
+                theme.guild_list_foreground = rgba_u32(t::GUILD_LIST_FOREGROUND_RGBA);
+                theme.text_chat = rgba_u32(t::TEXT_CHAT_RGBA);
+                theme.text_secondary = rgba_u32(t::TEXT_SECONDARY_RGBA);
+                theme.text_tertiary = rgba_u32(t::TEXT_TERTIARY_RGBA);
+                theme.text_tertiary_muted = rgba_u32(t::TEXT_TERTIARY_MUTED_RGBA);
+                theme.foreground = rgba_u32(t::TEXT_PRIMARY_RGBA);
+                theme.muted = rgba_u32(t::BACKGROUND_SECONDARY_RGBA);
+                theme.hover_bg = rgba_u32(t::BACKGROUND_MODIFIER_HOVER_RGBA);
+                theme.muted_foreground = rgba_u32(t::TEXT_PRIMARY_MUTED_RGBA);
+                theme.accent = rgba_u32(t::BACKGROUND_MODIFIER_SELECTED_RGBA);
+                theme.border = rgba_u32(t::BORDER_COLOR_RGBA);
+                theme.background_modifier_accent = rgba_u32(t::BACKGROUND_MODIFIER_ACCENT_RGBA);
+                theme.divider = rgba_u32(t::BORDER_COLOR_RGBA);
+                theme.brand = rgba_u32(t::BRAND_PRIMARY_RGBA);
+                theme.text_link = rgba_u32(t::TEXT_LINK_RGBA);
+                theme.unread_pill = rgba_u32(t::TEXT_PRIMARY_RGBA);
+                theme.danger = rgba_u32(t::STATUS_DANGER_RGBA);
+                theme.mention_bg = rgba_u32(t::MARKUP_MENTION_FILL_RGBA);
+                theme.mention_fg = rgba_u32(t::MARKUP_MENTION_TEXT_RGBA);
+                theme.status_online = rgba_u32(t::STATUS_ONLINE_RGBA);
+                theme.status_connecting = rgba_u32(t::STATUS_IDLE_RGBA);
+                theme.status_idle = rgba_u32(t::STATUS_IDLE_RGBA);
+                theme.status_dnd = rgba_u32(t::STATUS_DND_RGBA);
+                theme.status_offline = rgba_u32(t::STATUS_OFFLINE_RGBA);
+            }};
         }
+
+        match kind {
+            ThemeKind::Dark | ThemeKind::System => apply_generated_tokens!(dark),
+            ThemeKind::Light => apply_generated_tokens!(light),
+            ThemeKind::Darker | ThemeKind::Black => {}
+        }
+
+        theme
     }
 }
 
@@ -651,7 +706,7 @@ pub fn apply(kind: ThemeKind, window: &mut Window, cx: &mut App) {
         ThemeMode::Light
     };
     KitTheme::change(mode, Some(window), cx);
-    let brand = BRAND_PRIMARY.color();
+    let brand = Theme::from_kind(resolved).brand;
     let brand_hover = Hsl::new(BRAND_PRIMARY.h, BRAND_PRIMARY.s, (BRAND_PRIMARY.l - 6.0).max(0.0)).color();
     let brand_active = Hsl::new(BRAND_PRIMARY.h, BRAND_PRIMARY.s, (BRAND_PRIMARY.l - 12.0).max(0.0)).color();
     let kit = KitTheme::global_mut(cx);
@@ -723,25 +778,47 @@ mod tests {
         assert_eq!(scale_lightness((60., 96.), Curve::EaseInOut, 1.), 96.);
     }
 
+    fn to_srgb8(color: Hsla) -> (i16, i16, i16, i16) {
+        let c = color.to_rgb();
+        (
+            (c.r * 255.).round() as i16,
+            (c.g * 255.).round() as i16,
+            (c.b * 255.).round() as i16,
+            (c.a * 255.).round() as i16,
+        )
+    }
+
+    fn assert_srgb_near(actual: Hsla, expected: Hsla, max_diff: i16) {
+        let a = to_srgb8(actual);
+        let b = to_srgb8(expected);
+        assert!(
+            (a.0 - b.0).abs() <= max_diff
+                && (a.1 - b.1).abs() <= max_diff
+                && (a.2 - b.2).abs() <= max_diff
+                && (a.3 - b.3).abs() <= max_diff,
+            "sRGB mismatch: actual={a:?} expected={b:?} (max_diff={max_diff})"
+        );
+    }
+
     #[test]
     fn dark_tokens_use_the_official_hsl_values() {
         let p = dark_palette();
         assert_eq!(p.surface(p.stops.0), Hsl::new(258., 10., 5.));
         assert_eq!(p.text(false, 1.), Hsl::new(258., 10., 96.));
         let theme = Theme::from_kind(ThemeKind::Dark);
-        assert_eq!(theme.background, hsla(258. / 360., 0.10, 0.05, 1.));
-        assert_eq!(theme.brand, hsla(242. / 360., 0.70, 0.55, 1.));
+        assert_srgb_near(theme.background, hsla(258. / 360., 0.10, 0.05, 1.), 1);
+        assert_srgb_near(theme.brand, hsla(242. / 360., 0.70, 0.55, 1.), 1);
         let border_rgb = theme.brand_button_border.to_rgb();
         assert_eq!((border_rgb.r * 255.).round() as u8, 0x63);
         assert_eq!((border_rgb.g * 255.).round() as u8, 0x5f);
         assert_eq!((border_rgb.b * 255.).round() as u8, 0xe3);
-        assert_eq!(theme.status_online, hsla(152. / 360., 0.72, 0.40, 1.));
+        assert_srgb_near(theme.status_online, hsla(152. / 360., 0.72, 0.40, 1.), 1);
     }
 
     #[test]
     fn lighter_surface_and_text_tokens_match_the_manifest() {
         let near = |a: Hsla, h: f32, sat: f32, l: f32| {
-            assert!((a.h - h / 360.).abs() < 1e-4 && (a.s - sat / 100.).abs() < 1e-4 && (a.l - l / 100.).abs() < 6e-4, "{a:?} vs {l}");
+            assert_srgb_near(a, Hsl::new(h, sat, l).color(), 1);
         };
         let d = Theme::from_kind(ThemeKind::Dark);
         near(d.background_secondary_lighter, 258., 10., 12.44);
@@ -766,9 +843,83 @@ mod tests {
     #[test]
     fn light_text_is_dark_and_surface_is_bright() {
         let theme = Theme::from_kind(ThemeKind::Light);
-        assert_eq!(theme.background, hsla(220. / 360., 0.10, 0.985, 1.));
-        assert_eq!(theme.foreground, hsla(220. / 360., 0.10, 0.15, 1.));
-        assert_eq!(theme.status_dnd, hsla(359. / 360., 0.70, 0.50, 1.));
+        assert_srgb_near(theme.background, hsla(220. / 360., 0.10, 0.985, 1.), 1);
+        assert_srgb_near(theme.foreground, hsla(220. / 360., 0.10, 0.15, 1.), 1);
+        assert_srgb_near(theme.status_dnd, hsla(359. / 360., 0.70, 0.50, 1.), 1);
+    }
+
+    #[test]
+    fn generated_tokens_cover_manifest_and_match_dark_light_themes() {
+        assert!(!generated_tokens::SOURCE_BUILD.is_empty());
+
+        // Core tokens from ThemeVariableManifest.ts must be present in both dark and light modules.
+        for token in [
+            generated_tokens::dark::BACKGROUND_PRIMARY,
+            generated_tokens::dark::BACKGROUND_SECONDARY,
+            generated_tokens::dark::BACKGROUND_SECONDARY_LIGHTER,
+            generated_tokens::dark::BACKGROUND_TERTIARY,
+            generated_tokens::dark::GUILD_LIST_FOREGROUND,
+            generated_tokens::dark::TEXT_PRIMARY,
+            generated_tokens::dark::TEXT_CHAT,
+            generated_tokens::dark::BRAND_PRIMARY,
+            generated_tokens::dark::BORDER_COLOR,
+            generated_tokens::dark::MARKUP_MENTION_FILL,
+            generated_tokens::dark::STATUS_ONLINE,
+            generated_tokens::dark::LAYOUT_SIDEBAR_WIDTH,
+            generated_tokens::dark::FONT_SANS,
+            generated_tokens::light::BACKGROUND_PRIMARY,
+            generated_tokens::light::BACKGROUND_SECONDARY,
+            generated_tokens::light::BACKGROUND_SECONDARY_LIGHTER,
+            generated_tokens::light::BACKGROUND_TERTIARY,
+            generated_tokens::light::GUILD_LIST_FOREGROUND,
+            generated_tokens::light::TEXT_PRIMARY,
+            generated_tokens::light::TEXT_CHAT,
+            generated_tokens::light::BRAND_PRIMARY,
+            generated_tokens::light::BORDER_COLOR,
+            generated_tokens::light::MARKUP_MENTION_FILL,
+            generated_tokens::light::STATUS_ONLINE,
+            generated_tokens::light::LAYOUT_SIDEBAR_WIDTH,
+            generated_tokens::light::FONT_SANS,
+        ] {
+            assert!(!token.is_empty(), "manifest token constant must be non-empty");
+        }
+
+        macro_rules! assert_theme_matches_generated {
+            ($theme:expr, $mod:ident) => {{
+                use generated_tokens::$mod as t;
+                assert_eq!($theme.background, rgba_u32(t::BACKGROUND_PRIMARY_RGBA));
+                assert_eq!($theme.background_secondary, rgba_u32(t::BACKGROUND_SECONDARY_RGBA));
+                assert_eq!($theme.background_secondary_lighter, rgba_u32(t::BACKGROUND_SECONDARY_LIGHTER_RGBA));
+                assert_eq!($theme.background_tertiary, rgba_u32(t::BACKGROUND_TERTIARY_RGBA));
+                assert_eq!($theme.guild_list_foreground, rgba_u32(t::GUILD_LIST_FOREGROUND_RGBA));
+                assert_eq!($theme.text_chat, rgba_u32(t::TEXT_CHAT_RGBA));
+                assert_eq!($theme.text_secondary, rgba_u32(t::TEXT_SECONDARY_RGBA));
+                assert_eq!($theme.text_tertiary, rgba_u32(t::TEXT_TERTIARY_RGBA));
+                assert_eq!($theme.text_tertiary_muted, rgba_u32(t::TEXT_TERTIARY_MUTED_RGBA));
+                assert_eq!($theme.foreground, rgba_u32(t::TEXT_PRIMARY_RGBA));
+                assert_eq!($theme.muted, rgba_u32(t::BACKGROUND_SECONDARY_RGBA));
+                assert_eq!($theme.hover_bg, rgba_u32(t::BACKGROUND_MODIFIER_HOVER_RGBA));
+                assert_eq!($theme.muted_foreground, rgba_u32(t::TEXT_PRIMARY_MUTED_RGBA));
+                assert_eq!($theme.accent, rgba_u32(t::BACKGROUND_MODIFIER_SELECTED_RGBA));
+                assert_eq!($theme.border, rgba_u32(t::BORDER_COLOR_RGBA));
+                assert_eq!($theme.background_modifier_accent, rgba_u32(t::BACKGROUND_MODIFIER_ACCENT_RGBA));
+                assert_eq!($theme.divider, rgba_u32(t::BORDER_COLOR_RGBA));
+                assert_eq!($theme.brand, rgba_u32(t::BRAND_PRIMARY_RGBA));
+                assert_eq!($theme.text_link, rgba_u32(t::TEXT_LINK_RGBA));
+                assert_eq!($theme.unread_pill, rgba_u32(t::TEXT_PRIMARY_RGBA));
+                assert_eq!($theme.danger, rgba_u32(t::STATUS_DANGER_RGBA));
+                assert_eq!($theme.mention_bg, rgba_u32(t::MARKUP_MENTION_FILL_RGBA));
+                assert_eq!($theme.mention_fg, rgba_u32(t::MARKUP_MENTION_TEXT_RGBA));
+                assert_eq!($theme.status_online, rgba_u32(t::STATUS_ONLINE_RGBA));
+                assert_eq!($theme.status_connecting, rgba_u32(t::STATUS_IDLE_RGBA));
+                assert_eq!($theme.status_idle, rgba_u32(t::STATUS_IDLE_RGBA));
+                assert_eq!($theme.status_dnd, rgba_u32(t::STATUS_DND_RGBA));
+                assert_eq!($theme.status_offline, rgba_u32(t::STATUS_OFFLINE_RGBA));
+            }};
+        }
+
+        assert_theme_matches_generated!(Theme::from_kind(ThemeKind::Dark), dark);
+        assert_theme_matches_generated!(Theme::from_kind(ThemeKind::Light), light);
     }
 
     #[test]

@@ -80,6 +80,7 @@ def main(argv: list[str]) -> int:
     else:
         print("client: NOT online (check tunnel)")
         return 1
+    rp.wake_a11y()
     if "--check" in argv:
         i = argv.index("--check")
         return run([sys.executable, "-I", str(REPO / "tools" / "parity_lab" / "check_scene.py"), *argv[i + 1:i + 5]], tail=40)

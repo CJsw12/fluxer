@@ -67,6 +67,32 @@ def screenshot(out: Path, ipc_path: Path = DEFAULT_IPC) -> Path:
     return out
 
 
+def wake_a11y(ipc_path: Path = DEFAULT_IPC) -> bool:
+    """Send WM_GETOBJECT (UiaRootObjectId) so AccessKit activates on hidden desktops."""
+    if sys.platform != "win32":
+        return False
+    try:
+        import ctypes  # noqa: PLC0415
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
+        import visual_parity_diff as vpd  # noqa: PLC0415
+
+        hwnd = vpd._find_window_for_pid(pid(ipc_path), timeout_s=3.0)
+        res = ctypes.c_size_t(0)
+        ok = ctypes.windll.user32.SendMessageTimeoutW(
+            ctypes.c_void_p(hwnd),
+            0x003D,  # WM_GETOBJECT
+            ctypes.c_size_t(0),
+            ctypes.c_ssize_t(-25),  # UiaRootObjectId
+            2,  # SMTO_ABORTIFHUNG
+            2000,
+            ctypes.byref(res),
+        )
+        return bool(ok)
+    except Exception:
+        return False
+
+
 def main(argv: list[str]) -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     if not argv:

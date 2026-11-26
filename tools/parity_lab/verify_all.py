@@ -37,6 +37,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
+PRECHECK_GUILD = "1572284491404148736"
+PRECHECK_CHANNEL = "1572284491404148743"
 STEPS = ("build", "precheck", "icons", "colors", "ratchet", "resize", "surface", "state")
 LIVE_STEPS = ("ratchet", "resize", "surface", "state")
 TIMEOUTS = {
@@ -243,6 +245,29 @@ def step_precheck(args: argparse.Namespace, out_dir: Path) -> Result:
         inspect = reply
 
     elements = inspect.get("elements") if isinstance(inspect.get("elements"), list) else []
+    if elements:
+        status = next(
+            (e.get("text") for e in elements if e.get("flx") == "app.user-area.user-area-inner.user-status"),
+            None,
+        )
+        has_header = any(
+            e.get("flx") == "channel.member-list-group-header"
+            and str(e.get("text") or "").strip().startswith("Online")
+            and "2" in str(e.get("text") or "")
+            for e in elements
+        )
+        if status == "Online" and (not inspect.get("a11y") or not has_header):
+            if not inspect.get("a11y"):
+                rust_probe.wake_a11y()
+            if not has_header:
+                rust_probe.deep_link(f"fluxer://channels/{PRECHECK_GUILD}/{PRECHECK_CHANNEL}")
+                rust_probe.send("probe_key", keystroke="escape")
+            time.sleep(1.5)
+            retry = rust_probe.send("probe_inspect")
+            if isinstance(retry, dict) and retry.get("ok") is not False:
+                inspect = retry
+                elements = inspect.get("elements") if isinstance(inspect.get("elements"), list) else []
+
     if not elements:
         if not fails:
             fails.append("rust inspect returned no elements")

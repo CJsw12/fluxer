@@ -2,11 +2,12 @@
 """Run every pre-commit parity gate and print a short summary (one row per step).
 
     python -I tools/parity_lab/verify_all.py [--build] [--worker] [--skip-tests]
-        [--base REF] [--out DIR] [--only step,step]
+        [--base REF] [--out DIR] [--only step,step] [--no-heal]
 
 Steps, in order:
   build    only with --build: cycle.py --release [--worker] [--skip-tests] (tests + SHA256)
   precheck Rust Online, member list "Online ... 2", Rust mic on, official CDP mic/speaker on
+           (on FAIL: env.py heal once, 240 s, OUT/heal.log, then precheck again)
   icons    check_icons.py (errors -> FAIL, moved -> WARN)
   colors   check_colors.py --base REF
   ratchet  spec_gate.py --live --all (counts OK/FAIL, names only the failing scenes)
@@ -20,7 +21,8 @@ Exit 0 only when no step FAILs. --only runs a subset and always adds precheck un
 excludes it explicitly with a leading `-` or `!` (for example `--only colors,-precheck`).
 
 The always-on client is used: --launch-rust is never passed. Python children run with
-sys.executable -I and cwd=repo root.
+sys.executable -I and cwd=repo root. A failing precheck is healed once with env.py heal unless
+--no-heal is given.
 """
 
 from __future__ import annotations
@@ -44,6 +46,7 @@ LIVE_STEPS = ("ratchet", "resize", "surface", "state")
 TIMEOUTS = {
     "build": 2400,
     "precheck": 120,
+    "heal": 240,
     "icons": 300,
     "colors": 180,
     "ratchet": 3600,
@@ -225,7 +228,7 @@ def step_build(args: argparse.Namespace, out_dir: Path) -> Result:
     return Result("PASS", detail, log)
 
 
-def step_precheck(args: argparse.Namespace, out_dir: Path) -> Result:
+def _precheck_once(args: argparse.Namespace, out_dir: Path) -> Result:
     log = out_dir / "precheck.log"
     lines: list[str] = []
     fails: list[str] = []
@@ -336,6 +339,44 @@ def step_precheck(args: argparse.Namespace, out_dir: Path) -> Result:
     if fails:
         return Result("FAIL", clip("; ".join(fails)), log)
     return Result("PASS", "rust Online + member list 2, rust mic on, official mic+speaker on", log)
+
+
+def heal_command() -> list[str]:
+    return [sys.executable, "-I", str(HERE / "env.py"), "heal"]
+
+
+def should_heal(args: argparse.Namespace, result: Result) -> bool:
+    """A failing precheck is healed once, unless --no-heal is given."""
+    return result.status == "FAIL" and not getattr(args, "no_heal", False)
+
+
+def run_heal(out_dir: Path) -> tuple[int | None, bool, Path]:
+    code, text, timed_out = capture(heal_command(), TIMEOUTS["heal"])
+    log = out_dir / "heal.log"
+    log.write_text(
+        "$ " + " ".join(heal_command()) + "\n" + text + f"\n[verify_all] exit={code} timeout={timed_out}\n",
+        encoding="utf-8",
+        errors="replace",
+    )
+    return code, timed_out, log
+
+
+def step_precheck(args: argparse.Namespace, out_dir: Path) -> Result:
+    result = _precheck_once(args, out_dir)
+    if not should_heal(args, result):
+        return result
+    code, timed_out, _ = run_heal(out_dir)
+    status = "heal timeout" if timed_out else f"heal exit={code}"
+    retry = _precheck_once(args, out_dir)
+    note = f"[verify_all] {status}; precheck after heal: {retry.status}\n"
+    if retry.log and retry.log.is_file():
+        with retry.log.open("a", encoding="utf-8", errors="replace") as handle:
+            handle.write(note)
+    if retry.status == "PASS":
+        retry.detail = clip(f"{retry.detail} (healed; {status})")
+        return retry
+    retry.detail = clip(f"heal did not fix: {retry.detail} ({status})")
+    return retry
 
 
 def step_icons(args: argparse.Namespace, out_dir: Path) -> Result:
@@ -566,7 +607,21 @@ def selftest() -> None:
 
     assert clip("a" * 200) == "a" * (DETAIL_MAX - 1) + "…"
     assert clip("a  b\n c") == "a b c"
-    print("selftest ok (build/icons/colors/spec_gate/resize parsers + step selection)")
+
+    class _Args:
+        no_heal = False
+
+    ok_result = Result("PASS", "fine")
+    fail_result = Result("FAIL", "offline")
+    assert should_heal(_Args(), fail_result)
+    assert not should_heal(_Args(), ok_result)
+    _Args.no_heal = True
+    assert not should_heal(_Args(), fail_result)
+    assert heal_command() == [sys.executable, "-I", str(HERE / "env.py"), "heal"]
+    assert TIMEOUTS["heal"] == 240
+    healed = Result("PASS", "rust Online (healed; heal exit=0)")
+    assert "(healed" in healed.detail
+    print("selftest ok (build/icons/colors/spec_gate/resize parsers + step selection + heal gating)")
 
 
 # ---------------------------------------------------------------- CLI
@@ -582,6 +637,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  python -I tools/parity_lab/verify_all.py --build --skip-tests\n"
             "  python -I tools/parity_lab/verify_all.py --only colors,icons --base origin/desktop-rs\n"
             "  python -I tools/parity_lab/verify_all.py --only colors,-precheck\n"
+            "  python -I tools/parity_lab/verify_all.py --only precheck --no-heal\n"
             "  python -I tools/parity_lab/verify_all.py --selftest"
         ),
     )
@@ -596,6 +652,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="subset of: " + ", ".join(STEPS) + " (precheck is added unless excluded with -step)",
     )
     p.add_argument("--selftest", action="store_true", help="unit-test the output parsers and step selection")
+    p.add_argument(
+        "--no-heal",
+        action="store_true",
+        help="do not run env.py heal when precheck fails (default: heal once, then precheck again)",
+    )
     return p
 
 

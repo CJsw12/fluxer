@@ -963,6 +963,19 @@ def cmd_heal(cfg: Config, args: argparse.Namespace) -> int:
             actions.append(f"official: CDP navigate(Page.reload) exit={code}{' timeout' if timed_out else ''} {detail}")
             official = check_official(cfg, 2)
             actions.append(f"official: after reload {official.state} ({official.reason})")
+            if not official.ok and member_header_match(official.details.get("member_headers") or []) is None \
+                    and rust.state != "down":
+                # The server can hold the Rust user offline (stale presence) while Rust
+                # itself looks Online; a fresh Rust gateway session re-publishes it.
+                targets = [t for t in find_targets(cfg, process_snapshot()) if t["kind"] in ("rust", "voice-worker")]
+                killed, _ = kill_pids([t["pid"] for t in targets])
+                actions.append(f"official: still not 'Online — 2'; restarting rust client {killed} to re-publish presence")
+                rust = _start_rust(cfg, actions)
+                official = wait_until(lambda: check_official(cfg, 2), 30, interval=3.0)
+                actions.append(f"official: after rust restart {official.state} ({official.reason})")
+                if not official.ok:
+                    actions.append("official: still offline; if this persists restart the test server's "
+                                   "gateway container (docs/PARITY_LAB.md 10.6) and run heal again")
 
     if rust.state == "down":
         actions.append("rust: down; cannot heal (run up)")

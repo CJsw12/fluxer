@@ -196,6 +196,14 @@ fn switch_accounts_preserves_other_tokens_updates_active_on_success_and_ignores_
     client.update_in(cx, |v, window, cx| v.open_settings(window, cx));
     cx.run_until_parked();
     draw(cx);
+    client.update(cx, |v, cx| {
+        if let Overlay::Settings(modal) = &v.overlay {
+            modal.sidebar_scroll.scroll_to_bottom();
+        }
+        cx.notify();
+    });
+    cx.run_until_parked();
+    draw(cx);
     let settings_switch = cx
         .debug_bounds("settings-switch-accounts")
         .expect("settings switch button drawn")

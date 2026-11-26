@@ -1276,12 +1276,19 @@ pub(super) fn render_voice_tab(
                 )
                 .into_any_element();
 
+    let audio_section = div()
+        .flex()
+        .flex_col()
+        .gap_5()
+        .child(devices_section)
+        .child(input_mode_section)
+        .child(audio_processing_section)
+        .child(mic_test_section)
+        .into_any_element();
+
     let mut sections: Vec<(&'static str, AnyElement)> = vec![
-        ("voice-devices", devices_section),
-        ("input-mode", input_mode_section),
-        ("audio-processing", audio_processing_section),
-        ("mic-test", mic_test_section),
-        ("video-quality", video_quality_section),
+        ("audio", audio_section),
+        ("video", video_quality_section),
     ];
     if let Some(active_id) = active_section
         && let Some(pos) = sections.iter().position(|(id, _)| *id == active_id)

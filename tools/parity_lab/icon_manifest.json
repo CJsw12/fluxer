@@ -844,7 +844,7 @@
   {
    "rust_icon": "X",
    "file": "fluxer_client/app/src/ui/overlay.rs",
-   "line": 143,
+   "line": 196,
    "rust_asset": "fluxer_client/app/assets/icons/x.svg",
    "kind": "phosphor",
    "phosphor": "bold/x-bold.svg",
@@ -1084,7 +1084,7 @@
   {
    "rust_icon": "SignOut",
    "file": "fluxer_client/app/src/ui/settings/sidebar.rs",
-   "line": 345,
+   "line": 386,
    "rust_asset": "fluxer_client/app/assets/icons/sign-out.svg",
    "kind": "phosphor",
    "phosphor": "bold/sign-out-bold.svg",
@@ -1114,7 +1114,7 @@
   {
    "rust_icon": "PencilBold",
    "file": "fluxer_client/app/src/ui/settings/sidebar.rs",
-   "line": 466,
+   "line": 504,
    "rust_asset": "fluxer_client/app/assets/icons/pencil-bold.svg",
    "kind": "phosphor",
    "phosphor": "bold/pencil-bold.svg",
@@ -2083,21 +2083,6 @@
    "size": 18,
    "source_file": "tools/parity_lab/official_icons.json",
    "reason": null
-  },
-  {
-   "rust_icon": "LinkSimple",
-   "file": "fluxer_client/app/src/ui/settings/common.rs",
-   "line": 65,
-   "rust_asset": "fluxer_client/app/assets/icons/link-simple.svg",
-   "kind": "phosphor",
-   "phosphor": "bold/link-simple-bold.svg",
-   "status": "unverified",
-   "official_component": null,
-   "official_icon": null,
-   "weight": null,
-   "size": null,
-   "source_file": null,
-   "reason": "official app.settings-heading-link-button.link-icon uses bold/link-bold [15] whereas Rust uses LinkSimple (bold/link-simple-bold.svg)"
   },
   {
    "rust_icon": "CaretDown",
@@ -3107,7 +3092,7 @@
   {
    "rust_icon": "CaretRight",
    "file": "fluxer_client/app/src/ui/settings/sidebar.rs",
-   "line": 119,
+   "line": 115,
    "rust_asset": "fluxer_client/app/assets/icons/caret-right.svg",
    "kind": "phosphor",
    "phosphor": "bold/caret-right-bold.svg",
@@ -3122,7 +3107,7 @@
   {
    "rust_icon": "Users",
    "file": "fluxer_client/app/src/ui/settings/sidebar.rs",
-   "line": 326,
+   "line": 337,
    "rust_asset": "fluxer_client/app/assets/icons/users.svg",
    "kind": "phosphor",
    "phosphor": "fill/users-fill.svg",
@@ -3332,7 +3317,7 @@
   {
    "rust_icon": "CaretDown",
    "file": "fluxer_client/app/src/ui/settings/sidebar.rs",
-   "line": 117,
+   "line": 113,
    "rust_asset": "fluxer_client/app/assets/icons/caret-down.svg",
    "kind": "phosphor",
    "phosphor": "bold/caret-down-bold.svg",
@@ -3347,7 +3332,7 @@
   {
    "rust_icon": "MagnifyingGlass",
    "file": "fluxer_client/app/src/ui/settings/sidebar.rs",
-   "line": 408,
+   "line": 457,
    "rust_asset": "fluxer_client/app/assets/icons/magnifying-glass.svg",
    "kind": "phosphor",
    "phosphor": "bold/magnifying-glass-bold.svg",
@@ -3358,6 +3343,21 @@
    "size": 16,
    "source_file": "tools/parity_lab/official_icons.json",
    "reason": null
+  },
+  {
+   "rust_icon": "LinkSimple",
+   "file": "fluxer_client/app/src/ui/overlay.rs",
+   "line": 125,
+   "rust_asset": "fluxer_client/app/assets/icons/link-simple.svg",
+   "kind": "phosphor",
+   "phosphor": "bold/link-simple-bold.svg",
+   "status": "unverified",
+   "official_component": null,
+   "official_icon": null,
+   "weight": null,
+   "size": null,
+   "source_file": null,
+   "reason": "new call site, not yet matched to official harvest"
   }
  ]
 }

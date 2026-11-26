@@ -807,14 +807,17 @@ fn m7_guild_rail_hover_indicator_and_full_video_voice_settings_work(cx: &mut Tes
     }
 
     for (section_sel, click_sels) in [
-        ("settings-subitem-input-mode", &["settings-ptt-delay-500"][..]),
         (
-            "settings-subitem-audio-processing",
-            &["settings-voice-profile-custom", "settings-ns-backend-deepfilternet"][..],
+            "settings-subitem-audio",
+            &[
+                "settings-ptt-delay-500",
+                "settings-voice-profile-custom",
+                "settings-ns-backend-deepfilternet",
+                "settings-mic-test-btn",
+            ][..],
         ),
-        ("settings-subitem-mic-test", &["settings-mic-test-btn"][..]),
         (
-            "settings-subitem-video-quality",
+            "settings-subitem-video",
             &[
                 "settings-camera-res-1080p",
                 "settings-video-res-1440p",
@@ -829,10 +832,29 @@ fn m7_guild_rail_hover_indicator_and_full_video_voice_settings_work(cx: &mut Tes
         vcx.run_until_parked();
         draw(vcx);
         for &click_sel in click_sels {
+            if click_sel == "settings-mic-test-btn" {
+                let scroll_pos = vcx.debug_bounds("settings-ptt-delay-500").expect("scroll anchor").center();
+                vcx.simulate_event(gpui_kit::ScrollEvent {
+                    position: scroll_pos,
+                    delta: gpui_kit::ScrollDelta::Pixels(gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(-600.))),
+                    ..Default::default()
+                });
+                vcx.run_until_parked();
+                draw(vcx);
+            }
             let pt = vcx.debug_bounds(click_sel).expect(click_sel).center();
             vcx.simulate_click(pt, gpui_kit::Modifiers::default());
             vcx.run_until_parked();
             draw(vcx);
+            if click_sel == "settings-mic-test-btn" {
+                vcx.simulate_event(gpui_kit::ScrollEvent {
+                    position: pt,
+                    delta: gpui_kit::ScrollDelta::Pixels(gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(600.))),
+                    ..Default::default()
+                });
+                vcx.run_until_parked();
+                draw(vcx);
+            }
         }
     }
 

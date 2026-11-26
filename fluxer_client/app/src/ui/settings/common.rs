@@ -24,7 +24,7 @@ pub(super) fn sidebar_section_heading(title: String, theme: &Theme) -> impl Into
     div()
         .text_size(px(12.))
         .line_height(px(16.))
-        .font_weight(FontWeight::MEDIUM)
+        .font_weight(FontWeight::SEMIBOLD)
         .text_color(theme.text_tertiary)
         .child(title)
 }
@@ -47,24 +47,7 @@ pub(super) fn section_heading(title: String, theme: &Theme) -> impl IntoElement 
                 .flx("app.settings-section.section-title")
                 .child(title),
         )
-        .child(
-            div()
-                .size(px(28.))
-                .rounded(px(6.))
-                .flex()
-                .items_center()
-                .justify_center()
-                .flx("app.settings-heading-link-button.button.copy")
-                .child(
-                    div()
-                        .size(px(15.))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .flx("app.settings-heading-link-button.link-icon")
-                        .child(Icon::new(AppIcon::LinkSimple).with_size(px(15.)).text_color(theme.muted_foreground)),
-                ),
-        )
+        .child(overlay::heading_link_button(None, None, theme))
 }
 
 pub(super) fn info_card_row(title: String, subtitle: String, badge: Option<String>, theme: &Theme) -> AnyElement {

@@ -33,7 +33,7 @@ pub(super) fn render_sidebar_tab(
     show_sections: bool,
     theme: &Theme,
     cx: &mut Context<ClientView>,
-) -> AnyElement {
+) -> Vec<AnyElement> {
     let sel_id = tab.debug_selector();
     let sections = tab.sections();
     let selected_bg = settings_sub_selected_bg(theme);
@@ -44,87 +44,84 @@ pub(super) fn render_sidebar_tab(
     let has_sections = sections.len() > 1;
     let has_tree = selected && show_sections && has_sections;
 
-    let mut item = div()
+    let item_btn = div()
+        .id(sel_id)
+        .debug_selector(move || sel_id.to_owned())
         .w_full()
+        .h(px(34.))
+        .px(px(10.))
+        .rounded(px(8.))
+        .border_1()
+        .border_color(gpui_kit::transparent_black())
+        .cursor_pointer()
         .flex()
-        .flex_col()
-        .gap(px(3.))
-        .when(has_sections && !has_tree, |d| d.pb(px(3.)))
+        .flex_row()
+        .items_center()
+        .gap(px(8.))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(if selected { active_text } else { idle_text })
+        .when(selected, |d| d.bg(selected_bg))
+        .when(!selected, |d| {
+            d.hover(move |s| s.bg(hover_bg).text_color(active_text))
+        })
+        // Reserve the 3px collapsed sub-tree wrapper gap so inactive sections keep a 40px pitch.
+        .when(show_sections && has_sections && !has_tree, |d| d.mb(px(3.)))
+        .flx("app.settings-modal-layout.settings-modal-sidebar-item.button")
+        .on_click(cx.listener(move |this, _, _, cx| {
+            this.select_settings_tab(tab, cx);
+        }))
         .child(
-        div()
-            .id(sel_id)
-            .debug_selector(move || sel_id.to_owned())
-            .w_full()
-            .h(px(34.))
-            .px(px(10.))
-            .rounded(px(8.))
-            .border_1()
-            .border_color(gpui_kit::transparent_black())
-            .cursor_pointer()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap(px(8.))
-            .text_color(if selected { active_text } else { idle_text })
-            .when(selected, |d| d.bg(selected_bg).font_weight(FontWeight::MEDIUM))
-            .when(!selected, |d| {
-                d.hover(move |s| s.bg(hover_bg).text_color(active_text))
-            })
-            .flx("app.settings-modal-layout.settings-modal-sidebar-item.button")
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.select_settings_tab(tab, cx);
-            }))
-            .child(
+            div()
+                .size(px(20.))
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .flx("app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon")
+                .child(Icon::new(tab.icon()).with_size(px(20.))),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .h(px(18.))
+                .text_size(px(13.))
+                .line_height(px(18.))
+                .truncate()
+                .flx("app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-label")
+                .child(tab.label()),
+        )
+        .when(has_sections, |d| {
+            d.child(
                 div()
-                    .size(px(20.))
+                    .size(px(16.))
+                    .ml(px(4.))
                     .flex_none()
                     .flex()
                     .items_center()
                     .justify_center()
-                    .flx("app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon")
-                    .child(Icon::new(tab.icon()).with_size(px(20.))),
+                    .flx("app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-trailing")
+                    .child(
+                        div()
+                            .size(px(16.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .flx("app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-chevron")
+                            .child(
+                                Icon::new(if has_tree {
+                                    AppIcon::CaretDown
+                                } else {
+                                    AppIcon::CaretRight
+                                })
+                                .with_size(px(16.))
+                                .text_color(sub_idle_text),
+                            ),
+                    ),
             )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .h(px(18.))
-                    .text_size(px(13.))
-                    .line_height(px(18.))
-                    .truncate()
-                    .flx("app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-label")
-                    .child(tab.label()),
-            )
-            .when(has_sections, |d| {
-                d.child(
-                    div()
-                        .size(px(16.))
-                        .ml(px(4.))
-                        .flex_none()
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .flx("app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-trailing")
-                        .child(
-                            div()
-                                .size(px(16.))
-                                .flex()
-                                .items_center()
-                                .justify_center()
-                                .flx("app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-chevron")
-                                .child(
-                                    Icon::new(if has_tree {
-                                        AppIcon::CaretDown
-                                    } else {
-                                        AppIcon::CaretRight
-                                    })
-                                    .with_size(px(16.))
-                                    .text_color(sub_idle_text),
-                                ),
-                        ),
-                )
-            }),
-    );
+        });
+
+    let mut out = vec![item_btn.into_any_element()];
 
     if has_tree {
         let mut sub_list = div()
@@ -139,54 +136,59 @@ pub(super) fn render_sidebar_tab(
         for (idx, &(sec_id, sec_label)) in sections.iter().enumerate() {
             let is_active_sec = active_section == Some(sec_id) || (active_section.is_none() && idx == 0);
             let sub_sel = format!("settings-subitem-{sec_id}");
-            let sub_id = SharedString::from(sub_sel.clone());
-            sub_list = sub_list.child(
-                div()
-                    .id(sub_id)
-                    .debug_selector(move || sub_sel.clone())
-                    .w_full()
-                    .h(px(30.))
-                    .px(px(10.))
-                    .rounded(px(6.))
-                    .border_1()
-                    .border_color(gpui_kit::transparent_black())
-                    .cursor_pointer()
-                    .flex()
-                    .items_center()
-                    .text_size(px(13.))
-                    .line_height(px(18.))
-                    .text_color(if is_active_sec { active_text } else { sub_idle_text })
-                    .when(is_active_sec, |d| d.font_weight(FontWeight::SEMIBOLD).bg(selected_bg))
-                    .when(!is_active_sec, |d| {
-                        d.hover(move |s| s.bg(hover_bg).text_color(active_text))
-                    })
-                    .flx("app.settings-modal-layout.settings-modal-sidebar-sub-item.sidebar-sub-item.click.button")
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.select_settings_section(tab, sec_id, cx);
-                    }))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .h(px(18.))
-                            .line_height(px(18.))
-                            .truncate()
-                            .flx("app.settings-modal-layout.settings-modal-sidebar-sub-item.sidebar-sub-item-label")
-                            .child(l10n::tr(sec_label)),
-                    ),
-            );
-        }
-        item = item.child(
-            div()
+            let sub_id = SharedString::from(format!("settings-subitem-{}-{sec_id}", tab.debug_selector()));
+            let label_el = div()
+                .flex_1()
+                .min_w_0()
+                .h(px(18.))
+                .line_height(px(18.))
+                .truncate()
+                .flx("app.settings-modal-layout.settings-modal-sidebar-sub-item.sidebar-sub-item-label")
+                .child(l10n::tr(sec_label));
+            let row = div()
+                .id(sub_id)
+                .debug_selector(move || sub_sel.clone())
                 .w_full()
-                .mt(px(3.))
-                .mb(px(4.))
-                .flx("app.settings-modal-layout.settings-modal-sidebar-sub-items.sidebar-sub-items-wrap")
-                .child(sub_list),
-        );
+                .h(px(30.))
+                .flex_none()
+                .px(px(10.))
+                .rounded(px(6.))
+                .border_1()
+                .border_color(gpui_kit::transparent_black())
+                .cursor_pointer()
+                .flex()
+                .items_center()
+                .text_size(px(13.))
+                .line_height(px(18.))
+                .text_color(if is_active_sec { active_text } else { sub_idle_text })
+                .font_weight(if is_active_sec {
+                    FontWeight::SEMIBOLD
+                } else {
+                    FontWeight::MEDIUM
+                })
+                .bg(if is_active_sec {
+                    selected_bg
+                } else {
+                    gpui_kit::transparent_black()
+                })
+                .when(!is_active_sec, |d| d.hover(move |s| s.bg(hover_bg).text_color(active_text)))
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.select_settings_section(tab, sec_id, cx);
+                }))
+                .flx("app.settings-modal-layout.settings-modal-sidebar-sub-item.sidebar-sub-item.click.button")
+                .child(label_el);
+            sub_list = sub_list.child(row);
+        }
+        let wrap = div()
+            .w_full()
+            .mt(px(3.))
+            .mb(px(4.))
+            .flx("app.settings-modal-layout.settings-modal-sidebar-sub-items.sidebar-sub-items-wrap")
+            .child(sub_list);
+        out.push(wrap.into_any_element());
     }
 
-    item.into_any_element()
+    out
 }
 
 pub(super) fn render_sidebar(
@@ -293,69 +295,107 @@ pub(super) fn render_sidebar(
     } else {
         div()
             .flex_none()
-            .px_2p5()
-            .pb_3()
-            .pt_1()
-            .flex()
-            .flex_col()
-            .gap_1()
-            .child(settings_divider(theme))
-            .when(view.accounts_enabled, |d| {
-                let switch_label = if view.saved_accounts.len() > 1 {
-                    format!("{} ({})", l10n::tr("Switch accounts"), view.saved_accounts.len())
-                } else {
-                    l10n::tr("Switch accounts")
-                };
-                d.child(
-                    div()
-                        .id("settings-switch-accounts")
-                        .debug_selector(|| "settings-switch-accounts".to_owned())
-                        .h(px(32.))
-                        .px_2p5()
-                        .rounded(px(8.))
-                        .cursor_pointer()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap_2p5()
-                        .text_color(theme.muted_foreground)
-                        .hover(move |s| s.bg(hover_bg).text_color(foreground))
-                        .on_click(cx.listener(|this, _, window, cx| {
-                            this.apply_settings_effect(SettingsEffect::OpenAccountSwitcher, window, cx);
-                        }))
-                        .child(Icon::new(AppIcon::Users).with_size(px(16.)))
-                        .child(div().text_size(px(13.)).truncate().child(switch_label)),
-                )
-            })
+            .w_full()
+            .py(px(16.))
             .child(
                 div()
-                    .id("settings-logout")
-                    .debug_selector(|| "settings-logout".to_owned())
-                    .h(px(34.))
-                    .px_2p5()
-                    .rounded(px(8.))
-                    .cursor_pointer()
+                    .w_full()
+                    .min_h(px(74.))
+                    .pl(px(12.))
                     .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_2p5()
-                    .text_color(theme.danger)
-                    .hover(move |s| s.bg(danger_hover))
-                    .on_click(cx.listener(|this, _, _, cx| this.settings_prompt_logout(true, cx)))
-                    .child(Icon::new(AppIcon::SignOut).with_size(px(16.)).text_color(theme.danger))
-                    .child(div().text_size(px(13.)).font_weight(FontWeight::MEDIUM).child(l10n::tr("Sign out"))),
-            )
-            .child(
-                div()
-                    .px_2p5()
-                    .pt_2()
-                    .text_size(px(11.))
-                    .text_color(theme.muted_foreground)
-                    .opacity(0.65)
-                    .child(format!("Fluxer Rust v{CURRENT_VERSION}")),
+                    .flex_col()
+                    .justify_between()
+                    .child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .flex_col()
+                            .gap(px(4.))
+                            .when(view.accounts_enabled, |d| {
+                                let switch_label = if view.saved_accounts.len() > 1 {
+                                    format!("{} ({})", l10n::tr("Switch accounts"), view.saved_accounts.len())
+                                } else {
+                                    l10n::tr("Switch accounts")
+                                };
+                                d.child(
+                                    div()
+                                        .id("settings-switch-accounts")
+                                        .debug_selector(|| "settings-switch-accounts".to_owned())
+                                        .h(px(32.))
+                                        .px_2p5()
+                                        .rounded(px(8.))
+                                        .cursor_pointer()
+                                        .flex()
+                                        .flex_row()
+                                        .items_center()
+                                        .gap_2p5()
+                                        .text_color(theme.muted_foreground)
+                                        .hover(move |s| s.bg(hover_bg).text_color(foreground))
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.apply_settings_effect(SettingsEffect::OpenAccountSwitcher, window, cx);
+                                        }))
+                                        .child(Icon::new(AppIcon::Users).with_size(px(16.)))
+                                        .child(div().text_size(px(13.)).truncate().child(switch_label)),
+                                )
+                            })
+                            .child(
+                                div()
+                                    .text_size(px(11.))
+                                    .line_height(px(14.))
+                                    .text_color(theme.muted_foreground)
+                                    .opacity(0.65)
+                                    .child(format!("Fluxer Rust v{CURRENT_VERSION}")),
+                            ),
+                    )
+                    .child(div().h(px(12.))),
             )
             .into_any_element()
     };
+
+    let no_tabs_found = account_tabs.is_empty() && app_tabs.is_empty() && developer_tabs.is_empty();
+    let sign_out_item = (!no_tabs_found).then(|| {
+        div()
+            .id("settings-logout")
+            .debug_selector(|| "settings-logout".to_owned())
+            .w_full()
+            .h(px(34.))
+            .px(px(10.))
+            .rounded(px(8.))
+            .border_1()
+            .border_color(gpui_kit::transparent_black())
+            .cursor_pointer()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(8.))
+            .text_color(theme.danger)
+            .text_size(px(13.))
+            .line_height(px(18.))
+            .font_weight(FontWeight::MEDIUM)
+            .hover(move |s| s.bg(danger_hover))
+            .flx("app.settings-modal-layout.settings-modal-sidebar-item.button--2")
+            .on_click(cx.listener(|this, _, _, cx| this.settings_prompt_logout(true, cx)))
+            .child(
+                div()
+                    .size(px(20.))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .flx("app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon")
+                    .child(Icon::new(AppIcon::SignOut).with_size(px(20.)).text_color(theme.danger)),
+            )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .h(px(18.))
+                    .line_height(px(18.))
+                    .truncate()
+                    .flx("app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-label")
+                    .child(l10n::tr("Sign out")),
+            )
+    });
 
     div()
         .flex_1()
@@ -383,23 +423,32 @@ pub(super) fn render_sidebar(
                         .flx("app.settings-search.container")
                         .child(
                             div()
-                                .debug_selector(|| "settings-search".to_owned())
+                                .relative()
                                 .w_full()
                                 .h(px(34.))
-                                .rounded(px(8.))
-                                .bg(sidebar_bg)
-                                .border_1()
-                                .border_color(settings_border(theme))
-                                .flex()
-                                .flex_row()
-                                .items_center()
                                 .flx("app.settings-search.input-container")
                                 .child(
                                     div()
-                                        .ml(px(12.))
-                                        .mr(px(-28.))
+                                        .debug_selector(|| "settings-search".to_owned())
+                                        .w_full()
+                                        .h(px(34.))
+                                        .rounded(px(8.))
+                                        .bg(sidebar_bg)
+                                        .border_1()
+                                        .border_color(settings_border(theme))
+                                        .pl(px(36.))
+                                        .pr(px(16.))
+                                        .flex()
+                                        .items_center()
+                                        .flx("app.settings-search.input.query-change.text")
+                                        .child(Input::new(&modal.search).appearance(false).small()),
+                                )
+                                .child(
+                                    div()
+                                        .absolute()
+                                        .left(px(12.))
+                                        .top(px(9.))
                                         .size(px(16.))
-                                        .flex_none()
                                         .flex()
                                         .items_center()
                                         .justify_center()
@@ -409,17 +458,6 @@ pub(super) fn render_sidebar(
                                                 .with_size(px(16.))
                                                 .text_color(theme.muted_foreground),
                                         ),
-                                )
-                                .child(
-                                    div()
-                                        .w_full()
-                                        .h(px(34.))
-                                        .pl(px(36.))
-                                        .pr(px(16.))
-                                        .flex()
-                                        .items_center()
-                                        .flx("app.settings-search.input.query-change.text")
-                                        .child(Input::new(&modal.search).appearance(false).small()),
                                 ),
                         ),
                 )
@@ -507,6 +545,7 @@ pub(super) fn render_sidebar(
                                             d.child(
                                                 div()
                                                     .w_full()
+                                                    .mb(px(8.))
                                                     .flex()
                                                     .flex_col()
                                                     .gap(px(3.))
@@ -524,7 +563,7 @@ pub(super) fn render_sidebar(
                                                                 theme,
                                                             )),
                                                     )
-                                                    .children(account_tabs.iter().map(|&tab| {
+                                                    .children(account_tabs.iter().flat_map(|&tab| {
                                                         render_sidebar_tab(
                                                             tab,
                                                             modal.active_tab == tab,
@@ -540,7 +579,7 @@ pub(super) fn render_sidebar(
                                             d.child(
                                                 div()
                                                     .w_full()
-                                                    .mt(px(8.))
+                                                    .mb(px(8.))
                                                     .flex()
                                                     .flex_col()
                                                     .gap(px(3.))
@@ -558,7 +597,7 @@ pub(super) fn render_sidebar(
                                                                 theme,
                                                             )),
                                                     )
-                                                    .children(app_tabs.iter().map(|&tab| {
+                                                    .children(app_tabs.iter().flat_map(|&tab| {
                                                         render_sidebar_tab(
                                                             tab,
                                                             modal.active_tab == tab,
@@ -574,7 +613,7 @@ pub(super) fn render_sidebar(
                                             d.child(
                                                 div()
                                                     .w_full()
-                                                    .mt(px(8.))
+                                                    .mb(px(8.))
                                                     .flex()
                                                     .flex_col()
                                                     .gap(px(3.))
@@ -592,7 +631,7 @@ pub(super) fn render_sidebar(
                                                                 theme,
                                                             )),
                                                     )
-                                                    .children(developer_tabs.iter().map(|&tab| {
+                                                    .children(developer_tabs.iter().flat_map(|&tab| {
                                                         render_sidebar_tab(
                                                             tab,
                                                             modal.active_tab == tab,
@@ -604,30 +643,29 @@ pub(super) fn render_sidebar(
                                                     })),
                                             )
                                         })
-                                        .when(
-                                            account_tabs.is_empty() && app_tabs.is_empty() && developer_tabs.is_empty(),
-                                            |d| {
-                                                d.child(
-                                                    div()
-                                                        .px_2()
-                                                        .py_2()
-                                                        .text_xs()
-                                                        .text_color(theme.muted_foreground)
-                                                        .child(l10n::tr("No results")),
-                                                )
-                                            },
-                                        ),
-                                ),
-                        )
-                        .child(
-                            div()
-                                .w_full()
-                                .flx("app.settings-modal-layout.settings-modal-sidebar-nav.sidebar-nav-footer")
+                                        .children(sign_out_item)
+                                        .when(no_tabs_found, |d| {
+                                            d.child(
+                                                div()
+                                                    .px_2()
+                                                    .py_2()
+                                                    .text_xs()
+                                                    .text_color(theme.muted_foreground)
+                                                    .child(l10n::tr("No results")),
+                                            )
+                                        }),
+                                )
                                 .child(
                                     div()
                                         .w_full()
-                                        .flx("app.settings-modal-layout.settings-modal-sidebar-footer.sidebar-footer")
-                                        .child(footer),
+                                        .mt_auto()
+                                        .flx("app.settings-modal-layout.settings-modal-sidebar-nav.sidebar-nav-footer")
+                                        .child(
+                                            div()
+                                                .w_full()
+                                                .flx("app.settings-modal-layout.settings-modal-sidebar-footer.sidebar-footer")
+                                                .child(footer),
+                                        ),
                                 ),
                         ),
                 ),
@@ -641,9 +679,14 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
 
     let sidebar = render_sidebar(view, modal, &query_lower, theme, cx);
 
-    let (title, body): (SharedString, AnyElement) = if query_lower.is_empty() {
+    let (title, page_link, body): (SharedString, Option<String>, AnyElement) = if query_lower.is_empty() {
+        let link = modal
+            .selected_application_id
+            .is_none()
+            .then(|| modal.active_tab.deep_link_url().to_owned());
         (
             SharedString::from(modal.active_tab.label()),
+            link,
             render_tab_body(modal.active_tab, view, modal, theme, cx),
         )
     } else {
@@ -674,7 +717,7 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
                 }))
                 .into_any_element()
         };
-        (SharedString::from(l10n::tr("Search results")), search_body)
+        (SharedString::from(l10n::tr("Search results")), None, search_body)
     };
 
     let view_weak = cx.weak_entity();
@@ -693,9 +736,10 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
                 this.close_overlay(window, cx);
             }
         }))
-        .child(overlay::settings_modal(
+        .child(overlay::settings_modal_with_link(
             sidebar,
             title,
+            page_link,
             body,
             theme,
             move |window, cx| {

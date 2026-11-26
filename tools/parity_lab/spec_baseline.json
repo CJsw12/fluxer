@@ -71,27 +71,27 @@
           "missing": 3
         },
         "settings-appearance": {
-          "deltas": 50,
-          "missing": 25
+          "deltas": 24,
+          "missing": 23
         },
         "settings-keybinds": {
-          "deltas": 334,
-          "missing": 17
+          "deltas": 310,
+          "missing": 12
         },
         "settings-language": {
-          "deltas": 41,
+          "deltas": 22,
           "missing": 39
         },
         "settings-my-account": {
-          "deltas": 36,
+          "deltas": 13,
           "missing": 35
         },
         "settings-notifications": {
-          "deltas": 42,
+          "deltas": 15,
           "missing": 29
         },
         "settings-voice-video": {
-          "deltas": 47,
+          "deltas": 24,
           "missing": 43
         }
       },

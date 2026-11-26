@@ -186,7 +186,28 @@ impl SettingsTab {
         }
     }
 
-    /// Official sub-sections (`SettingsSectionRegistry.ts`) shown under the active tab in the left sidebar.
+    /// Official deep link URI (`UserSettingsDeepLinks.ts`) for the header copy button.
+    pub const fn deep_link_url(self) -> &'static str {
+        match self {
+            Self::Profile => "fluxer://settings/user?tab=my_profile",
+            Self::Account => "fluxer://settings/user?tab=account_security",
+            Self::PrivacySafety => "fluxer://settings/user?tab=privacy_safety",
+            Self::Connections => "fluxer://settings/user?tab=linked_accounts",
+            Self::Appearance => "fluxer://settings/user?tab=appearance",
+            Self::Themes => "fluxer://settings/user?tab=themes",
+            Self::Notifications => "fluxer://settings/user?tab=notifications",
+            Self::MessagesMedia => "fluxer://settings/user?tab=chat_settings",
+            Self::VoiceVideo => "fluxer://settings/user?tab=voice_video",
+            Self::Accessibility => "fluxer://settings/user?tab=accessibility",
+            Self::Language => "fluxer://settings/user?tab=language",
+            Self::Keybinds => "fluxer://settings/user?tab=keybinds",
+            Self::WindowsApp => "fluxer://settings/user?tab=desktop_settings",
+            Self::Advanced => "fluxer://settings/user?tab=advanced_settings",
+            Self::Applications => "fluxer://settings/user?tab=applications",
+        }
+    }
+
+    /// Official sub-sections (`SettingsSectionRegistry.ts` & `AdvancedSettingsCategories.ts`) shown in the left sidebar tree.
     pub const fn sections(self) -> &'static [(&'static str, &'static str)] {
         match self {
             Self::Profile => &[
@@ -195,9 +216,9 @@ impl SettingsTab {
             ],
             Self::Account => &[
                 ("account", "Sign-in details"),
-                ("security", "Security & passkeys"),
-                ("trusted-domains", "Trusted domains"),
-                ("danger-zone", "Danger zone"),
+                ("security", "Security"),
+                ("danger_zone", "Danger zone"),
+                ("blocked_users", "Blocked users"),
             ],
             Self::PrivacySafety => &[
                 ("profile-privacy", "Profile privacy"),
@@ -210,53 +231,62 @@ impl SettingsTab {
             ],
             Self::Connections => &[],
             Self::Appearance => &[
-                ("message-preview", "Preview"),
                 ("theme", "Theme"),
-                ("message-display", "Message display"),
-                ("chat-font-scaling", "Chat font scaling"),
+                ("hdr", "High Dynamic Range"),
                 ("app-zoom-level", "App zoom level"),
+                ("messages", "Messages"),
+                ("chat-font-scaling", "Chat font scaling"),
+                ("interface", "Interface"),
+                ("channel-list", "Channel list"),
+                ("active-now", "Active now"),
+                ("streamer-mode", "Streamer mode"),
             ],
             Self::Themes => &[
+                ("this-account", "This account"),
                 ("base-theme", "Base theme"),
+                ("your-themes", "Your themes"),
                 ("colors-and-fonts", "Colors and fonts"),
-                ("desktop-window", "Desktop window"),
+                ("assets", "Assets"),
+                ("transparent-window", "Desktop window"),
+                ("share-and-back-up", "Share and back up"),
+                ("quick-css", "Quick CSS"),
             ],
             Self::Notifications => &[
-                ("general", "Desktop notifications"),
+                ("notifications", "General"),
+                ("mention-preference", "Mention preference"),
                 ("sounds", "Sounds"),
-                ("unread-badge", "Unread & mention badges"),
+                ("text-to-speech", "Text-to-speech notifications"),
             ],
-            Self::MessagesMedia => &[
-                ("display", "Display & previews"),
-                ("spoilers", "Spoilers & reactions"),
-                ("input", "Text input & autocomplete"),
-            ],
-            Self::VoiceVideo => &[
-                ("voice-devices", "Devices & volume"),
-                ("input-mode", "Input mode"),
-                ("audio-processing", "Audio processing"),
-                ("mic-test", "Microphone test"),
-                ("video-quality", "Video & screen share"),
-            ],
+            Self::MessagesMedia => &[("display", "Display"), ("input", "Input")],
+            Self::VoiceVideo => &[("audio", "Audio"), ("video", "Video")],
             Self::Accessibility => &[
+                ("visual", "Visual"),
+                ("screen-reader", "Screen reader"),
+                ("tts", "Text-to-speech"),
+                ("keyboard", "Keyboard"),
+                ("animation", "Animation"),
                 ("motion", "Motion"),
-                ("visual", "Visual & contrast"),
-                ("keyboard", "Keyboard & screen reader"),
             ],
             Self::Language => &[
                 ("language-settings", "Interface language"),
-                ("time-format", "Time & date format"),
+                ("regional-format", "Regional format"),
+                ("time-format", "Time format"),
+                ("date-format", "Date format"),
+                ("spellcheck", "Spellcheck"),
             ],
-            Self::Keybinds => &[
-                ("keybinds-nav", "Navigation"),
-                ("keybinds-chat", "Messages & chat"),
-                ("keybinds-window", "Window & zoom"),
+            Self::Keybinds => &[],
+            Self::WindowsApp => &[],
+            Self::Advanced => &[
+                ("advanced-settings-privacy", "Privacy"),
+                ("advanced-settings-appearance", "Appearance"),
+                ("advanced-settings-accessibility", "Accessibility"),
+                ("advanced-settings-chat", "Chat"),
+                ("advanced-settings-media", "Media"),
+                ("advanced-settings-voice", "Voice"),
+                ("advanced-settings-notifications", "Notifications"),
+                ("advanced-settings-desktop", "Desktop"),
+                ("advanced-settings-developer", "Developer"),
             ],
-            Self::WindowsApp => &[
-                ("desktop-window", "Desktop window"),
-                ("tray-icon-color", "Tray icon color"),
-            ],
-            Self::Advanced => &[("updates", "About & updates")],
             Self::Applications => &[],
         }
     }
@@ -1115,6 +1145,9 @@ impl ClientView {
     pub(crate) fn settings_prompt_logout(&mut self, confirm: bool, cx: &mut Context<Self>) {
         if let Overlay::Settings(modal) = &mut self.overlay {
             modal.confirm_logout = confirm;
+            if confirm {
+                modal.sidebar_scroll.scroll_to_bottom();
+            }
             cx.notify();
         }
     }

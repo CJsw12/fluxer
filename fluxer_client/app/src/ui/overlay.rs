@@ -2,11 +2,11 @@
 
 use std::rc::Rc;
 
-use gpui_kit::component::Sizable as _;
+use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::{
-    Anchor, AnyElement, App, FontWeight, MouseButton, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString,
-    Size, Window, anchored, div, prelude::*, px,
+    Anchor, AnyElement, App, ClipboardItem, FontWeight, MouseButton, MouseMoveEvent, MouseUpEvent, Pixels, Point,
+    SharedString, Size, Window, anchored, div, prelude::*, px,
 };
 
 use crate::icons::AppIcon;
@@ -111,12 +111,65 @@ pub fn modal(
         .into_any_element()
 }
 
+/// Shared 28×28 heading copy-link button (`SettingsHeadingLinkButton.tsx`).
+/// Pass `id` and `href` for interactive copy-to-clipboard behavior on the
+/// modal header; pass `(None, None)` for static section headings.
+pub fn heading_link_button(id: Option<&'static str>, href: Option<String>, theme: &Theme) -> AnyElement {
+    let hover_color = theme.foreground;
+    let icon = div()
+        .size(px(15.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .flx("app.settings-heading-link-button.link-icon")
+        .child(Icon::new(AppIcon::LinkSimple).with_size(px(15.)));
+    let base = div()
+        .size(px(28.))
+        .flex_none()
+        .rounded(px(6.))
+        .border_1()
+        .border_color(gpui_kit::transparent_black())
+        .flex()
+        .items_center()
+        .justify_center()
+        .text_color(theme.text_tertiary);
+    match (id, href) {
+        (Some(el_id), Some(url)) => base
+            .id(el_id)
+            .cursor_pointer()
+            .hover(move |s| s.text_color(hover_color))
+            .on_click(move |_, _, cx| {
+                cx.write_to_clipboard(ClipboardItem::new_string(url.clone()));
+            })
+            .flx("app.settings-heading-link-button.button.copy")
+            .child(icon)
+            .into_any_element(),
+        _ => base
+            .flx("app.settings-heading-link-button.button.copy")
+            .child(icon)
+            .into_any_element(),
+    }
+}
+
 /// Reusable 2-pane settings modal shell (sidebar + scrollable content area
 /// with a fixed top header). Clicking the dimmed backdrop or close button
 /// calls `on_dismiss`.
 pub fn settings_modal(
     sidebar: impl IntoElement,
     title: SharedString,
+    body: impl IntoElement,
+    theme: &Theme,
+    on_dismiss: impl Fn(&mut Window, &mut App) + 'static,
+) -> AnyElement {
+    settings_modal_with_link(sidebar, title, None, body, theme, on_dismiss)
+}
+
+/// Variant of [`settings_modal`] that optionally shows the official header
+/// copy-link button next to the title (`SettingsModalHeader.tsx`).
+pub fn settings_modal_with_link(
+    sidebar: impl IntoElement,
+    title: SharedString,
+    page_link: Option<String>,
     body: impl IntoElement,
     theme: &Theme,
     on_dismiss: impl Fn(&mut Window, &mut App) + 'static,
@@ -146,7 +199,7 @@ pub fn settings_modal(
                 .on_click(move |_, window, cx| on_dismiss_btn(window, cx)),
         );
 
-    // `SettingsModalHeader`: 60px bar, 16px side padding, 18px/600 title.
+    // `SettingsModalHeader`: 60px bar, 16px side padding, 18px/600 title + optional 28×28 copy button.
     let header = div()
         .h(px(60.))
         .flex_none()
@@ -156,39 +209,41 @@ pub fn settings_modal(
         .flex()
         .flex_row()
         .items_center()
-        .justify_between()
         .child(
             div()
+                .w_full()
+                .h(px(34.))
                 .flex()
                 .flex_row()
                 .items_center()
-                .gap(px(8.))
-                .h(px(34.))
-                .flex_1()
-                .min_w_0()
-                .mr(px(15.))
-                .flx("app.settings-modal-header.title-wrapper")
+                .justify_between()
+                .flx("app.settings-modal-header.title-content")
                 .child(
                     div()
                         .flex_1()
                         .min_w_0()
-                        .h(px(34.))
+                        .mr(px(16.))
                         .flex()
                         .flex_row()
                         .items_center()
                         .gap(px(8.))
-                        .flx("app.settings-modal-header.title-content")
+                        .flx("app.settings-modal-header.title-wrapper")
                         .child(
                             div()
+                                .min_w_0()
+                                .truncate()
                                 .text_size(px(18.))
                                 .line_height(px(24.))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .flx("app.settings-modal-header.title")
                                 .child(title),
-                        ),
-                ),
-        )
-        .child(close_button);
+                        )
+                        .when_some(page_link, |d, href| {
+                            d.child(heading_link_button(Some("settings-header-copy-link"), Some(href), theme))
+                        }),
+                )
+                .child(close_button),
+        );
 
     // `.desktopScroll`: 20px top spacer, content centred at <=740px, 32px bottom spacer; the tab
     // container carries the 48px inline padding (740 - 96 = 644).

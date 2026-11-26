@@ -180,6 +180,8 @@ pub struct Theme {
     pub background_secondary_lighter: Hsla,
     /// `--background-tertiary` (guild rail).
     pub background_tertiary: Hsla,
+    /// `--background-header-secondary`.
+    pub background_header_secondary: Hsla,
     /// `--guild-list-foreground` (surface stop 0.38 dark/coal, 0.35 light).
     pub guild_list_foreground: Hsla,
     /// `--text-chat` (message body, member names).
@@ -600,6 +602,7 @@ impl Theme {
             background_secondary: secondary.color(),
             background_secondary_lighter: lighter.color(),
             background_tertiary: p.surface(p.stops.2).color(),
+            background_header_secondary: p.surface(0.5).color(),
             guild_list_foreground: p.surface(if light { 0.35 } else { 0.38 }).color(),
             text_chat: p.text(light, chat).color(),
             text_secondary: p.text(light, secondary_text).color(),
@@ -658,6 +661,7 @@ impl Theme {
                 theme.background_secondary = rgba_u32(t::BACKGROUND_SECONDARY_RGBA);
                 theme.background_secondary_lighter = rgba_u32(t::BACKGROUND_SECONDARY_LIGHTER_RGBA);
                 theme.background_tertiary = rgba_u32(t::BACKGROUND_TERTIARY_RGBA);
+                theme.background_header_secondary = rgba_u32(t::BACKGROUND_HEADER_SECONDARY_RGBA);
                 theme.guild_list_foreground = rgba_u32(t::GUILD_LIST_FOREGROUND_RGBA);
                 theme.text_chat = rgba_u32(t::TEXT_CHAT_RGBA);
                 theme.text_secondary = rgba_u32(t::TEXT_SECONDARY_RGBA);
@@ -891,6 +895,7 @@ mod tests {
                 assert_eq!($theme.background_secondary, rgba_u32(t::BACKGROUND_SECONDARY_RGBA));
                 assert_eq!($theme.background_secondary_lighter, rgba_u32(t::BACKGROUND_SECONDARY_LIGHTER_RGBA));
                 assert_eq!($theme.background_tertiary, rgba_u32(t::BACKGROUND_TERTIARY_RGBA));
+                assert_eq!($theme.background_header_secondary, rgba_u32(t::BACKGROUND_HEADER_SECONDARY_RGBA));
                 assert_eq!($theme.guild_list_foreground, rgba_u32(t::GUILD_LIST_FOREGROUND_RGBA));
                 assert_eq!($theme.text_chat, rgba_u32(t::TEXT_CHAT_RGBA));
                 assert_eq!($theme.text_secondary, rgba_u32(t::TEXT_SECONDARY_RGBA));

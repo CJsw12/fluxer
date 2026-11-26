@@ -5,8 +5,8 @@ use std::rc::Rc;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::{
-    Anchor, AnyElement, App, FontWeight, Hsla, MouseButton, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString,
-    Size, Window, anchored, div, prelude::*, px, rgb, rgba,
+    Anchor, AnyElement, App, FontWeight, MouseButton, MouseMoveEvent, MouseUpEvent, Pixels, Point, SharedString,
+    Size, Window, anchored, div, prelude::*, px,
 };
 
 use crate::icons::AppIcon;
@@ -124,10 +124,9 @@ pub fn settings_modal(
     let on_dismiss = Rc::new(on_dismiss);
     let on_dismiss_bg = on_dismiss.clone();
     let on_dismiss_btn = on_dismiss;
-    let dark = theme.background.l < 0.5;
-    let modal_bg: Hsla = if dark { rgb(0x1a181e).into() } else { theme.background };
-    let sidebar_bg: Hsla = if dark { rgb(0x2a2730).into() } else { theme.background_secondary };
-    let modal_border: Hsla = if dark { rgb(0x2f2c36).into() } else { theme.border };
+    let modal_bg = theme.background_secondary;
+    let sidebar_bg = theme.background_tertiary;
+    let modal_border = theme.background_modifier_accent;
 
     let close_button = div()
         .debug_selector(|| "settings-close".to_owned())
@@ -298,7 +297,7 @@ pub fn settings_modal(
         .mx(px(1.))
         .rounded(px(12.))
         .border_1()
-        .border_color(modal_border)
+        .border_color(theme.background_header_secondary)
         .bg(modal_bg)
         .overflow_hidden()
         .shadow_lg()
@@ -389,9 +388,8 @@ pub fn resizable_popover(
     on_drag_move: impl Fn(&MouseMoveEvent, &mut Window, &mut App) + 'static,
     on_drag_end: impl Fn(&MouseUpEvent, &mut Window, &mut App) + 'static,
 ) -> AnyElement {
-    let dark = theme.background.l < 0.5;
-    let bg: Hsla = if dark { rgb(0x2a2730).into() } else { theme.background_secondary };
-    let border: Hsla = if dark { rgba(0xc9c5d326).into() } else { theme.border };
+    let bg = theme.background_tertiary;
+    let border = theme.background_modifier_accent;
     let vw = f32::from(viewport.width);
     let vh = f32::from(viewport.height);
     let min_top = if vh >= 700. { 44. } else { 16. };

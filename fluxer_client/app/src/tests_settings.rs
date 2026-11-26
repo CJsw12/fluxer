@@ -1188,3 +1188,84 @@ fn keybinds_tab_editing_recording_conflicts_search_reset_and_runtime_dispatch(cx
 
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn settings_modal_theme_tokens_and_rendering_across_dark_and_light(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend_with_fixture(&rt);
+    let (view, vcx) = open_client(cx, backend, events);
+
+    let (dark, light) = vcx.update(|_window, cx| (Theme::dark(cx), Theme::light(cx)));
+
+    // Dark/light theme tokens used by settings modal and overlay must be distinct and ordered.
+    assert_ne!(dark.background_tertiary, light.background_tertiary);
+    assert_ne!(dark.background_header_secondary, light.background_header_secondary);
+    assert_ne!(dark.background_secondary, light.background_secondary);
+    assert_ne!(dark.background_secondary_lighter, light.background_secondary_lighter);
+    assert_ne!(dark.background_modifier_accent, light.background_modifier_accent);
+    assert_ne!(dark.foreground, light.foreground);
+    assert_ne!(dark.muted_foreground, light.muted_foreground);
+    assert_ne!(dark.text_tertiary, light.text_tertiary);
+    assert_ne!(dark.hover_bg, light.hover_bg);
+    assert_ne!(dark.divider, light.divider);
+
+    for theme in [&dark, &light] {
+        assert_ne!(theme.background_tertiary, theme.background_secondary);
+        assert_ne!(theme.background_secondary_lighter, theme.background_tertiary);
+        assert!(theme.background_modifier_accent.a > 0.0);
+        assert_ne!(theme.foreground, theme.muted_foreground);
+        assert_ne!(theme.muted_foreground, theme.text_tertiary);
+        assert!(theme.on_fill.l > 0.9);
+    }
+    // Dark sidebar (background_tertiary) must remain lighter than content (background_secondary).
+    assert!(dark.background_tertiary.l > dark.background_secondary.l);
+    assert!(dark.background_header_secondary.l < light.background_header_secondary.l);
+
+    // Render settings modal in Dark mode and verify core settings surfaces draw cleanly.
+    view.update_in(vcx, |v, window, cx| {
+        v.open_settings(window, cx);
+        v.select_settings_tab(SettingsTab::Appearance, cx);
+        v.settings_set_theme(ThemeKind::Dark, window, cx);
+    });
+    vcx.run_until_parked();
+    draw(vcx);
+    assert_eq!(vcx.update(|_window, cx| theme::kind(cx)), ThemeKind::Dark);
+    for selector in [
+        "settings-close",
+        "settings-search",
+        "settings-profile-card",
+        "settings-logout",
+        "settings-density-cozy",
+        "settings-font-16",
+    ] {
+        assert!(
+            vcx.debug_bounds(selector).is_some(),
+            "expected {selector} to render in Dark theme"
+        );
+    }
+
+    // Switch to Light mode and verify settings modal re-renders with light tokens.
+    view.update_in(vcx, |v, window, cx| v.settings_set_theme(ThemeKind::Light, window, cx));
+    vcx.run_until_parked();
+    draw(vcx);
+    assert_eq!(vcx.update(|_window, cx| theme::kind(cx)), ThemeKind::Light);
+    assert_eq!(
+        vcx.update(|_window, cx| Theme::current(cx).background_tertiary),
+        light.background_tertiary
+    );
+    for selector in [
+        "settings-close",
+        "settings-search",
+        "settings-profile-card",
+        "settings-logout",
+        "settings-density-cozy",
+        "settings-font-16",
+    ] {
+        assert!(
+            vcx.debug_bounds(selector).is_some(),
+            "expected {selector} to render in Light theme"
+        );
+    }
+
+    drop(rt);
+}

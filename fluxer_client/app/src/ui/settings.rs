@@ -13,8 +13,8 @@ use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{Disableable as _, Icon, Sizable as _};
 use gpui_kit::{
-    AnyElement, Context, Entity, FontWeight, Hsla, ScrollHandle, SharedString, Subscription, Window, div, hsla,
-    prelude::*, px, rgb,
+    AnyElement, Context, Entity, FontWeight, Hsla, ScrollHandle, SharedString, Subscription, Window, div,
+    prelude::*, px,
 };
 
 use crate::backend::voice::VoiceAudioSettings;
@@ -1084,62 +1084,32 @@ impl ClientView {
     }
 }
 
-fn settings_is_dark(theme: &Theme) -> bool {
-    theme.background.l < 0.5
-}
-
 fn settings_sidebar_bg(theme: &Theme) -> Hsla {
-    if settings_is_dark(theme) {
-        rgb(0x2a2730).into()
-    } else {
-        theme.background_secondary
-    }
+    theme.background_tertiary
 }
 
 fn settings_card_bg(theme: &Theme) -> Hsla {
-    if settings_is_dark(theme) {
-        rgb(0x1e1d23).into()
-    } else {
-        theme.background_secondary
-    }
+    theme.background_secondary_lighter
 }
 
 fn settings_border(theme: &Theme) -> Hsla {
-    if settings_is_dark(theme) {
-        rgb(0x2f2c36).into()
-    } else {
-        theme.border
-    }
+    theme.background_modifier_accent
 }
 
 fn settings_sub_selected_bg(theme: &Theme) -> Hsla {
-    if settings_is_dark(theme) {
-        hsla(0., 0., 1., 0.10)
-    } else {
-        theme.accent
-    }
+    theme.accent
 }
 
 fn settings_divider(theme: &Theme) -> AnyElement {
-    let color = if settings_is_dark(theme) {
-        hsla(0., 0., 1., 0.08)
-    } else {
-        theme.border
-    };
-    div().w_full().h(px(1.)).flex_none().bg(color).into_any_element()
+    div().w_full().h(px(1.)).flex_none().bg(theme.divider).into_any_element()
 }
 
 fn sidebar_section_heading(title: String, theme: &Theme) -> impl IntoElement {
-    let color: Hsla = if settings_is_dark(theme) {
-        rgb(0xb1acbb).into()
-    } else {
-        theme.muted_foreground
-    };
     div()
         .text_size(px(12.))
         .line_height(px(16.))
         .font_weight(FontWeight::MEDIUM)
-        .text_color(color)
+        .text_color(theme.text_tertiary)
         .child(title)
 }
 
@@ -3246,7 +3216,7 @@ fn render_theme_swatch(
 fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
     let active_theme = theme::kind(cx);
     let display = view.prefs.data.display();
-    let dark = settings_is_dark(theme);
+    let hover_bg = theme.hover_bg;
 
     let theme_swatches = THEME_OPTIONS.iter().enumerate().map(|(ix, (kind, label))| {
         let kind = *kind;
@@ -3270,7 +3240,7 @@ fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Clie
             .px_2()
             .rounded(px(6.))
             .cursor_pointer()
-            .hover(move |s| s.bg(if dark { hsla(0., 0., 1., 0.04) } else { theme.muted }))
+            .hover(move |s| s.bg(hover_bg))
             .flex()
             .flex_row()
             .items_start()
@@ -3291,7 +3261,7 @@ fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Clie
                             .flex()
                             .items_center()
                             .justify_center()
-                            .child(div().size(px(6.)).rounded_full().bg(rgb(0xffffff)))
+                            .child(div().size(px(6.)).rounded_full().bg(theme.on_fill))
                     }),
             )
             .child(
@@ -3342,7 +3312,7 @@ fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Clie
                     } else {
                         settings_border(theme)
                     })
-                    .bg(if selected { rgb(0xf4f4f6).into() } else { settings_card_bg(theme) }),
+                    .bg(if selected { theme.on_fill } else { settings_card_bg(theme) }),
             )
             .child(
                 div()
@@ -3510,7 +3480,7 @@ fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut Context<Clie
                         .bg(settings_border(theme)),
                 )
                 .child(div().h(px(4.)).rounded_full().bg(theme.brand).w(gpui_kit::relative(zoom_fraction)))
-                .child(div().ml(px(-6.)).size(px(12.)).flex_none().rounded_full().bg(rgb(0xf4f4f6))),
+                .child(div().ml(px(-6.)).size(px(12.)).flex_none().rounded_full().bg(theme.foreground)),
         );
 
     div()
@@ -7129,11 +7099,11 @@ fn render_sidebar_tab(
 ) -> AnyElement {
     let sel_id = tab.debug_selector();
     let sections = tab.sections();
-    let dark = settings_is_dark(theme);
     let selected_bg = settings_sub_selected_bg(theme);
-    let active_text: Hsla = if dark { rgb(0xf4f4f6).into() } else { theme.foreground };
-    let idle_text: Hsla = if dark { rgb(0xcecbd4).into() } else { theme.muted_foreground };
-    let sub_idle_text: Hsla = if dark { rgb(0xb1acbb).into() } else { theme.muted_foreground };
+    let active_text = theme.foreground;
+    let idle_text = theme.muted_foreground;
+    let sub_idle_text = theme.text_tertiary;
+    let hover_bg = theme.hover_bg;
     let has_sections = sections.len() > 1;
     let has_tree = selected && show_sections && has_sections;
 
@@ -7153,10 +7123,7 @@ fn render_sidebar_tab(
             .text_color(if selected { active_text } else { idle_text })
             .when(selected, |d| d.bg(selected_bg).font_weight(FontWeight::MEDIUM))
             .when(!selected, |d| {
-                d.hover(move |s| {
-                    s.bg(if dark { hsla(0., 0., 1., 0.05) } else { theme.muted })
-                        .text_color(active_text)
-                })
+                d.hover(move |s| s.bg(hover_bg).text_color(active_text))
             })
             .flx("app.settings-modal-layout.settings-modal-sidebar-item.button")
             .on_click(cx.listener(move |this, _, _, cx| {
@@ -7219,7 +7186,7 @@ fn render_sidebar_tab(
             .ml(px(21.))
             .pl(px(6.))
             .border_l_1()
-            .border_color(if dark { hsla(0., 0., 1., 0.08) } else { theme.border })
+            .border_color(theme.border)
             .flex()
             .flex_col()
             .gap(px(2.))
@@ -7244,10 +7211,7 @@ fn render_sidebar_tab(
                     .text_color(if is_active_sec { active_text } else { sub_idle_text })
                     .when(is_active_sec, |d| d.font_weight(FontWeight::SEMIBOLD).bg(selected_bg))
                     .when(!is_active_sec, |d| {
-                        d.hover(move |s| {
-                            s.bg(if dark { hsla(0., 0., 1., 0.05) } else { theme.muted })
-                                .text_color(active_text)
-                        })
+                        d.hover(move |s| s.bg(hover_bg).text_color(active_text))
                     })
                     .flx("app.settings-modal-layout.settings-modal-sidebar-sub-item.sidebar-sub-item.click.button")
                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -7284,8 +7248,10 @@ fn render_sidebar(
     theme: &Theme,
     cx: &mut Context<ClientView>,
 ) -> AnyElement {
-    let dark = settings_is_dark(theme);
     let sidebar_bg = settings_sidebar_bg(theme);
+    let hover_bg = theme.hover_bg;
+    let foreground = theme.foreground;
+    let danger_hover = theme.danger.opacity(0.10);
     let (avatar_el, user_name) = match &view.user {
         Some(user) => (
             div()
@@ -7404,11 +7370,8 @@ fn render_sidebar(
                         .flex_row()
                         .items_center()
                         .gap_2p5()
-                        .text_color(if dark { rgb(0xcecbd4).into() } else { theme.muted_foreground })
-                        .hover(move |s| {
-                            s.bg(if dark { hsla(0., 0., 1., 0.05) } else { theme.muted })
-                                .text_color(theme.foreground)
-                        })
+                        .text_color(theme.muted_foreground)
+                        .hover(move |s| s.bg(hover_bg).text_color(foreground))
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.apply_settings_effect(SettingsEffect::OpenAccountSwitcher, window, cx);
                         }))
@@ -7429,7 +7392,7 @@ fn render_sidebar(
                     .items_center()
                     .gap_2p5()
                     .text_color(theme.danger)
-                    .hover(|s| s.bg(hsla(0., 0.7, 0.5, 0.10)))
+                    .hover(move |s| s.bg(danger_hover))
                     .on_click(cx.listener(|this, _, _, cx| this.settings_prompt_logout(true, cx)))
                     .child(Icon::new(AppIcon::SignOut).with_size(px(16.)).text_color(theme.danger))
                     .child(div().text_size(px(13.)).font_weight(FontWeight::MEDIUM).child(l10n::tr("Sign out"))),
@@ -7524,10 +7487,10 @@ fn render_sidebar(
                         .bg(if profile_selected {
                             settings_sub_selected_bg(theme)
                         } else {
-                            hsla(0., 0., 0., 0.)
+                            gpui_kit::transparent_black()
                         })
                         .cursor_pointer()
-                        .hover(move |s| s.bg(if dark { hsla(0., 0., 1., 0.06) } else { theme.muted }))
+                        .hover(move |s| s.bg(hover_bg))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.select_settings_tab(SettingsTab::Profile, cx);
                         }))

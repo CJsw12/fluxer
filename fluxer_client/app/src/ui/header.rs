@@ -323,10 +323,6 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 })
                 .child({
                     let search_open = view.search.is_some();
-                    let update_visible = matches!(
-                        view.update_status,
-                        UpdateStatus::Available { .. } | UpdateStatus::Downloading { .. } | UpdateStatus::Downloaded { .. }
-                    );
                     let non_default_scope = view.search.as_ref().is_some_and(|s| {
                         let default_scope = if view.selected_channel.is_some() {
                             SearchScopeChoice::CurrentChannel
@@ -345,7 +341,6 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .w(px(theme.sizes.search_bar_width))
                         .h(px(38.))
                         .px_2p5()
-                        .when(!update_visible, |d| d.mr(px(40.)))
                         .rounded(px(12.))
                         .bg(rgb(0x242229))
                         .when(search_open, |d| d.border_1().border_color(theme.accent))

@@ -27,7 +27,7 @@
    },
    {
     "click": "button[aria-label=\"More\"]",
-    "index": 2
+    "index": 1
    }
   ],
   "rust": [

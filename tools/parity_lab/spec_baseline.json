@@ -5,7 +5,7 @@
     "markdown": {
       "spec": "target/parity-tmp/md.1280.spec.json",
       "max_deltas": 25,
-      "max_missing": 154,
+      "max_missing": 152,
       "ignore": [
         "app.native-titlebar.wordmark|width",
         "channel.channel-header-components.channel-header-icon.button-icon|x"
@@ -47,7 +47,7 @@
           "missing": 10
         },
         "user-area-popout": {
-          "deltas": 3,
+          "deltas": 2,
           "missing": 17
         }
       },
@@ -60,7 +60,7 @@
       "max": {
         "dm-conversation": {
           "deltas": 61,
-          "missing": 94
+          "missing": 92
         },
         "dm-home": {
           "deltas": 6,
@@ -71,27 +71,27 @@
           "missing": 3
         },
         "settings-appearance": {
-          "deltas": 91,
+          "deltas": 67,
           "missing": 25
         },
         "settings-keybinds": {
-          "deltas": 370,
+          "deltas": 338,
           "missing": 19
         },
         "settings-language": {
-          "deltas": 81,
+          "deltas": 60,
           "missing": 39
         },
         "settings-my-account": {
-          "deltas": 83,
+          "deltas": 59,
           "missing": 36
         },
         "settings-notifications": {
-          "deltas": 81,
+          "deltas": 60,
           "missing": 29
         },
         "settings-voice-video": {
-          "deltas": 92,
+          "deltas": 71,
           "missing": 44
         }
       },
@@ -108,14 +108,14 @@
         },
         "light-theme": {
           "deltas": 44,
-          "missing": 166
+          "missing": 163
         },
         "threads-panel": {
           "deltas": 3,
-          "missing": 11
+          "missing": 10
         },
         "voice-channel": {
-          "deltas": 51,
+          "deltas": 50,
           "missing": 51
         }
       },

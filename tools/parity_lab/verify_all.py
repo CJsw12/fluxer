@@ -38,6 +38,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 STEPS = ("build", "precheck", "icons", "colors", "ratchet", "resize", "surface", "state")
+LIVE_STEPS = ("ratchet", "resize", "surface", "state")
 TIMEOUTS = {
     "build": 2400,
     "precheck": 120,
@@ -596,6 +597,11 @@ def main(argv: list[str] | None = None) -> int:
         if name not in steps:
             detail = "not requested (pass --build)" if name == "build" and not args.build else "not selected"
             results[name] = Result("SKIP", detail)
+            continue
+        # Live gates measure the running apps; after a failed precheck (client offline,
+        # stale official gateway, muted mic) their failures are noise, so skip them.
+        if name in LIVE_STEPS and results.get("precheck") and results["precheck"].status == "FAIL":
+            results[name] = Result("SKIP", "precheck failed - fix the environment first")
             continue
         started = time.time()
         results[name] = STEP_FUNCS[name](args, out_dir)

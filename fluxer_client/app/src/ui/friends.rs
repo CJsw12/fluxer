@@ -4,20 +4,20 @@
 use fluxer_client_core::state::{ChannelKind, ClientState, RelationshipKind, Snowflake, Status, User};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::Input;
-use gpui_kit::component::Sizable as _;
-use gpui_kit::{AnyElement, ClickEvent, Context, FontWeight, SharedString, Window, div, prelude::*, px};
+use gpui_kit::component::{Icon, Sizable as _};
+use gpui_kit::{AnyElement, ClickEvent, Context, FontWeight, Role, SharedString, Window, div, prelude::*, px};
 
 use super::badge;
 use super::member_list::status_label;
 use super::avatar::{AvatarSpec, render_avatar};
 use super::profile_popout::find_1on1_dm;
-use crate::client_view::ClientView;
+use crate::client_view::{ClientView, HeaderHoverTarget};
 use crate::format::{default_avatar_index, initials};
 use crate::icons::AppIcon;
 use crate::parity_probe::FlxExt as _;
 use crate::profile::format_username_tag;
 use crate::theme::Theme;
-use crate::ui::l10n;
+use crate::ui::{l10n, rail_tooltip};
 use crate::view_model::{Place, avatar_url};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -26,6 +26,7 @@ pub enum FriendsTab {
     Online,
     All,
     Pending,
+    #[allow(dead_code)]
     Blocked,
     AddFriend,
 }
@@ -189,20 +190,24 @@ fn tab_button(
     cx: &mut Context<ClientView>,
 ) -> impl IntoElement {
     let accent = theme.accent;
+    let hover_bg = theme.hover_bg;
     let fg = theme.foreground;
     let base = div()
         .id(id)
-        .role(gpui_kit::Role::Button)
+        .role(Role::Button)
         .debug_selector(move || id.to_owned())
         .cursor_pointer()
+        .flex_none()
         .flex()
         .flex_row()
         .items_center()
-        .gap_1p5()
-        .px(px(12.))
+        .h(px(32.))
+        .gap(px(8.))
+        .px(px(8.))
         .py(px(4.))
         .rounded(px(6.))
-        .text_sm()
+        .text_size(px(16.))
+        .line_height(px(24.))
         .font_weight(FontWeight::SEMIBOLD)
         .on_click(cx.listener(move |this, _, _, cx| this.set_friends_tab(tab, cx)));
 
@@ -214,7 +219,7 @@ fn tab_button(
         base.bg(accent).text_color(fg)
     } else {
         base.text_color(theme.muted_foreground)
-            .hover(move |s| s.bg(accent).text_color(fg))
+            .hover(move |s| s.bg(hover_bg).text_color(fg))
     };
 
     let tab_flx = match tab {
@@ -225,10 +230,186 @@ fn tab_button(
         FriendsTab::Blocked => None,
     };
 
-    styled
-        .when_some(tab_flx, |d, f| d.flx(f))
-        .child(label)
-        .when(badge_count > 0, |d| d.child(badge(badge_count, theme)))
+    styled.when_some(tab_flx, |d, f| d.flx(f)).child(
+        div()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap(px(8.))
+            .flx("channel.direct-message.dm-friends-view.tab-content")
+            .child(label)
+            .when(badge_count > 0, |d| d.child(badge(badge_count, theme))),
+    )
+}
+
+fn render_inbox_button(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> impl IntoElement {
+    let hovered = view.hovered_header_item == Some(HeaderHoverTarget::Inbox);
+    let color = if hovered { theme.foreground } else { theme.muted_foreground };
+    let label = l10n::tr("Inbox");
+    div()
+        .id("header-inbox-btn")
+        .role(Role::Button)
+        .aria_label(label.clone())
+        .aria_selected(false)
+        .debug_selector(|| "header-inbox-btn".to_owned())
+        .relative()
+        .size(px(32.))
+        .rounded(px(16.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_pointer()
+        .text_color(color)
+        .on_hover(cx.listener(|this, h: &bool, _, cx| {
+            this.set_header_hover(HeaderHoverTarget::Inbox, *h, cx);
+        }))
+        .on_click(cx.listener(|this, ev: &ClickEvent, window, cx| {
+            this.toggle_inbox_popout(ev.position(), window, cx);
+        }))
+        .flx("channel.channel-header.inbox-button")
+        .child(crate::ui::channel_popouts::track_trigger("header-inbox-btn"))
+        .child(
+            div()
+                .size(px(24.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .flx("channel.channel-header-components.channel-header-icon.button-icon")
+                .child(Icon::new(AppIcon::Inbox).with_size(px(24.)).text_color(color)),
+        )
+        .when(hovered, |d| d.child(rail_tooltip::below(label, &["CTRL", "I"], true, theme)))
+}
+
+fn render_empty_state(title: String, subtitle: Option<String>, theme: &Theme) -> AnyElement {
+    div()
+        .flex_1()
+        .h_full()
+        .w_full()
+        .p(px(32.))
+        .flex()
+        .flex_col()
+        .items_center()
+        .justify_center()
+        .flx("channel.friends.empty-state-view.container")
+        .child(
+            div()
+                .flex_none()
+                .size(px(64.))
+                .mb(px(16.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_color(theme.text_tertiary)
+                .flx("channel.friends.empty-state-view.icon")
+                .child(Icon::new(AppIcon::UsersThreeFill).with_size(px(64.)).text_color(theme.text_tertiary)),
+        )
+        .child(
+            div()
+                .mb(px(8.))
+                .text_size(px(20.))
+                .line_height(px(30.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(theme.foreground)
+                .text_center()
+                .flx("channel.friends.empty-state-view.title")
+                .child(title),
+        )
+        .when_some(subtitle, |d, sub| {
+            d.child(
+                div()
+                    .max_w(px(448.))
+                    .text_size(px(16.))
+                    .line_height(px(24.))
+                    .font_weight(FontWeight::NORMAL)
+                    .text_color(theme.text_tertiary)
+                    .text_center()
+                    .flx("channel.friends.empty-state-view.subtitle")
+                    .child(sub),
+            )
+        })
+        .into_any_element()
+}
+
+fn render_active_now_sidebar(theme: &Theme) -> impl IntoElement {
+    div()
+        .w(px(352.))
+        .flex_none()
+        .h_full()
+        .flex()
+        .flex_col()
+        .border_l_1()
+        .border_color(theme.background_modifier_accent)
+        .bg(theme.background_secondary_lighter)
+        .flx("channel.active-now.active-now-sidebar.sidebar")
+        .child(
+            div()
+                .w_full()
+                .flex_none()
+                .pt(px(16.))
+                .px(px(16.))
+                .pb(px(12.))
+                .flex()
+                .flex_row()
+                .items_center()
+                .flx("channel.active-now.active-now-sidebar.header")
+                .child(
+                    div()
+                        .text_size(px(20.))
+                        .line_height(px(30.))
+                        .font_weight(FontWeight::BOLD)
+                        .text_color(theme.foreground)
+                        .flx("channel.active-now.active-now-sidebar.header-title")
+                        .child(l10n::tr("Active now")),
+                ),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .p(px(24.))
+                .gap(px(12.))
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .flx("channel.active-now.active-now-sidebar.empty-state")
+                .child(
+                    div()
+                        .flex_none()
+                        .size(px(48.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .opacity(0.6)
+                        .text_color(theme.text_tertiary)
+                        .flx("channel.active-now.active-now-sidebar.empty-icon")
+                        .child(Icon::new(AppIcon::Waveform).with_size(px(48.)).text_color(theme.text_tertiary)),
+                )
+                .child(
+                    div()
+                        .text_size(px(14.))
+                        .line_height(px(21.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(theme.text_secondary)
+                        .text_center()
+                        .flx("channel.active-now.active-now-sidebar.empty-title")
+                        .child(l10n::tr("It's quiet for now...")),
+                )
+                .child(
+                    div()
+                        .w_full()
+                        .text_size(px(12.))
+                        .line_height(px(16.8))
+                        .font_weight(FontWeight::NORMAL)
+                        .text_color(theme.text_tertiary)
+                        .text_center()
+                        .flx("channel.active-now.active-now-sidebar.empty-description")
+                        .child(l10n::tr(
+                            "When friends are active in voice channels, their activity will appear here.",
+                        )),
+                ),
+        )
 }
 
 fn render_row(row: &FriendRow, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
@@ -378,77 +559,118 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .flex()
         .flex_row()
         .items_center()
-        .gap_3()
+        .justify_between()
+        .gap_4()
         .px_4()
+        .bg(theme.background_secondary_lighter)
         .border_b_1()
         .border_color(theme.border)
         .flx("channel.channel-header.header-wrapper")
         .child(
             div()
+                .flex_1()
+                .min_w_0()
+                .h(px(40.))
                 .flex()
                 .flex_row()
                 .items_center()
-                .gap_2()
-                .flx("channel.direct-message.dm-friends-view.title-section")
-                .child(gpui_kit::component::Icon::new(crate::icons::AppIcon::Users).small().text_color(theme.muted_foreground))
+                .overflow_hidden()
+                .flx("channel.channel-header.header-left-section")
                 .child(
                     div()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .flx("channel.direct-message.dm-friends-view.title-text")
-                        .child(l10n::tr("Friends")),
+                        .flex_1()
+                        .min_w_0()
+                        .h_full()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_2()
+                        .overflow_hidden()
+                        .flx("channel.channel-header.left-content-container")
+                        .child(
+                            div()
+                                .min_w_0()
+                                .h_full()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap_4()
+                                .flx("channel.direct-message.dm-friends-view.header-content")
+                                .child(
+                                    div()
+                                        .min_w_0()
+                                        .h_full()
+                                        .overflow_hidden()
+                                        .flx("channel.direct-message.dm-friends-view.tabs-wrapper")
+                                        .child(
+                                            div()
+                                                .w_full()
+                                                .h_full()
+                                                .flex()
+                                                .flex_col()
+                                                .flx("channel.direct-message.dm-friends-view.tabs-scroller")
+                                                .child(
+                                                    div()
+                                                        .h(px(40.))
+                                                        .p(px(4.))
+                                                        .gap(px(4.))
+                                                        .flex()
+                                                        .flex_row()
+                                                        .items_center()
+                                                        .flx("channel.direct-message.dm-friends-view.tabs-inner")
+                                                        .child(tab_button(
+                                                            "friends-tab-online",
+                                                            l10n::tr("Online"),
+                                                            tab == FriendsTab::Online,
+                                                            0,
+                                                            FriendsTab::Online,
+                                                            theme,
+                                                            cx,
+                                                        ))
+                                                        .child(tab_button(
+                                                            "friends-tab-all",
+                                                            l10n::tr("All"),
+                                                            tab == FriendsTab::All,
+                                                            0,
+                                                            FriendsTab::All,
+                                                            theme,
+                                                            cx,
+                                                        ))
+                                                        .child(tab_button(
+                                                            "friends-tab-pending",
+                                                            l10n::tr("Pending"),
+                                                            tab == FriendsTab::Pending,
+                                                            view.pending_incoming,
+                                                            FriendsTab::Pending,
+                                                            theme,
+                                                            cx,
+                                                        ))
+                                                        .child(tab_button(
+                                                            "friends-tab-add",
+                                                            l10n::tr("Add friend"),
+                                                            tab == FriendsTab::AddFriend,
+                                                            0,
+                                                            FriendsTab::AddFriend,
+                                                            theme,
+                                                            cx,
+                                                        )),
+                                                ),
+                                        ),
+                                ),
+                        ),
                 ),
         )
         .child(
             div()
-                .w(px(1.))
-                .h(px(24.))
-                .bg(theme.border)
-                .flx("channel.direct-message.dm-friends-view.divider"),
-        )
-        .child(
-            div()
+                .flex_none()
                 .flex()
                 .flex_row()
                 .items_center()
-                .gap_1p5()
-                .flx("channel.direct-message.dm-friends-view.tabs-inner")
-                .child(tab_button(
-                    "friends-tab-online",
-                    l10n::tr("Online"),
-                    tab == FriendsTab::Online,
-                    0,
-                    FriendsTab::Online,
-                    theme,
-                    cx,
-                ))
-                .child(tab_button("friends-tab-all", l10n::tr("All"), tab == FriendsTab::All, 0, FriendsTab::All, theme, cx))
-                .child(tab_button(
-                    "friends-tab-pending",
-                    l10n::tr("Pending"),
-                    tab == FriendsTab::Pending,
-                    view.pending_incoming,
-                    FriendsTab::Pending,
-                    theme,
-                    cx,
-                ))
-                .child(tab_button(
-                    "friends-tab-blocked",
-                    l10n::tr("Blocked"),
-                    tab == FriendsTab::Blocked,
-                    0,
-                    FriendsTab::Blocked,
-                    theme,
-                    cx,
-                ))
-                .child(tab_button(
-                    "friends-tab-add",
-                    l10n::tr("Add friend"),
-                    tab == FriendsTab::AddFriend,
-                    0,
-                    FriendsTab::AddFriend,
-                    theme,
-                    cx,
-                )),
+                .justify_end()
+                .gap_2()
+                .relative()
+                .flx("channel.channel-header.header-right-section")
+                .child(render_inbox_button(view, theme, cx)),
         );
 
     let body: AnyElement = if tab == FriendsTab::AddFriend {
@@ -457,6 +679,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             Err(err) => div().text_xs().text_color(theme.danger).child(err.clone()),
         });
         div()
+            .flex_1()
+            .min_h_0()
             .p_4()
             .flex()
             .flex_col()
@@ -500,55 +724,122 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 })
                 .collect()
         };
+        let input_bg = if theme.background.l < 0.5 {
+            theme.background_tertiary
+        } else {
+            theme.background
+        };
         let search_bar = div()
-            .px_4()
-            .pt_3()
-            .pb_1()
-            .flex()
-            .flex_row()
-            .items_center()
-            .gap_2()
+            .w_full()
+            .pt(px(12.))
+            .px(px(16.))
+            .pb_0()
             .flx("channel.direct-message.dm-friends-view.search-wrapper")
             .child(
                 div()
-                    .flex_1()
-                    .min_w_0()
+                    .relative()
+                    .w_full()
+                    .h(px(44.))
+                    .rounded(px(8.))
+                    .border_1()
+                    .border_color(theme.background_modifier_accent)
+                    .bg(input_bg)
+                    .py(px(10.))
+                    .pl(px(36.))
+                    .pr(px(16.))
+                    .flex()
+                    .flex_row()
+                    .items_center()
+                    .gap(px(8.))
                     .debug_selector(|| "friends-search-input".to_owned())
-                    .child(Input::new(&view.friends_search_input).small()),
-            )
-            .when(!raw_query.is_empty(), |d| {
-                d.child(
-                    div().debug_selector(|| "friends-search-clear".to_owned()).child(
-                        Button::new("friends-search-clear")
-                            .ghost()
-                            .small()
-                            .icon(AppIcon::X)
-                            .accessibility_label(l10n::tr("Clear search"))
-                            .on_click(cx.listener(|this, _, window, cx| this.clear_friends_search(window, cx))),
+                    .flx("channel.direct-message.dm-friends-view.input.set-search-query")
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w_0()
+                            .child(
+                                Input::new(&view.friends_search_input)
+                                    .appearance(false)
+                                    .text_size(px(14.))
+                                    .line_height(px(20.)),
+                            ),
+                    )
+                    .when(!raw_query.is_empty(), |d| {
+                        d.child(
+                            div().flex_none().debug_selector(|| "friends-search-clear".to_owned()).child(
+                                Button::new("friends-search-clear")
+                                    .ghost()
+                                    .small()
+                                    .icon(AppIcon::X)
+                                    .accessibility_label(l10n::tr("Clear search"))
+                                    .on_click(cx.listener(|this, _, window, cx| this.clear_friends_search(window, cx))),
+                            ),
+                        )
+                    })
+                    .child(
+                        div()
+                            .absolute()
+                            .left(px(11.))
+                            .top(px(11.))
+                            .size(px(20.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .text_color(theme.text_secondary)
+                            .flx("channel.direct-message.dm-friends-view.search-icon")
+                            .child(
+                                Icon::new(AppIcon::MagnifyingGlass)
+                                    .with_size(px(20.))
+                                    .text_color(theme.text_secondary),
+                            ),
                     ),
-                )
-            });
+            );
 
         let list_content: AnyElement = if view.friend_rows.is_empty() {
-            div()
-                .flex_1()
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_color(theme.muted_foreground)
-                .flx("channel.friends.empty-state-view.container")
-                .child(l10n::tr("No friends to show."))
-                .into_any_element()
+            let (title, subtitle) = match tab {
+                FriendsTab::Pending => (
+                    l10n::tr("No pending requests"),
+                    Some(l10n::tr("Pending friend requests show up here.")),
+                ),
+                FriendsTab::Blocked => (l10n::tr("No friends to show."), None),
+                FriendsTab::Online => {
+                    let has_any_friends = view
+                        .backend
+                        .state()
+                        .relationships
+                        .values()
+                        .any(|r| r.kind() == RelationshipKind::Friend);
+                    if has_any_friends {
+                        (
+                            l10n::tr("Your friends are stuck in another timeline"),
+                            Some(l10n::tr("When they come online, they'll appear right here.")),
+                        )
+                    } else {
+                        (
+                            l10n::tr("This friends list needs more power"),
+                            Some(l10n::tr("Where we're going, we need more friends.")),
+                        )
+                    }
+                }
+                FriendsTab::All | FriendsTab::AddFriend => (
+                    l10n::tr("This friends list needs more power"),
+                    Some(l10n::tr("Where we're going, we need more friends.")),
+                ),
+            };
+            render_empty_state(title, subtitle, theme)
         } else if filtered_rows.is_empty() {
-            div()
-                .flex_1()
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_color(theme.muted_foreground)
-                .flx("channel.friends.empty-state-view.container")
-                .child(l10n::tr("No friends match your search."))
-                .into_any_element()
+            let (title, subtitle) = if tab == FriendsTab::Pending {
+                (
+                    l10n::tr("No pending requests match that search"),
+                    Some(l10n::tr("Try a different name.")),
+                )
+            } else {
+                (
+                    l10n::tr("No friends match that search"),
+                    Some(l10n::tr("Try another name or check your spelling.")),
+                )
+            };
+            render_empty_state(title, subtitle, theme)
         } else {
             div()
                 .id("friends-list")
@@ -569,26 +860,62 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             .min_h_0()
             .flex()
             .flex_col()
+            .gap_3()
             .flx("channel.direct-message.dm-friends-view.content")
             .child(search_bar)
-            .child(list_content)
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .w_full()
+                    .overflow_hidden()
+                    .flex()
+                    .flex_col()
+                    .flx("channel.direct-message.dm-friends-view.tab-body")
+                    .child(list_content),
+            )
             .into_any_element()
     };
 
+    // OutlineFrame.module.css: sits inside the 1px frame border at top and bottom.
     div()
-        .id("friends-view")
         .flex_1()
         .min_h_0()
+        .w_full()
+        .mr(px(-1.))
+        .pt(px(1.))
+        .pb(px(1.))
         .flex()
         .flex_col()
-        .flx("channel.direct-message.dm-friends-view.container")
-        .child(header)
-        .children(
-            view.error
-                .clone()
-                .map(|e| div().debug_selector(|| "friends-error".to_owned()).px_4().pt_2().text_xs().text_color(theme.danger).child(e)),
+        .child(
+            div()
+                .id("friends-view")
+                .flex_1()
+                .min_h_0()
+                .w_full()
+                .flex()
+                .flex_row()
+                .bg(theme.background_secondary_lighter)
+                .flx("channel.direct-message.dm-friends-view.container")
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .min_h_0()
+                        .h_full()
+                        .flex()
+                        .flex_col()
+                        .flx("channel.direct-message.dm-friends-view.main-column")
+                        .child(header)
+                        .children(
+                            view.error
+                                .clone()
+                                .map(|e| div().debug_selector(|| "friends-error".to_owned()).px_4().pt_2().text_xs().text_color(theme.danger).child(e)),
+                        )
+                        .child(body),
+                )
+                .child(render_active_now_sidebar(theme)),
         )
-        .child(body)
 }
 
 #[cfg(test)]

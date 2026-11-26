@@ -103,8 +103,8 @@
       "spec_dir": "target/parity-tmp/extra/spec",
       "max": {
         "friends-list": {
-          "deltas": 47,
-          "missing": 24
+          "deltas": 7,
+          "missing": 2
         },
         "light-theme": {
           "deltas": 29,

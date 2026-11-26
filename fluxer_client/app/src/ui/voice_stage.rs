@@ -398,7 +398,7 @@ fn split_control_group(
     active_danger: bool,
     active_online: bool,
     disabled: bool,
-    _theme: &Theme,
+    theme: &Theme,
     on_main_click: impl Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
     on_caret_click: impl Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
 ) -> AnyElement {
@@ -453,7 +453,7 @@ fn split_control_group(
                 .size(px(17.))
                 .rounded(px(7.))
                 .border_1()
-                .border_color(gpui_kit::hsla(0., 0., 1., 0.18))
+                .border_color(theme.vc_settings_border)
                 .bg(rgb(0x000000))
                 .text_color(gpui_kit::hsla(0., 0., 1., 0.88))
                 .flex()
@@ -608,7 +608,7 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
                             .ghost()
                             .small()
                             .label(expand_label.clone())
-                            .accessibility_label(expand_label)
+                            .accessibility_label(expand_label.clone())
                             .on_click(cx.listener(|this, _, _, cx| this.toggle_voice_stage_expanded(cx))),
                     ),
                 )
@@ -851,7 +851,7 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
                 .debug_selector(|| "voice-stage-control-separator".to_owned())
                 .w(px(1.))
                 .h(px(22.))
-                .bg(theme.border)
+                .bg(theme.vc_separator_bg)
                 .flx("voice.voice-control-bar.voice-control-bar-inner.button-separator"),
         )
         .child(single_control_button(
@@ -1190,8 +1190,9 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
         .id("voice-stage-controls")
         .debug_selector(|| "voice-stage-controls".to_owned())
         .flex_none()
-        .py_3()
-        .px_4()
+        .pt(px(16.))
+        .pb(px(12.))
+        .px(px(16.))
         .bg(rgb(0x000000))
         .flex()
         .flex_col()
@@ -1214,7 +1215,7 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
         0.35
     };
 
-    div()
+    let stage = div()
         .id("voice-stage")
         .role(Role::Region)
         .aria_label(l10n::tr("Voice call stage"))
@@ -1222,18 +1223,12 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
         .flex()
         .flex_col()
         .w_full()
-        .when(!is_split_view, |d| d.flex_1().h_full())
-        .when(is_split_view, |d| {
-            d.relative()
-                .h(px(split_height))
-                .flex_none()
-                .border_b_1()
-                .border_color(theme.border)
-        })
+        .when(!is_split_view, |d| d.flex_1().h_full().mr(px(-1.)))
+        .when(is_split_view, |d| d.relative().h(px(split_height)).flex_none())
         .min_w_0()
         .bg(rgb(0x000000))
         .flx("voice.compact-voice-call-view.compact-voice-call-view-inner.section.voice-root-pointer-activity")
-        .child(header)
+        .when(!is_split_view, |d| d.child(header))
         .child(stage_body)
         .child(controls)
         .when(is_split_view, |d| {
@@ -1276,6 +1271,40 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
                             .flx("voice.compact-voice-call-view.compact-voice-call-view-inner.resize-pill"),
                     ),
             )
-        })
-        .into_any_element()
+            .child(
+                div()
+                    .id("voice-stage-expand-btn")
+                    .role(Role::Button)
+                    .aria_label(expand_label)
+                    .debug_selector(|| "voice-stage-expand-btn".to_owned())
+                    .absolute()
+                    .left(px(12.))
+                    .bottom(px(12.))
+                    .size(px(42.))
+                    .rounded(px(14.))
+                    .border_1()
+                    .border_color(theme.vc_separator_bg)
+                    .bg(theme.vc_surface_bg)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .cursor_pointer()
+                    .hover(|s| s.border_color(theme.vc_corner_hover_border))
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle_voice_stage_expanded(cx)))
+                    .child(Icon::new(AppIcon::ChatCircleFill).with_size(px(20.)).text_color(theme.vc_control_fg)),
+            )
+        });
+
+    if is_split_view {
+        div()
+            .w_full()
+            .mr(px(-1.))
+            .flex_none()
+            .border_b_1()
+            .border_color(theme.border)
+            .child(stage)
+            .into_any_element()
+    } else {
+        stage.into_any_element()
+    }
 }

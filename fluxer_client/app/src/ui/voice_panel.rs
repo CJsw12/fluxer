@@ -127,29 +127,23 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             .justify_between()
                             .gap(px(8.))
                             .flx("voice.voice-connection-status.voice-connection-status-inner.status-row")
+                            .child(render_signal_strength_icon(status_color))
                             .child(
                                 div()
                                     .id("voice-panel-open-stage")
                                     .debug_selector(|| "voice-panel-open-stage".to_owned())
                                     .cursor_pointer()
                                     .on_click(cx.listener(|this, _, _, cx| this.open_voice_stage(cx)))
-                                    .flex()
-                                    .flex_row()
-                                    .items_center()
-                                    .gap(px(8.))
                                     .flex_1()
                                     .min_w_0()
+                                    .h(px(18.))
+                                    .truncate()
+                                    .text_size(px(14.))
+                                    .line_height(px(18.))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(status_color)
                                     .flx("voice.voice-connection-status.voice-connection-status-inner.focus-ring-wrapper")
-                                    .child(render_signal_strength_icon(status_color))
-                                    .child(
-                                        div()
-                                            .truncate()
-                                            .text_size(px(14.))
-                                            .line_height(px(18.))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(status_color)
-                                            .child(status_text),
-                                    ),
+                                    .child(status_text),
                             )
                             .child(
                                 div()
@@ -245,11 +239,11 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                                 .flex()
                                                 .flex_row()
                                                 .items_center()
-                                                .gap(px(4.))
                                                 .min_w_0()
+                                                .max_w_full()
                                                 .text_size(px(12.))
                                                 .line_height(px(16.))
-                                                .text_color(theme.muted_foreground)
+                                                .text_color(theme.text_secondary)
                                                 .hover(|s| s.text_color(theme.foreground))
                                                 .flx("voice.voice-connection-status.voice-connection-status-inner.channel-source-link.voice-connection-status-context-menu")
                                                 .child(
@@ -264,6 +258,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                                 .when_some(guild_label.as_ref().filter(|g| !g.is_empty()), |r, g| {
                                                     r.child(
                                                         div()
+                                                            .flex_none()
+                                                            .mx(px(2.))
                                                             .flx_text(
                                                                 "voice.voice-connection-status.voice-connection-status-inner.channel-source-separator",
                                                                 "/",
@@ -310,22 +306,33 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                                 .child(
                                                     Icon::new(AppIcon::Shield)
                                                         .with_size(px(14.))
-                                                        .text_color(theme.muted_foreground),
+                                                        .text_color(theme.text_tertiary),
                                                 ),
                                         )
                                         .child(
                                             div()
                                                 .flex_1()
                                                 .min_w_0()
-                                                .truncate()
+                                                .flex()
+                                                .flex_row()
+                                                .items_center()
                                                 .text_size(px(12.))
                                                 .line_height(px(16.))
-                                                .text_color(theme.muted_foreground)
-                                                .flx_text(
-                                                    "voice.voice-connection-status.voice-connection-status-inner.connection-id-value-text",
-                                                    conn_text.clone(),
-                                                )
-                                                .child(conn_text),
+                                                .text_color(theme.text_secondary)
+                                                .flx("voice.voice-connection-status.voice-connection-status-inner.connection-id-value")
+                                                .child(
+                                                    div()
+                                                        .max_w_full()
+                                                        .truncate()
+                                                        .text_size(px(12.))
+                                                        .line_height(px(16.))
+                                                        .text_color(theme.text_secondary)
+                                                        .flx_text(
+                                                            "voice.voice-connection-status.voice-connection-status-inner.connection-id-value-text",
+                                                            conn_text.clone(),
+                                                        )
+                                                        .child(conn_text),
+                                                ),
                                         ),
                                 )
                             })
@@ -351,8 +358,11 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 let mut stack = div()
                                     .id("voice-channel-avatar-stack")
                                     .debug_selector(|| "voice-channel-avatar-stack".to_owned())
-                                    .min_h(px(42.))
-                                    .py(px(3.))
+                                    .self_start()
+                                    .h(px(42.))
+                                    .pt(px(2.))
+                                    .pb(px(6.))
+                                    .pr(px(2.))
                                     .flex()
                                     .flex_row()
                                     .items_center()

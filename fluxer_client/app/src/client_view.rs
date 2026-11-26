@@ -3839,7 +3839,8 @@ impl ClientView {
                 }
                 self.close_overlay(window, cx);
                 self.select_place(Place::Guild(g), cx);
-                self.voice_stage_expanded = true;
+                self.voice_stage_expanded = false;
+                self.voice_call_height = 328.0;
                 self.join_voice_channel(c, cx);
                 true
             }
@@ -3874,6 +3875,7 @@ impl ClientView {
             }
             ["voice-leave"] => {
                 self.close_overlay(window, cx);
+                self.voice_call_height = self.prefs.data.voice_call_height as f32;
                 self.leave_voice_channel(cx);
                 true
             }
@@ -4341,6 +4343,12 @@ impl ClientView {
         if show_voice_stage {
             let split_chat = !self.voice_stage_expanded && self.selected_channel.is_some();
             if split_chat {
+                let search_panel = if self.search.is_some() {
+                    right_panel.take()
+                } else {
+                    let _ = right_panel.take();
+                    None
+                };
                 div()
                     .debug_selector(|| "voice-stage-split-chat".to_owned())
                     .flex()
@@ -4348,12 +4356,43 @@ impl ClientView {
                     .flex_1()
                     .min_w_0()
                     .h_full()
+                    // OutlineFrame.module.css: the pane sits inside the 1px frame border.
+                    .pt(px(1.))
+                    .pb(px(1.))
                     .on_drop(cx.listener(|v, paths: &ExternalPaths, _, cx| v.add_paths(paths.paths(), cx)))
+                    .child(ui::header::render(self, theme, cx))
                     .child(ui::voice_stage::render(self, theme, split_height, cx))
-                    .child(ui::message_list::render(self, handle, theme))
-                    .child(composer)
+                    .child(
+                        div()
+                            .flex()
+                            .flex_row()
+                            .flex_1()
+                            .min_h_0()
+                            .w_full()
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .h_full()
+                                    .when(
+                                        !self.guild_unavailable
+                                            && self.selected_channel.is_some()
+                                            && self.unread_anchor.is_some(),
+                                        |d| d.child(self.render_unread_bar(theme, cx)),
+                                    )
+                                    .child(ui::message_list::render(self, handle, theme))
+                                    .when(self.has_more_after && self.selected_channel.is_some(), |d| {
+                                        d.child(self.render_jump_to_present(theme, cx))
+                                    })
+                                    .child(composer),
+                            )
+                            .children(search_panel),
+                    )
                     .into_any_element()
             } else {
+                let _ = right_panel.take();
                 div()
                     .flex()
                     .flex_col()

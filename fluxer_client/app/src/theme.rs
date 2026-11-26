@@ -262,6 +262,16 @@ pub struct Theme {
     pub status_idle: Hsla,
     pub status_dnd: Hsla,
     pub status_offline: Hsla,
+    /// `VoiceControlBar.module.css` `.settingsButton` border (`rgba(255, 255, 255, 0.14)`).
+    pub vc_settings_border: Hsla,
+    /// `VoiceControlBar.module.css` `.buttonSeparator` fill (`rgba(255, 255, 255, 0.12)`).
+    pub vc_separator_bg: Hsla,
+    /// Voice stage / compact call surface background (`#000`).
+    pub vc_surface_bg: Hsla,
+    /// Voice stage neutral control foreground (`rgba(255, 255, 255, 0.90)`).
+    pub vc_control_fg: Hsla,
+    /// `CompactVoiceCallView.module.css` `.heightTogglePill:hover` border (`rgba(255, 255, 255, 0.20)`).
+    pub vc_corner_hover_border: Hsla,
     pub sizes: Sizes,
 }
 
@@ -691,6 +701,11 @@ impl Theme {
             status_idle: p.idle.color(),
             status_dnd: p.dnd.color(),
             status_offline: p.offline.color(),
+            vc_settings_border: hsla(0., 0., 1., 0.14),
+            vc_separator_bg: hsla(0., 0., 1., 0.12),
+            vc_surface_bg: rgb(0x000000).into(),
+            vc_control_fg: hsla(0., 0., 1., 0.90),
+            vc_corner_hover_border: hsla(0., 0., 1., 0.20),
             sizes: Sizes::DEFAULT,
         };
 

@@ -1144,7 +1144,7 @@
   {
    "rust_icon": "Waveform",
    "file": "fluxer_client/app/src/ui/voice_panel.rs",
-   "line": 183,
+   "line": 177,
    "rust_asset": "fluxer_client/app/assets/icons/waveform.svg",
    "kind": "phosphor",
    "phosphor": "fill/waveform-fill.svg",
@@ -1159,7 +1159,7 @@
   {
    "rust_icon": "X",
    "file": "fluxer_client/app/src/ui/voice_panel.rs",
-   "line": 214,
+   "line": 208,
    "rust_asset": "fluxer_client/app/assets/icons/x.svg",
    "kind": "phosphor",
    "phosphor": "bold/x-bold.svg",
@@ -1174,7 +1174,7 @@
   {
    "rust_icon": "PhoneX",
    "file": "fluxer_client/app/src/ui/voice_panel.rs",
-   "line": 216,
+   "line": 210,
    "rust_asset": "fluxer_client/app/assets/icons/phone-x.svg",
    "kind": "phosphor",
    "phosphor": "fill/phone-x-fill.svg",
@@ -1189,7 +1189,7 @@
   {
    "rust_icon": "CameraSlash",
    "file": "fluxer_client/app/src/ui/voice_panel.rs",
-   "line": 424,
+   "line": 434,
    "rust_asset": "fluxer_client/app/assets/icons/camera-slash.svg",
    "kind": "phosphor",
    "phosphor": "fill/camera-slash-fill.svg",
@@ -1204,7 +1204,7 @@
   {
    "rust_icon": "MonitorPlay",
    "file": "fluxer_client/app/src/ui/voice_panel.rs",
-   "line": 463,
+   "line": 473,
    "rust_asset": "fluxer_client/app/assets/icons/monitor-play.svg",
    "kind": "phosphor",
    "phosphor": "fill/monitor-play-fill.svg",
@@ -2132,7 +2132,7 @@
   {
    "rust_icon": "Shield",
    "file": "fluxer_client/app/src/ui/voice_panel.rs",
-   "line": 311,
+   "line": 307,
    "rust_asset": "fluxer_client/app/assets/icons/shield.svg",
    "kind": "phosphor",
    "phosphor": "fill/shield-fill.svg",
@@ -3396,6 +3396,21 @@
    "rust_asset": "fluxer_client/app/assets/icons/magnifying-glass.svg",
    "kind": "phosphor",
    "phosphor": "bold/magnifying-glass-bold.svg",
+   "status": "unverified",
+   "official_component": null,
+   "official_icon": null,
+   "weight": null,
+   "size": null,
+   "source_file": null,
+   "reason": "new call site, not yet matched to official harvest"
+  },
+  {
+   "rust_icon": "ChatCircleFill",
+   "file": "fluxer_client/app/src/ui/voice_stage.rs",
+   "line": 1294,
+   "rust_asset": "fluxer_client/app/assets/icons/chat-circle-fill.svg",
+   "kind": "phosphor",
+   "phosphor": "fill/chat-circle-fill.svg",
    "status": "unverified",
    "official_component": null,
    "official_icon": null,

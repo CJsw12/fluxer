@@ -115,8 +115,8 @@
           "missing": 10
         },
         "voice-channel": {
-          "deltas": 49,
-          "missing": 51
+          "deltas": 3,
+          "missing": 49
         }
       },
       "ignore": [],

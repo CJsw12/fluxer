@@ -106,7 +106,56 @@ def capture(cmd: list[str], timeout: int) -> tuple[int | None, str, bool]:
         return None, f"[verify_all] could not start {cmd[0]}: {exc}\n", False
 
 
+BROKER_GATE_STEPS = ("surface", "state")
+BROKER_LOGS: dict[str, int] = {}  # step -> broker exit code, for steps whose log was written by the broker
+
+
+def load_env_module():
+    """env.py loaded by path (isolated mode has no script dir on sys.path)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("fluxer_env_mod", HERE / "env.py")
+    if spec is None or spec.loader is None:
+        raise ImportError("cannot load env.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def use_broker(environ: dict | None = None, interactive: bool | None = None) -> bool:
+    import os
+    environ = os.environ if environ is None else environ
+    if environ.get("FLUXER_ENV_FORCE_BROKER") == "1":
+        return True
+    if interactive is None:
+        try:
+            interactive = load_env_module().on_interactive_desktop()
+        except (ImportError, OSError, SyntaxError):
+            interactive = True
+    return not interactive
+
+
+def run_gate_via_broker(names: list[str], out_dir: Path, submit=None) -> tuple[int, str]:
+    """One broker `gate` request for all window-capturing steps, writing into out_dir."""
+    try:
+        out_dir.resolve().relative_to((REPO / "target" / "parity-tmp").resolve())
+    except ValueError:
+        return 2, "--out must be inside target/parity-tmp to run window steps via the broker"
+    if submit is None:
+        try:
+            submit = load_env_module().submit_broker_request
+        except (ImportError, OSError, SyntaxError) as exc:
+            return 2, f"cannot load env.py: {exc}"
+    return submit("gate", ["--only", ",".join(names), "--out", str(out_dir)])
+
+
 def run_logged(name: str, cmd: list[str], out_dir: Path, timeout: int) -> tuple[int | None, str, bool, Path]:
+    if name in BROKER_LOGS:
+        log = out_dir / f"{name}.log"
+        try:
+            return 0, log.read_text(encoding="utf-8", errors="replace"), False, log
+        except OSError:
+            return 1, f"broker produced no {name}.log", False, log
     code, text, timed_out = capture(cmd, timeout)
     log = out_dir / f"{name}.log"
     log.write_text(text, encoding="utf-8", errors="replace")
@@ -652,6 +701,26 @@ def selftest() -> None:
     assert restore_client(lambda: False, lambda: (1, "boom")).status == "FAIL"
     assert restore_client(lambda: False, lambda: (None, "")).status == "FAIL"
     assert build_parser().parse_args(["--no-restore-client"]).no_restore_client
+    assert callable(load_env_module().submit_broker_request)
+    assert use_broker({}, interactive=False) and not use_broker({}, interactive=True)
+    assert use_broker({"FLUXER_ENV_FORCE_BROKER": "1"}, interactive=True)
+    import tempfile
+    with tempfile.TemporaryDirectory(dir=REPO / "target" / "parity-tmp" if (REPO / "target" / "parity-tmp").is_dir() else None) as td:
+        gd = Path(td)
+        calls: list = []
+        assert run_gate_via_broker(["surface"], Path(tempfile.gettempdir()) / "nope", lambda *a: (0, ""))[0] == 2
+        if gd.resolve().is_relative_to((REPO / "target" / "parity-tmp").resolve()):
+            assert run_gate_via_broker(["surface", "state"], gd, lambda a, e: (calls.append((a, e)) or (0, "ok")))[0] == 0
+            assert calls == [("gate", ["--only", "surface,state", "--out", str(gd)])]
+            (gd / "surface.log").write_text("noise" + chr(10) + "SUMMARY: 5/5 passed" + chr(10), encoding="utf-8")
+            BROKER_LOGS["surface"] = 0
+            try:
+                r = step_surface(argparse.Namespace(), gd)
+                assert r.status in ("PASS", "FAIL") and r.log == gd / "surface.log"
+                BROKER_LOGS["state"] = 0
+                assert step_state(argparse.Namespace(), gd).status == "FAIL"  # no matrix_report.json
+            finally:
+                BROKER_LOGS.clear()
     print("selftest ok (build/icons/colors/spec_gate/resize parsers + step selection + heal gating + client restore)")
 
 
@@ -715,6 +784,8 @@ def main(argv: list[str] | None = None) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     results: dict[str, Result] = {}
+    broker_decision = any(n in BROKER_GATE_STEPS for n in steps) and use_broker()
+    gate_failure = ""
     for name in STEPS:
         if name not in steps:
             detail = "not requested (pass --build)" if name == "build" and not args.build else "not selected"
@@ -726,7 +797,23 @@ def main(argv: list[str] | None = None) -> int:
             results[name] = Result("SKIP", "precheck failed - fix the environment first")
             continue
         started = time.time()
+        via_broker = False
+        if name in BROKER_GATE_STEPS and broker_decision:
+            if not BROKER_LOGS:
+                names = [n for n in BROKER_GATE_STEPS if n in steps]
+                code, tail = run_gate_via_broker(names, out_dir)
+                if code in (2, 3, 4):
+                    gate_failure = tail
+                else:
+                    for n in names:
+                        BROKER_LOGS[n] = code
+            via_broker = True
+            if gate_failure:
+                results[name] = Result("FAIL", clip(f"broker: {gate_failure}"))
+                continue
         results[name] = STEP_FUNCS[name](args, out_dir)
+        if via_broker:
+            results[name].detail += " (via broker)"
         results[name].detail = f"{results[name].detail} [{time.time() - started:.0f}s]" if results[name].status != "SKIP" else results[name].detail
     if not args.no_restore_client and (args.build or any(n in LIVE_STEPS for n in steps)):
         results["client"] = restore_client()

@@ -26,7 +26,10 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 BROKER_DIR = REPO / "target" / "parity-tmp" / "env-broker"
 ENV_PY = HERE / "env.py"
-ALLOWLIST = ("restart-client", "up", "heal", "shot")
+ALLOWLIST = ("restart-client", "up", "heal", "shot", "gate")
+GATE_STEPS = ("surface", "state")
+GATE_TIMEOUT = 900
+VERIFY_PY = HERE / "verify_all.py"
 SHOT_ROOT = REPO / "target" / "parity-tmp"
 PROBE_PY = HERE / "rust_probe.py"
 MAX_AGE = 600.0
@@ -63,6 +66,26 @@ def shot_path(raw: str) -> str | None:
     return str(resolved)
 
 
+def gate_args(raw: list[str]) -> list[str] | None:
+    """Validated verify_all args for `--only surface,state --out <dir under target/parity-tmp>`, else None."""
+    if len(raw) != 4 or raw[0] != "--only" or raw[2] != "--out":
+        return None
+    items = raw[1].split(",")
+    if not items or any(i not in GATE_STEPS for i in items) or len(set(items)) != len(items):
+        return None
+    out = raw[3]
+    if not out or out.startswith("-") or "\x00" in out or ".." in Path(out).parts:
+        return None
+    try:
+        resolved = (Path(out) if Path(out).is_absolute() else REPO / out).resolve()
+        resolved.relative_to(SHOT_ROOT.resolve())
+    except (OSError, ValueError):
+        return None
+    if resolved == SHOT_ROOT.resolve():
+        return None
+    return ["--only", ",".join(items), "--out", str(resolved)]
+
+
 def validate(req: object, now: float) -> tuple[str | None, list[str], str | None]:
     """Returns (action, extra_args, error)."""
     if not isinstance(req, dict):
@@ -83,6 +106,9 @@ def validate(req: object, now: float) -> tuple[str | None, list[str], str | None
     if action == "shot":
         target = shot_path(raw[0]) if len(raw) == 1 else None
         return (action, [target], None) if target else (None, [], "shot path not allowed")
+    if action == "gate":
+        g = gate_args(raw)
+        return (action, g, None) if g else (None, [], "gate args not allowed")
     i = 0
     while i < len(raw):
         if raw[i] == "--json":
@@ -101,15 +127,21 @@ def validate(req: object, now: float) -> tuple[str | None, list[str], str | None
 
 def default_runner(action: str, extra: list[str]) -> tuple[int, str]:
     env = {k: v for k, v in os.environ.items() if k != "FLUXER_ENV_FORCE_BROKER"}
-    cmd = ([sys.executable, "-I", str(PROBE_PY), "shot", *extra] if action == "shot"
-           else [sys.executable, "-I", str(ENV_PY), action, *extra])
+    timeout = RUN_TIMEOUT
+    if action == "shot":
+        cmd = [sys.executable, "-I", str(PROBE_PY), "shot", *extra]
+    elif action == "gate":
+        cmd = [sys.executable, "-I", str(VERIFY_PY), *extra, "--no-heal", "--no-restore-client"]
+        timeout = GATE_TIMEOUT
+    else:
+        cmd = [sys.executable, "-I", str(ENV_PY), action, *extra]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True,
-                           encoding="utf-8", errors="replace", timeout=RUN_TIMEOUT, env=env, cwd=str(REPO),
+                           encoding="utf-8", errors="replace", timeout=timeout, env=env, cwd=str(REPO),
                            stdin=subprocess.DEVNULL)
         return r.returncode, (r.stdout or "") + (r.stderr or "")
     except subprocess.TimeoutExpired:
-        return 124, "env.py timed out in broker"
+        return 124, f"{action} timed out in broker"
     except OSError as exc:
         return 125, f"could not start env.py: {exc}"
 
@@ -263,6 +295,18 @@ def selftest() -> None:
             assert shot_path(bad) is None, bad
         assert validate({"id": "s1", "action": "shot", "args": [], "created": now}, now)[2]
         assert validate({"id": "s1", "action": "shot", "args": ["target/parity-tmp/a.png", "--json"], "created": now}, now)[2]
+        g = lambda a: validate({"id": "g9", "action": "gate", "args": a, "created": now}, now)  # noqa: E731
+        okout = "target/parity-tmp/verify/x"
+        resolved = str((REPO / okout).resolve())
+        assert g(["--only", "surface,state", "--out", okout]) == ("gate", ["--only", "surface,state", "--out", resolved], None)
+        assert g(["--only", "state", "--out", resolved])[1] == ["--only", "state", "--out", resolved]
+        for bad in (["--only", "build", "--out", okout], ["--only", "surface,colors", "--out", okout],
+                    ["--only", "surface", "--out", "target/parity-tmp/../x"], ["--only", "surface", "--out", "C:/Windows"],
+                    ["--only", "surface", "--out", "-x"], ["--only", "surface", "--out", "target/parity-tmp"],
+                    ["--only", "surface", "--out", "target/other"], ["--only", "surface"], ["--only", "", "--out", okout],
+                    ["--only", "surface,surface", "--out", okout], ["--out", okout, "--only", "surface"],
+                    ["--only", "surface", "--out", okout, "--build"], []):
+            assert g(bad)[2], bad
         assert validate({"id": "d1", "action": "restart-client", "args": ["--dev"], "created": now}, now)[1] == ["--dev"]
         assert validate({"id": "d1", "action": "up", "args": ["--dev"], "created": now}, now)[2]
         calls: list = []
@@ -295,7 +339,7 @@ def selftest() -> None:
         script = startup_script()
         assert script.startswith('@start ""') and "env_broker.py" in script and " -I " in script
         assert startup_file().name == TASK_NAME + ".cmd"
-    print("selftest ok (validation allowlist, shot path rules, once-run with stub, lock, log trim, startup script)")
+    print("selftest ok (validation allowlist, shot path rules, gate arg rules, once-run with stub, lock, log trim, startup script)")
 
 
 def main() -> int:

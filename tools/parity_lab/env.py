@@ -1062,6 +1062,7 @@ BROKER_DIR = REPO / "target" / "parity-tmp" / "env-broker"
 BROKER_ACTIONS = ("restart-client", "up", "heal")
 BROKER_ACK_WAIT = 15.0
 BROKER_RESPONSE_WAIT = 180.0
+BROKER_RESPONSE_WAITS = {"gate": 930.0}
 BROKER_MISSING = ("no env broker on the user desktop; ask the user to run "
                   "`python -I tools/parity_lab/env_broker.py --install` once")
 
@@ -1119,10 +1120,12 @@ def broker_args(args: argparse.Namespace) -> list[str]:
 
 
 def submit_broker_request(action: str, extra: list[str], broker_dir: Path = BROKER_DIR,
-                          ack_wait: float = BROKER_ACK_WAIT, response_wait: float = BROKER_RESPONSE_WAIT,
+                          ack_wait: float = BROKER_ACK_WAIT, response_wait: float | None = None,
                           poll: float = 0.5) -> tuple[int, str]:
     """Writes a request, waits for the broker; returns (exit_code, output)."""
     import uuid
+    if response_wait is None:
+        response_wait = BROKER_RESPONSE_WAITS.get(action, BROKER_RESPONSE_WAIT)
     req_dir = broker_dir / "requests"
     resp_dir = broker_dir / "responses"
     req_dir.mkdir(parents=True, exist_ok=True)
@@ -1294,6 +1297,7 @@ def selftest() -> None:
     assert not needs_broker("up", True, {"FLUXER_ENV_FORCE_BROKER": "1"}, interactive=False)
     assert not needs_broker("down", False, {}, interactive=False)
     assert isinstance(on_interactive_desktop(), bool)
+    assert BROKER_RESPONSE_WAITS["gate"] > 900 and "up" not in BROKER_RESPONSE_WAITS
     with tempfile.TemporaryDirectory() as tmp_dir:
         code, out = submit_broker_request("up", [], Path(tmp_dir), ack_wait=0.3, response_wait=2, poll=0.05)
         assert code == 3 and "env_broker.py --install" in out

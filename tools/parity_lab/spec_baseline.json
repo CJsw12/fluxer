@@ -91,8 +91,8 @@
           "missing": 11
         },
         "settings-voice-video": {
-          "deltas": 21,
-          "missing": 41
+          "deltas": 19,
+          "missing": 11
         }
       },
       "ignore": [],
@@ -115,7 +115,7 @@
           "missing": 10
         },
         "voice-channel": {
-          "deltas": 3,
+          "deltas": 2,
           "missing": 49
         }
       },

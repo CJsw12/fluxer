@@ -13,7 +13,7 @@ a maximum per slug in `max`. `--all` gates both the current screen and the scene
     python -I tools/parity_lab/spec_gate.py --scenes-gate --live
     python -I tools/parity_lab/spec_gate.py --scenes-gate --from-dir <spec_delta scenes out dir>
     python -I tools/parity_lab/spec_gate.py --all --live
-    python -I tools/parity_lab/spec_gate.py --update [--allow-raise] [--rust ... | --live | --scenes-gate ...]
+    python -I tools/parity_lab/spec_gate.py --update [--allow-raise [--reason "<text>" [--confirm-large]]] [...]
     python -I tools/parity_lab/spec_gate.py --init <name> --spec <spec.json> [--rust ... | --live]
 
 check (default) exits 1 when the deltas left after `ignore` exceed max_deltas, or when the
@@ -28,12 +28,23 @@ update rewrites maxima to the current counts only when they went down (ratchet),
 `updated` when a maximum changed. --allow-raise sets them to the current counts even when they
 grew, and is also how a brand-new scene set (`"max": {}`) or a new slug gets its first maxima.
 init adds a markdown scene with the current counts as its initial maxima.
+
+Raising a maximum is accountable. Under --update --allow-raise, every maximum that would grow
+(markdown scene or scene-set slug, `deltas` or `missing`, including a new slug) needs
+--reason "<text>" of at least 15 characters. Without it, the planned raises are printed as
+old->new and the command exits 2 without writing the baseline. With it, the baseline is written
+as usual and each raised entry appends one JSON line to tools/parity_lab/spec_baseline_history.jsonl:
+{"date", "set" ("markdown" or the scene-set name), "slug" (null for markdown), "field"
+("deltas"|"missing"), "old", "new", "reason", "head" (short git HEAD, "unknown" on failure)}.
+A single raise above +20% and above +10 absolute also needs --confirm-large. Lowering (plain
+--update) needs no reason and writes no history.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 from datetime import date
 from pathlib import Path
@@ -41,6 +52,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO_ROOT = HERE.parents[1]
 DEFAULT_BASELINE = HERE / "spec_baseline.json"
+HISTORY_PATH = HERE / "spec_baseline_history.jsonl"
 TMP_ROOT = REPO_ROOT / "target" / "parity-tmp"
 
 sys.path.insert(0, str(HERE))
@@ -258,6 +270,81 @@ def ratchet(scene: dict, delta_count: int, missing_count: int, allow_raise: bool
     }
 
 
+# ---------------------------------------------------------------- raises
+
+def is_large_raise(entry: dict) -> bool:
+    """True when one raise is above +20% and above +10 absolute (integer maths, no division)."""
+    old, new = int(entry["old"]), int(entry["new"])
+    return new * 5 > old * 6 and new - old > 10
+
+
+def describe_raise(entry: dict) -> str:
+    who = "markdown" if entry["set"] == "markdown" else f"{entry['set']}/{entry['slug']}"
+    return f"{who} {entry['field']} {entry['old']}->{entry['new']}"
+
+
+def guard_raises(raised: list[dict], reason: str | None, confirm_large: bool) -> None:
+    """Blocks a raising --update unless --reason (and, for large raises, --confirm-large) is given."""
+    if not raised:
+        return
+    if not reason or len(reason.strip()) < 15:
+        for entry in raised:
+            print(f"  would raise {describe_raise(entry)}")
+        die(
+            f"--allow-raise would raise {len(raised)} maximum(s); "
+            'pass --reason "<text>" (min 15 chars) to record why'
+        )
+    large = [entry for entry in raised if is_large_raise(entry)]
+    if large and not confirm_large:
+        for entry in large:
+            print(f"  large raise {describe_raise(entry)}")
+        die(
+            f"{len(large)} raise(s) exceed +20% and +10 absolute; "
+            "pass --confirm-large in addition to --reason"
+        )
+
+
+def git_head() -> str:
+    """Short HEAD sha for the history line; 'unknown' when git is unavailable."""
+    try:
+        res = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=REPO_ROOT, capture_output=True, text=True, timeout=10, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+    out = res.stdout.strip()
+    return out if res.returncode == 0 and out else "unknown"
+
+
+def append_history(path: Path, raised: list[dict], reason: str, day: str) -> None:
+    """Appends one JSON line per raised entry."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    head = git_head()
+    records = [
+        {
+            "date": day,
+            "set": entry["set"],
+            "slug": entry["slug"],
+            "field": entry["field"],
+            "old": int(entry["old"]),
+            "new": int(entry["new"]),
+            "reason": reason,
+            "head": head,
+        }
+        for entry in raised
+    ]
+    needs_newline = path.exists() and path.stat().st_size > 0 and not path.read_bytes().endswith(b"\n")
+    try:
+        with path.open("a", encoding="utf-8", newline="\n") as fh:
+            if needs_newline:
+                fh.write("\n")
+            for record in records:
+                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except OSError as exc:
+        die(f"cannot append history: {path} ({exc})")
+
+
 # ---------------------------------------------------------------- modes
 
 def run_check(baseline: dict, rust_elements: list[dict]) -> int:
@@ -281,11 +368,12 @@ def run_check(baseline: dict, rust_elements: list[dict]) -> int:
     return 1 if failed else 0
 
 
-def run_update(baseline: dict, baseline_path: Path, rust_elements: list[dict], allow_raise: bool) -> int:
+def _plan_screen(baseline: dict, rust_elements: list[dict], allow_raise: bool, day: str,
+                 raised: list[dict]) -> bool:
+    """Ratchets the markdown scenes in place, appending planned raises to `raised`."""
     scenes = baseline.get("scenes") or {}
     if not scenes:
         die("baseline has no scenes; add one with --init <name> --spec <path>")
-    day = date.today().isoformat()
     changed_any = False
     for name, scene in scenes.items():
         cur = evaluate(scene, load_spec(scene["spec"]), rust_elements)
@@ -299,12 +387,49 @@ def run_update(baseline: dict, baseline_path: Path, rust_elements: list[dict], a
         if res["changed"]:
             scenes[name] = res["scene"]
             changed_any = True
+        if new_d > old_d:
+            raised.append(
+                {"set": "markdown", "slug": None, "field": "deltas", "old": old_d, "new": new_d}
+            )
+        if new_m > old_m:
+            raised.append(
+                {"set": "markdown", "slug": None, "field": "missing", "old": old_m, "new": new_m}
+            )
+    return changed_any
+
+
+def update_baseline(baseline: dict, baseline_path: Path, *, rust_elements: list[dict] | None = None,
+                    dirs: dict[str, Path] | None = None, do_screen: bool = False,
+                    do_scenes: bool = False, allow_raise: bool = False, reason: str | None = None,
+                    confirm_large: bool = False, history_path: Path | None = None,
+                    day: str | None = None) -> int:
+    """Plans every ratchet first, guards raises, then writes once (and records the history)."""
+    day = day or date.today().isoformat()
+    raised: list[dict] = []
+    changed_any = False
+    if do_screen:
+        changed_any |= _plan_screen(baseline, rust_elements or [], allow_raise, day, raised)
+    if do_scenes:
+        changed_any |= _plan_scenes(baseline, dirs or {}, allow_raise, day, raised)
+    guard_raises(raised, reason, confirm_large)
     if changed_any:
         write_baseline(baseline_path, baseline)
         print(f"wrote {baseline_path}")
+        if raised:
+            append_history(history_path or HISTORY_PATH, raised, reason or "", day)
     else:
         print("baseline unchanged (ratchet does not raise maxima; pass --allow-raise to do so)")
     return 0
+
+
+def run_update(baseline: dict, baseline_path: Path, rust_elements: list[dict], allow_raise: bool,
+               *, reason: str | None = None, confirm_large: bool = False,
+               history_path: Path | None = None, day: str | None = None) -> int:
+    return update_baseline(
+        baseline, baseline_path, rust_elements=rust_elements, do_screen=True,
+        allow_raise=allow_raise, reason=reason, confirm_large=confirm_large,
+        history_path=history_path, day=day,
+    )
 
 
 def run_scene_check(baseline: dict, dirs: dict[str, Path]) -> int:
@@ -348,12 +473,12 @@ def run_scene_check(baseline: dict, dirs: dict[str, Path]) -> int:
     return 1 if failed else 0
 
 
-def run_scene_update(baseline: dict, baseline_path: Path, dirs: dict[str, Path], allow_raise: bool) -> int:
-    """Ratchets per-slug maxima down (or to the current counts with --allow-raise)."""
+def _plan_scenes(baseline: dict, dirs: dict[str, Path], allow_raise: bool, day: str,
+                 raised: list[dict]) -> bool:
+    """Ratchets per-slug scene-set maxima in place, appending planned raises to `raised`."""
     sets = baseline.get("scene_sets") or {}
     if not sets:
         die("baseline has no scene_sets; add one to spec_baseline.json")
-    day = date.today().isoformat()
     changed_any = False
     for name, cfg in sets.items():
         validate_scene_set(name, cfg)
@@ -375,6 +500,11 @@ def run_scene_update(baseline: dict, baseline_path: Path, dirs: dict[str, Path],
                     f"{name}/{slug} deltas={counts[0]} max new->{counts[0]} "
                     f"missing={counts[1]} max new->{counts[1]} added"
                 )
+                for field, value in (("deltas", counts[0]), ("missing", counts[1])):
+                    if value > 0:
+                        raised.append(
+                            {"set": name, "slug": slug, "field": field, "old": 0, "new": value}
+                        )
                 continue
             old = (int(maxima[slug].get("deltas", 0)), int(maxima[slug].get("missing", 0)))
             new, changed, blocked = ratchet_pair(old, counts, allow_raise)
@@ -386,16 +516,29 @@ def run_scene_update(baseline: dict, baseline_path: Path, dirs: dict[str, Path],
                 f"{name}/{slug} deltas={counts[0]} max {old[0]}->{new[0]} "
                 f"missing={counts[1]} max {old[1]}->{new[1]} {state}"
             )
+            if new[0] > old[0]:
+                raised.append(
+                    {"set": name, "slug": slug, "field": "deltas", "old": old[0], "new": new[0]}
+                )
+            if new[1] > old[1]:
+                raised.append(
+                    {"set": name, "slug": slug, "field": "missing", "old": old[1], "new": new[1]}
+                )
         if set_changed:
             cfg["max"] = dict(sorted(maxima.items()))
             cfg["updated"] = day
             changed_any = True
-    if changed_any:
-        write_baseline(baseline_path, baseline)
-        print(f"wrote {baseline_path}")
-    else:
-        print("baseline unchanged (ratchet does not raise maxima; pass --allow-raise to do so)")
-    return 0
+    return changed_any
+
+
+def run_scene_update(baseline: dict, baseline_path: Path, dirs: dict[str, Path], allow_raise: bool,
+                     *, reason: str | None = None, confirm_large: bool = False,
+                     history_path: Path | None = None, day: str | None = None) -> int:
+    return update_baseline(
+        baseline, baseline_path, dirs=dirs, do_scenes=True,
+        allow_raise=allow_raise, reason=reason, confirm_large=confirm_large,
+        history_path=history_path, day=day,
+    )
 
 
 def run_init(baseline: dict, baseline_path: Path, name: str, spec_path: str, ignore: list[str],
@@ -592,10 +735,11 @@ def selftest() -> None:
         else:
             raise AssertionError("bad ignore entry must die")
 
-        # ratchet-down: lowers maxima and stamps updated; failed scenes are skipped
+        # ratchet-down: lowers maxima and stamps updated; failed scenes are skipped, no history
         down_bl = scene_bl(at_limit | {"alpha": {"deltas": 5, "missing": 4}})
         down_path = tmp / "selftest_baseline.json"
-        code, lines = capture(run_scene_update, down_bl, down_path, dirs, False)
+        down_hist = tmp / "down_history.jsonl"
+        code, lines = capture(run_scene_update, down_bl, down_path, dirs, False, history_path=down_hist)
         assert code == 0, lines
         assert "blue/alpha deltas=2 max 5->2 missing=1 max 4->1 lowered" in lines, lines
         assert "blue/beta deltas=1 max 1->1 missing=0 max 0->0 unchanged" in lines, lines
@@ -605,6 +749,7 @@ def selftest() -> None:
         assert json.loads(down_path.read_text(encoding="utf-8"))["scene_sets"]["blue"]["max"]["alpha"] == {
             "deltas": 2, "missing": 1,
         }
+        assert not down_hist.exists(), "lowering must not write history"
 
         # ratchet does not raise: an over-maximum run is blocked and writes nothing
         blocked_bl = scene_bl(at_limit | {"alpha": {"deltas": 1, "missing": 1}})
@@ -613,24 +758,107 @@ def selftest() -> None:
         assert code == 0 and not blocked_path.exists(), lines
         assert "blue/alpha deltas=2 max 1->1 missing=1 max 1->1 blocked" in lines, lines
 
-        # untracked slugs count as 0/0 until --update --allow-raise records them
+        # raising without --reason exits 2, prints old->new and writes neither baseline nor history
+        no_reason_bl = scene_bl(at_limit | {"alpha": {"deltas": 1, "missing": 1}})
+        nr_path = tmp / "no_reason.json"
+        nr_hist = tmp / "no_reason.jsonl"
+        out, err = io.StringIO(), io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                run_scene_update(no_reason_bl, nr_path, dirs, True, history_path=nr_hist)
+        except SystemExit as exc:
+            assert exc.code == 2, exc.code
+        else:
+            raise AssertionError("raise without --reason must exit 2")
+        assert not nr_path.exists() and not nr_hist.exists(), "blocked raise must not write"
+        assert "blue/alpha deltas 1->2" in out.getvalue(), out.getvalue()
+        assert "--reason" in err.getvalue(), err.getvalue()
+
+        # raising with --reason records one history line per raised entry
+        reason = "selftest: record untracked scene slugs"
         empty_bl = scene_bl({})
         code, lines = capture(run_scene_check, empty_bl, dirs)
         assert code == 1 and "blue/alpha deltas=2/0 missing=1/0 FAIL" in lines, lines
         assert any("no maxima for 'alpha'" in ln for ln in lines), lines
         raised_path = tmp / "raised.json"
-        code, lines = capture(run_scene_update, empty_bl, raised_path, dirs, True)
-        assert code == 0, lines
+        raised_hist = tmp / "raised_history.jsonl"
+        code, lines = capture(
+            run_scene_update, empty_bl, raised_path, dirs, True,
+            reason=reason, history_path=raised_hist,
+        )
+        assert code == 0 and raised_path.exists(), lines
         assert empty_bl["scene_sets"]["blue"]["max"] == {
             "alpha": {"deltas": 2, "missing": 1},
             "beta": {"deltas": 1, "missing": 0},
         }, empty_bl
+        records = [json.loads(ln) for ln in raised_hist.read_text(encoding="utf-8").splitlines()]
+        assert [
+            (r["set"], r["slug"], r["field"], r["old"], r["new"]) for r in records
+        ] == [
+            ("blue", "alpha", "deltas", 0, 2),
+            ("blue", "alpha", "missing", 0, 1),
+            ("blue", "beta", "deltas", 0, 1),
+        ], records
+        assert all(r["reason"] == reason and r["date"] == date.today().isoformat() for r in records)
+        assert all(isinstance(r["head"], str) and r["head"] for r in records), records
         code, lines = capture(run_scene_check, empty_bl, dirs)
         assert code == 1 and "blue/alpha deltas=2/2 missing=1/1 OK" in lines, lines
+
+        # a large raise (+12 absolute, from 0) also needs --confirm-large
+        big_dir = tmp / "big"
+        big_dir.mkdir()
+        big_deltas = [
+            {"flx": f"s.big.{i}", "idx": 0, "prop": "height", "official": "1", "rust": "2",
+             "rule": "[computed]", "src": "fluxer_client/synthetic.rs:1"}
+            for i in range(12)
+        ]
+        (big_dir / "summary.json").write_text(
+            json.dumps([{"scene": "big", "joined": 12, "deltas": 12, "missing": 0,
+                         "status": "ok", "error": None}]),
+            encoding="utf-8",
+        )
+        (big_dir / "big.json").write_text(
+            json.dumps({"joined": 12, "delta_count": 12, "deltas": big_deltas, "missing_in_rust": {}}),
+            encoding="utf-8",
+        )
+        def fresh_big() -> dict:
+            return {"version": 1, "scenes": {}, "scene_sets": {"big": {
+                "scenes": "synthetic_scenes.json", "spec_dir": "synthetic_spec",
+                "max": {"big": {"deltas": 0, "missing": 0}}, "ignore": [], "updated": "2026-01-01",
+            }}}
+        big_bl = fresh_big()
+        assert is_large_raise({"old": 0, "new": 12}), "0->12 must count as large"
+        assert not is_large_raise({"old": 40, "new": 44}), "44 is under +20%"
+        assert not is_large_raise({"old": 10, "new": 20}), "20 is not above +10 absolute"
+        big_path = tmp / "big_baseline.json"
+        big_hist = tmp / "big_history.jsonl"
+        out, err = io.StringIO(), io.StringIO()
+        try:
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                run_scene_update(
+                    big_bl, big_path, {"big": big_dir}, True,
+                    reason=reason, history_path=big_hist,
+                )
+        except SystemExit as exc:
+            assert exc.code == 2, exc.code
+        else:
+            raise AssertionError("large raise without --confirm-large must exit 2")
+        assert not big_path.exists() and not big_hist.exists(), "large raise must not write"
+        assert "big/big deltas 0->12" in out.getvalue(), out.getvalue()
+        assert "--confirm-large" in err.getvalue(), err.getvalue()
+        code, lines = capture(
+            run_scene_update, fresh_big(), big_path, {"big": big_dir}, True,
+            reason=reason, confirm_large=True, history_path=big_hist,
+        )
+        assert code == 0 and big_path.exists(), lines
+        big_records = [json.loads(ln) for ln in big_hist.read_text(encoding="utf-8").splitlines()]
+        assert [(r["slug"], r["field"], r["old"], r["new"]) for r in big_records] == [
+            ("big", "deltas", 0, 12),
+        ], big_records
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
-    print("selftest ok (pass/fail/ignore/ratchet + scene-set pass/fail/ignore/ratchet-down)")
+    print("selftest ok (pass/fail/ignore/ratchet + scene-set pass/fail/ignore/ratchet-down/raise-guard)")
 
 
 # ---------------------------------------------------------------- CLI
@@ -648,6 +876,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  python -I tools/parity_lab/spec_gate.py --all --live\n"
             "  python -I tools/parity_lab/spec_gate.py --update --rust target/parity-tmp/rs.json\n"
             "  python -I tools/parity_lab/spec_gate.py --update --allow-raise --scenes-gate --live\n"
+            "  python -I tools/parity_lab/spec_gate.py --update --allow-raise --reason \"upstream composer refactor\" --live\n"
             "  python -I tools/parity_lab/spec_gate.py --init markdown --spec target/parity-tmp/md.1280.spec.json --rust target/parity-tmp/rs.json\n"
             "  python -I tools/parity_lab/spec_gate.py --selftest"
         ),
@@ -661,6 +890,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--from-dir", metavar="DIR", help="with --scenes-gate: read an existing spec_delta scenes output dir instead of driving the app")
     p.add_argument("--update", action="store_true", help="lower recorded maxima to the current counts (ratchet)")
     p.add_argument("--allow-raise", action="store_true", help="with --update: also raise maxima to the current counts (initialises new sets/slugs)")
+    p.add_argument("--reason", metavar="TEXT", help="with --update --allow-raise: why maxima are raised (min 15 chars; recorded in spec_baseline_history.jsonl)")
+    p.add_argument("--confirm-large", action="store_true", help="with --reason: allow a single raise above +20%% and above +10 absolute")
     p.add_argument("--init", metavar="NAME", help="add a markdown scene with the current counts as maxima")
     p.add_argument("--spec", metavar="SPEC_JSON", help="official spec JSON path (required with --init)")
     p.add_argument("--ignore", action="append", default=[], metavar="FLX|PROP", help="with --init: ignore entry (repeatable)")
@@ -681,6 +912,12 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--update and --init are mutually exclusive")
     if args.allow_raise and not args.update:
         parser.error("--allow-raise requires --update")
+    if args.reason is not None and not (args.update and args.allow_raise):
+        parser.error("--reason requires --update --allow-raise")
+    if args.reason is not None and len(args.reason.strip()) < 15:
+        parser.error("--reason must be at least 15 characters")
+    if args.confirm_large and args.reason is None:
+        parser.error("--confirm-large requires --reason (and --update --allow-raise)")
     if args.rust and args.live:
         parser.error("--rust and --live are mutually exclusive")
     if args.from_dir and args.live:
@@ -711,14 +948,9 @@ def main(argv: list[str] | None = None) -> int:
             validate_scene_set(name, cfg)
 
     status = 0
-    if wants_screen:
-        rust_elements = load_rust(args.rust, args.live)
-        if args.init:
-            return run_init(baseline, baseline_path, args.init, args.spec, args.ignore, rust_elements)
-        if args.update:
-            status |= run_update(baseline, baseline_path, rust_elements, args.allow_raise)
-        else:
-            status |= run_check(baseline, rust_elements)
+    rust_elements = load_rust(args.rust, args.live) if wants_screen else None
+    if wants_screen and args.init:
+        return run_init(baseline, baseline_path, args.init, args.spec, args.ignore, rust_elements)
 
     if scenes_gate:
         for name, cfg in baseline["scene_sets"].items():
@@ -726,10 +958,19 @@ def main(argv: list[str] | None = None) -> int:
                 scene_dirs[name] = drive_scene_set(name, cfg)
             else:
                 scene_dirs[name] = scene_dir_for(name, Path(args.from_dir))
-        if args.update:
-            status |= run_scene_update(baseline, baseline_path, scene_dirs, args.allow_raise)
-        else:
-            status |= run_scene_check(baseline, scene_dirs)
+
+    if args.update:
+        return update_baseline(
+            baseline, baseline_path, rust_elements=rust_elements, dirs=scene_dirs,
+            do_screen=wants_screen, do_scenes=scenes_gate, allow_raise=args.allow_raise,
+            reason=args.reason, confirm_large=args.confirm_large,
+        )
+
+    if wants_screen:
+        status |= run_check(baseline, rust_elements or [])
+
+    if scenes_gate:
+        status |= run_scene_check(baseline, scene_dirs)
 
     return 1 if status else 0
 

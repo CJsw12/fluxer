@@ -242,15 +242,15 @@ Run everything from the repo root. In **PowerShell** there is no MSYS path mangl
 3. **차이 목록:** `spec_delta.py X.spec.json --live` 또는 `--scenes ... --spec-dir ... --live --out-dir ...`. 줄마다 공식 CSS 규칙과 Rust `파일:줄`이 붙는다. `floating`, 1~4px 글자 폭(글꼴 메트릭)은 대개 결함이 아니다.
 4. **누락 분류:** `coverage.py <spec> <delta>` 또는 `--scenes-dir`. 대부분은 "그려지지만 태그 없음"이므로 먼저 `.flx()` 태그를 붙여 결합 수를 늘린다(`.flx()`는 `.border_*()` 뒤).
 5. **수정:** 워커에게 아래 브리프 양식으로 넘기고, 워커가 `cycle.py --skip-tests`로 직접 빌드·재측정해 "범위 안 차이 0줄"을 맞춘다.
-6. **루트 재검증(커밋 전 필수):** `cycle.py --release`(테스트 포함, 실패 시 패키징 전 중단) → `spec_gate.py --live --all`(래칫) → `check_icons.py` → `check_resize.py` → `check_surface_parity.py` → `state_matrix.py --strict` → 해당 화면 스크린샷 육안 확인. 게이트는 상시 실행 클라이언트로 돌리고 `--launch-rust`는 쓰지 않는다.
-7. **래칫 갱신:** 차이가 줄면 `spec_gate.py --live --all --update`. 커버리지를 늘려 차이가 늘어난 경우에만 `--allow-raise`를 쓰고 커밋 메시지에 이유를 적는다.
+6. **루트 재검증(커밋 전 필수):** `python -I tools/parity_lab/verify_all.py --build [--worker]` 하나로 실행한다(측정 전 점검·아이콘·하드코딩 색·래칫·크기 조절·표면·상태 행렬을 돌리고 10줄 표만 출력, 원문은 `target/parity-tmp/verify/<시각>/<단계>.log`). 실패한 단계의 로그만 필요한 줄을 골라 읽는다. 아래는 개별 명령 참고용: `cycle.py --release`(테스트 포함, 실패 시 패키징 전 중단) → `spec_gate.py --live --all`(래칫) → `check_icons.py` → `check_resize.py` → `check_surface_parity.py` → `state_matrix.py --strict` → 해당 화면 스크린샷 육안 확인. 게이트는 상시 실행 클라이언트로 돌리고 `--launch-rust`는 쓰지 않는다.
+7. **래칫 갱신:** 차이가 줄면 `spec_gate.py --live --all --update`. 올려야 하면 `--allow-raise --reason "<15자 이상 사유>"`가 필수이고(사유는 `spec_baseline_history.jsonl`에 기록), +20%·+10 초과 상향은 `--confirm-large`까지 요구한다. 새 하드코딩 색은 `check_colors.py`가 막으며, 공식 CSS 리터럴처럼 토큰이 아닌 값만 사유와 함께 `color_allowlist.json`에 올린다.
 
 **워커 브리프 양식(요약):** 목표 1줄 / 입력(공식 명세·차이 목록·스크린샷 경로, 모두 `target/parity-tmp/`) / 루트가 이미 판정한 비결함 목록 / 실제 결함 목록(공식 수치·CSS 규칙·Rust 위치) / 루프 명령 / 회귀 기준(기존 장면 차이 상한, 래칫 OK, 아이콘 0 오류) / 소유 파일·금지 파일 / 규칙(GPUI `uniform_list` 콜백 상태 변경 금지, 숨은 호버 버튼 금지, 버튼마다 고유 핸들러, 기능 없는 항목은 `TODO(backlog)`로 남기고 보고, 하드코딩 색 대신 테마 토큰) / 출력 예산(10.3: `git diff --stat`, 로그·테스트·게이트는 `rtk` 또는 마지막 30줄, JSON 원문 출력 금지, 방금 쓴 파일 재독 금지 — 하위 에이전트는 이 문서를 읽지 않으므로 브리프에 그대로 넣는다) / 보고 형식(수정 전후 표, 남은 차이와 이유, 테스트 합계, 끝 상태).
 
 ### 10.9 자동 진행 모드 (오케스트레이터, 2026-11-25)
 세션 하나로 백로그를 연속 처리한다. 루트는 구현하지 않고, 기능마다 새 컨텍스트의 하위 에이전트를 띄워 컨텍스트 비대를 막는다.
 
-1. **루트 루프:** PROGRESS Next Steps에서 다음 기능 1개 선택 → 10.8 브리프 양식으로 지시 작성(입력은 `target/parity-tmp/`) → 하위 에이전트 1개 실행 → 25줄 이내 보고 수신 → 루트가 10.8 6단계 게이트 재검증(출력은 10.3 출력 예산) → 통과하면 커밋·push → `OPERATIONS.md` 스냅샷 한 줄 갱신 → 다음 기능. 루트는 코드 파일을 직접 고치지 않는다(게이트 실패 원인이 한두 줄일 때만 예외).
+1. **루트 루프:** PROGRESS Next Steps에서 다음 기능 1개 선택 → 10.8 브리프 양식으로 지시 작성(입력은 `target/parity-tmp/`) → 하위 에이전트 1개 실행 → 25줄 이내 보고 수신 → 루트가 `verify_all.py --build`로 재검증(10.8 6단계) → 통과하면 커밋·push → `OPERATIONS.md` 스냅샷 한 줄 갱신 → 다음 기능. 루트는 코드 파일을 직접 고치지 않는다(게이트 실패 원인이 한두 줄일 때만 예외).
 2. **하위 에이전트 배정(Antigravity):** 기능 1개 = 하위 에이전트 1개. 여러 시스템(REST·상태·UI)을 함께 설계하는 기능은 Neon급, 명세 수치 맞추기·태그·스크립트는 Hydrogen급으로 `swarm`에서 모델을 지정한다. 실기 클라이언트를 조작하는 하위 에이전트는 동시에 하나만.
 3. **시간 제한(2026-11-26 사고):** 루트가 띄운 CDP 추적 스크립트가 시간 제한 없이 7시간 매달려 자동 진행이 01:48~08:40 멈췄다. 백그라운드 명령과 스크립트는 모두 시간 제한을 건다(`timeout 600 ...`, 스크립트 안 대기에는 상한, CDP 이벤트 추적은 최대 N초 후 종료). 같은 작업 대기가 15분을 넘으면 중단하고 다음 단계로 간다.
 4. **루트는 디버깅하지 않는다:** 하위 에이전트가 실패하면 루트가 직접 추적·수정하지 말고, 실패 원인을 담아 브리프를 좁혀 새 하위 에이전트를 띄운다. 2회 실패하면 그 기능을 건너뛰고(`OPERATIONS.md`에 기록) 다음 기능으로 간다. 2026-11-26 세션에서 루트가 화면 공유 기능을 직접 디버깅하다 루트 컨텍스트가 턴당 26만~29만 토큰으로 커졌다.

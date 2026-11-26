@@ -1,0 +1,4 @@
+{
+  "note": "Allowlist for tools/parity_lab/check_colors.py. Every entry needs a non-empty reason (for example an official CSS literal that has no theme token yet, or a deliberate overlay/scrim whose official value is not tokenised). Keep this list as short as possible and prefer adding a theme token. 'file' is the repo-relative path and matches exactly; 'contains' is an exact substring of the added line; a matching entry suppresses every colour literal on that added line.",
+  "allow": []
+}

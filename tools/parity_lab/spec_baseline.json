@@ -87,8 +87,8 @@
           "missing": 35
         },
         "settings-notifications": {
-          "deltas": 12,
-          "missing": 27
+          "deltas": 17,
+          "missing": 11
         },
         "settings-voice-video": {
           "deltas": 21,
@@ -115,12 +115,12 @@
           "missing": 10
         },
         "voice-channel": {
-          "deltas": 2,
+          "deltas": 3,
           "missing": 49
         }
       },
       "ignore": [],
-      "updated": "2026-11-26"
+      "updated": "2026-11-27"
     }
   }
 }

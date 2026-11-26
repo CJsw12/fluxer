@@ -445,6 +445,15 @@ pub struct SettingsModal {
     pub keybinds_open_default_menu: Option<String>,
     pub keybinds_confirm_reset: bool,
     pub _keybinds_search_sub: Subscription,
+    pub notif_push_timeout_mins: u8,
+    pub notif_push_menu_open: bool,
+    pub notif_mention_preference: u8,
+    pub notif_master_volume: u16,
+    pub notif_all_sounds_expanded: bool,
+    pub notif_per_sound_expanded: bool,
+    pub notif_disabled_sounds: std::collections::HashSet<&'static str>,
+    pub notif_tts_enabled: bool,
+    pub notif_tts_mode: u8,
 }
 
 impl ClientView {
@@ -510,6 +519,15 @@ impl ClientView {
             keybinds_open_default_menu: None,
             keybinds_confirm_reset: false,
             _keybinds_search_sub: keybinds_search_sub,
+            notif_push_timeout_mins: 10,
+            notif_push_menu_open: false,
+            notif_mention_preference: 0,
+            notif_master_volume: 100,
+            notif_all_sounds_expanded: false,
+            notif_per_sound_expanded: false,
+            notif_disabled_sounds: std::collections::HashSet::new(),
+            notif_tts_enabled: true,
+            notif_tts_mode: 2,
         });
         cx.notify();
     }

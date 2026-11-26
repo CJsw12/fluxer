@@ -525,6 +525,15 @@ def _norm(path: object) -> str:
     return os.path.normcase(os.path.normpath(str(path)))
 
 
+def rust_exes(cfg: "Config") -> list[Path]:
+    """Configured dist exe plus the dev build that cycle.py (non --release) launches."""
+    return [cfg.rust_exe, REPO / "target" / "fc-root" / "debug" / "fluxer_client.exe"]
+
+
+def matches_rust(proc: dict, cfg: "Config") -> bool:
+    return any(matches_exe(proc, exe) for exe in rust_exes(cfg))
+
+
 def matches_exe(proc: dict, exe: Path) -> bool:
     candidate = str(proc.get("exe") or "")
     if not candidate or is_personal_app_path(candidate):
@@ -551,7 +560,7 @@ def find_targets(cfg: Config, procs: list[dict]) -> list[dict]:
             kind = "ssh"
         elif matches_exe(proc, cfg.official_exe):
             kind = "official"
-        elif matches_exe(proc, cfg.rust_exe):
+        elif matches_rust(proc, cfg):
             kind = "rust"
         elif matches_exe(proc, worker_exe(cfg)):
             kind = "voice-worker"
@@ -725,9 +734,9 @@ def rust_user_status() -> tuple[str | None, str | None]:
 
 def check_rust(cfg: Config, level: int = 2) -> Check:
     procs = process_snapshot()
-    matched = [proc for proc in procs if matches_exe(proc, cfg.rust_exe)]
+    matched = [proc for proc in procs if matches_rust(proc, cfg)]
     if not matched:
-        return Check("rust", "down", False, "not running (no process with ExecutablePath == rust_exe)")
+        return Check("rust", "down", False, "not running (no process with ExecutablePath == rust_exe or the target/fc-root debug exe)")
     pids = [proc["pid"] for proc in matched]
     handles = window_handles(pids)
     visible = [pid for pid in pids if handles.get(pid, 0)]
@@ -1030,6 +1039,105 @@ def cmd_restart_client(cfg: Config, args: argparse.Namespace) -> int:
     return emit(final, actions, args.json, cfg)
 
 
+# ---------------------------------------------------------------- interactive desktop / broker
+
+BROKER_DIR = REPO / "target" / "parity-tmp" / "env-broker"
+BROKER_ACTIONS = ("restart-client", "up", "heal")
+BROKER_ACK_WAIT = 15.0
+BROKER_RESPONSE_WAIT = 180.0
+BROKER_MISSING = ("no env broker on the user desktop; ask the user to run "
+                  "`python -I tools/parity_lab/env_broker.py --install` once")
+
+
+def on_interactive_desktop() -> bool:
+    """True when this thread runs on the user desktop (window station WinSta0, desktop Default)."""
+    if os.name != "nt":
+        return True
+    try:
+        import ctypes
+        from ctypes import wintypes
+        user32 = ctypes.WinDLL("user32", use_last_error=True)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        user32.GetThreadDesktop.restype = wintypes.HANDLE
+        user32.GetThreadDesktop.argtypes = [wintypes.DWORD]
+        user32.GetProcessWindowStation.restype = wintypes.HANDLE
+        user32.GetUserObjectInformationW.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p,
+                                                     wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
+        user32.GetUserObjectInformationW.restype = wintypes.BOOL
+
+        def name_of(handle) -> str | None:
+            if not handle:
+                return None
+            buf = ctypes.create_unicode_buffer(256)
+            need = wintypes.DWORD(0)
+            if not user32.GetUserObjectInformationW(handle, 2, buf, ctypes.sizeof(buf), ctypes.byref(need)):  # UOI_NAME
+                return None
+            return buf.value
+
+        desktop = name_of(user32.GetThreadDesktop(kernel32.GetCurrentThreadId()))
+        station = name_of(user32.GetProcessWindowStation())
+        return desktop == "Default" and station == "WinSta0"
+    except (OSError, AttributeError, ValueError):
+        return False
+
+
+def needs_broker(command: str | None, dry_run: bool, environ: dict | None = None, interactive: bool | None = None) -> bool:
+    if command not in BROKER_ACTIONS or dry_run:
+        return False
+    environ = os.environ if environ is None else environ
+    if environ.get("FLUXER_ENV_FORCE_BROKER") == "1":
+        return True
+    return not (on_interactive_desktop() if interactive is None else interactive)
+
+
+def broker_args(args: argparse.Namespace) -> list[str]:
+    out: list[str] = []
+    if args.json:
+        out.append("--json")
+    if args.config:
+        out += ["--config", str(args.config)]
+    return out
+
+
+def submit_broker_request(action: str, extra: list[str], broker_dir: Path = BROKER_DIR,
+                          ack_wait: float = BROKER_ACK_WAIT, response_wait: float = BROKER_RESPONSE_WAIT,
+                          poll: float = 0.5) -> tuple[int, str]:
+    """Writes a request, waits for the broker; returns (exit_code, output)."""
+    import uuid
+    req_dir = broker_dir / "requests"
+    resp_dir = broker_dir / "responses"
+    req_dir.mkdir(parents=True, exist_ok=True)
+    resp_dir.mkdir(parents=True, exist_ok=True)
+    rid = uuid.uuid4().hex
+    req = req_dir / f"{rid}.json"
+    resp = resp_dir / f"{rid}.json"
+    tmp = req_dir / f"{rid}.tmp"
+    tmp.write_text(json.dumps({"id": rid, "action": action, "args": extra, "created": time.time()}), encoding="utf-8")
+    os.replace(tmp, req)
+    start = time.time()
+    while time.time() - start < response_wait:
+        if resp.exists():
+            try:
+                data = json.loads(resp.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                time.sleep(poll)
+                continue
+            try:
+                resp.unlink()
+            except OSError:
+                pass
+            return int(data.get("exit_code") or 0), str(data.get("output_tail") or "")
+        # unclaimed request after ack_wait means nobody is listening (broker deletes it when it picks it up)
+        if time.time() - start > ack_wait and req.exists():
+            try:
+                req.unlink()
+            except OSError:
+                pass
+            return 3, BROKER_MISSING
+        time.sleep(poll)
+    return 4, "env broker did not finish within the wait limit"
+
+
 # ---------------------------------------------------------------- selftest
 
 def selftest() -> None:
@@ -1159,6 +1267,19 @@ def selftest() -> None:
         assert "navigate(cdp, port, undefined, {overallMs: 110000})" in nav[3]
         assert lib_url() in nav[3] and "PARITY_CDP_PORT" in nav[3]
 
+    # interactive-desktop broker routing
+    assert needs_broker("up", False, {}, interactive=False)
+    assert not needs_broker("up", False, {}, interactive=True)
+    assert needs_broker("heal", False, {"FLUXER_ENV_FORCE_BROKER": "1"}, interactive=True)
+    assert not needs_broker("status", False, {}, interactive=False)
+    assert not needs_broker("up", True, {"FLUXER_ENV_FORCE_BROKER": "1"}, interactive=False)
+    assert not needs_broker("down", False, {}, interactive=False)
+    assert isinstance(on_interactive_desktop(), bool)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        code, out = submit_broker_request("up", [], Path(tmp_dir), ack_wait=0.3, response_wait=2, poll=0.05)
+        assert code == 3 and "env_broker.py --install" in out
+        assert not list((Path(tmp_dir) / "requests").glob("*.json"))
+
     print("selftest ok (config/masking, personal-app guard, tunnel/official/rust commands, health parsers)")
 
 
@@ -1209,6 +1330,10 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"env: {exc}", file=sys.stderr)
         return 2
+    if needs_broker(args.command, args.dry_run):
+        code, out = submit_broker_request(args.command, broker_args(args))
+        print(out)
+        return code
     handlers = {
         "status": cmd_status,
         "up": cmd_up,

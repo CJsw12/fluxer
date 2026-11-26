@@ -543,7 +543,7 @@ fn settings_modal_switches_tabs_filters_search_and_closes(cx: &mut TestAppContex
     assert!(cx.debug_bounds("settings-profile-customization").is_some());
 
     for (selector, expected_tab, body_selector) in [
-        ("settings-tab-account", SettingsTab::Account, "settings-account-trusted"),
+        ("settings-tab-account", SettingsTab::Account, "settings-account-passkeys"),
         ("settings-tab-privacy", SettingsTab::PrivacySafety, "settings-privacy-dm"),
         ("settings-tab-themes", SettingsTab::Themes, "settings-theme-swatch-dark"),
         ("settings-tab-notifications", SettingsTab::Notifications, "settings-notifications"),

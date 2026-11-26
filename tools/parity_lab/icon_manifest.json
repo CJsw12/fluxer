@@ -3523,6 +3523,21 @@
    "size": null,
    "source_file": null,
    "reason": "new call site, not yet matched to official harvest"
+  },
+  {
+   "rust_icon": "Prohibit",
+   "file": "fluxer_client/app/src/ui/settings/account.rs",
+   "line": 680,
+   "rust_asset": "fluxer_client/app/assets/icons/prohibit.svg",
+   "kind": "phosphor",
+   "phosphor": "bold/prohibit-bold.svg",
+   "status": "unverified",
+   "official_component": null,
+   "official_icon": null,
+   "weight": null,
+   "size": null,
+   "source_file": null,
+   "reason": "new call site, not yet matched to official harvest"
   }
  ]
 }

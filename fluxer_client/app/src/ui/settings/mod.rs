@@ -436,6 +436,9 @@ pub struct SettingsModal {
     pub selected_application_loading: bool,
     pub applications_notice: Option<SharedString>,
     pub privacy_notice: Option<SharedString>,
+    pub account_notice: Option<SharedString>,
+    pub show_masked_email: bool,
+    pub show_passkey_form: bool,
     pub sidebar_scroll: ScrollHandle,
     pub locale_scroll: ScrollHandle,
     pub _subscription: Subscription,
@@ -510,6 +513,9 @@ impl ClientView {
             selected_application_loading: false,
             applications_notice: None,
             privacy_notice: None,
+            account_notice: None,
+            show_masked_email: false,
+            show_passkey_form: false,
             sidebar_scroll: ScrollHandle::new(),
             locale_scroll: ScrollHandle::new(),
             _subscription: subscription,
@@ -830,6 +836,13 @@ impl ClientView {
     pub(crate) fn settings_set_privacy_notice(&mut self, message: String, cx: &mut Context<Self>) {
         if let Overlay::Settings(modal) = &mut self.overlay {
             modal.privacy_notice = Some(message.into());
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn settings_set_account_notice(&mut self, message: String, cx: &mut Context<Self>) {
+        if let Overlay::Settings(modal) = &mut self.overlay {
+            modal.account_notice = Some(message.into());
             cx.notify();
         }
     }

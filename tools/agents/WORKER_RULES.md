@@ -8,7 +8,7 @@
 - 공식 앱에 없는 숨은 호버 버튼(`opacity(0).group_hover(...)`)을 만들지 않고, 다른 기능 버튼에 같은 핸들러를 복붙하지 않는다. 기능이 없는 항목은 고유 핸들러(닫기만) + `TODO(backlog)`.
 
 ## 컨텍스트 절약
-- 300줄이 넘는 파일은 `rg -n`으로 위치를 찾은 뒤 그 범위만 읽는다(`read_file`에 `StartLine`/`EndLine` 필수). 같은 파일을 여러 번 통째로 읽지 않는다.
+- 300줄이 넘는 파일은 `rg -n`으로 위치를 찾은 뒤 그 범위만 읽는다(`read_file`에 `StartLine`/`EndLine` 필수). 같은 파일을 여러 번 통째로 읽지 않는다. 고친 뒤 확인은 `rg -n`으로 바꾼 줄만 보고, 이미 읽은 구간을 다시 읽지 않는다.
 - 명령 출력이 잘리면 출력 파일(`.system_generated/steps/*/output.txt`, 게이트 로그)을 통째로 읽지 말고, 필터(`--flx`, `--scene`, `--limit`, `--fields`)를 좁혀 다시 실행하거나 `rg`/`Select-Object -Last`로 필요한 줄만 본다.
 - 검색은 좁게: `rg -l`(파일만)·`rg -c`(개수)로 먼저 좁히고, 본문 검색은 파일·경로를 지정하고 `-m 3` 이하·`-A/-B` 2줄 이하로 한다. 출력이 6,000자를 넘을 것 같으면 나눠서 실행한다.
 - 명세·래칫·차이 JSON은 즉석 파이썬 대신 `python -I tools/parity_lab/spec_query.py`(`baseline` · `spec` · `delta`)로 조회한다.

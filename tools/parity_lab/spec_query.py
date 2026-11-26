@@ -76,6 +76,10 @@ def rect_str(el: dict) -> str:
     if not isinstance(rect, (list, tuple)) or len(rect) < 4:
         return "-"
     return ",".join(round_num(v) for v in rect[:4])
+OUTPUT_CAP = 6000  # stays below agent tool-output truncation (~10 KB)
+NL = chr(10)
+
+
 def clip(text, limit: int = 40) -> str:
     text = " ".join(str(text or "").split())
     return text if len(text) <= limit else text[: limit - 1] + "…"
@@ -288,7 +292,18 @@ def main(argv=None) -> int:
     handlers = {"baseline": lambda: cmd_baseline(args.scene), "spec": lambda: cmd_spec(args),
                 "delta": lambda: cmd_delta(args)}
     if args.cmd in handlers:
-        handlers[args.cmd]()
+        import contextlib, io
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            handlers[args.cmd]()
+        out = buf.getvalue()
+        if len(out) > OUTPUT_CAP:
+            cut = out.rfind(NL, 0, OUTPUT_CAP)
+            out = out[: cut if cut > 0 else OUTPUT_CAP] + NL + (
+                f"… output capped at {OUTPUT_CAP} chars ({len(out)} total): "
+                "narrow --flx/--scene/--text, lower --limit or pass fewer --fields "
+                "(do not read the saved output file)") + NL
+        sys.stdout.write(out)
         return 0
     parser.print_help()
     return 1

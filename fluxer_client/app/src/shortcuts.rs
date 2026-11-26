@@ -302,7 +302,7 @@ impl KeybindSection {
             Self::Messages => "Messages",
             Self::Navigation => "Navigation",
             Self::DragAndDrop => "Drag and drop",
-            Self::Chat => "Messages & Media",
+            Self::Chat => "Chat",
             Self::VoiceAndVideo => "Voice and video",
             Self::Accounts => "Accounts",
             Self::Misc => "Miscellaneous",
@@ -376,7 +376,7 @@ pub fn default_shortcut_rows(section: KeybindSection) -> Vec<DefaultShortcutRowS
     match section {
         S::Defaults => vec![Single(spec(
             "system_toggle_shortcuts_overlay",
-            "Show keyboard shortcuts list",
+            "Show keybind list",
             "ctrl-/",
             S::Defaults,
         ))],
@@ -438,7 +438,19 @@ pub fn default_shortcut_rows(section: KeybindSection) -> Vec<DefaultShortcutRowS
                     S::Navigation,
                 ),
             ),
+            Single(spec("nav_jump_current_call", "Jump to the current call", "ctrl-alt-shift-v", S::Navigation)),
             Single(spec("nav_add_guild", "Create or join a community", "ctrl-shift-n", S::Navigation)),
+            Single(spec("nav_prev_guild_dms", "Switch to previous community or DMs", "ctrl-shift-tab", S::Navigation)),
+            Single(spec("nav_next_guild_dms", "Switch to next community or DMs", "ctrl-tab", S::Navigation)),
+            Single(spec("nav_goto_dms", "Go to direct messages", "ctrl-1", S::Navigation)),
+            Single(spec("nav_goto_guild_1", "Go to first community", "ctrl-2", S::Navigation)),
+            Single(spec("nav_goto_guild_2", "Go to second community", "ctrl-3", S::Navigation)),
+            Single(spec("nav_goto_guild_3", "Go to third community", "ctrl-4", S::Navigation)),
+            Single(spec("nav_goto_guild_4", "Go to fourth community", "ctrl-5", S::Navigation)),
+            Single(spec("nav_goto_guild_5", "Go to fifth community", "ctrl-6", S::Navigation)),
+            Single(spec("nav_goto_guild_6", "Go to sixth community", "ctrl-7", S::Navigation)),
+            Single(spec("nav_goto_guild_7", "Go to seventh community", "ctrl-8", S::Navigation)),
+            Single(spec("nav_goto_guild_8", "Go to eighth community", "ctrl-9", S::Navigation)),
         ],
         S::DragAndDrop => vec![
             Single(spec("dnd_start", "Start drag and drop", "ctrl-d", S::DragAndDrop)),
@@ -465,35 +477,59 @@ pub fn default_shortcut_rows(section: KeybindSection) -> Vec<DefaultShortcutRowS
             }),
             Single(spec("chat_upload", "Upload a file", "ctrl-shift-u", S::Chat)),
             Single(spec("chat_toggle_emoji", "Toggle the emoji picker", "ctrl-e", S::Chat)),
+            Single(spec("chat_toggle_gif", "Toggle the GIF picker", "ctrl-g", S::Chat)),
+            Single(spec("chat_toggle_sticker", "Toggle the sticker picker", "ctrl-s", S::Chat)),
+            Single(spec("chat_toggle_saved_media", "Toggle saved media", "ctrl-shift-g", S::Chat)),
+            Single(spec("chat_send_voice_message", "Send voice message", "ctrl-alt-v", S::Chat)),
             Single(spec("chat_toggle_pins", "Toggle pinned messages", "ctrl-p", S::Chat)),
+            Single(spec("chat_toggle_inbox", "Toggle the inbox", "ctrl-i", S::Chat)),
             Single(spec("chat_toggle_member_list", "Toggle the member list or voice chat", "ctrl-u", S::Chat)),
             Pair(
                 spec("chat_scroll_up", "Scroll chat up", "pageup", S::Chat),
                 spec("chat_scroll_down", "Scroll chat down", "pagedown", S::Chat),
             ),
+            Single(spec("chat_jump_oldest_unread", "Jump to the oldest unread message", "shift-pageup", S::Chat)),
             Single(spec("chat_mark_channel_read", "Mark channel as read", "escape", S::Chat)),
             Single(spec("chat_mark_guild_read", "Mark community as read", "shift-escape", S::Chat)),
+            Single(spec("chat_mark_top_inbox_read", "Mark top inbox channel as read", "ctrl-shift-e", S::Chat)),
+            Single(spec("chat_mark_all_inbox_read", "Mark all inbox channels as read", "", S::Chat)),
+            Single(spec("chat_start_group_dm", "Start a group DM", "ctrl-shift-t", S::Chat)),
+            Single(spec("chat_copy_channel_link", "Copy channel link", "ctrl-shift-l", S::Chat)),
         ],
         S::VoiceAndVideo => vec![
             Single(spec("voice_toggle_mute", "Toggle mute", "ctrl-shift-m", S::VoiceAndVideo)),
             Single(spec("voice_toggle_deafen", "Toggle deafen", "ctrl-shift-d", S::VoiceAndVideo)),
+            Single(spec("voice_toggle_soundboard", "Toggle the soundboard", "ctrl-shift-b", S::VoiceAndVideo)),
+            Single(spec("voice_start_call", "Start a call in a DM or group", "ctrl-'", S::VoiceAndVideo)),
             Single(spec("voice_answer_call", "Answer the incoming call", "ctrl-enter", S::VoiceAndVideo)),
             Single(spec("voice_decline_call", "Decline the incoming call", "escape", S::VoiceAndVideo)),
+            Single(spec("voice_toggle_compact_call", "Expand or collapse compact call view", "ctrl-shift-v", S::VoiceAndVideo)),
         ],
         S::Accounts => vec![
-            Single(spec("system_open_account_switcher", "Open account switcher", "ctrl-shift-a", S::Accounts)),
+            Single(spec("system_open_account_switcher", "Open the account switcher", "ctrl-shift-o", S::Accounts)),
+            Single(spec("system_switch_last_account", "Switch back to the last account", "ctrl-j", S::Accounts)),
             Pair(
-                spec("system_switch_account_prev", "Switch to previous account", "ctrl-alt-[", S::Accounts),
-                spec("system_switch_account_next", "Switch to next account", "ctrl-alt-]", S::Accounts),
+                spec("system_switch_account_prev", "Switch to the previous account", "ctrl-shift-[", S::Accounts),
+                spec("system_switch_account_next", "Switch to the previous account", "ctrl-shift-]", S::Accounts),
             ),
+            Single(spec("system_jump_newest_mention_account", "Jump to the newest mention on another account", "ctrl-shift-j", S::Accounts)),
+            Single(spec("system_search_other_accounts", "Search other accounts", "ctrl-shift-k", S::Accounts)),
+            Single(spec("system_switch_account_1", "Switch to account 1", "ctrl-shift-1", S::Accounts)),
+            Single(spec("system_switch_account_2", "Switch to account 2", "ctrl-shift-2", S::Accounts)),
+            Single(spec("system_switch_account_3", "Switch to account 3", "ctrl-shift-3", S::Accounts)),
+            Single(spec("system_switch_account_4", "Switch to account 4", "ctrl-shift-4", S::Accounts)),
+            Single(spec("system_switch_account_5", "Switch to account 5", "ctrl-shift-5", S::Accounts)),
+            Single(spec("system_switch_account_6", "Switch to account 6", "ctrl-shift-6", S::Accounts)),
+            Single(spec("system_switch_account_7", "Switch to account 7", "ctrl-shift-7", S::Accounts)),
+            Single(spec("system_switch_account_8", "Switch to account 8", "ctrl-shift-8", S::Accounts)),
+            Single(spec("system_switch_account_9", "Switch to account 9", "ctrl-shift-9", S::Accounts)),
         ],
         S::Misc => vec![
             Single(spec("misc_search", "Search messages", "ctrl-f", S::Misc)),
             Single(spec("misc_open_context_menu", "Open the context menu", "shift-f10", S::Misc)),
-            Single(spec("system_toggle_settings", "Open your settings", "ctrl-,", S::Misc)),
-            Single(spec("system_zoom_in", "Zoom in", "ctrl-=", S::Misc)),
-            Single(spec("system_zoom_out", "Zoom out", "ctrl--", S::Misc)),
-            Single(spec("system_zoom_reset", "Reset zoom", "ctrl-0", S::Misc)),
+            Single(spec("misc_toggle_downloads", "Toggle the downloads panel", "", S::Misc)),
+            Single(spec("misc_open_quick_css", "Open quick CSS editor", "ctrl-alt-shift-t", S::Misc)),
+            Single(spec("misc_toggle_custom_css", "Turn custom CSS on or off", "ctrl-alt-shift-k", S::Misc)),
         ],
     }
 }
@@ -569,7 +605,7 @@ fn canonical_key_token(raw: &str) -> Option<String> {
 }
 
 /// Normalizes a shortcut string such as `"Shift+Ctrl+M"` or `"ctrl-shift-m"`
-/// into canonical modifier order `"ctrl-alt-shift-meta-<key>"`.
+/// into canonical modifier order `"ctrl-shift-alt-meta-<key>"`.
 pub fn normalize_combo(raw: &str) -> String {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
@@ -629,11 +665,11 @@ pub fn normalize_combo(raw: &str) -> String {
     if ctrl {
         parts.push("ctrl");
     }
-    if alt {
-        parts.push("alt");
-    }
     if shift {
         parts.push("shift");
+    }
+    if alt {
+        parts.push("alt");
     }
     if meta {
         parts.push("meta");
@@ -650,11 +686,11 @@ pub fn keystroke_to_combo(ks: &Keystroke) -> Option<String> {
     if ks.modifiers.control {
         parts.push("ctrl");
     }
-    if ks.modifiers.alt {
-        parts.push("alt");
-    }
     if ks.modifiers.shift {
         parts.push("shift");
+    }
+    if ks.modifiers.alt {
+        parts.push("alt");
     }
     if ks.modifiers.platform {
         parts.push("meta");
@@ -679,14 +715,14 @@ fn chip_label_for_token(token: &str) -> String {
         "enter" => "Enter".to_owned(),
         "space" => "Space".to_owned(),
         "tab" => "Tab".to_owned(),
-        "backspace" => "Backspace".to_owned(),
+        "backspace" => "⌫".to_owned(),
         "delete" => "Del".to_owned(),
-        "up" => "↑".to_owned(),
-        "down" => "↓".to_owned(),
-        "left" => "←".to_owned(),
-        "right" => "→".to_owned(),
-        "pageup" => "PgUp".to_owned(),
-        "pagedown" => "PgDn".to_owned(),
+        "up" => "▲".to_owned(),
+        "down" => "▼".to_owned(),
+        "left" => "◀".to_owned(),
+        "right" => "▶".to_owned(),
+        "pageup" => "Page up".to_owned(),
+        "pagedown" => "Page down".to_owned(),
         other if other.len() == 1 => other.to_ascii_uppercase(),
         other if other.starts_with('f') && other[1..].chars().all(|c| c.is_ascii_digit()) => {
             other.to_ascii_uppercase()
@@ -826,7 +862,7 @@ mod tests {
         assert!(combos_equal("Ctrl+Shift+M", "shift-ctrl-m"));
         assert!(!combos_equal("", ""));
         assert_eq!(format_combo_chips("ctrl-shift-m"), vec!["Ctrl", "Shift", "M"]);
-        assert_eq!(format_combo_chips("alt-up"), vec!["Alt", "↑"]);
+        assert_eq!(format_combo_chips("alt-up"), vec!["Alt", "▲"]);
         assert_eq!(format_combo_chips("ctrl--"), vec!["Ctrl", "-"]);
         assert_eq!(format_combo_display("ctrl-k"), "Ctrl + K");
     }

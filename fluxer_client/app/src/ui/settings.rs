@@ -1133,8 +1133,21 @@ fn section_heading(title: String, theme: &Theme) -> impl IntoElement {
         )
         .child(
             div()
-                .flx("app.settings-heading-link-button.link-icon")
-                .child(Icon::new(AppIcon::LinkSimple).with_size(px(15.)).text_color(theme.muted_foreground)),
+                .size(px(28.))
+                .rounded(px(6.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .flx("app.settings-heading-link-button.button.copy")
+                .child(
+                    div()
+                        .size(px(15.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .flx("app.settings-heading-link-button.link-icon")
+                        .child(Icon::new(AppIcon::LinkSimple).with_size(px(15.)).text_color(theme.muted_foreground)),
+                ),
         )
 }
 
@@ -7107,14 +7120,22 @@ fn render_sidebar_tab(
     let has_sections = sections.len() > 1;
     let has_tree = selected && show_sections && has_sections;
 
-    let mut item = div().w_full().flex().flex_col().gap(px(3.)).child(
+    let mut item = div()
+        .w_full()
+        .flex()
+        .flex_col()
+        .gap(px(3.))
+        .when(has_sections && !has_tree, |d| d.pb(px(3.)))
+        .child(
         div()
             .id(sel_id)
             .debug_selector(move || sel_id.to_owned())
             .w_full()
             .h(px(34.))
-            .px(px(11.))
+            .px(px(10.))
             .rounded(px(8.))
+            .border_1()
+            .border_color(gpui_kit::transparent_black())
             .cursor_pointer()
             .flex()
             .flex_row()
@@ -7201,8 +7222,10 @@ fn render_sidebar_tab(
                     .debug_selector(move || sub_sel.clone())
                     .w_full()
                     .h(px(30.))
-                    .px(px(11.))
+                    .px(px(10.))
                     .rounded(px(6.))
+                    .border_1()
+                    .border_color(gpui_kit::transparent_black())
                     .cursor_pointer()
                     .flex()
                     .items_center()
@@ -7233,6 +7256,7 @@ fn render_sidebar_tab(
             div()
                 .w_full()
                 .mt(px(3.))
+                .mb(px(4.))
                 .flx("app.settings-modal-layout.settings-modal-sidebar-sub-items.sidebar-sub-items-wrap")
                 .child(sub_list),
         );
@@ -7438,7 +7462,6 @@ fn render_sidebar(
                                 .debug_selector(|| "settings-search".to_owned())
                                 .w_full()
                                 .h(px(34.))
-                                .px_2p5()
                                 .rounded(px(8.))
                                 .bg(sidebar_bg)
                                 .border_1()
@@ -7446,10 +7469,11 @@ fn render_sidebar(
                                 .flex()
                                 .flex_row()
                                 .items_center()
-                                .gap_2()
                                 .flx("app.settings-search.input-container")
                                 .child(
                                     div()
+                                        .ml(px(12.))
+                                        .mr(px(-28.))
                                         .size(px(16.))
                                         .flex_none()
                                         .flex()
@@ -7464,13 +7488,14 @@ fn render_sidebar(
                                 )
                                 .child(
                                     div()
-                                        .flex_1()
-                                        .min_w_0()
+                                        .w_full()
                                         .h(px(34.))
+                                        .pl(px(36.))
+                                        .pr(px(16.))
                                         .flex()
                                         .items_center()
                                         .flx("app.settings-search.input.query-change.text")
-                                        .child(Input::new(&modal.search).small()),
+                                        .child(Input::new(&modal.search).appearance(false).small()),
                                 ),
                         ),
                 )
@@ -7532,7 +7557,7 @@ fn render_sidebar(
                 .child(
                     div()
                         .id("settings-sidebar-scroll")
-                        .w_full()
+                        .mr(px(-8.))
                         .flex_1()
                         .min_h_0()
                         .overflow_y_scroll()
@@ -7543,6 +7568,7 @@ fn render_sidebar(
                         .child(
                             div()
                                 .w_full()
+                                .pr(px(8.))
                                 .flex()
                                 .flex_col()
                                 .flx("app.settings-modal-layout.settings-modal-sidebar-nav.sidebar-nav-content")
@@ -7567,6 +7593,7 @@ fn render_sidebar(
                                                             .px(px(10.))
                                                             .pt(px(4.))
                                                             .pb(px(3.))
+                                                            .mb(px(1.))
                                                             .flx("app.settings-modal-layout.settings-modal-sidebar-category-title.sidebar-category-title")
                                                             .child(sidebar_section_heading(
                                                                 l10n::tr("Your account"),
@@ -7600,6 +7627,7 @@ fn render_sidebar(
                                                             .px(px(10.))
                                                             .pt(px(4.))
                                                             .pb(px(3.))
+                                                            .mb(px(1.))
                                                             .flx("app.settings-modal-layout.settings-modal-sidebar-category-title.sidebar-category-title")
                                                             .child(sidebar_section_heading(
                                                                 l10n::tr("App settings"),
@@ -7633,6 +7661,7 @@ fn render_sidebar(
                                                             .px(px(10.))
                                                             .pt(px(4.))
                                                             .pb(px(3.))
+                                                            .mb(px(1.))
                                                             .flx("app.settings-modal-layout.settings-modal-sidebar-category-title.sidebar-category-title")
                                                             .child(sidebar_section_heading(
                                                                 l10n::tr("Developer"),
@@ -7665,10 +7694,20 @@ fn render_sidebar(
                                             },
                                         ),
                                 ),
+                        )
+                        .child(
+                            div()
+                                .w_full()
+                                .flx("app.settings-modal-layout.settings-modal-sidebar-nav.sidebar-nav-footer")
+                                .child(
+                                    div()
+                                        .w_full()
+                                        .flx("app.settings-modal-layout.settings-modal-sidebar-footer.sidebar-footer")
+                                        .child(footer),
+                                ),
                         ),
                 ),
         )
-        .child(footer)
         .into_any_element()
 }
 

@@ -4,7 +4,7 @@
   "scenes": {
     "markdown": {
       "spec": "target/parity-tmp/md.1280.spec.json",
-      "max_deltas": 25,
+      "max_deltas": 16,
       "max_missing": 152,
       "ignore": [
         "app.native-titlebar.wordmark|width",
@@ -71,28 +71,28 @@
           "missing": 3
         },
         "settings-appearance": {
-          "deltas": 67,
+          "deltas": 50,
           "missing": 25
         },
         "settings-keybinds": {
-          "deltas": 338,
-          "missing": 19
+          "deltas": 335,
+          "missing": 17
         },
         "settings-language": {
-          "deltas": 60,
+          "deltas": 41,
           "missing": 39
         },
         "settings-my-account": {
-          "deltas": 59,
-          "missing": 36
+          "deltas": 36,
+          "missing": 35
         },
         "settings-notifications": {
-          "deltas": 60,
+          "deltas": 42,
           "missing": 29
         },
         "settings-voice-video": {
-          "deltas": 71,
-          "missing": 44
+          "deltas": 47,
+          "missing": 43
         }
       },
       "ignore": [],

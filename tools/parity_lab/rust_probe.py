@@ -67,6 +67,27 @@ def screenshot(out: Path, ipc_path: Path = DEFAULT_IPC) -> Path:
     return out
 
 
+def shot_via_broker(out: Path) -> dict:
+    """Off the interactive desktop EnumWindows cannot see the client; ask the user-desktop broker."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import env  # noqa: PLC0415
+
+    out = out if out.is_absolute() else Path.cwd() / out
+    code, text = env.submit_broker_request("shot", [str(out)])
+    if code == 0 and out.is_file():
+        return {"ok": True, "file": str(out)}
+    return {"ok": False, "error": f"broker shot failed (exit {code}): {text[-300:]}"}
+
+
+def shot(out: Path) -> dict:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import env  # noqa: PLC0415
+
+    if os.environ.get("FLUXER_ENV_FORCE_BROKER") == "1" or not env.on_interactive_desktop():
+        return shot_via_broker(out)
+    return {"ok": True, "file": str(screenshot(out))}
+
+
 def wake_a11y(ipc_path: Path = DEFAULT_IPC) -> bool:
     """Send WM_GETOBJECT (UiaRootObjectId) so AccessKit activates on hidden desktops."""
     if sys.platform != "win32":
@@ -125,7 +146,7 @@ def main(argv: list[str]) -> int:
     elif cmd == "link":
         r = deep_link(rest[0])
     elif cmd == "shot":
-        r = {"ok": True, "file": str(screenshot(Path(rest[0])))}
+        r = shot(Path(rest[0]))
     else:
         print(__doc__)
         return 2

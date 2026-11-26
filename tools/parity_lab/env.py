@@ -40,6 +40,7 @@ process/TCP/HTTP checks (no node, probe, launch or kill) and prints the planned 
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import os
 import re
@@ -1032,8 +1033,11 @@ def cmd_down(cfg: Config, args: argparse.Namespace) -> int:
 
 def cmd_restart_client(cfg: Config, args: argparse.Namespace) -> int:
     actions: list[str] = []
+    kill_cfg = cfg  # stop any running client (dist or debug) before launching the requested one
+    if getattr(args, "dev", False):
+        cfg = dataclasses.replace(cfg, rust_exe=(REPO / "target" / "fc-root" / "debug" / "fluxer_client.exe").resolve())
     procs = process_snapshot()
-    targets = [t for t in find_targets(cfg, procs) if t["kind"] in ("rust", "voice-worker")]
+    targets = [t for t in find_targets(kill_cfg, procs) if t["kind"] in ("rust", "voice-worker")]
     if args.dry_run:
         pids = [target["pid"] for target in targets]
         actions.append(f"would stop rust client pid(s) {pids}" if pids else "rust client not running")
@@ -1109,6 +1113,8 @@ def broker_args(args: argparse.Namespace) -> list[str]:
         out.append("--json")
     if args.config:
         out += ["--config", str(args.config)]
+    if getattr(args, "dev", False):
+        out.append("--dev")
     return out
 
 
@@ -1315,6 +1321,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("command", nargs="?", choices=("status", "up", "heal", "down", "restart-client"),
                         help="status | up | heal | down | restart-client")
+    parser.add_argument("--dev", action="store_true", help="restart-client: launch target/fc-root/debug/fluxer_client.exe")
     parser.add_argument("--json", action="store_true", help="print one JSON object instead of the table")
     parser.add_argument("--dry-run", action="store_true",
                         help="read-only checks only (process/TCP/HTTP); print planned actions, change nothing")

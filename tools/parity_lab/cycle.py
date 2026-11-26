@@ -34,6 +34,7 @@ import rust_probe as rp  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 TARGET = REPO / "target" / "fc-root"
+RESTART_TIMEOUT = 240
 PWSH = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "PowerShell" / "7" / "pwsh.exe"
 DIST = REPO / "dist" / "fluxer_client"
 DIST_EXE = DIST / "fluxer_client.exe"
@@ -168,33 +169,18 @@ def run_cycle(opts: argparse.Namespace) -> int:
             exe = TARGET / "debug" / "fluxer_client.exe"
     else:
         exe = DIST_EXE
-    profile = os.environ.get("PARITY_PROFILE", str(REPO.parent / "Logs" / "fluxer_test_profile"))
-    launch = (
-        "Remove-Item Env:SSL_CERT_FILE -ErrorAction SilentlyContinue; "
-        f"$env:FLUXER_PARITY_PROBE='1'; $env:LOCALAPPDATA='{profile}'; "
-        f"Start-Process -FilePath '{exe}' -ArgumentList '--no-os-integration' -WorkingDirectory '{exe.parent}'"
-    )
-    subprocess.run([str(PWSH), "-NoProfile", "-Command", launch], check=False)
-    for _ in range(30):
-        time.sleep(1.5)
-        r = subprocess.run(["orca", "computer", "get-app-state", "--app", "fluxer_client", "--no-screenshot", "--query", "Status"],
-                           capture_output=True, text=True, encoding="utf-8", errors="replace")
-        if "Status: Online" in r.stdout:
-            print("client: Online")
-            break
-        try:
-            pr = rp.send("probe_inspect")
-            if pr.get("ok") and any(
-                e.get("flx") == "app.user-area.user-area-inner.user-status" and e.get("text") == "Online"
-                for e in pr.get("elements", [])
-            ):
-                print("client: Online (via probe)")
-                break
-        except Exception:
-            pass
-    else:
+    restart = [sys.executable, "-I", str(REPO / "tools" / "parity_lab" / "env.py"), "restart-client"] + ([] if opts.release else ["--dev"])
+    try:
+        r = subprocess.run(restart, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                           timeout=RESTART_TIMEOUT, cwd=str(REPO), stdin=subprocess.DEVNULL)
+        code, out = r.returncode, (r.stdout or "") + (r.stderr or "")
+    except subprocess.TimeoutExpired:
+        code, out = 124, "env.py restart-client timed out"
+    print(chr(10).join(out.splitlines()[-6:]))
+    if code != 0:
         print("client: NOT online (check tunnel)")
         return 1
+    print("client: Online")
     rp.wake_a11y()
     if opts.check:
         return run([sys.executable, "-I", str(REPO / "tools" / "parity_lab" / "check_scene.py"), *opts.check], tail=40)

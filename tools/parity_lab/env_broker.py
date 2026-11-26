@@ -26,7 +26,9 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 BROKER_DIR = REPO / "target" / "parity-tmp" / "env-broker"
 ENV_PY = HERE / "env.py"
-ALLOWLIST = ("restart-client", "up", "heal")
+ALLOWLIST = ("restart-client", "up", "heal", "shot")
+SHOT_ROOT = REPO / "target" / "parity-tmp"
+PROBE_PY = HERE / "rust_probe.py"
 MAX_AGE = 600.0
 RUN_TIMEOUT = 170
 POLL = 1.0
@@ -48,6 +50,19 @@ def log(broker_dir: Path, msg: str) -> None:
         pass
 
 
+def shot_path(raw: str) -> str | None:
+    """Resolved output path when raw is a .png inside <repo>/target/parity-tmp, else None."""
+    if not raw or raw.startswith("-") or "\x00" in raw or ".." in Path(raw).parts or not raw.lower().endswith(".png"):
+        return None
+    path = Path(raw)
+    try:
+        resolved = (path if path.is_absolute() else REPO / path).resolve()
+        resolved.relative_to(SHOT_ROOT.resolve())
+    except (OSError, ValueError):
+        return None
+    return str(resolved)
+
+
 def validate(req: object, now: float) -> tuple[str | None, list[str], str | None]:
     """Returns (action, extra_args, error)."""
     if not isinstance(req, dict):
@@ -65,10 +80,16 @@ def validate(req: object, now: float) -> tuple[str | None, list[str], str | None
     if not isinstance(raw, list) or not all(isinstance(a, str) for a in raw):
         return None, [], "bad args"
     extra: list[str] = []
+    if action == "shot":
+        target = shot_path(raw[0]) if len(raw) == 1 else None
+        return (action, [target], None) if target else (None, [], "shot path not allowed")
     i = 0
     while i < len(raw):
         if raw[i] == "--json":
             extra.append("--json")
+            i += 1
+        elif raw[i] == "--dev" and action == "restart-client":
+            extra.append("--dev")
             i += 1
         elif raw[i] == "--config" and i + 1 < len(raw) and not raw[i + 1].startswith("-"):
             extra += ["--config", raw[i + 1]]
@@ -80,8 +101,10 @@ def validate(req: object, now: float) -> tuple[str | None, list[str], str | None
 
 def default_runner(action: str, extra: list[str]) -> tuple[int, str]:
     env = {k: v for k, v in os.environ.items() if k != "FLUXER_ENV_FORCE_BROKER"}
+    cmd = ([sys.executable, "-I", str(PROBE_PY), "shot", *extra] if action == "shot"
+           else [sys.executable, "-I", str(ENV_PY), action, *extra])
     try:
-        r = subprocess.run([sys.executable, "-I", str(ENV_PY), action, *extra], capture_output=True, text=True,
+        r = subprocess.run(cmd, capture_output=True, text=True,
                            encoding="utf-8", errors="replace", timeout=RUN_TIMEOUT, env=env, cwd=str(REPO),
                            stdin=subprocess.DEVNULL)
         return r.returncode, (r.stdout or "") + (r.stderr or "")
@@ -233,6 +256,15 @@ def selftest() -> None:
         assert validate({"id": "a1", "action": "up", "args": [], "created": now - 700}, now)[2] == "request expired"
         assert validate({"id": "../x", "action": "up", "args": [], "created": now}, now)[2]
         assert validate({"id": "a1", "action": "up", "args": ["--config", "C:/x.json"], "created": now}, now)[1] == ["--config", "C:/x.json"]
+        assert validate({"id": "s1", "action": "shot", "args": ["target/parity-tmp/a/x.png"], "created": now}, now)[1] == [
+            str((REPO / "target/parity-tmp/a/x.png").resolve())]
+        for bad in ("target/parity-tmp/../x.png", "target/parity-tmp/x.txt", "C:/Windows/x.png", "/tmp/x.png",
+                    "target/other/x.png", "-o.png", "target/parity-tmp"):
+            assert shot_path(bad) is None, bad
+        assert validate({"id": "s1", "action": "shot", "args": [], "created": now}, now)[2]
+        assert validate({"id": "s1", "action": "shot", "args": ["target/parity-tmp/a.png", "--json"], "created": now}, now)[2]
+        assert validate({"id": "d1", "action": "restart-client", "args": ["--dev"], "created": now}, now)[1] == ["--dev"]
+        assert validate({"id": "d1", "action": "up", "args": ["--dev"], "created": now}, now)[2]
         calls: list = []
 
         def stub(action, extra):
@@ -263,7 +295,7 @@ def selftest() -> None:
         script = startup_script()
         assert script.startswith('@start ""') and "env_broker.py" in script and " -I " in script
         assert startup_file().name == TASK_NAME + ".cmd"
-    print("selftest ok (validation allowlist, once-run with stub, lock, log trim, startup script)")
+    print("selftest ok (validation allowlist, shot path rules, once-run with stub, lock, log trim, startup script)")
 
 
 def main() -> int:

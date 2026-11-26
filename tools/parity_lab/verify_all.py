@@ -528,7 +528,7 @@ def select_steps(only: str | None, want_build: bool) -> list[str]:
 
 def print_table(results: dict[str, Result]) -> int:
     print(f"{'step':<8}  {'result':<5}  details  (log: relative path)")
-    for name in STEPS:
+    for name in STEPS + (("client",) if "client" in results else ()):
         result = results.get(name) or Result("SKIP", "not selected")
         log = f"  (log: {log_rel(result.log)})" if result.log else ""
         print(f"{name:<8}  {result.status:<5}  {clip(result.detail)}{log}")
@@ -539,6 +539,31 @@ def print_table(results: dict[str, Result]) -> int:
         f"{counts['FAIL']} FAIL, {counts['SKIP']} SKIP -> exit {1 if failed else 0}"
     )
     return 1 if failed else 0
+
+
+def client_running() -> bool:
+    """True when the Rust client answers the parity probe on its IPC port."""
+    sys.path.insert(0, str(HERE))
+    try:
+        import rust_probe  # noqa: PLC0415
+        return bool(rust_probe.send("probe_inspect", timeout=5.0).get("ok"))
+    except Exception:  # noqa: BLE001 - any failure means not reachable
+        return False
+
+
+def restart_client() -> tuple[int | None, str]:
+    code, text, timed_out = capture([sys.executable, "-I", str(HERE / "env.py"), "restart-client"], TIMEOUTS["heal"])
+    return (None if timed_out else code), text
+
+
+def restore_client(probe=client_running, restart=restart_client) -> Result:
+    """Leaves the always-on client running after gates that may have closed it."""
+    if probe():
+        return Result("PASS", "running")
+    code, text = restart()
+    if code == 0 and probe():
+        return Result("PASS", "restarted")
+    return Result("FAIL", clip(f"restart-client exit {code} ({first_error(text)})"))
 
 
 # ---------------------------------------------------------------- selftest
@@ -621,7 +646,13 @@ def selftest() -> None:
     assert TIMEOUTS["heal"] == 240
     healed = Result("PASS", "rust Online (healed; heal exit=0)")
     assert "(healed" in healed.detail
-    print("selftest ok (build/icons/colors/spec_gate/resize parsers + step selection + heal gating)")
+    assert restore_client(lambda: True, lambda: (_ for _ in ()).throw(AssertionError("no restart"))).detail == "running"
+    states = iter([False, True])
+    assert restore_client(lambda: next(states), lambda: (0, "")).detail == "restarted"
+    assert restore_client(lambda: False, lambda: (1, "boom")).status == "FAIL"
+    assert restore_client(lambda: False, lambda: (None, "")).status == "FAIL"
+    assert build_parser().parse_args(["--no-restore-client"]).no_restore_client
+    print("selftest ok (build/icons/colors/spec_gate/resize parsers + step selection + heal gating + client restore)")
 
 
 # ---------------------------------------------------------------- CLI
@@ -656,6 +687,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-heal",
         action="store_true",
         help="do not run env.py heal when precheck fails (default: heal once, then precheck again)",
+    )
+    p.add_argument(
+        "--no-restore-client",
+        action="store_true",
+        help="do not restart the Rust client at the end when it is not running (default: restore after build/live steps)",
     )
     return p
 
@@ -692,6 +728,8 @@ def main(argv: list[str] | None = None) -> int:
         started = time.time()
         results[name] = STEP_FUNCS[name](args, out_dir)
         results[name].detail = f"{results[name].detail} [{time.time() - started:.0f}s]" if results[name].status != "SKIP" else results[name].detail
+    if not args.no_restore_client and (args.build or any(n in LIVE_STEPS for n in steps)):
+        results["client"] = restore_client()
     return print_table(results)
 
 

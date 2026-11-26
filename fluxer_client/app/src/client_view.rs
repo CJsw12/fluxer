@@ -2926,6 +2926,7 @@ impl ClientView {
         cx.notify();
     }
 
+    #[cfg(test)]
     pub(crate) fn toggle_screen_share(&mut self, include_audio: bool, cx: &mut Context<Self>) {
         if self.voice.self_stream {
             self.backend.stop_screen_share();

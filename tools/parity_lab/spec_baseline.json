@@ -5,12 +5,12 @@
     "markdown": {
       "spec": "target/parity-tmp/md.1280.spec.json",
       "max_deltas": 10,
-      "max_missing": 152,
+      "max_missing": 122,
       "ignore": [
         "app.native-titlebar.wordmark|width",
         "channel.channel-header-components.channel-header-icon.button-icon|x"
       ],
-      "updated": "2026-11-26"
+      "updated": "2026-11-27"
     }
   },
   "scene_sets": {
@@ -59,12 +59,12 @@
       "spec_dir": "target/parity-tmp/more/spec",
       "max": {
         "dm-conversation": {
-          "deltas": 25,
-          "missing": 92
+          "deltas": 26,
+          "missing": 25
         },
         "dm-home": {
           "deltas": 5,
-          "missing": 40
+          "missing": 20
         },
         "explore": {
           "deltas": 9,
@@ -108,15 +108,15 @@
         },
         "light-theme": {
           "deltas": 11,
-          "missing": 163
+          "missing": 133
         },
         "threads-panel": {
           "deltas": 3,
           "missing": 10
         },
         "voice-channel": {
-          "deltas": 2,
-          "missing": 49
+          "deltas": 3,
+          "missing": 48
         }
       },
       "ignore": [],

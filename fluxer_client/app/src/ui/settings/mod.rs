@@ -457,6 +457,16 @@ pub struct SettingsModal {
     pub notif_disabled_sounds: std::collections::HashSet<&'static str>,
     pub notif_tts_enabled: bool,
     pub notif_tts_mode: u8,
+    pub lang_dropdown_open: bool,
+    pub regional_dropdown_open: bool,
+    pub regional_format: &'static str,
+    pub time_format_mode: u8,
+    pub date_format_mode: u8,
+    pub spellcheck_enabled: bool,
+    pub spellcheck_engine: u8,
+    pub spellcheck_auto_detect: bool,
+    pub spellcheck_personal_word: Entity<InputState>,
+    pub spellcheck_personal_words: Vec<String>,
 }
 
 impl ClientView {
@@ -486,6 +496,7 @@ impl ClientView {
                 cx.notify();
             }
         });
+        let spellcheck_personal_word = cx.new(|cx| InputState::new(window, cx).placeholder(l10n::tr("Add a word…")));
         let default_tab = SettingsTab::default();
         let default_section = default_tab.sections().first().map(|(id, _)| *id);
         self.overlay = Overlay::Settings(SettingsModal {
@@ -534,6 +545,16 @@ impl ClientView {
             notif_disabled_sounds: std::collections::HashSet::new(),
             notif_tts_enabled: true,
             notif_tts_mode: 2,
+            lang_dropdown_open: false,
+            regional_dropdown_open: false,
+            regional_format: "language",
+            time_format_mode: 0,
+            date_format_mode: 0,
+            spellcheck_enabled: true,
+            spellcheck_engine: 0,
+            spellcheck_auto_detect: true,
+            spellcheck_personal_word,
+            spellcheck_personal_words: Vec::new(),
         });
         cx.notify();
     }

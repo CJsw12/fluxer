@@ -3538,6 +3538,51 @@
    "size": null,
    "source_file": null,
    "reason": "new call site, not yet matched to official harvest"
+  },
+  {
+   "rust_icon": "Translate",
+   "file": "fluxer_client/app/src/ui/settings/language.rs",
+   "line": 341,
+   "rust_asset": "fluxer_client/app/assets/icons/translate-bold.svg",
+   "kind": "phosphor",
+   "phosphor": "bold/translate-bold.svg",
+   "status": "unverified",
+   "official_component": null,
+   "official_icon": null,
+   "weight": null,
+   "size": null,
+   "source_file": null,
+   "reason": "new call site, not yet matched to official harvest"
+  },
+  {
+   "rust_icon": "CaretDown",
+   "file": "fluxer_client/app/src/ui/settings/language.rs",
+   "line": 375,
+   "rust_asset": "fluxer_client/app/assets/icons/caret-down.svg",
+   "kind": "phosphor",
+   "phosphor": "bold/caret-down-bold.svg",
+   "status": "unverified",
+   "official_component": null,
+   "official_icon": null,
+   "weight": null,
+   "size": null,
+   "source_file": null,
+   "reason": "new call site, not yet matched to official harvest"
+  },
+  {
+   "rust_icon": "CaretDown",
+   "file": "fluxer_client/app/src/ui/settings/language.rs",
+   "line": 564,
+   "rust_asset": "fluxer_client/app/assets/icons/caret-down.svg",
+   "kind": "phosphor",
+   "phosphor": "bold/caret-down-bold.svg",
+   "status": "unverified",
+   "official_component": null,
+   "official_icon": null,
+   "weight": null,
+   "size": null,
+   "source_file": null,
+   "reason": "new call site, not yet matched to official harvest"
   }
  ]
 }

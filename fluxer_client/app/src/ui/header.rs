@@ -52,6 +52,9 @@ fn render_header_icon_button(
         .on_hover(on_hover)
         .on_click(on_click)
         .flx(flx)
+        .when(flx.contains("channel-pins-button"), |d| {
+            d.flx("channel.channel-header-components.channel-pins-button.icon-button-wrapper--2")
+        })
         .child(crate::ui::channel_popouts::track_trigger(id))
         .child(
             div()
@@ -96,7 +99,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .flex_row()
         .items_center()
         .justify_between()
-        .gap_3()
+        .gap_4()
         .px_4()
         .bg(theme.background_secondary_lighter)
         .border_b_1()
@@ -109,69 +112,104 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .flex()
                 .flex_row()
                 .items_center()
-                .gap(px(12.))
-                .when_some(dm_peer, |d, peer| {
-                    d.child(render_avatar_tagged(
-                        AvatarSpec {
-                            user_id: peer.dm_user_id.unwrap_or(peer.id),
-                            avatar_url: peer.dm_avatar_url.clone(),
-                            display_name: peer.name.clone(),
-                            size: 32.,
-                            status: peer.dm_status,
-                            status_border_bg: Some(theme.background_secondary_lighter),
-                        },
-                        theme,
-                        &["ui.status-aware-avatar.avatar"],
-                    ))
-                })
-                .when(dm_peer.is_none() && !glyph.is_empty(), |d| {
-                    if glyph == "#" {
-                        d.child(
-                            div()
-                                .flex_none()
-                                .size(px(24.))
-                                .flx("channel.channel-utils.get-icon.text-channel-icon")
-                                .child(Icon::new(AppIcon::TextChannel).with_size(px(24.)).text_color(theme.muted_foreground)),
-                        )
-                    } else {
-                        d.child(
-                            div()
-                                .text_color(theme.muted_foreground)
-                                .text_base()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                .child(glyph),
-                        )
-                    }
-                })
+                .overflow_hidden()
+                .flx("channel.channel-header.header-left-section")
                 .child(
                     div()
-                        .flex_none()
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_size(px(16.))
-                        .line_height(px(24.))
-                        .text_color(theme.foreground)
-                        .flx_text(
-                            if dm_peer.is_some() {
-                                "channel.channel-header.channel-name--4"
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(8.))
+                        .overflow_hidden()
+                        .flx("channel.channel-header.left-content-container")
+                        .when_some(dm_peer, |d, peer| {
+                            d.child(
+                                div()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .cursor_pointer()
+                                    .flx("channel.channel-header.desktop-button.open-user-profile")
+                                    .child(render_avatar_tagged(
+                                        AvatarSpec {
+                                            user_id: peer.dm_user_id.unwrap_or(peer.id),
+                                            avatar_url: peer.dm_avatar_url.clone(),
+                                            display_name: peer.name.clone(),
+                                            size: 32.,
+                                            status: peer.dm_status,
+                                            status_border_bg: Some(theme.background_secondary_lighter),
+                                        },
+                                        theme,
+                                        &["ui.status-aware-avatar.avatar"],
+                                    ))
+                                    .child(
+                                        div()
+                                            .pl(px(12.))
+                                            .flx("channel.channel-header.dm-name-wrapper--2")
+                                            .child(
+                                                div()
+                                                    .flex_none()
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .text_size(px(16.))
+                                                    .line_height(px(24.))
+                                                    .text_color(theme.foreground)
+                                                    .flx_text("channel.channel-header.channel-name--4", view.channel_title.to_string())
+                                                    .child(view.channel_title.clone()),
+                                            ),
+                                    ),
+                            )
+                        })
+                        .when(dm_peer.is_none() && !glyph.is_empty(), |d| {
+                            if glyph == "#" {
+                                d.child(
+                                    div()
+                                        .flex_none()
+                                        .size(px(24.))
+                                        .flx("channel.channel-utils.get-icon.text-channel-icon")
+                                        .child(
+                                            Icon::new(AppIcon::TextChannel)
+                                                .with_size(px(24.))
+                                                .text_color(theme.muted_foreground),
+                                        ),
+                                )
                             } else {
-                                "channel.channel-header.channel-name--8"
-                            },
-                            view.channel_title.to_string(),
-                        )
-                        .child(view.channel_title.clone()),
-                )
-                .when_some(view.channel_topic.clone(), |d, topic| {
-                    d.child(div().w(px(1.)).h(px(16.)).mx_1().bg(theme.border)).child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .truncate()
-                            .text_xs()
-                            .font_weight(FontWeight::NORMAL)
-                            .text_color(theme.muted_foreground)
-                            .child(topic),
-                    )
-                }),
+                                d.child(
+                                    div()
+                                        .text_color(theme.muted_foreground)
+                                        .text_base()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .child(glyph),
+                                )
+                            }
+                        })
+                        .when(dm_peer.is_none(), |d| {
+                            d.child(
+                                div()
+                                    .flex_none()
+                                    .ml(px(4.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_size(px(16.))
+                                    .line_height(px(24.))
+                                    .text_color(theme.foreground)
+                                    .flx_text("channel.channel-header.channel-name--8", view.channel_title.to_string())
+                                    .child(view.channel_title.clone()),
+                            )
+                        })
+                        .when_some(view.channel_topic.clone(), |d, topic| {
+                            d.child(div().w(px(1.)).h(px(16.)).mx_1().bg(theme.border)).child(
+                                div()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .truncate()
+                                    .text_xs()
+                                    .font_weight(FontWeight::NORMAL)
+                                    .text_color(theme.muted_foreground)
+                                    .child(topic),
+                            )
+                        }),
+                ),
         )
         .child(
             div()
@@ -334,81 +372,88 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         s.scope != default_scope
                     });
                     div()
-                        .id("toggle-search")
-                        .role(Role::Button)
-                        .aria_label(l10n::tr("Search"))
-                        .debug_selector(|| "toggle-search".to_owned())
-                        .w(px(theme.sizes.search_bar_width))
-                        .h(px(38.))
-                        .px_2p5()
-                        .rounded(px(12.))
-                        .bg(theme.background_textarea)
-                        .when(search_open, |d| d.border_1().border_color(theme.accent))
-                        .hover(|s| s.bg(theme.control_hover_bg))
-                        .cursor_pointer()
-                        .flex()
-                        .flex_row()
-                        .items_center()
-                        .gap_2()
-                        .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx)))
-                        .flx("channel.message-search-bar.message-search-bar.input-container")
+                        .flx("channel.channel-header.message-search-focus-wrapper")
                         .child(
                             div()
-                                .id("header-search-scope-btn")
-                                .debug_selector(|| "header-search-scope-btn".to_owned())
+                                .id("toggle-search")
                                 .role(Role::Button)
-                                .aria_label(l10n::tr("Search scope"))
-                                .relative()
-                                .flex_none()
-                                .size(px(16.))
-                                .flex()
-                                .items_center()
-                                .justify_center()
+                                .aria_label(l10n::tr("Search"))
+                                .debug_selector(|| "toggle-search".to_owned())
+                                .w(px(theme.sizes.search_bar_width))
+                                .h(px(38.))
+                                .px_2p5()
+                                .rounded(px(12.))
+                                .bg(theme.background_textarea)
+                                .border_1()
+                                .border_color(if search_open { theme.accent } else { theme.background_modifier_accent })
+                                .hover(|s| s.bg(theme.control_hover_bg))
                                 .cursor_pointer()
-                                .text_color(theme.foreground)
-                                .text_size(px(16.))
-                                .line_height(px(24.))
-                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                                .on_click(cx.listener(|this, ev: &gpui_kit::ClickEvent, window, cx| {
-                                    cx.stop_propagation();
-                                    this.toggle_search_scope_popout(ev.position(), window, cx);
-                                }))
-                                .flx("channel.message-search-bar.message-search-bar.scope-button.scope-menu-open")
-                                .child(crate::ui::channel_popouts::track_trigger("header-search-scope-btn"))
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .gap_2()
+                                .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx)))
+                                .flx("channel.message-search-bar.message-search-bar.anchor")
+                                .flx("channel.message-search-bar.message-search-bar.input-container")
                                 .child(
                                     div()
+                                        .id("header-search-scope-btn")
+                                        .debug_selector(|| "header-search-scope-btn".to_owned())
+                                        .role(Role::Button)
+                                        .aria_label(l10n::tr("Search scope"))
+                                        .relative()
                                         .flex_none()
                                         .size(px(16.))
-                                        .flx("channel.message-search-bar.message-search-bar.search-icon")
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .cursor_pointer()
+                                        .text_color(theme.foreground)
+                                        .text_size(px(16.))
+                                        .line_height(px(24.))
+                                        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                        .on_click(cx.listener(|this, ev: &gpui_kit::ClickEvent, window, cx| {
+                                            cx.stop_propagation();
+                                            this.toggle_search_scope_popout(ev.position(), window, cx);
+                                        }))
+                                        .flx("channel.message-search-bar.message-search-bar.scope-button.scope-menu-open")
+                                        .child(crate::ui::channel_popouts::track_trigger("header-search-scope-btn"))
                                         .child(
-                                            Icon::new(AppIcon::MagnifyingGlass)
-                                                .with_size(px(16.))
-                                                .text_color(theme.muted_foreground),
-                                        ),
+                                            div()
+                                                .flex_none()
+                                                .size(px(16.))
+                                                .flx("channel.message-search-bar.message-search-bar.search-icon")
+                                                .child(
+                                                    Icon::new(AppIcon::MagnifyingGlass)
+                                                        .with_size(px(16.))
+                                                        .text_color(theme.muted_foreground),
+                                                ),
+                                        )
+                                        .when(non_default_scope, |d| {
+                                            d.child(
+                                                div()
+                                                    .debug_selector(|| "header-search-scope-indicator".to_owned())
+                                                    .absolute()
+                                                    .bottom(px(-2.))
+                                                    .left(px(-2.))
+                                                    .size(px(6.))
+                                                    .rounded_full()
+                                                    .bg(theme.brand),
+                                            )
+                                        }),
                                 )
-                                .when(non_default_scope, |d| {
-                                    d.child(
-                                        div()
-                                            .debug_selector(|| "header-search-scope-indicator".to_owned())
-                                            .absolute()
-                                            .bottom(px(-2.))
-                                            .left(px(-2.))
-                                            .size(px(6.))
-                                            .rounded_full()
-                                            .bg(theme.brand),
-                                    )
-                                }),
-                        )
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_w_0()
-                                .truncate()
-                                .text_size(px(14.))
-                                .line_height(px(22.))
-                                .font_weight(FontWeight::NORMAL)
-                                .text_color(theme.muted_foreground)
-                                .child(l10n::tr("Search messages")),
+                                .child(
+                                    div()
+                                        .flex_1()
+                                        .min_w_0()
+                                        .truncate()
+                                        .text_size(px(14.))
+                                        .line_height(px(22.))
+                                        .font_weight(FontWeight::NORMAL)
+                                        .text_color(theme.foreground)
+                                        .flx("channel.message-search-bar.message-search-bar.input.text")
+                                        .child(l10n::tr("Search messages")),
+                                ),
                         )
                 })
                 .when_some(

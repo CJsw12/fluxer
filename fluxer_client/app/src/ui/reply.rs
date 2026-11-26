@@ -11,6 +11,7 @@ use gpui_kit::{
 };
 
 use crate::format::{default_avatar_index, initials};
+use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 use crate::ui::l10n;
 use crate::ui::avatar::{AvatarSpec, render_avatar};
@@ -38,6 +39,7 @@ pub struct ReplyAuthorLine {
     pub message_id: Snowflake,
     pub author_id: Snowflake,
     pub author: SharedString,
+    pub mention_author: bool,
     pub initials: SharedString,
     pub avatar_url: Option<SharedString>,
     pub default_avatar: usize,
@@ -64,6 +66,7 @@ pub fn reply_line(state: &ClientState, message: &Message, media: Option<&str>) -
                 author_id: target.author.id,
                 initials: initials(&author).into(),
                 author: author.into(),
+                mention_author: message.mentions.iter().any(|u| u.id == target.author.id),
                 avatar_url: media.and_then(|media| avatar_url(media, &target.author)).map(Into::into),
                 default_avatar: default_avatar_index(target.author.id),
                 excerpt: excerpt(&target.content, EXCERPT_CHARS).into(),
@@ -115,66 +118,120 @@ pub fn reply_preview_line(
         .w(px(spine_w))
         .ml(px(spine_ml))
         .mt(px(8.))
+        .mr(px(4.))
         .h(px(8.))
         .flex_none()
         .border_l_2()
         .border_t_2()
         .rounded_tl(px(6.))
         .border_color(theme.border);
-    let mut row = div()
-        .id(id)
+    let mut inner = div()
         .flex()
         .flex_row()
+        .flex_1()
         .items_center()
-        .gap_1()
         // Official `.repliedMessage`: 14px text in an 18px line (`--message-reply-height`).
         .h(px(18.))
         .text_size(px(14.))
         .line_height(px(18.))
         .text_color(muted)
         .min_w_0()
-        .child(spine);
+        .flx("channel.reply-preview.replied-message--3");
     let target = match line {
         ReplyLine::Loaded(target) => {
-            row = row
-                .child(render_avatar(
-                    AvatarSpec {
-                        user_id: target.author_id,
-                        avatar_url: target.avatar_url.clone(),
-                        display_name: target.author.clone(),
-                        size: REPLY_AVATAR,
-                        status: None,
-                        status_border_bg: None,
-                    },
-                    theme,
-                ))
+            let mut username_color = theme.foreground;
+            username_color.a *= 0.64;
+            inner = inner
                 .child(
                     div()
                         .flex_none()
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(theme.foreground)
-                        .child(format!("@{}", target.author)),
+                        .mr(px(4.))
+                        .cursor_pointer()
+                        .flx("channel.reply-preview.replied-avatar")
+                        .child(render_avatar(
+                            AvatarSpec {
+                                user_id: target.author_id,
+                                avatar_url: target.avatar_url.clone(),
+                                display_name: target.author.clone(),
+                                size: REPLY_AVATAR,
+                                status: None,
+                                status_border_bg: None,
+                            },
+                            theme,
+                        )),
+                )
+                .child(
+                    div()
+                        .flex_none()
+                        .mr(px(5.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(username_color)
+                        .flx("channel.reply-preview.replied-username")
+                        .child(if target.mention_author {
+                            format!("@{}", target.author)
+                        } else {
+                            target.author.to_string()
+                        }),
                 );
-            row = if target.excerpt.is_empty() {
-                row.child(div().italic().child(if target.has_attachments {
-                    "Click to see attachment"
-                } else {
-                    "Click to see message"
-                }))
+            inner = if target.excerpt.is_empty() {
+                inner.child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .h(px(18.))
+                        .overflow_hidden()
+                        .truncate()
+                        .italic()
+                        .flx("channel.reply-preview.replied-text-preview.jump-to-replied-message.button")
+                        .child(
+                            div().flex().flex_row().min_w_0().child(
+                                div()
+                                    .flx("channel.reply-preview.replied-text-content--2")
+                                    .child(if target.has_attachments {
+                                        "Click to see attachment"
+                                    } else {
+                                        "Click to see message"
+                                    }),
+                            ),
+                        ),
+                )
             } else {
-                row.child(div().min_w_0().overflow_hidden().truncate().child(target.excerpt.clone()))
+                inner.child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .h(px(18.))
+                        .overflow_hidden()
+                        .truncate()
+                        .flx("channel.reply-preview.replied-text-preview.jump-to-replied-message.button")
+                        .child(
+                            div().flex().flex_row().min_w_0().child(
+                                div()
+                                    .flx("channel.reply-preview.replied-text-content--2")
+                                    .child(target.excerpt.clone()),
+                            ),
+                        ),
+                )
             };
             Some((target.channel_id, target.message_id))
         }
         ReplyLine::Deleted => {
-            row = row.child(div().italic().child(l10n::tr("Original message was deleted")));
+            inner = inner.child(div().italic().child(l10n::tr("Original message was deleted")));
             None
         }
         ReplyLine::NotLoaded { channel_id, message_id } => {
-            row = row.child(div().italic().child("Loading message…"));
+            inner = inner.child(div().italic().child("Loading message…"));
             Some((*channel_id, *message_id))
         }
     };
+    let row = div()
+        .id(id)
+        .flex()
+        .flex_row()
+        .items_center()
+        .min_w_0()
+        .child(spine)
+        .child(inner);
     match target {
         Some((channel_id, message_id)) => row
             .cursor_pointer()

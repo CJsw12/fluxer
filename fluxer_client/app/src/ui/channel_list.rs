@@ -23,51 +23,81 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             .h(px(theme.sizes.header_height))
             .flex_none()
             .px_2()
+            .bg(theme.background_secondary)
             .border_b_1()
-            .border_color(theme.border)
+            .border_color(theme.user_area_divider)
             .flex()
             .items_center()
+            .flx("channel.direct-message.dm-list.dm-list-header.show.button")
             .child(
                 div()
                     .id("dm-quick-switcher-btn")
                     .role(Role::Button)
                     .aria_label(l10n::tr("Quick switcher"))
                     .debug_selector(|| "dm-quick-switcher-btn".to_owned())
+                    .relative()
                     .w_full()
-                    .h(px(34.))
+                    .h(px(28.))
                     .flex()
                     .flex_row()
                     .items_center()
-                    .justify_between()
-                    .gap_2()
-                    .px_2p5()
+                    .px(px(12.))
                     .rounded(px(6.))
-                    .bg(theme.background)
-                    .border_1()
-                    .border_color(theme.border)
+                    .text_color(theme.muted_foreground)
                     .cursor_pointer()
-                    .hover(|s| s.bg(theme.hover_bg))
+                    .hover(|s| s.bg(theme.hover_bg).text_color(theme.foreground))
                     .on_click(cx.listener(|this, _, window, cx| this.open_quick_switcher(window, cx)))
+                    .flx("channel.direct-message.dm-list.dm-list-header-button")
                     .child(
                         div()
-                            .flex_1()
                             .min_w_0()
                             .truncate()
-                            .text_xs()
-                            .text_color(theme.muted_foreground)
+                            .text_size(px(13.))
+                            .line_height(px(19.5))
+                            .font_weight(FontWeight::MEDIUM)
+                            .flx("channel.direct-message.dm-list.dm-list-header-text")
                             .child(l10n::tr("Quick switcher")),
                     )
                     .child(
                         div()
+                            .absolute()
+                            .right(px(8.))
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(2.))
                             .flex_none()
-                            .px_1p5()
-                            .py_0p5()
-                            .rounded(px(4.))
-                            .bg(theme.background_secondary)
-                            .text_size(px(10.))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.muted_foreground)
-                            .child("CTRL K"),
+                            .flx("channel.direct-message.dm-list.dm-list-header-shortcut")
+                            .child(
+                                div()
+                                    .h(px(18.))
+                                    .min_w(px(18.))
+                                    .px(px(4.))
+                                    .rounded(px(4.))
+                                    .bg(theme.background_modifier_accent)
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .text_size(px(10.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(theme.foreground)
+                                    .child("CTRL"),
+                            )
+                            .child(
+                                div()
+                                    .h(px(18.))
+                                    .min_w(px(18.))
+                                    .px(px(4.))
+                                    .rounded(px(4.))
+                                    .bg(theme.background_modifier_accent)
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .text_size(px(10.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(theme.foreground)
+                                    .child("K"),
+                            ),
                     ),
             )
             .into_any_element(),
@@ -309,7 +339,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         }
         Place::Explore => return super::explore::render_sidebar(view, theme, cx),
     };
-    let mut list = div()
+    let scroller = div()
         .id("channel-list")
         .role(Role::Navigation)
         .aria_label(l10n::tr("Channels"))
@@ -317,11 +347,21 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .flex_col()
         .flex_1()
         .min_h_0()
-        .pt(px(if view.place == Place::Home { 0. } else { 11. }))
-        .pb_2()
-        .gap(px(1.))
-        .when(view.place == Place::Home, |d| d.px(px(8.)))
+        .when(view.place == Place::Home, |d| {
+            d.bg(theme.background_secondary)
+                .flx("channel.direct-message.dm-list.desktop-scroller")
+        })
         .overflow_y_scroll();
+    let mut list = div()
+        .flex()
+        .flex_col()
+        .w_full()
+        .pt(px(if view.place == Place::Home { 0. } else { 11. }))
+        .pb(px(if view.place == Place::Home { 0. } else { 8. }))
+        .gap(px(1.))
+        .when(view.place == Place::Home, |d| {
+            d.px(px(8.)).flx("channel.direct-message.dm-list.scroller-content")
+        });
     if view.place == Place::Home {
         let notes_id = view
             .backend
@@ -337,6 +377,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             inner: "channel.direct-message.dm-list.clickable-item-inner",
             content: "channel.direct-message.dm-list.clickable-item-content",
             icon: "channel.direct-message.dm-list.clickable-item-icon",
+            icon_svg: "channel.direct-message.dm-list.icon-size5--4",
             text: "channel.direct-message.dm-list.clickable-item-text",
         };
         let flx_notes = ClickableFlx {
@@ -344,13 +385,14 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             inner: "",
             content: "channel.direct-message.dm-list.clickable-item-content--2",
             icon: "channel.direct-message.dm-list.clickable-item-icon--2",
+            icon_svg: "channel.direct-message.dm-list.icon-size5--5",
             text: "channel.direct-message.dm-list.clickable-item-text--2",
         };
         let pending = view.pending_incoming;
         let notes_target_id = notes_id.or_else(|| view.backend.state().current_user_id());
         list = list
             // `DirectMessageList` leading `var(--spacing-2)` spacer.
-            .child(div().flex_none().h(px(8.)))
+            .child(div().flex_none().h(px(8.)).flx("channel.direct-message.dm-list.div--2"))
             .child(clickable_item(
                 "home-friends",
                 l10n::tr("Friends"),
@@ -424,20 +466,51 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             .flex_none()
                             .size(px(16.))
                             .debug_selector(|| "create-group-dm-btn".to_owned())
+                            .flx("channel.direct-message.direct-message-list.dm-list.dm-create-button-tooltip-target")
                             .child(
-                                Button::new("create-group-dm-btn")
-                                    .ghost()
-                                    .xsmall()
-                                    .icon(AppIcon::Plus)
-                                    .tooltip(l10n::tr("Create group DM"))
-                                    .accessibility_label(l10n::tr("Create group DM"))
-                                    .on_click(cx.listener(|this, _, window, cx| this.open_create_group_dm(window, cx))),
+                                div()
+                                    .id("create-group-dm-btn")
+                                    .role(Role::Button)
+                                    .aria_label(l10n::tr("Create group DM"))
+                                    .size(px(16.))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .cursor_pointer()
+                                    .text_color(theme.muted_foreground)
+                                    .hover(|s| s.text_color(theme.foreground))
+                                    .on_click(cx.listener(|this, _, window, cx| this.open_create_group_dm(window, cx)))
+                                    .flx("channel.direct-message.dm-list.dm-create-button.open-create-dm-modal")
+                                    .child(
+                                        div()
+                                            .size(px(16.))
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .flx("channel.direct-message.dm-list.icon-size4--2")
+                                            .child(Icon::new(AppIcon::Plus).with_size(px(16.))),
+                                    ),
                             ),
                     ),
             );
     }
-    for c in &view.channels {
-        list = list.child(render_channel(view, c, theme, cx));
+    if view.place == Place::Home {
+        let mut dm_list = div()
+            .flex()
+            .flex_col()
+            .gap(px(1.))
+            .bg(theme.background_secondary)
+            .flx("channel.direct-message.dm-list.dm-channel-list");
+        for c in &view.channels {
+            dm_list = dm_list.child(render_channel(view, c, theme, cx));
+        }
+        list = list
+            .child(dm_list)
+            .child(div().flex_none().h(px(73.)).flx("channel.direct-message.dm-list.bottom-spacer"));
+    } else {
+        for c in &view.channels {
+            list = list.child(render_channel(view, c, theme, cx));
+        }
     }
     div()
         .flex()
@@ -446,8 +519,11 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .h_full()
         .flex_none()
         .bg(theme.background_secondary)
+        .when(view.place == Place::Home, |d| {
+            d.flx("channel.direct-message.dm-list.dm-list-container")
+        })
         .child(header_bar)
-        .child(list)
+        .child(scroller.child(list))
         .into_any_element()
 }
 
@@ -457,6 +533,7 @@ struct ClickableFlx {
     inner: &'static str,
     content: &'static str,
     icon: &'static str,
+    icon_svg: &'static str,
     text: &'static str,
 }
 
@@ -495,7 +572,15 @@ fn clickable_item(
                 .items_center()
                 .justify_center()
                 .flx(flx.icon)
-                .child(Icon::new(icon).with_size(px(20.)).text_color(icon_fg)),
+                .child(
+                    div()
+                        .size(px(20.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .flx(flx.icon_svg)
+                        .child(Icon::new(icon).with_size(px(20.)).text_color(icon_fg)),
+                ),
         )
         .child(
             div()
@@ -705,88 +790,104 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                     .bg(fg),
             )
         })
-        .child(if c.icon == ChannelIcon::Dm {
-            div()
-                .debug_selector(|| "dm-row-avatar".to_owned())
-                .flex_none()
-                .size(px(32.))
-                .when(selected, |d| d.flx("channel.direct-message.dm-list-item.dm-item-avatar-wrapper--2"))
-                .child(render_avatar(
-                    AvatarSpec {
-                        user_id: c.dm_user_id.unwrap_or(c.id),
-                        avatar_url: c.dm_avatar_url.clone(),
-                        display_name: c.name.clone(),
-                        size: 32.,
-                        status: c.dm_status,
-                        status_border_bg: Some(theme.background_secondary),
-                    },
-                    theme,
-                ))
-                .into_any_element()
-        } else {
-            let icon = match c.icon {
-                ChannelIcon::Voice => AppIcon::VoiceChannel,
-                ChannelIcon::Announcement => AppIcon::AnnouncementChannel,
-                ChannelIcon::Forum => AppIcon::ForumChannel,
-                ChannelIcon::Thread => AppIcon::Chats,
-                ChannelIcon::Link => AppIcon::LinkChannel,
-                _ => AppIcon::TextChannel,
-            };
-            div()
-                .size(px(20.))
-                .flex_none()
-                .flex()
-                .items_center()
-                .justify_center()
-                .child(
-                    div()
-                        .flex_none()
-                        .size(px(20.))
-                        .flx(match c.icon {
-                            ChannelIcon::Voice => "channel.channel-utils.get-icon.voice-channel-icon",
-                            _ => "channel.channel-utils.get-icon.text-channel-icon",
-                        })
-                        .child(Icon::new(icon).with_size(px(20.)).text_color(if selected { fg } else { muted_fg })),
-                )
-                .flx("app.channel-item-content.div")
-                .into_any_element()
-        })
-        .child(if is_dm {
-            // `.dmItemInfo` / `.dmItemName` (20px lines) around the name text.
+        .child(
             div()
                 .flex_1()
                 .min_w_0()
                 .flex()
                 .flex_row()
                 .items_center()
-                .h(px(20.))
-                // Room for the close button (24px) the official row reserves.
-                .mr(px(24.))
-                .when(selected, |d| {
-                    d.flx("channel.direct-message.dm-list-item.dm-item-info--2")
-                        .flx("channel.direct-message.dm-list-item.dm-item-name--2")
+                .gap(px(if is_dm { 12. } else { 6. }))
+                .when(is_dm && selected, |d| {
+                    d.flx("channel.direct-message.dm-list-item.dm-item-content--2")
                 })
-                .child(
+                .child(if c.icon == ChannelIcon::Dm {
                     div()
+                        .debug_selector(|| "dm-row-avatar".to_owned())
+                        .flex_none()
+                        .size(px(32.))
+                        .when(selected, |d| d.flx("channel.direct-message.dm-list-item.dm-item-avatar-wrapper--2"))
+                        .child(render_avatar(
+                            AvatarSpec {
+                                user_id: c.dm_user_id.unwrap_or(c.id),
+                                avatar_url: c.dm_avatar_url.clone(),
+                                display_name: c.name.clone(),
+                                size: 32.,
+                                status: c.dm_status,
+                                status_border_bg: Some(theme.background_secondary),
+                            },
+                            theme,
+                        ))
+                        .into_any_element()
+                } else {
+                    let icon = match c.icon {
+                        ChannelIcon::Voice => AppIcon::VoiceChannel,
+                        ChannelIcon::Announcement => AppIcon::AnnouncementChannel,
+                        ChannelIcon::Forum => AppIcon::ForumChannel,
+                        ChannelIcon::Thread => AppIcon::Chats,
+                        ChannelIcon::Link => AppIcon::LinkChannel,
+                        _ => AppIcon::TextChannel,
+                    };
+                    div()
+                        .size(px(20.))
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(
+                            div()
+                                .flex_none()
+                                .size(px(20.))
+                                .flx(match c.icon {
+                                    ChannelIcon::Voice => "channel.channel-utils.get-icon.voice-channel-icon",
+                                    _ => "channel.channel-utils.get-icon.text-channel-icon",
+                                })
+                                .child(
+                                    Icon::new(icon)
+                                        .with_size(px(20.))
+                                        .text_color(if selected { fg } else { muted_fg }),
+                                ),
+                        )
+                        .flx("app.channel-item-content.div")
+                        .into_any_element()
+                })
+                .child(if is_dm {
+                    // `.dmItemInfo` / `.dmItemName` (20px lines) around the name text.
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .h(px(20.))
+                        // Room for the close button (24px) + 12px gap the official row reserves.
+                        .mr(px(36.))
+                        .when(selected, |d| {
+                            d.flx("channel.direct-message.dm-list-item.dm-item-info--2")
+                                .flx("channel.direct-message.dm-list-item.dm-item-name--2")
+                        })
+                        .child(
+                            div()
+                                .min_w_0()
+                                .truncate()
+                                .when(selected, |d| {
+                                    d.flx_text("channel.direct-message.dm-list-item.dm-item-name-text--2", c.name.to_string())
+                                })
+                                .child(c.name.clone()),
+                        )
+                        .into_any_element()
+                } else {
+                    div()
+                        .flex_1()
                         .min_w_0()
                         .truncate()
-                        .when(selected, |d| {
-                            d.flx_text("channel.direct-message.dm-list-item.dm-item-name-text--2", c.name.to_string())
-                        })
-                        .child(c.name.clone()),
-                )
-                .into_any_element()
-        } else {
-            div()
-                .flex_1()
-                .min_w_0()
-                .truncate()
-                .flx_text("app.channel-item-content.channel-name", c.name.to_string())
-                .child(c.name.clone())
-                .into_any_element()
-        })
+                        .flx_text("app.channel-item-content.channel-name", c.name.to_string())
+                        .child(c.name.clone())
+                        .into_any_element()
+                }),
+        )
         // Official trailing slot: gap plus reserved icon space (16px when selected).
-        .child(div().flex_none().w(px(if selected && !is_dm { 16. } else { 0. })));
+        .when(!is_dm, |d| d.child(div().flex_none().w(px(if selected { 16. } else { 0. }))));
     if c.muted {
         row = row.child(Icon::new(AppIcon::BellSlash).xsmall());
     }

@@ -191,12 +191,23 @@ impl ClientView {
                 .flex_1()
                 .min_w_0()
                 .h_full()
-                // OutlineFrame.module.css: the pane sits inside the 1px frame border.
-                .pt(px(1.))
-                .pb(px(1.))
+                .bg(theme.background_secondary_lighter)
+                .flx("channel.channel-view.channel-view-scaffold.channel-grid")
                 // Files dropped anywhere on the message pane go to the tray.
                 .on_drop(cx.listener(|v, paths: &ExternalPaths, _, cx| v.add_paths(paths.paths(), cx)))
-                .child(ui::header::render(self, theme, cx))
+                .child(
+                    div()
+                        .w_full()
+                        .flx("channel.channel-view.channel-view-scaffold.div")
+                        .child(
+                            div()
+                                .w_full()
+                                .when(self.place == Place::Home, |d| {
+                                    d.flx("channel.channel-view.dm-channel-view.voice-active-header-wrapper")
+                                })
+                                .child(ui::header::render(self, theme, cx)),
+                        ),
+                )
                 .child(
                     div()
                         .flex()
@@ -204,6 +215,7 @@ impl ClientView {
                         .flex_1()
                         .min_h_0()
                         .w_full()
+                        .flx("channel.channel-view.channel-view-scaffold.content-grid")
                         .child(
                             div()
                                 .flex()
@@ -211,6 +223,9 @@ impl ClientView {
                                 .flex_1()
                                 .min_w_0()
                                 .h_full()
+                                .bg(theme.background_secondary_lighter)
+                                .flx("channel.channel-view.channel-view-scaffold.chat-area-slot")
+                                .flx("channel.channel-chat-layout.container")
                                 .when_some(self.voice.watched_video_track.as_ref(), |d, track| {
                                     let label = ui::video_viewer::participant_display_name(self, track);
                                     d.child(ui::video_viewer::render(
@@ -224,7 +239,16 @@ impl ClientView {
                                 .when(!self.guild_unavailable && self.selected_channel.is_some() && self.unread_anchor.is_some(), |d| {
                                     d.child(self.render_unread_bar(theme, cx))
                                 })
-                                .child(ui::message_list::render(self, handle, theme))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .flex_1()
+                                        .min_h_0()
+                                        .min_w_0()
+                                        .flx("channel.channel-chat-layout.messages-area")
+                                        .child(ui::message_list::render(self, handle, theme)),
+                                )
                                 .when(self.has_more_after && self.selected_channel.is_some(), |d| {
                                     d.child(self.render_jump_to_present(theme, cx))
                                 })

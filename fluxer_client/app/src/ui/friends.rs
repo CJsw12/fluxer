@@ -877,14 +877,12 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             .into_any_element()
     };
 
-    // OutlineFrame.module.css: sits inside the 1px frame border at top and bottom.
+    // OutlineFrame.module.css: parent `content-column` already provides the 1px top/bottom inset.
     div()
         .flex_1()
         .min_h_0()
         .w_full()
         .mr(px(-1.))
-        .pt(px(1.))
-        .pb(px(1.))
         .flex()
         .flex_col()
         .child(

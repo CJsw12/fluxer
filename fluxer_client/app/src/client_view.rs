@@ -934,27 +934,79 @@ impl Render for ClientView {
                 // 381x58 at default 320px sidebar). Rail 72 + 1px gap + sidebar_w.
                 div()
                     .relative()
-                    .w(px(theme.sizes.rail_width + 1. + sidebar_w))
+                    .w(px(theme.sizes.rail_width + 1.))
                     .h_full()
                     .flex_none()
                     .bg(theme.background_secondary)
                     .flex()
                     .flex_row()
                     .child(ui::guild_rail::render(self, &theme, cx))
-                    .child(div().w(px(1.)).h_full().flex_none().bg(theme.background_secondary))
-                    // `channel-list-content.bottom-spacer` (73px).
+                    .child(div().w(px(1.)).h_full().flex_none().bg(theme.background_secondary)),
+            )
+            .child(
+                // The layout sits inside the 1px frame border at the top and bottom
+                // for channel/DM views (explore/voice-stage manage their own).
+                div()
+                    .flex()
+                    .flex_row()
+                    .flex_1()
+                    .min_w_0()
+                    .h_full()
+                    .when(!show_explore && !show_voice_stage, |d| d.pt(px(1.)).pb(px(1.)))
                     .child(
-                        // The navbar sits inside the 1px frame border at the top and bottom.
-                        div().h_full().flex_none().pt(px(1.)).pb(px(1.)).child(
-                            div()
-                                .h_full()
-                                .when(self.place != Place::Explore, |d| d.pb(px(73.)))
-                                .flx("app.guild-sidebar.guild-navbar")
-                                .child(ui::channel_list::render(self, &theme, cx)),
-                        ),
+                        div()
+                            .flex()
+                            .flex_row()
+                            .flex_1()
+                            .min_w_0()
+                            .h_full()
+                            .when(self.place == Place::Home, |d| {
+                                d.bg(theme.background_secondary)
+                                    .flx("channel.direct-message.dm-layout.dm-layout-container")
+                            })
+                            .child(
+                                div()
+                                    .h_full()
+                                    .flex_none()
+                                    .when(show_explore, |d| d.pt(px(1.)).pb(px(1.)))
+                                    .when(self.place == Place::Home, |d| {
+                                        d.bg(theme.background_secondary)
+                                            .flx("channel.direct-message.dm-layout.dm-list-column--2")
+                                    })
+                                    .child(
+                                        div()
+                                            .h_full()
+                                            .when(matches!(self.place, Place::Guild(_)), |d| d.pb(px(73.)))
+                                            .flx("app.guild-sidebar.guild-navbar")
+                                            .child(ui::channel_list::render(self, &theme, cx)),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_1()
+                                    .min_w_0()
+                                    .h_full()
+                                    .when(self.place == Place::Home, |d| {
+                                        d.bg(theme.background_tertiary)
+                                            .flx("channel.direct-message.dm-layout.content-column--2")
+                                    })
+                                    .when(self.place != Place::Home, |d| d.bg(theme.background_secondary_lighter))
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .h_full()
+                                            .when(self.place == Place::Home, |d| {
+                                                d.bg(theme.background_secondary)
+                                                    .flx("channel.direct-message.dm-layout.content-inner--2")
+                                            })
+                                            .child(main_pane),
+                                    ),
+                            ),
                     ),
             )
-            .child(div().flex().flex_1().min_w_0().h_full().bg(theme.background_secondary_lighter).child(main_pane))
             .children(right_panel)
             // `OutlineFrame.module.css`: 1px `rgba(255,255,255,0.035)` border with a 14px
             // top-left radius around everything right of the 72px rail.

@@ -176,7 +176,9 @@ pub fn render(
     let compact = sizes.compact;
     let mut content = div().flex().flex_col().flex_1().min_w_0();
     // The official wrapper holds the author line and the body.
-    content = content.flx("channel.user-message.message-content");
+    content = content
+        .flx("channel.user-message.message-content")
+        .flx("channel.user-message.message-content--2");
     if compact || row.group_start {
         let view_author = view.clone();
         let author_btn = div()
@@ -278,7 +280,11 @@ pub fn render(
     if let (MessageState::Sending, Some(percent)) = (row.state, row.upload_percent) {
         content = content.child(upload_bar(percent, theme));
     }
-    let mut accessories = div().flex().flex_col().py(px(2.));
+    let mut accessories = div()
+        .flex()
+        .flex_col()
+        .py(px(2.))
+        .flx("channel.user-message.container--3");
     let mut has_accessories = false;
     let placeholder = theme.image_placeholder;
     if !row.images.is_empty() {
@@ -345,49 +351,77 @@ pub fn render(
                 .with_loading(move || div().size_full().bg(placeholder).into_any_element())
                 .with_fallback(move || div().text_xs().text_color(muted_fg).child(url.clone()).into_any_element());
             let mut badge_bg: Hsla = rgb(0x000000).into();
-            badge_bg.a = 0.65;
-            images_grid = images_grid.child(
+            badge_bg.a = 0.6;
+            let tile = div()
+                .id(SharedString::from(format!("attachment-open-{}-{ix}", row.id.0)))
+                .debug_selector(move || format!("attachment-open-{}-{ix}", row.id.0))
+                .relative()
+                .w(px(tile_w))
+                .h(px(tile_h))
+                .flex_none()
+                .rounded(px(4.))
+                .overflow_hidden()
+                .bg(theme.background_secondary)
+                .when(image_count == 2, |d| {
+                    d.flx("channel.embeds.media.media-container.group.clear-text-selection")
+                        .flx("channel.embeds.attachments.attachment-grid-item.media-container")
+                        .flx("channel.embeds.attachments.attachment-grid-item.media-frame")
+                })
+                .when(image_count == 1, |d| {
+                    d.flx("channel.embeds.media.media-container.group.clear-text-selection")
+                        .flx("channel.embeds.media.embed-image.image-inner-container")
+                        .flx("channel.embeds.media.embed-image.image-element")
+                })
+                .cursor_pointer()
+                .on_click(move |_, window, cx| {
+                    let items = (*items_for_click).clone();
+                    let _ = view_img.update(cx, |v, cx| v.open_media_viewer(items, ix, window, cx));
+                })
+                .child(
+                    div()
+                        .size_full()
+                        .when(image_count == 2, |d| {
+                            d.flx("channel.embeds.attachments.attachment-grid-item.clickable-button")
+                                .flx("channel.embeds.attachments.attachment-grid-item.media-image")
+                        })
+                        .when(image_count == 1, |d| {
+                            d.flx("channel.embeds.media.embed-image.image-preview-handler.image-preview-handler.open-image-preview.button")
+                        })
+                        .child(thumb),
+                )
+                .when(image.animated, |d| {
+                    d.child(
+                        div()
+                            .debug_selector(move || format!("attachment-gif-badge-{}-{ix}", row.id.0))
+                            .when(image_count == 2, |d| {
+                                d.flx("channel.embeds.attachments.attachment-grid-item.gif-indicator")
+                            })
+                            .absolute()
+                            .top_2()
+                            .left_2()
+                            .px(px(8.))
+                            .py_1()
+                            .rounded(px(4.))
+                            .bg(badge_bg)
+                            .text_color(theme.on_fill)
+                            .text_sm()
+                            .line_height(px(14.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .child("GIF"),
+                    )
+                });
+            images_grid = images_grid.child(if image_count == 1 {
                 div()
-                    .id(SharedString::from(format!("attachment-open-{}-{ix}", row.id.0)))
-                    .debug_selector(move || format!("attachment-open-{}-{ix}", row.id.0))
-                    .relative()
-                    .w(px(tile_w))
-                    .h(px(tile_h))
-                    .flex_none()
-                    .rounded(px(4.))
-                    .overflow_hidden()
-                    .bg(placeholder)
-                    .when(image_count == 2, |d| {
-                        d.flx("channel.embeds.attachments.attachment-grid-item.media-container")
-                    })
-                    .when(image_count == 1, |d| d.flx("channel.embeds.media.embed-image.image-element"))
-                    .cursor_pointer()
-                    .on_click(move |_, window, cx| {
-                        let items = (*items_for_click).clone();
-                        let _ = view_img.update(cx, |v, cx| v.open_media_viewer(items, ix, window, cx));
-                    })
-                    .child(thumb)
-                    .when(image.animated, |d| {
-                        d.child(
-                            div()
-                                .debug_selector(move || format!("attachment-gif-badge-{}-{ix}", row.id.0))
-                                .when(image_count == 2, |d| {
-                                    d.flx("channel.embeds.attachments.attachment-grid-item.gif-indicator")
-                                })
-                                .absolute()
-                                .top_2()
-                                .left_2()
-                                .px(px(8.))
-                                .py_0p5()
-                                .rounded(px(4.))
-                                .bg(badge_bg)
-                                .text_color(rgb(0xffffff))
-                                .text_xs()
-                                .font_weight(FontWeight::BOLD)
-                                .child("GIF"),
-                        )
-                    }),
-            );
+                    .w_full()
+                    .flx("channel.embeds.attachments.attachment-single-media.single-media-container--4")
+                    .flx("channel.embeds.attachments.attachment-single-media.relative-wrapper--4")
+                    .flx("channel.embeds.media.embed-image.container")
+                    .flx("channel.embeds.media.embed-image.row-container--2")
+                    .child(tile)
+                    .into_any_element()
+            } else {
+                tile.into_any_element()
+            });
         }
         let container = div()
             .w_full()
@@ -506,17 +540,31 @@ pub fn render(
             },
         ));
     }
-    if has_accessories {
-        content = content.child(accessories);
-    }
+    let accessories_el = has_accessories.then(|| {
+        div()
+            .w_full()
+            .pl(px(if compact { 16. } else { 16. + sizes.gutter }))
+            .pr(px(64.))
+            .child(accessories)
+    });
     let is_hovered = !matches!(bar, RowBar::None);
     let mut main = div()
         .flex()
         .flex_row()
         .w_full()
         // Official `padding-inline-end` leaves 64px to the chat area edge.
-        .pl_4()
         .pr(px(64.))
+        .child(
+            div()
+                .w(px(16.))
+                .flex_none()
+                .when(compact || row.group_start, |d| {
+                    d.flx("channel.user-message.message-gutter-left--2")
+                })
+                .when(!compact && !row.group_start, |d| {
+                    d.flx("channel.message-author-info.message-gutter-left--2")
+                }),
+        )
         .when(row.state == MessageState::Sending, |d| d.opacity(0.6));
     if !compact {
         let gutter = if row.group_start {
@@ -575,7 +623,25 @@ pub fn render(
                 )
                 .into_any_element()
         };
-        main = main.child(div().w(px(sizes.gutter)).flex_none().child(gutter));
+        main = main.child(
+            div()
+                .w(px(sizes.gutter))
+                .flex_none()
+                .flex()
+                .flex_row()
+                .child(div().flex_1().min_w_0().child(gutter))
+                .child(
+                    div()
+                        .w(px(12.))
+                        .flex_none()
+                        .when(compact || row.group_start, |d| {
+                            d.flx("channel.user-message.message-gutter-right--2")
+                        })
+                        .when(!compact && !row.group_start, |d| {
+                            d.flx("channel.message-author-info.message-gutter-right--2")
+                        }),
+                ),
+        );
     }
     let main = main.child(content);
     // Official `--message-reply-spacing`: 0.25rem (4px) cozy, 0.0625rem (1px) compact.
@@ -621,8 +687,19 @@ pub fn render(
         })
         .children(reply_line)
         .child(main)
+        .children(accessories_el)
         // Probe-only overlay: the official rendered message wrapper excludes the 16px chat gutters.
-        .child(div().absolute().top_0().bottom_0().left(px(16.)).right(px(16.)).flx("channel.message-group.rendered-messages.div"));
+        .child(
+            div()
+                .absolute()
+                .top_0()
+                .bottom_0()
+                .left(px(16.))
+                .right(px(16.))
+                .flx("channel.message.focus-ring-anchor")
+                .flx("channel.message-group.rendered-messages.div")
+                .flx("channel.message-group.rendered-messages.div--2"),
+        );
     let bar = match bar {
         RowBar::None => None,
         RowBar::QuickReactions => {

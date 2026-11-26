@@ -46,22 +46,32 @@ pub fn render_with(
     let upload = view.can_send.then(|| {
         div()
             .flex_none()
-            .ml(px(4.))
+            .w(px(40.))
+            .h(px(32.))
+            .px(px(4.))
+            .flex()
+            .items_center()
+            .justify_center()
             .debug_selector(|| "composer-upload".to_owned())
-            .flx("channel.lexical-channel-textarea-content.plus-button-above-backdrop.clear-slash-command")
-            .child(crate::ui::channel_popouts::track_trigger("composer-upload-btn"))
-            .children(composer_icon_slot())
+            .flx("channel.lexical-channel-textarea-content.upload-button-column")
             .child(
-                Button::new("composer-upload-btn")
-                    .ghost()
-                    .with_size(px(32.))
-                    .rounded(px(6.))
-                    .icon(composer_icon(AppIcon::Plus, theme))
-                    .tooltip(l10n::tr("Open menu"))
-                    .accessibility_label(l10n::tr("Open menu"))
-                    .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
-                        v.toggle_composer_plus_menu(ev.position(), window, cx);
-                    })),
+                div()
+                    .size(px(32.))
+                    .flx("channel.lexical-channel-textarea-content.plus-button-above-backdrop.clear-slash-command")
+                    .child(crate::ui::channel_popouts::track_trigger("composer-upload-btn"))
+                    .children(composer_icon_slot())
+                    .child(
+                        Button::new("composer-upload-btn")
+                            .ghost()
+                            .with_size(px(32.))
+                            .rounded(px(6.))
+                            .icon(composer_icon(AppIcon::Plus, theme))
+                            .tooltip(l10n::tr("Open menu"))
+                            .accessibility_label(l10n::tr("Open menu"))
+                            .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
+                                v.toggle_composer_plus_menu(ev.position(), window, cx);
+                            })),
+                    ),
             )
     });
     let gif_btn = view.can_send.then(|| {
@@ -129,33 +139,56 @@ pub fn render_with(
         .children(top_bar)
         .child(
             div()
-                .flex()
-                .flex_row()
-                .items_center()
-                .gap(px(16.))
                 .min_h(px(theme.sizes.composer_height))
                 .rounded(px(theme.sizes.composer_radius))
                 .bg(theme.background_textarea)
-                .pl(px(10.))
-                .pr(px(10.))
-                .py(px(13.))
+                .px(px(10.))
                 .flx("channel.lexical-channel-textarea-content.textarea-outer")
-                .children(upload)
-                .child(div().flex_1().line_height(px(22.)).child(field))
-                .when(view.can_send, |d| {
-                    d.child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .gap(px(4.))
-                            .px(px(4.))
-                            .flx("channel.textarea.textarea-buttons.button-container-dense")
-                            .children(gif_btn)
-                            .children(sticker_btn)
-                            .children(emoji),
-                    )
-                }),
+                .child(
+                    div()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(12.))
+                        .w_full()
+                        .min_h(px(theme.sizes.composer_height))
+                        .py(px(13.))
+                        .flx("channel.lexical-channel-textarea-content.render-section.flx-channel-textarea-section")
+                        .flx("channel.lexical-channel-textarea-content.main-wrapper-dense")
+                        .children(upload)
+                        .child(
+                            div()
+                                .flex_1()
+                                .h(px(32.))
+                                .flex()
+                                .items_center()
+                                .flx("channel.lexical-channel-textarea-content.content-area-dense")
+                                .child(
+                                    div()
+                                        .w_full()
+                                        .h(px(22.))
+                                        .flex()
+                                        .items_center()
+                                        .line_height(px(22.))
+                                        .flx("channel.lexical-channel-textarea-content.flx-channel-textarea-composer")
+                                        .child(field),
+                                ),
+                        )
+                        .when(view.can_send, |d| {
+                            d.child(
+                                div()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(4.))
+                                    .px(px(4.))
+                                    .flx("channel.textarea.textarea-buttons.button-container-dense")
+                                    .children(gif_btn)
+                                    .children(sticker_btn)
+                                    .children(emoji),
+                            )
+                        }),
+                ),
         );
     div()
         .flex()

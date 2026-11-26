@@ -261,13 +261,21 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 )
                                 .child(
                                     div()
-                                        .truncate()
-                                        .text_size(px(11.))
-                                        .line_height(px(14.))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(status_color_text)
+                                        .flex()
+                                        .flex_row()
+                                        .w_full()
+                                        .min_w_0()
                                         .flx_text("app.user-area.user-area-inner.user-status", label.to_string())
-                                        .child(label),
+                                        .child(
+                                            div()
+                                                .truncate()
+                                                .text_size(px(11.))
+                                                .line_height(px(14.))
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(status_color_text)
+                                                .flx("app.user-area.user-area-inner.user-status-label")
+                                                .child(label),
+                                        ),
                                 ),
                         ),
                 )

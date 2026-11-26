@@ -98,13 +98,26 @@ pub fn render(view: &ClientView, handle: WeakEntity<ClientView>, theme: &Theme) 
     let list = MessageScroller::new("messages", view.scroller.clone(), move |ix, window, cx| {
         let rows = rows.borrow();
         let groups = row_groups.borrow();
+        let is_first_group = ix == 0;
+        let has_next_group = ix + 1 < groups.len();
         let Some(range) = groups.get(ix).cloned() else {
             return div().into_any_element();
         };
         let Some(group_rows) = rows.get(range) else {
             return div().into_any_element();
         };
-        render_group(group_rows, &theme, &handle, picker, hovered, highlighted_id, window.scale_factor(), cx)
+        render_group(
+            group_rows,
+            is_first_group,
+            has_next_group,
+            &theme,
+            &handle,
+            picker,
+            hovered,
+            highlighted_id,
+            window.scale_factor(),
+            cx,
+        )
     })
     // The scroller's default row wrapper adds 32px below and 12px beside
     // every row; rows carry their own spacing.
@@ -117,6 +130,9 @@ pub fn render(view: &ClientView, handle: WeakEntity<ClientView>, theme: &Theme) 
         .min_h_0()
         // Official stream bottom space: last message ends 25px above the composer (2px row padding + 23px).
         .pb(px(16.))
+        .flx("channel.messages.messages-wrapper")
+        .flx("channel.messages.scroller-container")
+        .flx("channel.messages.scroller")
         .on_hover(move |hovered, _, cx| {
             if !*hovered {
                 let _ = leave.update(cx, |v, cx| v.hover_message(None, cx));
@@ -138,6 +154,8 @@ pub fn render(view: &ClientView, handle: WeakEntity<ClientView>, theme: &Theme) 
 #[allow(clippy::too_many_arguments)]
 fn render_group(
     group_rows: &[MessageRow],
+    is_first_group: bool,
+    has_next_group: bool,
     theme: &Theme,
     handle: &WeakEntity<ClientView>,
     picker: Option<fluxer_client_core::state::Snowflake>,
@@ -174,11 +192,11 @@ fn render_group(
         }
         return column.child(message).into_any_element();
     }
-    if first.group_start {
+    if is_first_group && first.group_start {
         let leave_view = handle.clone();
         column = column.child(
             div()
-                .w_full()
+                .mx(px(16.))
                 .h(px(theme.sizes.group_gap))
                 .on_mouse_move(move |_, _, cx| {
                     let _ = leave_view.update(cx, |v, cx| v.hover_message(None, cx));
@@ -206,7 +224,20 @@ fn render_group(
         }
         group_el = group_el.child(div().mx(px(-16.)).child(message));
     }
-    column.child(group_el).into_any_element()
+    column = column.child(group_el);
+    if has_next_group {
+        let leave_view = handle.clone();
+        column = column.child(
+            div()
+                .mx(px(16.))
+                .h(px(theme.sizes.group_gap))
+                .flx("channel.channel-message-stream.push-spacer-if-needed.div")
+                .on_mouse_move(move |_, _, cx| {
+                    let _ = leave_view.update(cx, |v, cx| v.hover_message(None, cx));
+                }),
+        );
+    }
+    column.into_any_element()
 }
 
 fn highlight_wrapper(message: AnyElement, theme: &Theme) -> AnyElement {
@@ -372,7 +403,15 @@ fn divider(label: Option<SharedString>, new: bool, theme: &Theme) -> AnyElement 
     let line_color = if new { theme.danger } else { theme.background_modifier_accent };
     let line = move |id: &'static str| div().flex_1().h(px(2.)).bg(line_color).flx(id);
     // `ChannelDivider.container`: 20px tall, 0 1.25rem padding, text padding 0 0.75rem.
-    let mut row = div().flex().flex_row().items_center().mx(px(36.)).h(px(20.)).child(line("channel.divider.line"));
+    let mut row = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .mx(px(16.))
+        .px(px(20.))
+        .h(px(20.))
+        .flx("channel.channel-message-stream.render-channel-stream.divider")
+        .child(line("channel.divider.line"));
     if let Some(label) = label {
         row = row
             .child(

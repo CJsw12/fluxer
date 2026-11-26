@@ -209,6 +209,10 @@ def spec_delta(
 
     deltas: list[dict] = []
     ext_deltas: list[dict] = []
+    # `floating` mismatches are informational only: official stacking contexts and
+    # Rust probe/implementation overlays make them noisy, and a real inline-vs-overlay
+    # bug already shows up as geometry deltas of the elements it pushes.
+    floating_notes: list[dict] = []
     joined = 0
     unknown = {"floating": 0, "no_style": 0}
     missing: dict[str, int] = {}
@@ -270,7 +274,9 @@ def spec_delta(
         else:
             r_float = str(style.get("position", "")).lower() == "absolute"
             if bool(el.get("floating")) != r_float:
-                add("floating", str(bool(el.get("floating"))).lower(), str(r_float).lower(), "position")
+                floating_notes.append(
+                    _make_delta("floating", str(bool(el.get("floating"))).lower(), str(r_float).lower(), "position")
+                )
         if style is None:
             continue
 
@@ -417,6 +423,7 @@ def spec_delta(
         "missing_in_rust": dict(sorted(missing.items())),
         "rust_only": rust_only,
         "deltas": deltas,
+        "floating_notes": floating_notes,
         "extended_style": {
             "enabled": include_extended,
             "checked_properties": [
@@ -459,6 +466,11 @@ def render_md(res: dict, spec: dict) -> str:
     for src, items in sorted(groups.items(), key=lambda kv: -len(kv[1])):
         out += [f"## {src} ({len(items)})", ""]
         out += [f"- {delta_line(d)}" for d in items]
+        out.append("")
+    notes = res.get("floating_notes") or []
+    if notes:
+        out += [f"## Floating mismatches (informational, not counted) ({len(notes)})", ""]
+        out += [f"- {delta_line(d)}" for d in notes]
         out.append("")
     out += ["## Missing in Rust (coverage)", ""]
     out += [f"- {f} x{n}" for f, n in res["missing_in_rust"].items()] or ["- none"]

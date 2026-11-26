@@ -4,7 +4,7 @@
   "scenes": {
     "markdown": {
       "spec": "target/parity-tmp/md.1280.spec.json",
-      "max_deltas": 16,
+      "max_deltas": 10,
       "max_missing": 152,
       "ignore": [
         "app.native-titlebar.wordmark|width",
@@ -59,15 +59,15 @@
       "spec_dir": "target/parity-tmp/more/spec",
       "max": {
         "dm-conversation": {
-          "deltas": 61,
+          "deltas": 52,
           "missing": 92
         },
         "dm-home": {
-          "deltas": 6,
+          "deltas": 5,
           "missing": 40
         },
         "explore": {
-          "deltas": 12,
+          "deltas": 9,
           "missing": 3
         },
         "settings-appearance": {
@@ -75,7 +75,7 @@
           "missing": 25
         },
         "settings-keybinds": {
-          "deltas": 335,
+          "deltas": 334,
           "missing": 17
         },
         "settings-language": {
@@ -107,7 +107,7 @@
           "missing": 24
         },
         "light-theme": {
-          "deltas": 44,
+          "deltas": 29,
           "missing": 163
         },
         "threads-panel": {
@@ -115,7 +115,7 @@
           "missing": 10
         },
         "voice-channel": {
-          "deltas": 50,
+          "deltas": 49,
           "missing": 51
         }
       },

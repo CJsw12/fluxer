@@ -38,6 +38,9 @@ POLL = 1.0
 LOG_LIMIT = 1_000_000
 TASK_NAME = "FluxerEnvBroker"
 HEARTBEAT_STALE = 5.0
+WATCHDOG_INTERVAL = 30.0
+WATCHDOG_BACKOFF = 120.0
+WATCHDOG_FAILS = 2
 
 
 def log(broker_dir: Path, msg: str) -> None:
@@ -230,18 +233,87 @@ def broker_alive(broker_dir: Path = BROKER_DIR) -> bool:
         return False
 
 
-def run_loop(broker_dir: Path, once: bool) -> int:
+class Watchdog:
+    """Restarts the tunnel (env.py up) after consecutive failed TCP checks of its local port."""
+
+    def __init__(self, check, up, logger, interval=WATCHDOG_INTERVAL, backoff=WATCHDOG_BACKOFF, fails=WATCHDOG_FAILS):
+        self.check, self.up, self.logger = check, up, logger
+        self.interval, self.backoff, self.fails = interval, backoff, fails
+        self.next_check = 0.0
+        self.failures = 0
+        self.backoff_until = 0.0
+        self.backoff_logged = False
+
+    def tick(self, now: float, busy: bool = False) -> str:
+        """Returns one of: idle, ok, fail, busy, backoff, restarted, restart-failed."""
+        if now < self.next_check:
+            return "idle"
+        if busy:
+            return "busy"
+        self.next_check = now + self.interval
+        if self.check():
+            self.failures = 0
+            self.backoff_logged = False
+            return "ok"
+        self.failures += 1
+        if self.failures < self.fails:
+            return "fail"
+        if now < self.backoff_until:
+            if not self.backoff_logged:
+                self.logger("watchdog: tunnel still down, backing off")
+                self.backoff_logged = True
+            return "backoff"
+        self.logger("watchdog: tunnel down, running env.py up")
+        ok = self.up()
+        self.failures = 0
+        if ok:
+            self.logger("watchdog: env.py up finished")
+            return "restarted"
+        self.backoff_until = now + self.backoff
+        self.backoff_logged = False
+        self.logger(f"watchdog: env.py up failed, backoff {int(self.backoff)}s")
+        return "restart-failed"
+
+
+def make_watchdog(broker_dir: Path) -> "Watchdog | None":
+    import importlib.util
+    try:
+        spec = importlib.util.spec_from_file_location("fluxer_env_cfg", ENV_PY)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod
+        spec.loader.exec_module(mod)
+        cfg = mod.load_config(None)
+        host, port = mod.split_host_port(cfg.tunnel_local)
+    except Exception as exc:  # noqa: BLE001
+        log(broker_dir, f"watchdog disabled: config not loadable ({type(exc).__name__})")
+        return None
+
+    def check() -> bool:
+        return mod.tcp_ok(cfg.tunnel_local, 3.0)
+
+    def up() -> bool:
+        code, _ = default_runner("up", [])
+        return code == 0
+
+    return Watchdog(check, up, lambda m: log(broker_dir, m))
+
+
+def run_loop(broker_dir: Path, once: bool, watchdog: bool = True) -> int:
     lock = Lock(broker_dir / "broker.lock")
     if not lock.acquire():
         print("env_broker: another broker is already running")
         return 1
     try:
         log(broker_dir, f"broker start pid={os.getpid()} once={once}")
+        wd = make_watchdog(broker_dir) if watchdog and not once else None
         while True:
             heartbeat(broker_dir)
-            process_pending(broker_dir)
+            busy = process_pending(broker_dir) > 0
             if once:
                 return 0
+            if wd is not None:
+                wd.tick(time.time(), busy)
+                heartbeat(broker_dir)
             time.sleep(POLL)
     finally:
         lock.release()
@@ -333,13 +405,30 @@ def selftest() -> None:
         assert not other.acquire()
         first.release()
         assert run_loop(d, True) == 0 and broker_alive(d)
+        msgs: list[str] = []
+        state = {"up": True, "ups": 0, "result": False}
+        def fake_up() -> bool:
+            state["ups"] += 1
+            return state["result"]
+        w = Watchdog(lambda: state["up"], fake_up, msgs.append)
+        assert w.tick(0) == "ok" and w.tick(1) == "idle"
+        state["up"] = False
+        assert w.tick(30, busy=True) == "busy" and state["ups"] == 0
+        assert w.tick(31) == "fail" and state["ups"] == 0          # first failure only
+        assert w.tick(62) == "restart-failed" and state["ups"] == 1  # second in a row
+        assert w.tick(93) == "fail" and w.tick(124) == "backoff" and state["ups"] == 1
+        assert w.tick(155) == "backoff" and msgs.count("watchdog: tunnel still down, backing off") == 1
+        state["result"] = True
+        assert w.tick(200) == "restarted" and state["ups"] == 2 or w.tick(231) == "restarted"
+        state["up"] = True
+        assert w.tick(500) == "ok" and w.failures == 0
         (d / "broker.log").write_text("x" * (LOG_LIMIT + 10))
         log(d, "trim")
         assert (d / "broker.log").stat().st_size < LOG_LIMIT
         script = startup_script()
         assert script.startswith('@start ""') and "env_broker.py" in script and " -I " in script
         assert startup_file().name == TASK_NAME + ".cmd"
-    print("selftest ok (validation allowlist, shot path rules, gate arg rules, once-run with stub, lock, log trim, startup script)")
+    print("selftest ok (validation allowlist, shot path rules, gate arg rules, once-run with stub, lock, log trim, startup script, watchdog rules)")
 
 
 def main() -> int:
@@ -349,6 +438,7 @@ def main() -> int:
     ap.add_argument("--uninstall", action="store_true", help="remove the Startup launcher")
     ap.add_argument("--status", action="store_true", help="task registered? broker alive?")
     ap.add_argument("--dry-run", action="store_true", help="with --install: print the launcher only")
+    ap.add_argument("--no-watchdog", action="store_true", help="do not auto-restart the tunnel")
     ap.add_argument("--selftest", action="store_true")
     a = ap.parse_args()
     if a.selftest:
@@ -377,7 +467,7 @@ def main() -> int:
         print(f"task {TASK_NAME}: {'startup launcher installed' if task_exists() else 'no startup launcher'}; "
               f"broker: {'alive' if broker_alive() else 'not running'}")
         return 0
-    return run_loop(BROKER_DIR, a.once)
+    return run_loop(BROKER_DIR, a.once, not a.no_watchdog)
 
 
 if __name__ == "__main__":

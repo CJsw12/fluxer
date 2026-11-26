@@ -66,6 +66,7 @@ RUST_STATUS_FLX = "app.user-area.user-area-inner.user-status"
 MEMBER_ONLINE_RE = re.compile(r"Online\s*[—–-]\s*2")
 
 TUNNEL_WAIT = 30
+TUNNEL_HEAL_WAIT = 20
 OFFICIAL_WAIT = 90
 RUST_WAIT = 120
 RUST_ONLINE_WAIT = 60
@@ -827,6 +828,17 @@ def _start_rust(cfg: Config, actions: list[str]) -> Check:
     return wait_until(lambda: check_rust(cfg, 1), RUST_WAIT)
 
 
+def _start_tunnel(cfg: Config, actions: list[str], reason: str, wait: float = TUNNEL_WAIT) -> Check:
+    """Start the tunnel ssh (same path as `up`) and wait for the local TCP port."""
+    tunnel_cmd = tunnel_command(cfg)
+    actions.append(f"tunnel: start ({reason})")
+    pid = launch_detached(tunnel_cmd, cwd=REPO)
+    actions.append(f"tunnel: pid={pid} {mask_command(tunnel_cmd, cfg)}")
+    tunnel = wait_until(lambda: check_tunnel(cfg), wait)
+    actions.append(f"tunnel: {'ready' if tunnel.ok else 'NOT ready'} ({tunnel.reason})")
+    return tunnel
+
+
 def cmd_up(cfg: Config, args: argparse.Namespace) -> int:
     dry = args.dry_run
     actions: list[str] = []
@@ -842,11 +854,7 @@ def cmd_up(cfg: Config, args: argparse.Namespace) -> int:
     elif dry:
         actions.append(f"tunnel: would start ({tunnel.reason}): {mask_command(tunnel_cmd, cfg)}")
     else:
-        actions.append(f"tunnel: start ({tunnel.reason})")
-        pid = launch_detached(tunnel_cmd, cwd=REPO)
-        actions.append(f"tunnel: pid={pid} {mask_command(tunnel_cmd, cfg)}")
-        tunnel = wait_until(lambda: check_tunnel(cfg), TUNNEL_WAIT)
-        actions.append(f"tunnel: {'ready' if tunnel.ok else 'NOT ready'} ({tunnel.reason})")
+        tunnel = _start_tunnel(cfg, actions, tunnel.reason)
 
     # official
     official = checks["official"]
@@ -935,6 +943,17 @@ def cmd_heal(cfg: Config, args: argparse.Namespace) -> int:
     checks = collect_status(cfg, 0 if dry else 2)
     nav_cmd = navigate_command(cfg.official_cdp_port)
     url = route_url(cfg.markdown_route)
+
+    if dry and not checks["tunnel"].ok:
+        actions.append(f"tunnel: would restart first ({checks['tunnel'].reason}): "
+                       f"{mask_command(tunnel_command(cfg), cfg)}; wait up to {TUNNEL_HEAL_WAIT}s for TCP")
+    if not dry and not checks["tunnel"].ok:
+        tunnel = _start_tunnel(cfg, actions, checks["tunnel"].reason, TUNNEL_HEAL_WAIT)
+        if tunnel.ok:
+            # the Rust client needs a few seconds to leave "Reconnecting..."
+            actions.append(f"rust: waiting up to {RUST_ONLINE_WAIT}s for Online after tunnel restart")
+            wait_until(lambda: check_rust(cfg, 1), RUST_ONLINE_WAIT, interval=3.0)
+        checks = collect_status(cfg, 2)
 
     official = checks["official"]
     rust = checks["rust"]
@@ -1193,6 +1212,30 @@ def selftest() -> None:
         assert key not in rendered and target not in rendered and MASK in rendered, rendered
         assert redact(f"key={key} target={target}", cfg) == f"key={MASK} target={MASK}"
 
+        # heal: tunnel down plans/performs a tunnel restart first (stubs, no real processes)
+        g = globals()
+        saved = {k: g[k] for k in ("collect_status", "emit", "launch_detached", "wait_until", "check_rust", "check_tunnel", "_rust_deep_link", "_rust_key_escape")}
+        calls: list[str] = []
+        down = Check("tunnel", "down", False, "TCP unreachable")
+        okc = Check("x", "pass", True, "ok")
+        try:
+            g["collect_status"] = lambda c, level=2: {"tunnel": down, "official": okc, "rust": okc}
+            g["emit"] = lambda checks, actions, js, c=None: (calls.extend(actions), 0)[1]
+            g["launch_detached"] = lambda *a, **k: calls.append("LAUNCH") or 1
+            g["wait_until"] = lambda fn, timeout, interval=2.0: okc
+            g["check_rust"] = lambda c, level=2: okc
+            ns = argparse.Namespace(dry_run=True, json=False)
+            cmd_heal(cfg, ns)
+            assert any("tunnel: would restart first" in x for x in calls) and "LAUNCH" not in calls, calls
+            calls.clear()
+            g["_rust_deep_link"] = lambda url: {}
+            g["_rust_key_escape"] = lambda: {}
+            g["time"] = type("T", (), {"sleep": staticmethod(lambda s: None), "time": time.time})
+            cmd_heal(cfg, argparse.Namespace(dry_run=False, json=False))
+            assert "LAUNCH" in calls and any(x.startswith("tunnel: start") for x in calls), calls
+        finally:
+            g.update(saved)
+            g["time"] = time
         # config discovery
         assert resolve_config_path(None, {"FLUXER_ENV_CONFIG": str(config_path)}) == config_path.resolve()
         assert resolve_config_path(None, {}) == default_config_path()

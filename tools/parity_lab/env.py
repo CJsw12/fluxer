@@ -524,7 +524,13 @@ def split_host_port(value: str) -> tuple[str, int]:
 # ---------------------------------------------------------------- process matching
 
 def _norm(path: object) -> str:
-    return os.path.normcase(os.path.normpath(str(path)))
+    # realpath resolves directory junctions (the repo may live on another drive behind
+    # a junction), so C:\...\fluxer\x.exe and E:\...\fluxer\x.exe compare equal.
+    try:
+        resolved = os.path.realpath(str(path))
+    except (OSError, ValueError):
+        resolved = str(path)
+    return os.path.normcase(os.path.normpath(resolved))
 
 
 def rust_exes(cfg: "Config") -> list[Path]:

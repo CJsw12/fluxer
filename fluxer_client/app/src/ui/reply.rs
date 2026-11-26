@@ -127,7 +127,10 @@ pub fn reply_preview_line(
         .flex_row()
         .items_center()
         .gap_1()
-        .text_xs()
+        // Official `.repliedMessage`: 14px text in an 18px line (`--message-reply-height`).
+        .h(px(18.))
+        .text_size(px(14.))
+        .line_height(px(18.))
         .text_color(muted)
         .min_w_0()
         .child(spine);

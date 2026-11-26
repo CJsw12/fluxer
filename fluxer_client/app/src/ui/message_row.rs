@@ -517,7 +517,6 @@ pub fn render(
         // Official `padding-inline-end` leaves 64px to the chat area edge.
         .pl_4()
         .pr(px(64.))
-        .py(px(sizes.message_padding_y))
         .when(row.state == MessageState::Sending, |d| d.opacity(0.6));
     if !compact {
         let gutter = if row.group_start {
@@ -578,16 +577,19 @@ pub fn render(
         };
         main = main.child(div().w(px(sizes.gutter)).flex_none().child(gutter));
     }
-    // Probe-only overlays: the official message wrapper and group exclude the 16px chat gutters.
-    let main = main
-        .child(content)
-        .child(div().absolute().top_0().bottom_0().left(px(16.)).right(px(16.)).flx("channel.message-group.rendered-messages.div"));
+    let main = main.child(content);
+    // Official `--message-reply-spacing`: 0.25rem (4px) cozy, 0.0625rem (1px) compact.
+    let reply_spacing = if compact { 1. } else { 4. };
     let reply_line = row.reply.as_ref().map(|line| {
         let view = view.clone();
         let id = SharedString::from(format!("reply-{}", row.id.0));
-        div().px_4().child(reply::reply_preview_line(id, line, theme, move |channel_id, message_id, _, cx| {
-            let _ = view.update(cx, |v, cx| v.jump_to_message(channel_id, message_id, cx));
-        }))
+        div()
+            .pl_4()
+            .pr(px(64.))
+            .mb(px(reply_spacing))
+            .child(reply::reply_preview_line(id, line, theme, move |channel_id, message_id, _, cx| {
+                let _ = view.update(cx, |v, cx| v.jump_to_message(channel_id, message_id, cx));
+            }))
     });
     let mentioned_sel = format!("msg-mentioned-{}", row.id.0);
     let mut mention_bg: Hsla = rgb(0xfaa61a).into();
@@ -599,13 +601,14 @@ pub fn render(
         .flex()
         .flex_col()
         .w_full()
-        .flx("channel.message.article.alt-click")
+        .py(px(sizes.message_padding_y))
         .when(row.mentioned, |d| {
             d.debug_selector(move || mentioned_sel.clone())
                 .bg(mention_bg)
                 .border_l_2()
                 .border_color(mention_border)
         })
+        .flx("channel.message.article.alt-click")
         .when(is_hovered && !row.mentioned, |d| d.bg(theme.hover_bg))
         .when(!row.mentioned, |d| d.hover(|s| s.bg(theme.hover_bg)))
         .when(row.actions.sent, |d| {
@@ -617,7 +620,9 @@ pub fn render(
             })
         })
         .children(reply_line)
-        .child(main);
+        .child(main)
+        // Probe-only overlay: the official rendered message wrapper excludes the 16px chat gutters.
+        .child(div().absolute().top_0().bottom_0().left(px(16.)).right(px(16.)).flx("channel.message-group.rendered-messages.div"));
     let bar = match bar {
         RowBar::None => None,
         RowBar::QuickReactions => {

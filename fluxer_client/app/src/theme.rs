@@ -26,6 +26,20 @@ fn rgba_u32(v: u32) -> Hsla {
     .into()
 }
 
+/// Linearly mixes two colors in sRGB (`color-mix(in srgb, a <weight_a>, b <1 - weight_a>)`).
+fn mix_srgb(a: Hsla, weight_a: f32, b: Hsla) -> Hsla {
+    let a = a.to_rgb();
+    let b = b.to_rgb();
+    let weight_b = 1.0 - weight_a;
+    gpui_kit::Rgba {
+        r: a.r * weight_a + b.r * weight_b,
+        g: a.g * weight_a + b.g * weight_b,
+        b: a.b * weight_a + b.b * weight_b,
+        a: a.a * weight_a + b.a * weight_b,
+    }
+    .into()
+}
+
 /// App-wide selected theme kind (`Theme::current` reads this global).
 #[derive(Debug, Clone, Copy)]
 pub struct Selected(pub ThemeKind);
@@ -180,10 +194,16 @@ pub struct Theme {
     pub background_secondary_lighter: Hsla,
     /// `--background-tertiary` (guild rail).
     pub background_tertiary: Hsla,
+    /// `--background-textarea` (search bar & message composer input container).
+    pub background_textarea: Hsla,
     /// `--background-header-secondary`.
     pub background_header_secondary: Hsla,
     /// `--guild-list-foreground` (surface stop 0.38 dark/coal, 0.35 light).
     pub guild_list_foreground: Hsla,
+    /// `--guilds-layout-item-bg` (guild rail DM & Favorites button background).
+    pub guilds_layout_item_bg: Hsla,
+    /// `--channel-welcome-icon-bg` (empty channel icon circle; falls back to `guild_list_foreground` in dark).
+    pub channel_welcome_icon_bg: Hsla,
     /// `--text-chat` (message body, member names).
     pub text_chat: Hsla,
     /// `--text-secondary`.
@@ -210,6 +230,8 @@ pub struct Theme {
     pub border: Hsla,
     /// `--background-modifier-accent` (subtle surface/control border).
     pub background_modifier_accent: Hsla,
+    /// `--user-area-divider-color` (`OutlineFrame` border & member list divider).
+    pub user_area_divider: Hsla,
     /// Divider lines; the same token as `border`.
     pub divider: Hsla,
     /// `--brand-primary`.
@@ -597,13 +619,26 @@ impl Theme {
         } else {
             (0.82, 0.72, 0.38, 0.2)
         };
+        let primary_color = primary.color();
+        let guild_list_fg = p.surface(if light { 0.35 } else { 0.38 }).color();
         let mut theme = Self {
-            background: primary.color(),
+            background: primary_color,
             background_secondary: secondary.color(),
             background_secondary_lighter: lighter.color(),
             background_tertiary: p.surface(p.stops.2).color(),
+            background_textarea: p.surface(if light { 0.88 } else { 0.3 }).color(),
             background_header_secondary: p.surface(0.5).color(),
-            guild_list_foreground: p.surface(if light { 0.35 } else { 0.38 }).color(),
+            guild_list_foreground: guild_list_fg,
+            guilds_layout_item_bg: if light {
+                mix_srgb(guild_list_fg, 0.72, primary_color)
+            } else {
+                guild_list_fg
+            },
+            channel_welcome_icon_bg: if light {
+                mix_srgb(guild_list_fg, 0.55, primary_color)
+            } else {
+                guild_list_fg
+            },
             text_chat: p.text(light, chat).color(),
             text_secondary: p.text(light, secondary_text).color(),
             text_tertiary: p.text(light, tertiary).color(),
@@ -625,6 +660,11 @@ impl Theme {
             accent: p.selected.color(),
             border: p.border.color(),
             background_modifier_accent: p.modifier_accent.color(),
+            user_area_divider: if light {
+                p.border.color()
+            } else {
+                hsla(0., 0., 1., 0.035)
+            },
             divider: p.border.color(),
             brand: BRAND_PRIMARY.color(),
             brand_button_border: {
@@ -661,8 +701,10 @@ impl Theme {
                 theme.background_secondary = rgba_u32(t::BACKGROUND_SECONDARY_RGBA);
                 theme.background_secondary_lighter = rgba_u32(t::BACKGROUND_SECONDARY_LIGHTER_RGBA);
                 theme.background_tertiary = rgba_u32(t::BACKGROUND_TERTIARY_RGBA);
+                theme.background_textarea = rgba_u32(t::BACKGROUND_TEXTAREA_RGBA);
                 theme.background_header_secondary = rgba_u32(t::BACKGROUND_HEADER_SECONDARY_RGBA);
                 theme.guild_list_foreground = rgba_u32(t::GUILD_LIST_FOREGROUND_RGBA);
+                theme.guilds_layout_item_bg = rgba_u32(t::GUILDS_LAYOUT_ITEM_BG_RGBA);
                 theme.text_chat = rgba_u32(t::TEXT_CHAT_RGBA);
                 theme.text_secondary = rgba_u32(t::TEXT_SECONDARY_RGBA);
                 theme.text_tertiary = rgba_u32(t::TEXT_TERTIARY_RGBA);
@@ -674,6 +716,7 @@ impl Theme {
                 theme.accent = rgba_u32(t::BACKGROUND_MODIFIER_SELECTED_RGBA);
                 theme.border = rgba_u32(t::BORDER_COLOR_RGBA);
                 theme.background_modifier_accent = rgba_u32(t::BACKGROUND_MODIFIER_ACCENT_RGBA);
+                theme.user_area_divider = rgba_u32(t::USER_AREA_DIVIDER_COLOR_RGBA);
                 theme.divider = rgba_u32(t::BORDER_COLOR_RGBA);
                 theme.brand = rgba_u32(t::BRAND_PRIMARY_RGBA);
                 theme.text_link = rgba_u32(t::TEXT_LINK_RGBA);
@@ -690,8 +733,15 @@ impl Theme {
         }
 
         match kind {
-            ThemeKind::Dark | ThemeKind::System => apply_generated_tokens!(dark),
-            ThemeKind::Light => apply_generated_tokens!(light),
+            ThemeKind::Dark | ThemeKind::System => {
+                apply_generated_tokens!(dark);
+                theme.channel_welcome_icon_bg = theme.guild_list_foreground;
+            }
+            ThemeKind::Light => {
+                apply_generated_tokens!(light);
+                theme.channel_welcome_icon_bg =
+                    mix_srgb(theme.guild_list_foreground, 0.55, theme.background);
+            }
             ThemeKind::Darker | ThemeKind::Black => {}
         }
 
@@ -862,7 +912,10 @@ mod tests {
             generated_tokens::dark::BACKGROUND_SECONDARY,
             generated_tokens::dark::BACKGROUND_SECONDARY_LIGHTER,
             generated_tokens::dark::BACKGROUND_TERTIARY,
+            generated_tokens::dark::BACKGROUND_TEXTAREA,
             generated_tokens::dark::GUILD_LIST_FOREGROUND,
+            generated_tokens::dark::GUILDS_LAYOUT_ITEM_BG,
+            generated_tokens::dark::USER_AREA_DIVIDER_COLOR,
             generated_tokens::dark::TEXT_PRIMARY,
             generated_tokens::dark::TEXT_CHAT,
             generated_tokens::dark::BRAND_PRIMARY,
@@ -875,7 +928,10 @@ mod tests {
             generated_tokens::light::BACKGROUND_SECONDARY,
             generated_tokens::light::BACKGROUND_SECONDARY_LIGHTER,
             generated_tokens::light::BACKGROUND_TERTIARY,
+            generated_tokens::light::BACKGROUND_TEXTAREA,
             generated_tokens::light::GUILD_LIST_FOREGROUND,
+            generated_tokens::light::GUILDS_LAYOUT_ITEM_BG,
+            generated_tokens::light::USER_AREA_DIVIDER_COLOR,
             generated_tokens::light::TEXT_PRIMARY,
             generated_tokens::light::TEXT_CHAT,
             generated_tokens::light::BRAND_PRIMARY,
@@ -895,8 +951,10 @@ mod tests {
                 assert_eq!($theme.background_secondary, rgba_u32(t::BACKGROUND_SECONDARY_RGBA));
                 assert_eq!($theme.background_secondary_lighter, rgba_u32(t::BACKGROUND_SECONDARY_LIGHTER_RGBA));
                 assert_eq!($theme.background_tertiary, rgba_u32(t::BACKGROUND_TERTIARY_RGBA));
+                assert_eq!($theme.background_textarea, rgba_u32(t::BACKGROUND_TEXTAREA_RGBA));
                 assert_eq!($theme.background_header_secondary, rgba_u32(t::BACKGROUND_HEADER_SECONDARY_RGBA));
                 assert_eq!($theme.guild_list_foreground, rgba_u32(t::GUILD_LIST_FOREGROUND_RGBA));
+                assert_eq!($theme.guilds_layout_item_bg, rgba_u32(t::GUILDS_LAYOUT_ITEM_BG_RGBA));
                 assert_eq!($theme.text_chat, rgba_u32(t::TEXT_CHAT_RGBA));
                 assert_eq!($theme.text_secondary, rgba_u32(t::TEXT_SECONDARY_RGBA));
                 assert_eq!($theme.text_tertiary, rgba_u32(t::TEXT_TERTIARY_RGBA));
@@ -908,6 +966,7 @@ mod tests {
                 assert_eq!($theme.accent, rgba_u32(t::BACKGROUND_MODIFIER_SELECTED_RGBA));
                 assert_eq!($theme.border, rgba_u32(t::BORDER_COLOR_RGBA));
                 assert_eq!($theme.background_modifier_accent, rgba_u32(t::BACKGROUND_MODIFIER_ACCENT_RGBA));
+                assert_eq!($theme.user_area_divider, rgba_u32(t::USER_AREA_DIVIDER_COLOR_RGBA));
                 assert_eq!($theme.divider, rgba_u32(t::BORDER_COLOR_RGBA));
                 assert_eq!($theme.brand, rgba_u32(t::BRAND_PRIMARY_RGBA));
                 assert_eq!($theme.text_link, rgba_u32(t::TEXT_LINK_RGBA));
@@ -923,8 +982,17 @@ mod tests {
             }};
         }
 
-        assert_theme_matches_generated!(Theme::from_kind(ThemeKind::Dark), dark);
-        assert_theme_matches_generated!(Theme::from_kind(ThemeKind::Light), light);
+        let dark_theme = Theme::from_kind(ThemeKind::Dark);
+        let light_theme = Theme::from_kind(ThemeKind::Light);
+        assert_theme_matches_generated!(dark_theme, dark);
+        assert_theme_matches_generated!(light_theme, light);
+        assert_eq!(dark_theme.channel_welcome_icon_bg, dark_theme.guild_list_foreground);
+        assert_eq!(to_srgb8(dark_theme.channel_welcome_icon_bg), (41, 38, 47, 255));
+        assert_eq!(
+            light_theme.channel_welcome_icon_bg,
+            mix_srgb(light_theme.guild_list_foreground, 0.55, light_theme.background)
+        );
+        assert_eq!(to_srgb8(light_theme.channel_welcome_icon_bg), (234, 235, 238, 255));
     }
 
     #[test]

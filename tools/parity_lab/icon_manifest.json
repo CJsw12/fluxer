@@ -2162,7 +2162,7 @@
   {
    "rust_icon": "CrownFill",
    "file": "fluxer_client/app/src/ui/member_list.rs",
-   "line": 412,
+   "line": 411,
    "rust_asset": "fluxer_client/app/assets/icons/crown-fill.svg",
    "kind": "phosphor",
    "phosphor": "fill/crown-fill.svg",

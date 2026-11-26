@@ -289,7 +289,7 @@ fn channel_start(name: &SharedString, theme: &Theme) -> AnyElement {
                 .flex()
                 .items_center()
                 .justify_center()
-                .bg(theme.guild_list_foreground) // --channel-welcome-icon-bg falls back to --guild-list-foreground
+                .bg(theme.channel_welcome_icon_bg)
                 .text_color(theme.foreground)
                 .text_size(px(20.))
                 .flx("channel.channel-welcome-section.pointer-events-none")
@@ -369,7 +369,7 @@ fn dm_start(
 
 /// Date separator (`ChannelDivider`) and/or the red "NEW" divider.
 fn divider(label: Option<SharedString>, new: bool, theme: &Theme) -> AnyElement {
-    let line_color = if new { theme.danger } else { gpui_kit::hsla(252. / 360., 0.17, 0.80, 0.15) };
+    let line_color = if new { theme.danger } else { theme.background_modifier_accent };
     let line = move |id: &'static str| div().flex_1().h(px(2.)).bg(line_color).flx(id);
     // `ChannelDivider.container`: 20px tall, 0 1.25rem padding, text padding 0 0.75rem.
     let mut row = div().flex().flex_row().items_center().mx(px(36.)).h(px(20.)).child(line("channel.divider.line"));

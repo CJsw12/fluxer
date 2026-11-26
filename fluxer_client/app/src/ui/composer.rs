@@ -9,7 +9,7 @@ use fluxer_client_core::state::{ClientState, MESSAGE_TYPE_REPLY, Message, Messag
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Enter, Escape, IndentInline, Input, InputContent, MoveDown, MoveUp};
-use gpui_kit::{AnyElement, App, Context, Div, SharedString, Window, div, prelude::*, px, rgb};
+use gpui_kit::{AnyElement, App, Context, Div, SharedString, Window, div, prelude::*, px};
 
 use crate::client_view::ClientView;
 use crate::icons::AppIcon;
@@ -135,7 +135,7 @@ pub fn render_with(
                 .gap(px(16.))
                 .min_h(px(theme.sizes.composer_height))
                 .rounded(px(theme.sizes.composer_radius))
-                .bg(rgb(0x242229))
+                .bg(theme.background_textarea)
                 .pl(px(10.))
                 .pr(px(10.))
                 .py(px(13.))

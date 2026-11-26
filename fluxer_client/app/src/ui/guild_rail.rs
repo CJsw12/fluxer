@@ -12,7 +12,7 @@
 use fluxer_client_core::state::Unread;
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
-    AnyElement, App, ClickEvent, Context, Div, Hsla, Window, rgb, rgba, ElementId, FontWeight, ObjectFit, Role, SharedString, Stateful, div, img, prelude::*, px,
+    AnyElement, App, ClickEvent, Context, Div, Hsla, Window, ElementId, FontWeight, ObjectFit, Role, SharedString, Stateful, div, img, prelude::*, px,
 };
 
 use super::{badge, l10n, rail_tooltip};
@@ -100,7 +100,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             true,
             view.home_unread,
             theme,
-            theme.background_tertiary,
+            theme.guilds_layout_item_bg,
         )
         .flx("app.sidebar-nav.fluxer-button.fluxer-button-icon"),
         home_hovered.then(|| rail_tooltip::text(l10n::tr("Direct messages"), theme, rail_tooltip::TOOLTIP_LEFT)),
@@ -150,7 +150,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 true,
                 Unread::default(),
                 theme,
-                theme.background_tertiary,
+                theme.guilds_layout_item_bg,
             )
             .debug_selector(|| "rail-favorites-btn".to_owned())
             .flx("app.sidebar-nav.favorites-button.fluxer-button-icon"),
@@ -256,7 +256,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             }))
             .border_2()
             .when(!discover_selected, |d| d.border_dashed())
-            .border_color(if discover_active { Hsla::from(rgb(0xf4f4f6)) } else { Hsla::from(rgba(0xc9c5d326)) })
+            .border_color(if discover_active { theme.foreground } else { theme.background_modifier_accent })
             .bg(if discover_selected { theme.brand } else { gpui_kit::transparent_black() })
             .text_color(discover_fg)
             .cursor_pointer()
@@ -291,7 +291,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             }))
             .border_2()
             .border_dashed()
-            .border_color(if join_hovered { Hsla::from(rgb(0xf4f4f6)) } else { Hsla::from(rgba(0xc9c5d326)) })
+            .border_color(if join_hovered { theme.foreground } else { theme.background_modifier_accent })
             .bg(gpui_kit::transparent_black())
             .cursor_pointer()
             .flex()

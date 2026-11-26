@@ -342,7 +342,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .h(px(38.))
                         .px_2p5()
                         .rounded(px(12.))
-                        .bg(rgb(0x242229))
+                        .bg(theme.background_textarea)
                         .when(search_open, |d| d.border_1().border_color(theme.accent))
                         .hover(|s| s.bg(theme.control_hover_bg))
                         .cursor_pointer()

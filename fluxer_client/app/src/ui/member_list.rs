@@ -251,7 +251,6 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     // Official rows start 6px above the container top (group header slot 83..127, container 89).
     .mt(px(-6.))
     .mb(px(4.));
-    let divider_color = if theme.background.l < 0.5 { hsla(0., 0., 1., 0.035) } else { theme.border };
     div()
         .id("member-panel")
         .debug_selector(|| "member-panel".to_owned())
@@ -269,7 +268,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .w(px(1.))
                 .h_full()
                 .flex_none()
-                .bg(divider_color)
+                .bg(theme.user_area_divider)
                 .flx("channel.channel-view.channel-view-scaffold.member-list-divider"),
         )
         .child(div().flex_1().min_w_0().flex().flex_col().pl(px(7.)).pr(px(8.)).child(list))

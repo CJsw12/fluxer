@@ -4257,11 +4257,7 @@ impl Render for ClientView {
                     .rounded_tl(px(14.))
                     .border_t_1()
                     .border_l_1()
-                    .border_color(if theme.background.l < 0.5 {
-                        gpui_kit::hsla(0., 0., 1., 0.035)
-                    } else {
-                        theme.border
-                    })
+                    .border_color(theme.user_area_divider)
                     .flx("app.outline-frame.frame"),
             )
             // Keep the bottom-left user card and its popout above the outline frame's 1px left border.

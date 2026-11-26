@@ -1,5 +1,7 @@
 # Parity Lab — 공식 Fluxer와 Rust 앱의 1:1 자동 비교·탐색 체계
 
+> 에이전트는 시작할 때 이 문서 대신 `docs/AGENT_GUIDE.md`를 읽는다. 이 문서는 배경·근거·과거 기록을 담은 참고서다.
+
 > 작성 2026-11-23. 목표는 Rust GPUI 앱(`fluxer_client/`)의 모든 화면과 모든 버튼으로 열리는 창을 공식 Fluxer와 기능·모양 모두 같게 만드는 것이다. 이 문서는 기존 검증 방법의 한계, 새 방법의 설계와 실측 결과, 남은 과제를 정리한다.
 
 ## 1. 결론
@@ -227,7 +229,7 @@ Run everything from the repo root. In **PowerShell** there is no MSYS path mangl
 **Loops and checks**
 - Dev loop: `python -I tools/parity_lab/cycle.py [--release] [--worker] [--skip-tests] [--check OFFICIAL.dom.json OFFICIAL.png <link> OUT]`.
 - Scene diff: `python -I tools/parity_lab/check_scene.py OFFICIAL.dom.json OFFICIAL.png <link> OUT [--official-offset 0,32]`; generic join: `compare.py` (writes `diff_heatmap.png`); replay crawl graph on Rust: `replay.py GRAPH_DIR OUT --link <link> [--launch-rust dist/fluxer_client/fluxer_client.exe] [--strict-no-duplicates]` (generates `backlog.md`/`backlog.json` and detects copy-paste duplicate screens).
-- State & surface gates: `python -I tools/parity_lab/state_matrix.py --strict --launch-rust dist/fluxer_client/fluxer_client.exe --out OUT` (blocks `phantom_hover_ui` spikes and missing tooltips); `python -I tools/parity_lab/check_surface_parity.py --launch-rust dist/fluxer_client/fluxer_client.exe --out OUT` (seam, member corner, hover phantom UI, Media/Stickers/Emojis split, settings contrast).
+- State & surface gates (normally via `verify_all.py`; with the always-on client do NOT pass `--launch-rust`): `python -I tools/parity_lab/state_matrix.py --strict --out OUT` (blocks `phantom_hover_ui` spikes and missing tooltips); `python -I tools/parity_lab/check_surface_parity.py --out OUT` (seam, member corner, hover phantom UI, Media/Stickers/Emojis split, settings contrast).
 - Screen share both ways: `python -I tools/parity_lab/share_check.py --guild G --channel C --out OUT` (needs release client with worker).
 - Icons: `python -I tools/parity_lab/check_icons.py` (manifest + originals + call-site sync, must be 0 errors); after moving or adding `AppIcon::` call sites run `--sync` and mark sites verified only with same-size official evidence; ground truth list `tools/parity_lab/official_icons.json`.
 - Spec loop (preferred over eyeballing): `node tools/parity_lab/spec_official.mjs --attach 9334 --viewport 1280x800 --out SPEC.json [--hover <flx>]` (read-only CDP: computed box/paint props, matched CSS-module rules, floating) → `python -I tools/parity_lab/spec_delta.py SPEC.json --live [--scope <flx-prefix>]... --out-md OUT.md [--max N]` (one line per delta with CSS rule and Rust `file:line` from the probe's `src`/`style`). Hand the delta lines to the implementer as the acceptance list.

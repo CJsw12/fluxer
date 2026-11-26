@@ -5,7 +5,7 @@
 ## 새 세션 시작 순서 (모든 도구 공통)
 
 1. 도구별 지침(Claude: `CLAUDE.md`, Antigravity: 전역 `~/.gemini/config/GEMINI.md`) → `AGENTS.md`(공통 규칙) → 이 문서 → 로컬 운영 메모 `Logs/handoff/OPERATIONS.md`(Git 제외: 시험 환경·상시 실행·상태 스냅샷)를 읽는다. 명령어 모음은 `README.md`.
-2. UI 작업이면 `docs/PARITY_LAB.md` 10장을 읽는다. 특히 10.8(명세 루프 표준 절차·워커 브리프 양식), 10.7(도구 빠른 참조), 10.6(자주 한 실수).
+2. `docs/AGENT_GUIDE.md`(규칙·컨텍스트 예산·도구 한 줄 사용법·작업 흐름, 약 2천 토큰)를 읽는다. `docs/PARITY_LAB.md`는 참고서라 통째로 읽지 않고, 필요한 절만 찾아 읽는다.
 3. 상시 실행 구성(시험 서버 터널, 측정 기능을 켠 Rust 클라이언트, 비교용 공식 앱)을 `docs/PARITY_LAB.md` 10.1대로 확인·기동한다. 측정 전 점검 4가지: Rust `Status: Online`, Rust 멤버 목록 `Online—2`, CDP 9334 응답, 양쪽 마이크·스피커 켜짐(10.8 1단계).
 4. 아래 Next Steps 1번부터 **사용자에게 묻지 말고 바로** 진행한다(선택이 필요하면 추천안으로 진행하고 보고에 남긴다). 사용자 선호(자율 진행·커밋·push 상시 승인·빌드 부하 제한)는 `Logs/handoff/OPERATIONS.md` 첫 절에 있다.
 
@@ -52,5 +52,5 @@
 
 ## 문서 지도
 
-- 활성: `README.md`(개요·명령), `PROGRESS.md`(이 문서), `docs/UI_PARITY_ROADMAP.md`(실행 계획), `docs/PARITY_LAB.md`(검증 방법·운영 가이드·외부 사례), `docs/rust_client_core/{GATEWAY_PROTOCOL,REST_AND_AUTH,STATE_MODEL}.md`(코어 레퍼런스), `docs/progress/progress.json`(기능 추적).
+- 활성: `README.md`(개요·명령), `PROGRESS.md`(이 문서), `docs/UI_PARITY_ROADMAP.md`(실행 계획), `docs/AGENT_GUIDE.md`(에이전트 시작 안내), `docs/PARITY_LAB.md`(검증 방법·운영 가이드·외부 사례, 참고서), `docs/rust_client_core/{GATEWAY_PROTOCOL,REST_AND_AUTH,STATE_MODEL}.md`(코어 레퍼런스), `docs/progress/progress.json`(기능 추적).
 - 로컬 보관(Git 제외, `docs/archive/*.local.md`): 이전 진행 기록, 끝난 M1~M8 상세, 이전 단계 계획서, 비공개 조사. 작업 기준으로 삼지 않는다.

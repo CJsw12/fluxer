@@ -9,7 +9,7 @@
 import {mkdirSync, readdirSync, readFileSync, statSync, writeFileSync} from 'node:fs';
 import {dirname, join, relative, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
-import {Cdp, clientInfo, helpers, pageWsUrl, sleep} from './lib.mjs';
+import {Cdp, clientInfo, helpers, navigate, pageWsUrl, sleep} from './lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '../..');
@@ -224,6 +224,17 @@ function moduleRules(matched, modules) {
 
 const cdp = new Cdp(await pageWsUrl(opts.attach));
 await cdp.open();
+// Re-applied by navigate() when the renderer target is replaced and the socket reconnects.
+cdp.onReconnect = async (c) => {
+	await c.send('Page.enable').catch(() => {});
+	await c.send('Page.addScriptToEvaluateOnNewDocument', {source: WRITE_GUARD}).catch(() => {});
+	if (opts.viewport) {
+		const [w, h] = opts.viewport.split('x').map(Number);
+		await c.send('Emulation.setDeviceMetricsOverride', {width: w, height: h, deviceScaleFactor: 1, mobile: false});
+	}
+	await c.send('DOM.enable');
+	await c.send('CSS.enable');
+};
 const forced = new Set();
 let exitCode = 0;
 const modules = indexModules();
@@ -414,7 +425,7 @@ async function runScenes() {
 		blockedWrites.push(...prevBlocked);
 		const dest = targetRoute === '__BASE__' ? baseRoute : targetRoute;
 		const url = /^https?:|^fluxer-app:/i.test(dest) ? dest : `${baseOrigin}${dest.startsWith('/') ? '' : '/'}${dest}`;
-		await cdp.send('Page.navigate', {url});
+		await navigate(cdp, opts.attach, url, {selector: '[data-flx]'});
 		await waitFor(`document.readyState === 'complete' && document.querySelectorAll('[data-flx]').length > 10`, 20000);
 		await sleep(1500);
 		await cdp.eval(WRITE_GUARD).catch(() => {});

@@ -14,16 +14,25 @@ export async function pageWsUrl(port, tries = 60) {
 }
 
 export class Cdp {
-	constructor(url) {
-		this.ws = new WebSocket(url);
+	constructor(url, {timeoutMs = 30000} = {}) {
 		this.id = 0;
 		this.pending = new Map();
 		this.events = [];
 		this.handlers = new Map();
-		this.ws.onmessage = (m) => {
+		this.timeoutMs = timeoutMs;
+		this.closed = false;
+		this.onReconnect = null; // async (cdp) => void, re-applies per-session setup after navigate()
+		this.url = url;
+		this.attach(new WebSocket(url));
+	}
+	attach(ws) {
+		this.ws = ws;
+		this.closed = false;
+		ws.onmessage = (m) => {
 			const msg = JSON.parse(m.data);
 			if (msg.id && this.pending.has(msg.id)) {
-				const {resolve, reject} = this.pending.get(msg.id);
+				const {resolve, reject, timer} = this.pending.get(msg.id);
+				clearTimeout(timer);
 				this.pending.delete(msg.id);
 				msg.error ? reject(new Error(JSON.stringify(msg.error))) : resolve(msg.result);
 			} else if (msg.method && this.handlers.has(msg.method)) {
@@ -32,27 +41,93 @@ export class Cdp {
 				this.events.push(msg.params.exceptionDetails?.text);
 			}
 		};
+		const fail = (why) => {
+			if (this.ws !== ws) return; // stale socket after reconnect
+			this.closed = true;
+			this.rejectAll(new Error(`CDP socket ${why}`));
+		};
+		ws.addEventListener('close', () => fail('closed'));
+		ws.addEventListener('error', () => fail('error'));
+	}
+	rejectAll(err) {
+		for (const [id, p] of this.pending) {
+			clearTimeout(p.timer);
+			p.reject(err);
+			this.pending.delete(id);
+		}
 	}
 	open() {
 		return new Promise((r, j) => {
-			this.ws.onopen = r;
-			this.ws.onerror = j;
+			if (this.ws.readyState === 1) return r();
+			this.ws.addEventListener('open', () => r(), {once: true});
+			this.ws.addEventListener('error', (e) => j(new Error(`CDP open failed: ${e?.message ?? 'error'}`)), {once: true});
 		});
 	}
 	on(method, handler) {
 		if (!this.handlers.has(method)) this.handlers.set(method, []);
 		this.handlers.get(method).push(handler);
 	}
-	send(method, params = {}) {
-		const id = ++this.id;
-		this.ws.send(JSON.stringify({id, method, params}));
-		return new Promise((resolve, reject) => this.pending.set(id, {resolve, reject}));
+	send(method, params = {}, timeoutMs = this.timeoutMs) {
+		return new Promise((resolve, reject) => {
+			if (this.closed || this.ws.readyState !== 1) return reject(new Error(`CDP socket not open (${method})`));
+			const id = ++this.id;
+			const timer = setTimeout(() => {
+				this.pending.delete(id);
+				reject(new Error(`CDP ${method} timed out after ${timeoutMs}ms`));
+			}, timeoutMs);
+			this.pending.set(id, {resolve, reject, timer});
+			try {
+				this.ws.send(JSON.stringify({id, method, params}));
+			} catch (e) {
+				clearTimeout(timer);
+				this.pending.delete(id);
+				reject(e);
+			}
+		});
 	}
-	async eval(expr) {
-		const r = await this.send('Runtime.evaluate', {expression: expr, awaitPromise: true, returnByValue: true});
+	async eval(expr, timeoutMs) {
+		const r = await this.send('Runtime.evaluate', {expression: expr, awaitPromise: true, returnByValue: true}, timeoutMs);
 		if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text);
 		return r.result.value;
 	}
+	// Replaces the socket with a fresh one to the (re-resolved) page target. Keeps handlers/pending API.
+	async reconnect(port, tries = 60) {
+		try { this.ws.close(); } catch {}
+		this.rejectAll(new Error('CDP reconnecting'));
+		this.url = await pageWsUrl(port, tries);
+		this.attach(new WebSocket(this.url));
+		await this.open();
+		if (this.onReconnect) await this.onReconnect(this);
+	}
+}
+
+// Navigates (or reloads when url is omitted) and survives the renderer target being replaced:
+// the old socket may go silent or close, so we do not trust the Page.navigate reply, re-resolve the
+// target, reconnect and wait until `selector` exists. Bounded by overallMs; throws on timeout.
+export async function navigate(cdp, port, url, {selector = '[data-flx*="message-username"]', overallMs = 120000, settleMs = 500} = {}) {
+	const deadline = Date.now() + overallMs;
+	const left = () => Math.max(1000, deadline - Date.now());
+	const fire = url ? cdp.send('Page.navigate', {url}, 8000) : cdp.send('Page.reload', {}, 8000);
+	await fire.catch(() => {}); // timeout/close here is expected when the target is replaced
+	await sleep(settleMs);
+	let lastErr = 'no attempt';
+	while (Date.now() < deadline) {
+		try {
+			if (cdp.closed || cdp.ws.readyState !== 1) await cdp.reconnect(port, 8);
+			const ok = await cdp.eval(`!!document.querySelector(${JSON.stringify(selector)})`, Math.min(8000, left()));
+			if (ok) return true;
+			lastErr = `selector not present: ${selector}`;
+		} catch (e) {
+			lastErr = e.message;
+			try {
+				await cdp.reconnect(port, 8); // silent socket (timeout) -> force a fresh one
+			} catch (e2) {
+				lastErr = e2.message;
+			}
+		}
+		await sleep(500);
+	}
+	throw new Error(`navigate(${url ?? 'reload'}) did not reach ${selector} within ${overallMs}ms (${lastErr})`);
 }
 
 // Runs in the page: every visible [data-flx] element with geometry, the styles that decide
@@ -79,8 +154,9 @@ export const DOM_DUMP = `(() => {
 // Page-expression helpers bound to one CDP session.
 export function helpers(cdp) {
 	async function waitFor(expr, ms = 20000) {
-		for (let t = 0; t < ms; t += 250) {
-			if (await cdp.eval(expr).catch(() => false)) return true;
+		const end = Date.now() + ms;
+		while (Date.now() < end) {
+			if (await cdp.eval(expr, Math.min(10000, Math.max(1000, end - Date.now()))).catch(() => false)) return true;
 			await sleep(250);
 		}
 		return false;

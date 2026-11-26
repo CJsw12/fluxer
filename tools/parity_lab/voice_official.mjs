@@ -9,7 +9,7 @@
 //   node voice_official.mjs --attach 9334 restore --guild G --channel C   (navigates back to text channel)
 // Every command prints one JSON line. Pick a harmless share source (e.g. the Rust client window):
 // the picker lists every open window of the machine.
-import {Cdp, helpers, pageWsUrl, sleep} from './lib.mjs';
+import {Cdp, helpers, navigate, pageWsUrl, sleep} from './lib.mjs';
 
 const argv = process.argv.slice(2);
 const opt = (k) => {
@@ -20,6 +20,8 @@ const cmd = argv.find((a, i) => !a.startsWith('--') && !(i > 0 && argv[i - 1].st
 const cdp = new Cdp(await pageWsUrl(Number(opt('attach') ?? 9334)));
 await cdp.open();
 const h = helpers(cdp);
+const PORT = Number(opt('attach') ?? 9334);
+cdp.onReconnect = (c) => c.send('Emulation.setDeviceMetricsOverride', {width: 1280, height: 800, deviceScaleFactor: 1, mobile: false});
 await cdp.send('Emulation.setDeviceMetricsOverride', {width: 1280, height: 800, deviceScaleFactor: 1, mobile: false});
 const MUTE = '[data-flx="app.user-area.user-area-inner.control-button.mute"]';
 const out = {};
@@ -64,7 +66,7 @@ async function audioReport() {
 }
 
 if (cmd === 'join') {
-	await cdp.send('Page.navigate', {url: `fluxer-app://app/channels/${opt('guild')}/${opt('channel')}`});
+	await navigate(cdp, PORT, `fluxer-app://app/channels/${opt('guild')}/${opt('channel')}`, {selector: '[data-flx]'});
 	await sleep(5000);
 	// "Restarted while connected" nag bar would otherwise reconnect on its own terms.
 	await h.clickText('^Not now$');
@@ -99,7 +101,7 @@ if (cmd === 'join') {
 	const g = opt('guild');
 	const c = opt('channel');
 	if (g && c) {
-		await cdp.send('Page.navigate', {url: `fluxer-app://app/channels/${g}/${c}`});
+		await navigate(cdp, PORT, `fluxer-app://app/channels/${g}/${c}`, {selector: '[data-flx]'});
 		await sleep(2000);
 		out.restored = `${g}/${c}`;
 	}

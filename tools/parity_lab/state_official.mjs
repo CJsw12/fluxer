@@ -7,7 +7,7 @@
 // states, then restores clean #markdown state (disconnected, undeafened, pointer parked) in finally.
 import {mkdirSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {Cdp, DOM_DUMP, clientInfo, helpers, pageWsUrl, sleep} from './lib.mjs';
+import {Cdp, DOM_DUMP, clientInfo, helpers, navigate, pageWsUrl, sleep} from './lib.mjs';
 
 const rawArgs = process.argv.slice(2);
 const VOICE = rawArgs.includes('--voice');
@@ -75,14 +75,31 @@ const STYLE_KEYS = ['backgroundColor', 'color', 'borderRadius', 'borderTopWidth'
 const MUTE_SEL = '[data-flx="app.user-area.user-area-inner.control-button.mute"]';
 const DEAFEN_SEL = '[data-flx="app.user-area.user-area-inner.control-button.deafen"]';
 
+// Overall deadline: never hang. Reports the step in progress and exits non-zero.
+const DEADLINE_MS = Number(args.deadline ?? 600) * 1000;
+let STEP = 'startup';
+setTimeout(() => {
+	console.error(`state_official: deadline ${DEADLINE_MS}ms exceeded during step "${STEP}"`);
+	process.exit(3);
+}, DEADLINE_MS).unref();
+process.on('unhandledRejection', (e) => {
+	console.error(`state_official: failed during step "${STEP}": ${e?.message ?? e}`);
+	process.exit(1);
+});
+
 const cdp = new Cdp(await pageWsUrl(PORT));
+// Per-session setup, re-applied whenever navigate() has to reconnect to a replaced renderer target.
+async function setupSession(c) {
+	await c.send('Page.enable');
+	await c.send('Runtime.enable');
+	await c.send('Emulation.setDeviceMetricsOverride', {width: WIDTH, height: HEIGHT, deviceScaleFactor: 1, mobile: false});
+	await c.send('Emulation.setEmulatedMedia', {features: [{name: 'prefers-reduced-motion', value: 'reduce'}]});
+	await c.send('Page.addScriptToEvaluateOnNewDocument', {source: WRITE_GUARD});
+	await c.eval(WRITE_GUARD).catch(() => {});
+}
 await cdp.open();
-await cdp.send('Page.enable');
-await cdp.send('Runtime.enable');
-await cdp.send('Emulation.setDeviceMetricsOverride', {width: WIDTH, height: HEIGHT, deviceScaleFactor: 1, mobile: false});
-await cdp.send('Emulation.setEmulatedMedia', {features: [{name: 'prefers-reduced-motion', value: 'reduce'}]});
-await cdp.send('Page.addScriptToEvaluateOnNewDocument', {source: WRITE_GUARD});
-await cdp.eval(WRITE_GUARD).catch(() => {});
+await setupSession(cdp);
+cdp.onReconnect = setupSession;
 const {waitFor, realClick, realClickExpr, pressKey, clickText} = helpers(cdp);
 
 async function park() {
@@ -101,8 +118,8 @@ async function dismissNag() {
 }
 
 async function gotoMarkdown() {
-	await cdp.send('Page.navigate', {url: `${ORIGIN}/channels/${GUILD}/${CHANNEL}`});
-	await waitFor(`!!document.querySelector('[data-flx="channel.channel-header.header-wrapper"]')`, 30000);
+	STEP = 'goto #markdown';
+	await navigate(cdp, PORT, `${ORIGIN}/channels/${GUILD}/${CHANNEL}`, {selector: '[data-flx="channel.channel-header.header-wrapper"]'});
 	await sleep(2000);
 	await clickText('^Not now$');
 	await dismissNag();
@@ -124,6 +141,7 @@ async function clickMarkdownInSidebar() {
 }
 
 async function saveState(slug, extra = {}) {
+	STEP = `state ${slug}`;
 	const dom = await cdp.eval(DOM_DUMP);
 	const tooltips = await cdp.eval(TOOLTIP_DUMP);
 	const shot = await cdp.send('Page.captureScreenshot', {format: 'png'});

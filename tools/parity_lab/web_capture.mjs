@@ -12,7 +12,7 @@
 import {spawn} from 'node:child_process';
 import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
-import {Cdp, DOM_DUMP, SVG_DUMP, clientInfo, helpers, pageWsUrl, sleep} from './lib.mjs';
+import {Cdp, DOM_DUMP, SVG_DUMP, clientInfo, helpers, navigate, pageWsUrl, sleep} from './lib.mjs';
 
 const args = Object.fromEntries(
 	process.argv.slice(2).reduce((acc, v, i, a) => (v.startsWith('--') ? [...acc, [v.slice(2), a[i + 1]]] : acc), []),
@@ -78,13 +78,17 @@ async function axDump(cdp) {
 }
 
 const cdp = new Cdp(await pageWsUrl(PORT));
+async function setupSession(c) {
+	await c.send('Page.enable');
+	await c.send('Runtime.enable');
+	await c.send('DOM.enable');
+	await c.send('Accessibility.enable');
+	await c.send('Emulation.setDeviceMetricsOverride', {width: WIDTH, height: HEIGHT, deviceScaleFactor: 1, mobile: false});
+	await c.send('Emulation.setEmulatedMedia', {features: [{name: 'prefers-reduced-motion', value: 'reduce'}]});
+}
 await cdp.open();
-await cdp.send('Page.enable');
-await cdp.send('Runtime.enable');
-await cdp.send('DOM.enable');
-await cdp.send('Accessibility.enable');
-await cdp.send('Emulation.setDeviceMetricsOverride', {width: WIDTH, height: HEIGHT, deviceScaleFactor: 1, mobile: false});
-await cdp.send('Emulation.setEmulatedMedia', {features: [{name: 'prefers-reduced-motion', value: 'reduce'}]});
+await setupSession(cdp);
+cdp.onReconnect = setupSession;
 
 // Session: the app restores accounts through its own catalog/credential mirror, so raw token
 // injection is not enough. Log in once through the real form (the in-page ALTCHA widget solves
@@ -95,7 +99,7 @@ async function typeInto(selector, text) {
 	await cdp.send('Input.insertText', {text});
 }
 async function ensureLoggedIn() {
-	await cdp.send('Page.navigate', {url: `${ORIGIN}/channels/@me`});
+	await navigate(cdp, PORT, `${ORIGIN}/channels/@me`, {selector: 'nav, [data-flx*="guild-list"], input[type="password"], button'});
 	const settled = await waitFor(`!!document.querySelector('nav, [data-flx*="guild-list"], input[type="password"], button')`);
 	if (!settled) throw new Error('app did not boot');
 	await sleep(1500);
@@ -125,11 +129,11 @@ for (const scene of scenes) {
 	const theme = scene.theme ?? 'dark';
 	if (!ATTACH) {
 		// The booted app removes window.localStorage, so write storage from a non-app document.
-		await cdp.send('Page.navigate', {url: `${ORIGIN}/favicon.ico`});
+		await navigate(cdp, PORT, `${ORIGIN}/favicon.ico`, {selector: 'body'});
 		await waitFor(`document.readyState === 'complete'`, 5000);
 		await cdp.eval(`localStorage.setItem('theme', ${JSON.stringify(theme)}); true`);
 	}
-	await cdp.send('Page.navigate', {url: `${ORIGIN}${scene.path}`});
+	await navigate(cdp, PORT, `${ORIGIN}${scene.path}`, {selector: scene.wait_for ?? '[data-flx]'});
 	const waitSel = scene.wait_for ?? '[data-flx]';
 	let ready = false;
 	for (let i = 0; i < 80 && !ready; i++) {

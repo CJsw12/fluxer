@@ -1,7 +1,7 @@
 # Fluxer GPUI 1:1 UI 패리티 로드맵
 
 > `fluxer_client/`(Rust GPUI 앱)의 화면·동작을 공식 Fluxer(`fluxer_app/`, 데스크톱 Electron)와 1:1로 맞추는 **유일한 활성 실행 계획서**다.
-> - 새 세션은 `AGENTS.md` → `PROGRESS.md` → 이 문서의 미완료(`[ ]`) 첫 항목 순서로 진행한다. 검증·측정 방법과 운영 절차는 `docs/PARITY_LAB.md`(특히 8장 사각지대, 10장 운영 가이드)를 따른다.
+> - 진행 순서와 다음 할 일은 `PROGRESS.md`의 Next Steps 한 곳에서만 관리한다. 이 문서는 마일스톤의 목표와 수락 기준을 기록한다. 검증·측정 방법은 `docs/PARITY_LAB.md`, 에이전트 규칙은 `AGENTS.md`.
 > - 프로토콜·상태 레퍼런스 `docs/rust_client_core/{GATEWAY_PROTOCOL,REST_AND_AUTH,STATE_MODEL}.md`는 읽기 전용 참조다.
 > - 끝난 M1~M8의 상세 작업 내역은 Git 이력(아래 커밋)과 로컬 보관본 `docs/archive/UI_PARITY_ROADMAP-M1-M8.local.md`에 있다.
 

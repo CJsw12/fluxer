@@ -5,7 +5,7 @@
 ## 새 세션 시작 순서 (모든 도구 공통)
 
 1. 도구별 지침(Claude: `CLAUDE.md`, Antigravity: 전역 `~/.gemini/config/GEMINI.md`) → `AGENTS.md`(공통 규칙) → 이 문서 → 로컬 운영 메모 `Logs/handoff/OPERATIONS.md`(Git 제외: 시험 환경·상시 실행·상태 스냅샷)를 읽는다. 명령어 모음은 `README.md`.
-2. `docs/AGENT_GUIDE.md`(규칙·컨텍스트 예산·도구 한 줄 사용법·작업 흐름, 약 2천 토큰)를 읽는다. `docs/PARITY_LAB.md`는 참고서라 통째로 읽지 않고, 필요한 절만 찾아 읽는다.
+2. UI 작업의 규칙·컨텍스트 예산·도구 사용법·작업 흐름은 `AGENTS.md`의 "UI 1:1 작업" 절에 있다. `docs/PARITY_LAB.md`는 참고서라 통째로 읽지 않고, 필요한 절만 찾아 읽는다.
 3. 상시 실행 구성(시험 서버 터널, 측정 기능을 켠 Rust 클라이언트, 비교용 공식 앱)을 `docs/PARITY_LAB.md` 10.1대로 확인·기동한다. 측정 전 점검 4가지: Rust `Status: Online`, Rust 멤버 목록 `Online—2`, CDP 9334 응답, 양쪽 마이크·스피커 켜짐(10.8 1단계).
 4. 아래 Next Steps 1번부터 **사용자에게 묻지 말고 바로** 진행한다(선택이 필요하면 추천안으로 진행하고 보고에 남긴다). 사용자 선호(자율 진행·커밋·push 상시 승인·빌드 부하 제한)는 `Logs/handoff/OPERATIONS.md` 첫 절에 있다.
 
@@ -40,6 +40,7 @@
 
 ## Next Steps
 
+0. **남은 수치 차이 줄이기(래칫 기준 `tools/parity_lab/spec_baseline.json`).** 큰 순서: 설정 키 설정 334, DM 대화 52, 음성 채널 49, 설정 탭 50~70대, 친구 목록 47, 라이트 테마 29. 설정 화면 코드는 `fluxer_client/app/src/ui/settings/` 아래 탭별 파일(`keybinds.rs`, `voice_video.rs` 등)이므로 필요한 탭만 읽는다.
 1. **M9.5 양방향 화면 공유 재검증 (버전 정렬 후).** 비교 앱 버전을 테스트 서버·저장소와 맞춘 뒤(`FLUXER_DISABLE_MODULE_UPDATES=1`), 실기 `share_check.py --launch-rust`로 `rust_to_official`, `official_to_rust`, `voice_audio` 최종 통과를 확인하고 M9.5를 완료 처리한다.
 2. **T3 고위험 백로그 구현 및 교차 계열 검토.** 메시지 삭제·일괄 삭제·길드 탈퇴·밴·인증 등 서버 데이터 변경·삭제·권한 경로(`TODO(backlog)`)는 구현 후 다른 계열 모델의 독립 검토를 거쳐 반영한다.
 3. **M9.9 미검증 아이콘 수확 및 M9.1 후속.** `icon_manifest.json` 미검증 112곳을 공식 원본 SVG로 마저 검증하고, `interactions.json` 후속 717건을 우선순위대로 반영한다.
@@ -52,5 +53,5 @@
 
 ## 문서 지도
 
-- 활성: `README.md`(개요·명령), `PROGRESS.md`(이 문서), `docs/UI_PARITY_ROADMAP.md`(실행 계획), `docs/AGENT_GUIDE.md`(에이전트 시작 안내), `docs/PARITY_LAB.md`(검증 방법·운영 가이드·외부 사례, 참고서), `docs/rust_client_core/{GATEWAY_PROTOCOL,REST_AND_AUTH,STATE_MODEL}.md`(코어 레퍼런스), `docs/progress/progress.json`(기능 추적).
+- 활성: `README.md`(개요·명령), `PROGRESS.md`(이 문서), `docs/UI_PARITY_ROADMAP.md`(실행 계획), `docs/PARITY_LAB.md`(검증 방법·운영 가이드·외부 사례, 참고서), `docs/rust_client_core/{GATEWAY_PROTOCOL,REST_AND_AUTH,STATE_MODEL}.md`(코어 레퍼런스), `docs/progress/progress.json`(기능 추적).
 - 로컬 보관(Git 제외, `docs/archive/*.local.md`): 이전 진행 기록, 끝난 M1~M8 상세, 이전 단계 계획서, 비공개 조사. 작업 기준으로 삼지 않는다.

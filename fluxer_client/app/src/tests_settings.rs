@@ -733,6 +733,11 @@ fn m5_user_area_popout_and_interactive_settings_prefs_work(cx: &mut TestAppConte
     draw(vcx);
     assert!(vcx.debug_bounds("settings-input-mode-vad").is_some());
     assert!(vcx.debug_bounds("settings-input-mode-ptt").is_some());
+
+    let custom_btn = vcx.debug_bounds("settings-voice-profile-custom").unwrap().center();
+    vcx.simulate_click(custom_btn, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
     assert!(vcx.debug_bounds("settings-noise-suppression").is_some());
 
     let ptt_btn = vcx.debug_bounds("settings-input-mode-ptt").unwrap().center();
@@ -794,10 +799,7 @@ fn m7_guild_rail_hover_indicator_and_full_video_voice_settings_work(cx: &mut Tes
 
     for sel in [
         "settings-voice-profile-custom",
-        "settings-ns-backend-deepfilternet",
-        "settings-echo-cancellation",
         "settings-auto-gain-control",
-        "settings-ptt-delay-500",
         "settings-mic-test-btn",
         "settings-mic-test-meter",
         "settings-camera-res-1080p",
@@ -811,6 +813,20 @@ fn m7_guild_rail_hover_indicator_and_full_video_voice_settings_work(cx: &mut Tes
         "settings-video-hw-accel",
     ] {
         assert!(vcx.debug_bounds(sel).is_some(), "{sel} must be rendered in Voice & Video tab");
+    }
+
+    for pre_sel in ["settings-voice-profile-custom", "settings-input-mode-ptt"] {
+        let pt = vcx.debug_bounds(pre_sel).expect(pre_sel).center();
+        vcx.simulate_click(pt, gpui_kit::Modifiers::default());
+        vcx.run_until_parked();
+        draw(vcx);
+    }
+    for sel in [
+        "settings-ns-backend-deepfilternet",
+        "settings-echo-cancellation",
+        "settings-ptt-delay-500",
+    ] {
+        assert!(vcx.debug_bounds(sel).is_some(), "{sel} must be rendered in custom PTT mode");
     }
 
     for (section_sel, click_sels) in [
@@ -839,11 +855,11 @@ fn m7_guild_rail_hover_indicator_and_full_video_voice_settings_work(cx: &mut Tes
         vcx.run_until_parked();
         draw(vcx);
         for &click_sel in click_sels {
-            if click_sel == "settings-mic-test-btn" {
-                let scroll_pos = vcx.debug_bounds("settings-ptt-delay-500").expect("scroll anchor").center();
+            if click_sel == "settings-ptt-delay-500" || click_sel == "settings-mic-test-btn" {
+                let scroll_pos = vcx.debug_bounds("settings-voice-profile-custom").expect("scroll anchor").center();
                 vcx.simulate_event(gpui_kit::ScrollEvent {
                     position: scroll_pos,
-                    delta: gpui_kit::ScrollDelta::Pixels(gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(-600.))),
+                    delta: gpui_kit::ScrollDelta::Pixels(gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(-400.))),
                     ..Default::default()
                 });
                 vcx.run_until_parked();
@@ -856,7 +872,7 @@ fn m7_guild_rail_hover_indicator_and_full_video_voice_settings_work(cx: &mut Tes
             if click_sel == "settings-mic-test-btn" {
                 vcx.simulate_event(gpui_kit::ScrollEvent {
                     position: pt,
-                    delta: gpui_kit::ScrollDelta::Pixels(gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(600.))),
+                    delta: gpui_kit::ScrollDelta::Pixels(gpui_kit::point(gpui_kit::px(0.), gpui_kit::px(800.))),
                     ..Default::default()
                 });
                 vcx.run_until_parked();

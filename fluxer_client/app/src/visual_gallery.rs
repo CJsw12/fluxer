@@ -876,7 +876,7 @@ mod tests {
                 }
                 6 => {
                     assert!(vcx.debug_bounds("settings-appearance-preview").is_some());
-                    assert!(vcx.debug_bounds("settings-theme-swatch-dark").is_some());
+                    assert!(vcx.debug_bounds("settings-open-themes-tab").is_some());
                 }
                 7 => {
                     assert!(vcx.debug_bounds("settings-close").is_some());

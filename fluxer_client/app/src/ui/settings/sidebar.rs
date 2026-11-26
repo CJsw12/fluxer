@@ -720,6 +720,9 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
         (SharedString::from(l10n::tr("Search results")), None, search_body)
     };
 
+    let preview = (query_lower.is_empty() && modal.active_tab == SettingsTab::Appearance)
+        .then(|| render_appearance_preview(view, theme));
+
     let view_weak = cx.weak_entity();
     div()
         .id("settings-modal")
@@ -736,10 +739,11 @@ pub fn render(view: &ClientView, modal: &SettingsModal, theme: &Theme, cx: &mut 
                 this.close_overlay(window, cx);
             }
         }))
-        .child(overlay::settings_modal_with_link(
+        .child(overlay::settings_modal_with_preview(
             sidebar,
             title,
             page_link,
+            preview,
             body,
             theme,
             move |window, cx| {

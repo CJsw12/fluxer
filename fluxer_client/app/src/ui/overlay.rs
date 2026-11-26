@@ -174,6 +174,21 @@ pub fn settings_modal_with_link(
     theme: &Theme,
     on_dismiss: impl Fn(&mut Window, &mut App) + 'static,
 ) -> AnyElement {
+    settings_modal_with_preview(sidebar, title, page_link, None, body, theme, on_dismiss)
+}
+
+/// Variant of [`settings_modal_with_link`] that optionally places a tab-level
+/// preview element directly inside `settings-tab-container.container` above
+/// `settings-tab-content.content` (used by `AppearanceTab`).
+pub fn settings_modal_with_preview(
+    sidebar: impl IntoElement,
+    title: SharedString,
+    page_link: Option<String>,
+    preview: Option<AnyElement>,
+    body: impl IntoElement,
+    theme: &Theme,
+    on_dismiss: impl Fn(&mut Window, &mut App) + 'static,
+) -> AnyElement {
     let on_dismiss = Rc::new(on_dismiss);
     let on_dismiss_bg = on_dismiss.clone();
     let on_dismiss_btn = on_dismiss;
@@ -278,6 +293,7 @@ pub fn settings_modal_with_link(
                         .flex_col()
                         .gap(px(20.))
                         .flx("app.settings-tab-layout.settings-tab-container.container")
+                        .when_some(preview, |d, el| d.child(el))
                         .child(
                             div()
                                 .w_full()

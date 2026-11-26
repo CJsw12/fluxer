@@ -40,7 +40,7 @@
 
 ## Next Steps
 
-0. **남은 수치 차이 줄이기(래칫 기준 `tools/parity_lab/spec_baseline.json`).** 현재 기준(2026-11-26, deltas/missing): 설정 키 설정 310/12, DM 대화 25/92, 설정 음성·영상 24/43, 설정 모양 24/23, 설정 언어 22/39, 설정 알림 15/29, 설정 내 계정 13/35, 라이트 테마 11/163, 마크다운 10/152, 탐색 9, 친구 목록 7, 음성 채널 0/49. 설정 화면 코드는 `fluxer_client/app/src/ui/settings/` 아래 탭별 파일이므로 필요한 탭만 읽는다.
+0. **남은 수치 차이 줄이기(래칫 기준 `tools/parity_lab/spec_baseline.json`).** 현재 기준(2026-11-26, deltas/missing): 설정 키 설정 310/12, DM 대화 25/92, 설정 음성·영상 24/43, 설정 언어 22/39, 설정 모양 21/13, 설정 알림 15/29, 설정 내 계정 13/35, 라이트 테마 11/163, 마크다운 10/152, 탐색 9, 친구 목록 7, 음성 채널 0/49. 설정 화면 코드는 `fluxer_client/app/src/ui/settings/` 아래 탭별 파일이므로 필요한 탭만 읽는다.
 1. **M9.5 양방향 화면 공유 재검증 (버전 정렬 후).** 비교 앱 버전을 테스트 서버·저장소와 맞춘 뒤(`FLUXER_DISABLE_MODULE_UPDATES=1`), 실기 `share_check.py --launch-rust`로 `rust_to_official`, `official_to_rust`, `voice_audio` 최종 통과를 확인하고 M9.5를 완료 처리한다.
 2. **T3 고위험 백로그 구현 및 교차 계열 검토.** 메시지 삭제·일괄 삭제·길드 탈퇴·밴·인증 등 서버 데이터 변경·삭제·권한 경로(`TODO(backlog)`)는 구현 후 다른 계열 모델의 독립 검토를 거쳐 반영한다.
 3. **M9.9 미검증 아이콘 수확 및 M9.1 후속.** `icon_manifest.json` 미검증 112곳을 공식 원본 SVG로 마저 검증하고, `interactions.json` 후속 717건을 우선순위대로 반영한다.

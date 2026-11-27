@@ -22,12 +22,15 @@
 - **기동(새 탭 1개):**
   `orca orchestration worker-start --environment local --from <내_세션_핸들> --worktree current --agent antigravity --model gemini-4-neon --effort medium --task-title "parity-batch-<N>" --spec-file target/parity-tmp/runner/batch_spec_<N>.md --json`
   - 반환 JSON의 `model == "gemini-4-neon"`, `effort == "medium"` 일치를 확인한다(T3·2회 실패 복합 버그만 `high` 또는 Claude 예외 승격).
-- **완료 후 감사:** `python -I tools/agents/agy_audit.py --since <기동UTC시각> --json` 결과를 `Logs/handoff/worker_retro.md`에 1행 기록한다.
+- **완료 후 감사:** `python -I tools/agents/agy_audit.py --since <기동UTC시각> --json` 결과와 **배치 총 소요 시간·최장 구간(`build`/`surface`/`swarm`)**을 `Logs/handoff/worker_retro.md`에 1행 기록한다.
 
-## 5. 재귀 개선 기준 (과잉 규칙화 방지)
-- 1회성 마찰은 `worker_retro.md`에 기록만 한다.
-- **2회 반복 마찰** 또는 **게이트 실패**만 승격한다: **도구 자동화 우선(별도 소형 워커에 위임)** → 불가 시 `tools/agents/WORKER_RULES.md`에 1~2줄 반영(**30줄 하드캡** 유지).
-- 승격 후 다음 1배치의 `agy_audit.py` KPI(`repeated_reads`, `>8KB`, `errors`, `rework`)가 개선되지 않으면 즉시 회수한다.
+## 5. 재귀 개선 기준 (품질 + 속도, 과잉 규칙화 방지)
+- 1회성 마찰·지연은 `worker_retro.md`에 기록만 한다.
+- **승격 조건 (아래 중 하나 해당 시):**
+  1. **품질/효율:** 2회 반복 마찰 또는 게이트 실패.
+  2. **시간 단축:** 동일 병목 구간(빌드·검증·워커 대기·전처리)이 **2회 연속 배치 시간의 30% 초과**하거나 **배치 총 시간이 25분 초과**.
+- **개선 원칙:** **도구·빌드·캐시·병렬화 자동화 우선(별도 소형 워커 위임)** → 불가 시 `tools/agents/WORKER_RULES.md`에 1~2줄 반영(**30줄 하드캡** 유지). **테스트·래칫·육안 확인 등 품질 게이트 생략으로 시간을 줄이는 것은 금지.**
+- 승격 후 다음 1배치의 `agy_audit.py` KPI(`repeated_reads`, `>8KB`, `errors`, `rework`) 및 **배치 소요 시간**이 개선되지 않거나 게이트 신뢰도가 떨어지면 즉시 회수한다.
 
 ## 6. T3 및 멈춤 조건
 - **T3(삭제·인증·권한·저장 형식):** 배치 워커의 커밋을 금지하고, 구현 완료 후 **다른 계열 교차 검토 워커**를 별도 탭으로 실행해 통과한 뒤에만 커밋한다.

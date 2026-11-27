@@ -113,6 +113,53 @@ def capture(cmd: list[str], timeout: int) -> tuple[int | None, str, bool]:
 
 BROKER_GATE_STEPS = ("surface", "state")
 BROKER_LOGS: dict[str, int] = {}  # step -> broker exit code, for steps whose log was written by the broker
+STATE_OFFICIAL_CACHE = REPO / "target" / "parity-tmp" / "state_official_cache"
+
+
+def cached_official_state_dir(cache_dir: Path = STATE_OFFICIAL_CACHE) -> Path | None:
+    """Return cache_dir when it holds a usable official state_matrix capture."""
+    manifest = cache_dir / "manifest.json"
+    if not (manifest.is_file() and (cache_dir / "rest.dom.json").is_file() and (cache_dir / "rest.png").is_file()):
+        return None
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    states = data.get("states") if isinstance(data, dict) else None
+    if not isinstance(states, list) or len(states) < 5:
+        return None
+    return cache_dir
+
+
+def save_official_state_cache(src_dir: Path, cache_dir: Path = STATE_OFFICIAL_CACHE) -> bool:
+    """Persist a verified official state capture into cache_dir for reuse across runs."""
+    if cached_official_state_dir(src_dir) is None:
+        return False
+    try:
+        cache_dir.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(src_dir, cache_dir, dirs_exist_ok=True)
+        return True
+    except OSError:
+        return False
+
+
+def should_skip_after_failure(name: str, results: dict[str, Result], fail_fast: bool) -> str | None:
+    """Return skip reason when an earlier failure makes running `name` wasteful, else None."""
+    if name in LIVE_STEPS:
+        build_res = results.get("build")
+        if build_res and build_res.status == "FAIL" and "sha n/a" in build_res.detail:
+            return "build failed before producing a new binary"
+        pre_res = results.get("precheck")
+        if pre_res and pre_res.status == "FAIL":
+            return "precheck failed - fix the environment first"
+    if fail_fast and name in BROKER_GATE_STEPS:
+        failed = [
+            step for step in ("icons", "colors", "ratchet", "resize")
+            if results.get(step) and results[step].status == "FAIL"
+        ]
+        if failed:
+            return f"skipped after earlier FAIL ({', '.join(failed)}; pass --no-fail-fast to run)"
+    return None
 
 
 def load_env_module():
@@ -614,6 +661,10 @@ def step_surface(args: argparse.Namespace, out_dir: Path) -> Result:
 def step_state(args: argparse.Namespace, out_dir: Path) -> Result:
     state_dir = out_dir / "state"
     cmd = [sys.executable, "-I", str(HERE / "state_matrix.py"), "--strict", "--out", str(state_dir)]
+    refresh = getattr(args, "refresh_official", False)
+    cache_dir = None if refresh else cached_official_state_dir()
+    if cache_dir is not None:
+        cmd.extend(["--official-dir", str(cache_dir)])
     code, text, timed_out, log = run_logged("state", cmd, out_dir, TIMEOUTS["state"])
     report_path = state_dir / "matrix_report.json"
     report, failures = parse_matrix_report(report_path)
@@ -621,7 +672,11 @@ def step_state(args: argparse.Namespace, out_dir: Path) -> Result:
         return Result("FAIL", f"timeout after {TIMEOUTS['state']}s", log)
     if report is None:
         return Result("FAIL", clip(f"no usable matrix_report.json ({first_error(text)})"), log)
+    if cache_dir is None and code == 0:
+        save_official_state_cache(state_dir / "official")
     detail = f"strict_failures={len(failures)}"
+    if cache_dir is not None:
+        detail += " (cached official)"
     if failures:
         detail += f" ({failures[0]})"
     if failures:
@@ -894,12 +949,29 @@ def selftest() -> None:
     )
 
     assert build_parser().parse_args(["--no-restore-client"]).no_restore_client
+    assert build_parser().parse_args(["--no-fail-fast"]).no_fail_fast
+    assert build_parser().parse_args(["--refresh-official"]).refresh_official
+    assert should_skip_after_failure("ratchet", {"build": Result("FAIL", "exit 1, no tests, sha n/a")}, True) is not None
+    assert should_skip_after_failure("ratchet", {"build": Result("FAIL", "exit 1, sha 8c6bf354 (client offline)")}, True) is None
+    assert should_skip_after_failure("surface", {"ratchet": Result("FAIL", "21 OK, 1 FAIL")}, True) is not None
+    assert should_skip_after_failure("surface", {"ratchet": Result("FAIL", "21 OK, 1 FAIL")}, False) is None
+    assert should_skip_after_failure("resize", {"ratchet": Result("FAIL", "21 OK, 1 FAIL")}, True) is None
     assert callable(load_env_module().submit_broker_request)
     assert use_broker({}, interactive=False) and not use_broker({}, interactive=True)
     assert use_broker({"FLUXER_ENV_FORCE_BROKER": "1"}, interactive=True)
     import tempfile
     with tempfile.TemporaryDirectory(dir=REPO / "target" / "parity-tmp" if (REPO / "target" / "parity-tmp").is_dir() else None) as td:
         gd = Path(td)
+        fake_off = gd / "off"
+        fake_off.mkdir()
+        assert cached_official_state_dir(fake_off) is None
+        (fake_off / "manifest.json").write_text(json.dumps({"states": [{"slug": f"s{i}"} for i in range(6)]}), encoding="utf-8")
+        (fake_off / "rest.dom.json").write_text("[]", encoding="utf-8")
+        (fake_off / "rest.png").write_bytes(b"png")
+        assert cached_official_state_dir(fake_off) == fake_off
+        fake_cache = gd / "cache"
+        assert save_official_state_cache(fake_off, fake_cache)
+        assert cached_official_state_dir(fake_cache) == fake_cache
         calls: list = []
         assert run_gate_via_broker(["surface"], Path(tempfile.gettempdir()) / "nope", lambda *a: (0, ""))[0] == 2
         if gd.resolve().is_relative_to((REPO / "target" / "parity-tmp").resolve()):
@@ -914,7 +986,7 @@ def selftest() -> None:
                 assert step_state(argparse.Namespace(), gd).status == "FAIL"  # no matrix_report.json
             finally:
                 BROKER_LOGS.clear()
-    print("selftest ok (build/icons/colors/spec_gate/resize parsers + step selection + heal gating + client restore)")
+    print("selftest ok (build/icons/colors/spec_gate/resize parsers + step selection + heal gating + client restore + fail-fast + official cache)")
 
 
 # ---------------------------------------------------------------- CLI
@@ -955,6 +1027,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="do not restart the Rust client at the end when it is not running (default: restore after build/live steps)",
     )
+    p.add_argument(
+        "--no-fail-fast",
+        action="store_true",
+        help="run slow surface/state gates even when icons/colors/ratchet/resize already failed",
+    )
+    p.add_argument(
+        "--refresh-official",
+        action="store_true",
+        help="re-capture official state_matrix instead of reusing target/parity-tmp/state_official_cache",
+    )
     return p
 
 
@@ -984,10 +1066,9 @@ def main(argv: list[str] | None = None) -> int:
             detail = "not requested (pass --build)" if name == "build" and not args.build else "not selected"
             results[name] = Result("SKIP", detail)
             continue
-        # Live gates measure the running apps; after a failed precheck (client offline,
-        # stale official gateway, muted mic) their failures are noise, so skip them.
-        if name in LIVE_STEPS and results.get("precheck") and results["precheck"].status == "FAIL":
-            results[name] = Result("SKIP", "precheck failed - fix the environment first")
+        skip_reason = should_skip_after_failure(name, results, fail_fast=not args.no_fail_fast)
+        if skip_reason is not None:
+            results[name] = Result("SKIP", skip_reason)
             continue
         started = time.time()
         via_broker = False

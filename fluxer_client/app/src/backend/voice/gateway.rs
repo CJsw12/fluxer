@@ -359,6 +359,24 @@ pub(super) fn on_gateway_dispatch_inner(
                                                 let _ = events_for_watcher.send(UiEvent::VoiceChanged);
                                             }
                                         }
+                                        ev @ VoiceRoomEvent::ScreenShareAudio { .. } => {
+                                            let mut mgr = lock(&voice_for_events);
+                                            if mgr.attempt_id != attempt_id {
+                                                break;
+                                            }
+                                            let error = match &ev {
+                                                VoiceRoomEvent::ScreenShareAudio { error, .. } => error.clone(),
+                                                _ => None,
+                                            };
+                                            if mgr.handle_room_event(ev) {
+                                                let _ = events_for_watcher.send(UiEvent::VoiceChanged);
+                                                if let Some(error) = error {
+                                                    let _ = events_for_watcher.send(UiEvent::ActionFailed {
+                                                        error: format!("Screen share audio unavailable: {error}"),
+                                                    });
+                                                }
+                                            }
+                                        }
                                         ev @ (VoiceRoomEvent::ScreenSources(_)
                                         | VoiceRoomEvent::ActiveSpeakers(_)) => {
                                             let mut mgr = lock(&voice_for_events);

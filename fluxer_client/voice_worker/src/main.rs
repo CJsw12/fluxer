@@ -22,6 +22,9 @@ use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWriteExt, BufReader};
 use tokio::sync::mpsc;
 use url::Url;
 
+#[cfg(windows)]
+mod screen_audio;
+
 const MAX_VIDEO_WIDTH: u32 = 960;
 const MAX_VIDEO_HEIGHT: u32 = 540;
 const VIDEO_FRAME_MIN_INTERVAL: Duration = Duration::from_millis(66);
@@ -170,6 +173,7 @@ impl fmt::Debug for WorkerCommand {
 enum WorkerEvent {
     Connected,
     Error { message: String },
+    ScreenShareAudio { request: u64, active: bool, error: Option<String> },
     Disconnected { reason: String },
     ScreenSources {
         sources: Vec<ScreenSourceInfo>,
@@ -229,17 +233,54 @@ fn abort_video_task(active_video_task: &mut Option<(String, tokio::task::JoinHan
 }
 
 struct ActiveScreenShare {
+    video_options: WorkerCommand,
     pub_sid: TrackSid,
     stop_flag: Arc<AtomicBool>,
+    stopped: Arc<tokio::sync::Notify>,
     capture_thread: Option<std::thread::JoinHandle<()>>,
+    #[cfg(windows)]
+    audio: Option<screen_audio::Capture>,
 }
 
 async fn stop_screen_share(active_screen_share: &mut Option<ActiveScreenShare>, room: &Room) {
     if let Some(mut share) = active_screen_share.take() {
         share.stop_flag.store(true, Ordering::Release);
         drop(share.capture_thread.take());
+        #[cfg(windows)]
+        if let Some(audio) = share.audio.take() {
+            audio.stop(room).await;
+        }
         let _ = room.local_participant().unpublish_track(&share.pub_sid).await;
     }
+}
+
+async fn update_screen_share_audio_and_emit(
+    _share: &mut ActiveScreenShare,
+    with_audio: bool,
+    _room: &Room,
+    request: u64,
+    stdout: &mut tokio::io::Stdout,
+) {
+    if !with_audio {
+        #[cfg(windows)]
+        if let Some(audio) = _share.audio.take() {
+            audio.stop(_room).await;
+        }
+        return;
+    }
+    #[cfg(windows)]
+    let result = if _share.audio.is_some() {
+        Ok(())
+    } else {
+        screen_audio::Capture::start(_room).await.map(|audio| _share.audio = Some(audio))
+    };
+    #[cfg(not(windows))]
+    let result: Result<(), &str> = Err("System audio capture is unavailable on this platform");
+    emit_event(stdout, &WorkerEvent::ScreenShareAudio {
+        request,
+        active: result.is_ok(),
+        error: result.err().map(str::to_owned),
+    }).await;
 }
 
 /// libyuv names packed formats by 32-bit word order (little-endian), so the bytes in memory are
@@ -950,6 +991,7 @@ async fn run_worker() -> i32 {
     let (video_frame_tx, mut video_frame_rx) = mpsc::channel::<WorkerEvent>(1);
     let mut active_video_task: Option<(String, tokio::task::JoinHandle<()>)> = None;
     let mut active_screen_share: Option<ActiveScreenShare> = None;
+    let mut screen_share_request = 0_u64;
     let mut audio_state = WorkerAudioState {
         input_device: None,
         output_device: None,
@@ -985,7 +1027,7 @@ async fn run_worker() -> i32 {
                             }
                             WorkerCommand::SetScreenShare {
                                 active,
-                                with_audio: _,
+                                with_audio,
                                 source_id,
                                 source_kind,
                                 width,
@@ -994,12 +1036,24 @@ async fn run_worker() -> i32 {
                                 codec,
                                 max_bitrate,
                             } => {
+                                screen_share_request = screen_share_request.wrapping_add(1);
                                 if !active {
                                     stop_screen_share(&mut active_screen_share, &room).await;
                                 } else {
-                                    if active_screen_share.is_some() {
-                                        stop_screen_share(&mut active_screen_share, &room).await;
+                                    let video_options = WorkerCommand::SetScreenShare {
+                                        active, with_audio: false, source_id, source_kind: source_kind.clone(),
+                                        width, height, fps, codec: codec.clone(), max_bitrate,
+                                    };
+                                    if let Some(share) = &mut active_screen_share
+                                        && share.video_options == video_options
+                                        && !share.stop_flag.load(Ordering::Acquire)
+                                    {
+                                        update_screen_share_audio_and_emit(
+                                            share, with_audio, &room, screen_share_request, &mut stdout,
+                                        ).await;
+                                        continue;
                                     }
+                                    stop_screen_share(&mut active_screen_share, &room).await;
                                     let want_window = source_kind
                                         .as_deref()
                                         .is_some_and(|k| k.eq_ignore_ascii_case("window"));
@@ -1020,6 +1074,12 @@ async fn run_worker() -> i32 {
                                         capturer_opt = DesktopCapturer::new(sopts);
                                     }
                                     let Some(mut capturer) = capturer_opt else {
+                                        if with_audio {
+                                            emit_event(&mut stdout, &WorkerEvent::ScreenShareAudio {
+                                                request: screen_share_request, active: false,
+                                                error: Some("Screen capture unavailable".to_owned()),
+                                            }).await;
+                                        }
                                         emit_event(
                                             &mut stdout,
                                             &WorkerEvent::Error {
@@ -1076,6 +1136,12 @@ async fn run_worker() -> i32 {
                                     {
                                         Ok(handle) => handle,
                                         Err(_) => {
+                                            if with_audio {
+                                                emit_event(&mut stdout, &WorkerEvent::ScreenShareAudio {
+                                                    request: screen_share_request, active: false,
+                                                    error: Some("Failed to publish screen share".to_owned()),
+                                                }).await;
+                                            }
                                             emit_event(
                                                 &mut stdout,
                                                 &WorkerEvent::Error {
@@ -1160,6 +1226,8 @@ async fn run_worker() -> i32 {
                                             }
                                         }
                                     });
+                                    let stopped = Arc::new(tokio::sync::Notify::new());
+                                    let thread_stopped = stopped.clone();
                                     let capture_thread = std::thread::spawn(move || {
                                         while !thread_stop_flag.load(Ordering::Acquire) {
                                             let tick = Instant::now();
@@ -1173,12 +1241,21 @@ async fn run_worker() -> i32 {
                                                 std::thread::sleep(remaining);
                                             }
                                         }
+                                        thread_stopped.notify_one();
                                     });
-                                    active_screen_share = Some(ActiveScreenShare {
+                                    let mut share = ActiveScreenShare {
+                                        video_options,
                                         pub_sid,
                                         stop_flag,
+                                        stopped,
                                         capture_thread: Some(capture_thread),
-                                    });
+                                        #[cfg(windows)]
+                                        audio: None,
+                                    };
+                                    update_screen_share_audio_and_emit(
+                                        &mut share, with_audio, &room, screen_share_request, &mut stdout,
+                                    ).await;
+                                    active_screen_share = Some(share);
                                 }
                             }
                             WorkerCommand::SetAudioSettings {
@@ -1353,6 +1430,26 @@ async fn run_worker() -> i32 {
             Some(frame_ev) = video_frame_rx.recv() => {
                 emit_event(&mut stdout, &frame_ev).await;
             }
+            failure = wait_for_share_failure(&mut active_screen_share) => {
+                match failure {
+                    ShareFailure::Video => {
+                        stop_screen_share(&mut active_screen_share, &room).await;
+                        emit_event(&mut stdout, &WorkerEvent::ScreenShareAudio {
+                            request: screen_share_request, active: false,
+                            error: Some("Screen capture stopped".to_owned()),
+                        }).await;
+                    }
+                    #[cfg(windows)]
+                    ShareFailure::Audio(reason) => {
+                        if let Some(audio) = active_screen_share.as_mut().and_then(|share| share.audio.take()) {
+                            audio.stop(&room).await;
+                        }
+                        emit_event(&mut stdout, &WorkerEvent::ScreenShareAudio {
+                            request: screen_share_request, active: false, error: Some(reason.to_owned()),
+                        }).await;
+                    }
+                }
+            }
         }
     }
 
@@ -1366,6 +1463,27 @@ async fn run_worker() -> i32 {
     drop(platform_audio);
     let _ = room.close().await;
     0
+}
+
+enum ShareFailure {
+    Video,
+    #[cfg(windows)]
+    Audio(&'static str),
+}
+
+async fn wait_for_share_failure(share: &mut Option<ActiveScreenShare>) -> ShareFailure {
+    let Some(share) = share else {
+        return std::future::pending().await;
+    };
+    #[cfg(windows)]
+    if let Some(audio) = &mut share.audio {
+        return tokio::select! {
+            _ = share.stopped.notified() => ShareFailure::Video,
+            reason = audio.forward_until_failure() => ShareFailure::Audio(reason),
+        };
+    }
+    share.stopped.notified().await;
+    ShareFailure::Video
 }
 
 #[tokio::main]
@@ -1424,6 +1542,14 @@ mod tests {
 
         for (ev, expected_type) in [
             (WorkerEvent::Connected, "\"type\":\"connected\""),
+            (
+                WorkerEvent::ScreenShareAudio {
+                    request: 2,
+                    active: false,
+                    error: Some("No Windows playback device".to_owned()),
+                },
+                "\"type\":\"screen_share_audio\"",
+            ),
             (
                 WorkerEvent::Error {
                     message: "boom".to_owned(),

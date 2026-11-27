@@ -264,6 +264,7 @@ impl fmt::Debug for VoiceCredentials {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum VoiceRoomEvent {
     TracksChanged,
+    ScreenShareAudio { request: u64, active: bool, error: Option<String> },
     Disconnected(String),
     VideoFrameReady,
     ScreenSources(Vec<ScreenSourceInfo>),
@@ -327,6 +328,9 @@ pub(crate) trait VoiceRoom: Send + Sync {
         self.set_screen_share(active, opts.with_audio);
     }
     fn request_screen_sources(&self) {}
+    fn screen_share_request_id(&self) -> Option<u64> {
+        None
+    }
     fn set_audio_settings(&self, _settings: &VoiceAudioSettings) {}
     fn set_watched_video_track(&self, _track_sid: Option<String>) {}
     fn subscribed_tracks(&self) -> Vec<TrackSubscriptionKey> {

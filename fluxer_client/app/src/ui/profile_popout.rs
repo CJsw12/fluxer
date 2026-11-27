@@ -35,6 +35,7 @@ pub struct ProfilePopout {
     pub guild_id: Option<Snowflake>,
     pub anchor: Point<Pixels>,
     pub card: ProfileCard,
+    static_cdn: Option<std::sync::Arc<str>>,
     pub error: Option<String>,
     pub note_input: Entity<InputState>,
     pub saved_note: String,
@@ -127,6 +128,7 @@ impl ClientView {
             guild_id,
             anchor,
             card,
+            static_cdn: self.backend.static_cdn.clone(),
             error: None,
             note_input,
             saved_note: initial_note,
@@ -322,6 +324,22 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
         .child(avatar_el);
 
     let display_name_tip = card.display_name.clone();
+    let badges: Vec<_> = card.profile_badges.iter().filter_map(|badge| {
+        let image = crate::profile::profile_badge_image(badge, pop.static_cdn.as_deref());
+        let caption = badge.caption.as_deref().filter(|caption| !caption.is_empty());
+        let content = if let Some(url) = image {
+            let ratio = badge.aspect_ratio.unwrap_or(1.0).clamp(0.25, 3.0);
+            img(url).h(px(20.)).w(px(20. * ratio)).object_fit(ObjectFit::Contain).into_any_element()
+        } else {
+            div().text_xs().child(caption?.to_owned()).into_any_element()
+        };
+        let tooltip = crate::profile::profile_badge_tooltip(badge);
+        Some(div()
+            .id(SharedString::from(badge.key.clone()))
+            .aria_label(caption.unwrap_or(&badge.label).to_owned())
+            .tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx))
+            .child(content))
+    }).collect();
     let user_id_text = card.user_id.to_string();
     let mut body = div()
         .px_4()
@@ -351,6 +369,9 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
                                 .tooltip(move |window, cx| Tooltip::new(display_name_tip.clone()).build(window, cx))
                                 .child(card.display_name.clone()),
                         )
+                        .when(!badges.is_empty(), |d| {
+                            d.child(div().flex().items_center().gap_1().flx("profile-badges").children(badges))
+                        })
                         .when(card.bot, |d| {
                             d.child(
                                 div()
@@ -818,6 +839,33 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
                                 .child(f.initials.clone()),
                         )
                         .child(div().text_sm().truncate().child(f.name.clone()))
+                })),
+        );
+    }
+
+    if !card.connected_accounts.is_empty() {
+        body = body.child(
+            div().flex().flex_col().gap_1().flx("profile-connected-accounts")
+                .children(card.connected_accounts.iter().enumerate().map(|(index, account)| {
+                    let platform = match account.kind.as_str() {
+                        "bsky" => l10n::tr("Bluesky"),
+                        "domain" => l10n::tr("Domain"),
+                        "oauth" => account.provider_id.clone().unwrap_or_else(|| "OAuth".to_owned()),
+                        other => other.to_owned(),
+                    };
+                    let verified = l10n::tr("Verified");
+                    let mut tip = format!("{platform} · {}", account.name);
+                    if account.verified {
+                        tip.push_str(&format!(" · {verified}"));
+                    }
+                    div().id(("profile-connected-account", index))
+                        .rounded(px(4.)).border_1().border_color(theme.border)
+                        .flex().flex_col().gap_1().px_2().py_1()
+                        .text_xs().text_color(theme.muted_foreground)
+                        .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
+                        .child(platform)
+                        .child(div().text_sm().text_color(theme.foreground).truncate().child(account.name.clone()))
+                        .when(account.verified, |d| d.child(verified))
                 })),
         );
     }

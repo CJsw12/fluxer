@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -44,6 +45,7 @@ PRECHECK_GUILD = "1572284491404148736"
 PRECHECK_CHANNEL = "1572284491404148743"
 PRECHECK_POLL_TIMEOUT_S = 18.0
 PRECHECK_POLL_INTERVAL_S = 1.5
+ORCA_WAKE_TIMEOUT_S = 10
 STEPS = ("build", "precheck", "icons", "colors", "ratchet", "resize", "surface", "state")
 LIVE_STEPS = ("ratchet", "resize", "surface", "state")
 TIMEOUTS = {
@@ -386,6 +388,40 @@ def _poll_rust_precheck(
     return inspect, fails, attempts
 
 
+def wake_a11y_for_precheck(
+    local_wake_fn: Callable[[], bool],
+    *,
+    use_broker_fn: Callable[[], bool] = use_broker,
+    which_fn: Callable[[str], str | None] = shutil.which,
+    capture_fn: Callable[[list[str], int], tuple[int | None, str, bool]] = capture,
+) -> bool:
+    """Wake fluxer_client's UIA tree locally, or via Orca on hidden desktops."""
+    try:
+        if local_wake_fn():
+            return True
+    except Exception:  # noqa: BLE001
+        pass
+    if not use_broker_fn():
+        return False
+    orca_bin = which_fn("orca")
+    if not orca_bin:
+        return False
+    code, _text, timed_out = capture_fn(
+        [
+            orca_bin,
+            "computer",
+            "get-app-state",
+            "--app",
+            "fluxer_client",
+            "--no-screenshot",
+            "--query",
+            "Status",
+        ],
+        ORCA_WAKE_TIMEOUT_S,
+    )
+    return not timed_out and code == 0
+
+
 def _precheck_once(args: argparse.Namespace, out_dir: Path) -> Result:
     log = out_dir / "precheck.log"
     lines: list[str] = []
@@ -395,7 +431,7 @@ def _precheck_once(args: argparse.Namespace, out_dir: Path) -> Result:
 
     inspect, fails, attempts = _poll_rust_precheck(
         lambda: rust_probe.send("probe_inspect"),
-        rust_probe.wake_a11y,
+        lambda: wake_a11y_for_precheck(rust_probe.wake_a11y),
         rust_probe.deep_link,
         lambda: rust_probe.send("probe_key", keystroke="escape"),
     )
@@ -813,6 +849,50 @@ def selftest() -> None:
         monotonic_fn=lambda: clock[0],
     )
     assert timeout_attempts == 3 and len(timeout_fails) == 2, (timeout_attempts, timeout_fails)
+
+    # wake_a11y_for_precheck: local success skips orca; hidden desktop falls back to orca
+    orca_calls: list[tuple[list[str], int]] = []
+    assert wake_a11y_for_precheck(
+        lambda: True,
+        use_broker_fn=lambda: (_ for _ in ()).throw(AssertionError("should not check broker")),
+        which_fn=lambda _n: (_ for _ in ()).throw(AssertionError("should not check orca")),
+        capture_fn=lambda cmd, t: (orca_calls.append((cmd, t)) or (0, "", False)),
+    )
+    assert not wake_a11y_for_precheck(
+        lambda: False,
+        use_broker_fn=lambda: False,
+        which_fn=lambda _n: (_ for _ in ()).throw(AssertionError("should not check orca")),
+        capture_fn=lambda cmd, t: (orca_calls.append((cmd, t)) or (0, "", False)),
+    )
+    assert wake_a11y_for_precheck(
+        lambda: (_ for _ in ()).throw(OSError("no hwnd")),
+        use_broker_fn=lambda: True,
+        which_fn=lambda n: "C:/orca/orca.cmd" if n == "orca" else None,
+        capture_fn=lambda cmd, t: (orca_calls.append((cmd, t)) or (0, "ok", False)),
+    )
+    assert orca_calls == [(
+        ["C:/orca/orca.cmd", "computer", "get-app-state", "--app", "fluxer_client", "--no-screenshot", "--query", "Status"],
+        ORCA_WAKE_TIMEOUT_S,
+    )]
+    assert not wake_a11y_for_precheck(
+        lambda: False,
+        use_broker_fn=lambda: True,
+        which_fn=lambda _n: None,
+        capture_fn=lambda _cmd, _t: (_ for _ in ()).throw(AssertionError("should not run capture")),
+    )
+    assert not wake_a11y_for_precheck(
+        lambda: False,
+        use_broker_fn=lambda: True,
+        which_fn=lambda _n: "orca",
+        capture_fn=lambda _cmd, _t: (1, "err", False),
+    )
+    assert not wake_a11y_for_precheck(
+        lambda: False,
+        use_broker_fn=lambda: True,
+        which_fn=lambda _n: "orca",
+        capture_fn=lambda _cmd, _t: (None, "timeout", True),
+    )
+
     assert build_parser().parse_args(["--no-restore-client"]).no_restore_client
     assert callable(load_env_module().submit_broker_request)
     assert use_broker({}, interactive=False) and not use_broker({}, interactive=True)

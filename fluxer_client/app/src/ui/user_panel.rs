@@ -192,13 +192,13 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .role(Role::Region)
         .aria_label(l10n::tr("User controls"))
         .debug_selector(|| "user-area-wrapper".to_owned())
-        .flx("app.user-area.user-area-inner.section")
         .flex()
         .flex_col()
         .flex_none()
         .rounded(px(8.))
         // Official card: srgb(0.124 0.116 0.142) = `--background-secondary-lighter`, no border.
         .bg(theme.background_secondary_lighter)
+        .flx("app.user-area.user-area-inner.section")
         .overflow_hidden()
         .children(voice_panel::render(view, theme, cx))
         .child(

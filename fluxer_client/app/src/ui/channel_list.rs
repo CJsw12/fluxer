@@ -526,6 +526,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         for c in &view.channels {
             list = list.child(render_channel(view, c, theme, cx));
         }
+        // Keep the last channel clear of the floating user card.
+        list = list.child(div().flex_none().h(px(73.)));
     }
     div()
         .flex()

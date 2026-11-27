@@ -5,6 +5,8 @@
 //! Replying / Editing) without any GPUI state, so the owner of the input
 //! (`ClientView`) drives it from the input's events and [`key_hooks`].
 
+use std::sync::atomic::{AtomicU8, Ordering};
+
 use fluxer_client_core::state::{ClientState, MESSAGE_TYPE_REPLY, Message, MessageState, Snowflake};
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -17,6 +19,7 @@ use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 use crate::ui::emoji_picker::ExpressionTab;
 use crate::ui::l10n;
+use crate::ui::rail_tooltip;
 use crate::ui::reply::ReplyingTo;
 
 /// The last error, the autocomplete popup (`ui::autocomplete::render`)
@@ -80,72 +83,87 @@ pub fn render_with(
     });
     let gif_btn = view.can_send.then(|| {
         div()
+            .id("composer-gif-wrap")
+            .relative()
             .debug_selector(|| "composer-gif".to_owned())
             .flx("channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--2")
+            .on_hover(cx.listener(|_, hovered: &bool, _, cx| {
+                set_composer_tip(2, *hovered);
+                cx.notify();
+            }))
             .child(crate::ui::channel_popouts::track_trigger("composer-gif-btn"))
-            .children(composer_icon_slot())
             .child(
-                div()
-                    .flx("channel.textarea.textarea-button.tooltip")
-                    .child(
-                        Button::new("composer-gif-btn")
-                            .ghost()
-                            .with_size(px(32.))
-                            .rounded(px(6.))
-                            .icon(composer_icon(AppIcon::Image, theme))
-                            .tooltip(l10n::tr("Media"))
-                            .accessibility_label(l10n::tr("Media"))
-                            .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
-                                v.toggle_expression_tab(ExpressionTab::Media, ev.position(), window, cx);
-                            })),
-                    ),
+                Button::new("composer-gif-btn")
+                    .ghost()
+                    .with_size(px(32.))
+                    .size(px(32.))
+                    .p_0()
+                    .rounded(px(6.))
+                    .child(composer_glyph(AppIcon::Image, theme))
+                    .accessibility_label(l10n::tr("Media"))
+                    .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
+                        v.toggle_expression_tab(ExpressionTab::Media, ev.position(), window, cx);
+                    })),
             )
+            .when(COMPOSER_TIP.load(Ordering::Relaxed) == 2, |d| {
+                d.child(rail_tooltip::top(l10n::tr("Media"), &["CTRL", "SHIFT", "G"], theme))
+            })
     });
     let sticker_btn = view.can_send.then(|| {
         div()
+            .id("composer-sticker-wrap")
+            .relative()
             .debug_selector(|| "composer-sticker".to_owned())
             .flx("channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--3")
+            .on_hover(cx.listener(|_, hovered: &bool, _, cx| {
+                set_composer_tip(3, *hovered);
+                cx.notify();
+            }))
             .child(crate::ui::channel_popouts::track_trigger("composer-sticker-btn"))
-            .children(composer_icon_slot())
             .child(
-                div()
-                    .flx("channel.textarea.textarea-button.tooltip")
-                    .child(
-                        Button::new("composer-sticker-btn")
-                            .ghost()
-                            .with_size(px(32.))
-                            .rounded(px(6.))
-                            .icon(composer_icon(AppIcon::Sticker, theme))
-                            .tooltip(l10n::tr("Stickers"))
-                            .accessibility_label(l10n::tr("Stickers"))
-                            .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
-                                v.toggle_expression_tab(ExpressionTab::Stickers, ev.position(), window, cx);
-                            })),
-                    ),
+                Button::new("composer-sticker-btn")
+                    .ghost()
+                    .with_size(px(32.))
+                    .size(px(32.))
+                    .p_0()
+                    .rounded(px(6.))
+                    .child(composer_glyph(AppIcon::Sticker, theme))
+                    .accessibility_label(l10n::tr("Stickers"))
+                    .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
+                        v.toggle_expression_tab(ExpressionTab::Stickers, ev.position(), window, cx);
+                    })),
             )
+            .when(COMPOSER_TIP.load(Ordering::Relaxed) == 3, |d| {
+                d.child(rail_tooltip::top(l10n::tr("Stickers"), &["CTRL", "S"], theme))
+            })
     });
     let emoji = view.can_send.then(|| {
         div()
+            .id("composer-emoji-wrap")
+            .relative()
             .debug_selector(|| "composer-emoji".to_owned())
             .flx("channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--4")
+            .on_hover(cx.listener(|_, hovered: &bool, _, cx| {
+                set_composer_tip(4, *hovered);
+                cx.notify();
+            }))
             .child(crate::ui::channel_popouts::track_trigger("composer-emoji-btn"))
-            .children(composer_icon_slot())
             .child(
-                div()
-                    .flx("channel.textarea.textarea-button.tooltip")
-                    .child(
-                        Button::new("composer-emoji-btn")
-                            .ghost()
-                            .with_size(px(32.))
-                            .rounded(px(6.))
-                            .icon(composer_icon(AppIcon::Smiley, theme))
-                            .tooltip(l10n::tr("Emojis"))
-                            .accessibility_label(l10n::tr("Emojis"))
-                            .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
-                                v.toggle_expression_tab(ExpressionTab::Emojis, ev.position(), window, cx);
-                            })),
-                    ),
+                Button::new("composer-emoji-btn")
+                    .ghost()
+                    .with_size(px(32.))
+                    .size(px(32.))
+                    .p_0()
+                    .rounded(px(6.))
+                    .child(composer_glyph(AppIcon::Smiley, theme))
+                    .accessibility_label(l10n::tr("Emojis"))
+                    .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
+                        v.toggle_expression_tab(ExpressionTab::Emojis, ev.position(), window, cx);
+                    })),
             )
+            .when(COMPOSER_TIP.load(Ordering::Relaxed) == 4, |d| {
+                d.child(rail_tooltip::top(l10n::tr("Emojis"), &["CTRL", "E"], theme))
+            })
     });
     let input = div()
         .flex()
@@ -771,6 +789,30 @@ mod tests {
         assert_eq!(value(cx), "draft");
         assert!(cx.update(|_, cx| harness.read(cx).controller.mode() == &ComposerMode::Normal));
     }
+}
+
+/// Which composer expression button (2 Media, 3 Stickers, 4 Emojis) shows its hover tooltip; 0 = none.
+/// Window-wide singleton because the composer owns no hover state of its own.
+static COMPOSER_TIP: AtomicU8 = AtomicU8::new(0);
+
+fn set_composer_tip(idx: u8, hovered: bool) {
+    if hovered {
+        COMPOSER_TIP.store(idx, Ordering::Relaxed);
+    } else {
+        let _ = COMPOSER_TIP.compare_exchange(idx, 0, Ordering::Relaxed, Ordering::Relaxed);
+    }
+}
+
+/// Official 22x22 icon box; the official svg itself is 22x22 (CDP getBoundingClientRect, viewBox 0 0 256 256) (`channel.textarea.textarea-button.icon`).
+fn composer_glyph(icon: AppIcon, theme: &Theme) -> Div {
+    div()
+        .flex_none()
+        .size(px(22.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .flx("channel.textarea.textarea-button.icon")
+        .child(gpui_kit::component::Icon::new(icon).with_size(px(22.)).text_color(theme.muted_foreground))
 }
 
 /// Invisible box matching the 22px icon centred in the 32px button; carries the icon's flx tag

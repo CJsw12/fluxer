@@ -193,7 +193,7 @@ pub fn settings_modal_with_preview(
     let on_dismiss_bg = on_dismiss.clone();
     let on_dismiss_btn = on_dismiss;
     let modal_bg = theme.background_secondary;
-    let sidebar_bg = theme.background_tertiary;
+    let sidebar_bg = theme.form_surface_background;
     let modal_border = theme.background_modifier_accent;
 
     let close_hover_bg = theme.hover_bg;
@@ -327,6 +327,8 @@ pub fn settings_modal_with_preview(
         .w(gpui_kit::relative(0.2737))
         .max_w(px(320.))
         .h_full()
+        .rounded_tl(px(11.))
+        .rounded_bl(px(11.))
         .bg(sidebar_bg)
         .border_r_1()
         .border_color(modal_border)
@@ -348,6 +350,8 @@ pub fn settings_modal_with_preview(
         .flex_1()
         .min_w_0()
         .h_full()
+        .rounded_tr(px(11.))
+        .rounded_br(px(11.))
         .bg(modal_bg)
         .flex()
         .flex_col()

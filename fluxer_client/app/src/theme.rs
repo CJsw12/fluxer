@@ -197,6 +197,7 @@ pub struct Theme {
     pub background_secondary_lighter: Hsla,
     /// `--background-tertiary` (guild rail).
     pub background_tertiary: Hsla,
+    pub form_surface_background: Hsla,
     /// `--background-textarea` (search bar & message composer input container).
     pub background_textarea: Hsla,
     /// `--background-header-secondary`.
@@ -641,6 +642,7 @@ impl Theme {
             popover_shadow: hsla(0., 0., 0., 0.24),
             background_secondary_lighter: lighter.color(),
             background_tertiary: p.surface(p.stops.2).color(),
+            form_surface_background: p.surface(p.stops.2).color(),
             background_textarea: p.surface(if light { 0.88 } else { 0.3 }).color(),
             background_header_secondary: p.surface(0.5).color(),
             guild_list_foreground: guild_list_fg,
@@ -722,6 +724,7 @@ impl Theme {
                 theme.background_secondary_alt = rgba_u32(t::BACKGROUND_SECONDARY_ALT_RGBA);
                 theme.background_secondary_lighter = rgba_u32(t::BACKGROUND_SECONDARY_LIGHTER_RGBA);
                 theme.background_tertiary = rgba_u32(t::BACKGROUND_TERTIARY_RGBA);
+                theme.form_surface_background = rgba_u32(t::FORM_SURFACE_BACKGROUND_RGBA);
                 theme.background_textarea = rgba_u32(t::BACKGROUND_TEXTAREA_RGBA);
                 theme.background_header_secondary = rgba_u32(t::BACKGROUND_HEADER_SECONDARY_RGBA);
                 theme.guild_list_foreground = rgba_u32(t::GUILD_LIST_FOREGROUND_RGBA);
@@ -972,6 +975,7 @@ mod tests {
                 assert_eq!($theme.background_secondary, rgba_u32(t::BACKGROUND_SECONDARY_RGBA));
                 assert_eq!($theme.background_secondary_lighter, rgba_u32(t::BACKGROUND_SECONDARY_LIGHTER_RGBA));
                 assert_eq!($theme.background_tertiary, rgba_u32(t::BACKGROUND_TERTIARY_RGBA));
+                assert_eq!($theme.form_surface_background, rgba_u32(t::FORM_SURFACE_BACKGROUND_RGBA));
                 assert_eq!($theme.background_textarea, rgba_u32(t::BACKGROUND_TEXTAREA_RGBA));
                 assert_eq!($theme.background_header_secondary, rgba_u32(t::BACKGROUND_HEADER_SECONDARY_RGBA));
                 assert_eq!($theme.guild_list_foreground, rgba_u32(t::GUILD_LIST_FOREGROUND_RGBA));

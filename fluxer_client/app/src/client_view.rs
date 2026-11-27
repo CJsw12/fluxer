@@ -983,7 +983,9 @@ impl Render for ClientView {
                     .flex_1()
                     .min_w_0()
                     .h_full()
-                    .when(!show_voice_stage, |d| d.pt(px(1.)).pb(px(1.)))
+                    // The 1px padding rows sit under the translucent outline frame border;
+                    // paint them like the sidebar so the border reads grey, not black.
+                    .when(!show_voice_stage, |d| d.pt(px(1.)).pb(px(1.)).bg(theme.background_secondary))
                     .child(
                         div()
                             .flex()
@@ -1018,7 +1020,6 @@ impl Render for ClientView {
                                             .child(
                                                 div()
                                                     .h_full()
-                                                    .when(matches!(self.place, Place::Guild(_)), |d| d.pb(px(73.)))
                                                     .flx("app.guild-sidebar.guild-navbar")
                                                     .child(ui::channel_list::render(self, &theme, cx)),
                                             ),
@@ -1053,6 +1054,20 @@ impl Render for ClientView {
             .children(right_panel)
             // `OutlineFrame.module.css`: 1px `rgba(255,255,255,0.035)` border with a 14px
             // top-left radius around everything right of the 72px rail.
+            // Underlay for the translucent border: official `.frame` paints its
+            // `--background-secondary-lighter` background beneath the border.
+            .child(
+                div()
+                    .absolute()
+                    .top(px(0.))
+                    .left(px(theme.sizes.rail_width))
+                    .right(px(0.))
+                    .bottom(px(0.))
+                    .rounded_tl(px(14.))
+                    .border_t_1()
+                    .border_l_1()
+                    .border_color(theme.background_secondary_lighter),
+            )
             .child(
                 div()
                     .absolute()

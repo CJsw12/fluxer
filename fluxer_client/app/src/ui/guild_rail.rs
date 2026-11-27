@@ -136,10 +136,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         )
         .flx("app.sidebar-nav.fluxer-button.fluxer-button-icon"),
         home_hovered.then(|| {
-            wrap_tooltip(
-                "app.sidebar-nav.fluxer-button.tooltip",
-                rail_tooltip::text(l10n::tr("Direct messages"), theme, rail_tooltip::TOOLTIP_LEFT),
-            )
+            rail_tooltip::text(l10n::tr("Direct messages"), theme, rail_tooltip::TOOLTIP_LEFT, "app.sidebar-nav.fluxer-button.tooltip")
         }),
     ));
 
@@ -197,10 +194,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             .debug_selector(|| "rail-favorites-btn".to_owned())
             .flx("app.sidebar-nav.favorites-button.fluxer-button-icon"),
             fav_hovered.then(|| {
-                wrap_tooltip(
-                    "app.sidebar-nav.favorites-button.tooltip",
-                    rail_tooltip::text(l10n::tr("Favorites"), theme, rail_tooltip::TOOLTIP_LEFT),
-                )
+                rail_tooltip::text(l10n::tr("Favorites"), theme, rail_tooltip::TOOLTIP_LEFT, "app.sidebar-nav.favorites-button.tooltip")
             }),
         ))
         .child(
@@ -280,10 +274,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             .flx("app.sidebar-nav.guild-list-item-presentation.guild-icon")
             .when(in_voice, |d| d.child(rail_tooltip::voice_badge(theme))),
             hovered.then(|| {
-                wrap_tooltip(
-                    "app.sidebar-nav.guild-list-item-content.tooltip",
-                    rail_tooltip::guild(g.name.clone(), g.counts, theme),
-                )
+                rail_tooltip::guild(g.name.clone(), g.counts, theme, "app.sidebar-nav.guild-list-item-content.tooltip")
             }),
         ));
     }
@@ -343,10 +334,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     .child(Icon::new(AppIcon::Compass).with_size(px(20.)).text_color(discover_fg)),
             ),
         discover_hovered.then(|| {
-            wrap_tooltip(
-                "app.sidebar-nav.discovery-button.div",
-                rail_tooltip::text(l10n::tr("Explore communities"), theme, 76.),
-            )
+            rail_tooltip::text(l10n::tr("Explore communities"), theme, 76., "app.sidebar-nav.discovery-button.div")
         }),
     ))
     .child(slot(4., 68., 44., "app.sidebar-nav.add-guild-button.button.add-guild",
@@ -391,16 +379,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     .child(Icon::new(AppIcon::Plus).with_size(px(20.)).text_color(if join_hovered { theme.foreground } else { theme.muted_foreground })),
             ),
         join_hovered.then(|| {
-            wrap_tooltip(
-                "app.sidebar-nav.add-guild-button.tooltip-with-keybind",
-                rail_tooltip::create_or_join(l10n::tr("Create or join a community"), theme, 76.),
-            )
+            rail_tooltip::create_or_join(l10n::tr("Create or join a community"), theme, 76., "app.sidebar-nav.add-guild-button.tooltip-with-keybind")
         }),
     ))
-}
-
-fn wrap_tooltip(flx: &'static str, tooltip: AnyElement) -> AnyElement {
-    div().flx(flx).child(tooltip).into_any_element()
 }
 
 /// Full-width slot that carries the official click-area tag; hover and click live here.

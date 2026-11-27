@@ -16,8 +16,8 @@ use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 
 const SURFACE: u32 = 0x2a2730;
-const ARROW_LEN: f32 = 7.;
-const ARROW_SPAN: f32 = 14.;
+/// Bounding box of the official 10px square pointer rotated 45deg (10 * sqrt 2).
+const POINTER_BOX: f32 = 14.14;
 /// `--tooltip-border-color`: measured `rgba(201, 197, 211, 0.15)`.
 const BORDER_RGBA: u32 = 0xc9c5d326;
 
@@ -49,35 +49,36 @@ fn pointer(side: PointerSide) -> impl IntoElement {
                         window.paint_path(path, color);
                     }
                 };
+                // Official pointer: a 10px square rotated 45deg (14.14 bbox) centred on the
+                // tooltip's padding edge; only the half outside the body is visible.
+                let cx = l + (r - l) / 2.;
+                let cy = t + (b - t) / 2.;
                 match side {
                     PointerSide::Left => {
-                        let mid = t + (b - t) / 2.;
-                        draw([(l, mid), (r + px(1.), t), (r + px(1.), b)], border);
-                        draw([(l + px(1.4), mid), (r + px(1.), t + px(0.6)), (r + px(1.), b - px(0.6))], fill);
+                        draw([(l, cy), (cx + px(1.), cy - px(7.)), (cx + px(1.), cy + px(7.))], border);
+                        draw([(l + px(1.4), cy), (cx + px(1.), cy - px(6.4)), (cx + px(1.), cy + px(6.4))], fill);
                     }
                     PointerSide::Up { .. } => {
-                        let mid = l + (r - l) / 2.;
-                        draw([(mid, t), (r, b + px(1.)), (l, b + px(1.))], border);
-                        draw([(mid, t + px(1.4)), (r - px(0.6), b + px(1.)), (l + px(0.6), b + px(1.))], fill);
+                        draw([(cx, t), (cx + px(7.), cy + px(1.)), (cx - px(7.), cy + px(1.))], border);
+                        draw([(cx, t + px(1.4)), (cx + px(6.4), cy + px(1.)), (cx - px(6.4), cy + px(1.))], fill);
                     }
                     PointerSide::Down => {
-                        let mid = l + (r - l) / 2.;
-                        draw([(l, t - px(1.)), (r, t - px(1.)), (mid, b)], border);
-                        draw([(l + px(0.6), t - px(1.)), (r - px(0.6), t - px(1.)), (mid, b - px(1.4))], fill);
+                        draw([(cx - px(7.), cy - px(1.)), (cx + px(7.), cy - px(1.)), (cx, b)], border);
+                        draw([(cx - px(6.4), cy - px(1.)), (cx + px(6.4), cy - px(1.)), (cx, b - px(1.4))], fill);
                     }
                 }
             },
         )
     };
     let tri_box = div()
-        .w(px(if matches!(side, PointerSide::Left) { ARROW_LEN } else { ARROW_SPAN }))
-        .h(px(if matches!(side, PointerSide::Left) { ARROW_SPAN } else { ARROW_LEN }))
+        .flex_none()
+        .size(px(POINTER_BOX))
         .flx("ui.tooltip.tooltip.tooltip-container.tooltip-pointer")
         .child(paint_tri(side).size_full());
     match side {
         PointerSide::Left => div()
             .absolute()
-            .left(px(-ARROW_LEN - 1.))
+            .left(px(-POINTER_BOX / 2.))
             .top_0()
             .bottom_0()
             .flex()
@@ -86,7 +87,7 @@ fn pointer(side: PointerSide) -> impl IntoElement {
             .into_any_element(),
         PointerSide::Up { right_inset: None } => div()
             .absolute()
-            .top(px(-ARROW_LEN - 1.))
+            .top(px(-POINTER_BOX / 2.))
             .left_0()
             .right_0()
             .flex()
@@ -95,13 +96,13 @@ fn pointer(side: PointerSide) -> impl IntoElement {
             .into_any_element(),
         PointerSide::Up { right_inset: Some(right) } => div()
             .absolute()
-            .top(px(-ARROW_LEN - 1.))
+            .top(px(-POINTER_BOX / 2.))
             .right(px(right))
             .child(tri_box)
             .into_any_element(),
         PointerSide::Down => div()
             .absolute()
-            .bottom(px(-ARROW_LEN - 1.))
+            .bottom(px(-POINTER_BOX / 2.))
             .left_0()
             .right_0()
             .flex()
@@ -112,6 +113,11 @@ fn pointer(side: PointerSide) -> impl IntoElement {
 }
 
 fn shell(content: impl IntoElement, centered: bool, side: PointerSide) -> impl IntoElement {
+    shell_max(content, centered, side, 190.)
+}
+
+/// `max_w` is the official `max-width: 11.875rem` (190); the guild tooltip widens it.
+fn shell_max(content: impl IntoElement, centered: bool, side: PointerSide, max_w: f32) -> impl IntoElement {
     div()
         .flx("ui.tooltip.tooltip.tooltip")
         .child(
@@ -125,7 +131,7 @@ fn shell(content: impl IntoElement, centered: bool, side: PointerSide) -> impl I
                 .border_1()
                 .border_color(rgba(BORDER_RGBA))
                 .shadow_lg()
-                .whitespace_nowrap()
+                .max_w(px(max_w))
                 .child(pointer(side))
                 .child(
                     div()
@@ -138,6 +144,8 @@ fn shell(content: impl IntoElement, centered: bool, side: PointerSide) -> impl I
 
 fn label(text: impl Into<SharedString>, theme: &Theme, size: f32, line_h: f32, bold: bool) -> impl IntoElement {
     div()
+        .max_w_full()
+        .text_center()
         .text_size(px(size))
         .line_height(px(line_h))
         .font_weight(if bold { FontWeight::SEMIBOLD } else { FontWeight::MEDIUM })
@@ -158,7 +166,7 @@ fn keybind_content(
         div()
             .h(px(20.))
             .min_w(px(20.))
-            .px(px(6.))
+            .px(px(5.))
             .flex()
             .items_center()
             .justify_center()
@@ -189,7 +197,7 @@ fn keybind_content(
                 .flex()
                 .flex_row()
                 .items_center()
-                .gap(px(4.))
+                .gap(px(2.))
                 .flx("ui.keybind-hint.keybind-hint.keybind-hint");
             for &k in keys {
                 row = row.child(chip(k));
@@ -199,7 +207,8 @@ fn keybind_content(
 }
 
 /// Position the tooltip beside a rail slot (`left` is relative to the slot, which must be `relative`).
-fn place_side(tooltip: impl IntoElement, left: f32) -> AnyElement {
+/// The measured `flx` sits on a shrink-wrapped flex item so its rect equals the tooltip box.
+fn place_side(tooltip: impl IntoElement, left: f32, flx: &'static str) -> AnyElement {
     deferred(
         div()
             .absolute()
@@ -208,14 +217,14 @@ fn place_side(tooltip: impl IntoElement, left: f32) -> AnyElement {
             .h_full()
             .flex()
             .items_center()
-            .child(tooltip),
+            .child(div().flx(flx).child(tooltip)),
     )
     .with_priority(10)
     .into_any_element()
 }
 
 /// One-line rail tooltip (`Direct messages`, `Favorites`, `Explore communities`): height 42.
-pub(crate) fn text(text: impl Into<SharedString>, theme: &Theme, left: f32) -> AnyElement {
+pub(crate) fn text(text: impl Into<SharedString>, theme: &Theme, left: f32, flx: &'static str) -> AnyElement {
     place_side(
         shell(
             div().px(px(14.)).py(px(10.)).child(label(text, theme, 15., 20., false)),
@@ -223,11 +232,12 @@ pub(crate) fn text(text: impl Into<SharedString>, theme: &Theme, left: f32) -> A
             PointerSide::Left,
         ),
         left,
+        flx,
     )
 }
 
 /// Guild tooltip: bold name row, plus the `online / members` row when counts are known.
-pub(crate) fn guild(name: impl Into<SharedString>, counts: Option<(u32, u32)>, theme: &Theme) -> AnyElement {
+pub(crate) fn guild(name: impl Into<SharedString>, counts: Option<(u32, u32)>, theme: &Theme, flx: &'static str) -> AnyElement {
     let stat = |dot: Hsla, text: String, count_flx: &'static str| {
         div()
             .flex()
@@ -254,7 +264,7 @@ pub(crate) fn guild(name: impl Into<SharedString>, counts: Option<(u32, u32)>, t
         .flex()
         .flex_col()
         .items_start()
-        .gap(px(6.))
+        .gap(px(12.))
         .px(px(14.))
         .py(px(10.))
         .min_w(px(248.))
@@ -265,7 +275,7 @@ pub(crate) fn guild(name: impl Into<SharedString>, counts: Option<(u32, u32)>, t
                 .child(
                     div()
                         .flx("app.sidebar-nav.guild-list-item-tooltip.guild-tooltip-name")
-                        .child(label(name, theme, 15., 20., true)),
+                        .child(label(name, theme, 15., 22.4, true)),
                 ),
         )
         .children(counts.map(|(online, members)| {
@@ -285,13 +295,13 @@ pub(crate) fn guild(name: impl Into<SharedString>, counts: Option<(u32, u32)>, t
                     "app.sidebar-nav.guild-list-item-tooltip.render-member-count.guild-tooltip-stat-text",
                 ))
         }));
-    place_side(shell(body, false, PointerSide::Left), TOOLTIP_LEFT)
+    place_side(shell_max(body, false, PointerSide::Left, 400.), TOOLTIP_LEFT, flx)
 }
 
 /// `Create or join a community` tooltip with the `CTRL SHIFT N` key chips.
-pub(crate) fn create_or_join(label_text: impl Into<SharedString>, theme: &Theme, left: f32) -> AnyElement {
+pub(crate) fn create_or_join(label_text: impl Into<SharedString>, theme: &Theme, left: f32, flx: &'static str) -> AnyElement {
     let body = keybind_content(label_text, &["CTRL", "SHIFT", "N"], 15., 20., 14., 10., theme);
-    place_side(shell(body, true, PointerSide::Left), left)
+    place_side(shell(body, true, PointerSide::Left), left, flx)
 }
 
 /// Header button tooltip placed below a `32x32` button with an `8px` gap (`top: 40`).
@@ -323,6 +333,24 @@ pub(crate) fn above(label_text: impl Into<SharedString>, keys: &[&'static str], 
         true,
         PointerSide::Down,
     );
+    deferred(
+        div()
+            .absolute()
+            .bottom(px(40.))
+            .left(px(-104.))
+            .w(px(240.))
+            .flex()
+            .justify_center()
+            .child(tip),
+    )
+    .with_priority(10)
+    .into_any_element()
+}
+
+/// Official `TooltipWithKeybind` at `position="top"` for a `32x32` button: box centred above it with
+/// the `8px` offset (`bottom: 40`). The shell already carries the official `ui.tooltip.tooltip.*` flx names.
+pub(crate) fn top(label_text: impl Into<SharedString>, keys: &[&'static str], theme: &Theme) -> AnyElement {
+    let tip = shell(keybind_content(label_text, keys, 13., 18., 10., 7., theme), true, PointerSide::Down);
     deferred(
         div()
             .absolute()

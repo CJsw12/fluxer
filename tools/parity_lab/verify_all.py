@@ -33,6 +33,7 @@ import re
 import subprocess
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -41,6 +42,8 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 PRECHECK_GUILD = "1572284491404148736"
 PRECHECK_CHANNEL = "1572284491404148743"
+PRECHECK_POLL_TIMEOUT_S = 18.0
+PRECHECK_POLL_INTERVAL_S = 1.5
 STEPS = ("build", "precheck", "icons", "colors", "ratchet", "resize", "surface", "state")
 LIVE_STEPS = ("ratchet", "resize", "surface", "state")
 TIMEOUTS = {
@@ -277,80 +280,136 @@ def step_build(args: argparse.Namespace, out_dir: Path) -> Result:
     return Result("PASS", detail, log)
 
 
-def _precheck_once(args: argparse.Namespace, out_dir: Path) -> Result:
-    log = out_dir / "precheck.log"
-    lines: list[str] = []
-    fails: list[str] = []
-
-    sys.path.insert(0, str(HERE))
-    inspect: dict = {}
-    try:
-        import rust_probe  # noqa: PLC0415  (module reads the IPC file only when called)
-
-        reply = rust_probe.send("probe_inspect")
-    except Exception as exc:  # noqa: BLE001  (report any probe transport failure)
-        reply = {}
-        fails.append(f"rust probe unreachable: {type(exc).__name__}: {exc}")
-    if reply.get("ok") is False:
-        fails.append(f"rust probe_inspect failed: {reply.get('error', 'unknown error')}")
-    if isinstance(reply, dict):
-        inspect = reply
-
+def _evaluate_rust_inspect(inspect: dict) -> tuple[list, str | None, str | None, bool]:
     elements = inspect.get("elements") if isinstance(inspect.get("elements"), list) else []
-    if elements:
-        status = next(
-            (e.get("text") for e in elements if e.get("flx") == "app.user-area.user-area-inner.user-status"),
-            None,
-        )
-        has_header = any(
-            e.get("flx") == "channel.member-list-group-header"
+    status = next(
+        (e.get("text") for e in elements if e.get("flx") == "app.user-area.user-area-inner.user-status"),
+        None,
+    )
+    header = next(
+        (
+            str(e.get("text"))
+            for e in elements
+            if e.get("flx") == "channel.member-list-group-header"
             and str(e.get("text") or "").strip().startswith("Online")
             and "2" in str(e.get("text") or "")
-            for e in elements
-        )
-        if status == "Online" and (not inspect.get("a11y") or not has_header):
-            if not inspect.get("a11y"):
-                rust_probe.wake_a11y()
-            if not has_header:
-                rust_probe.deep_link(f"fluxer://channels/{PRECHECK_GUILD}/{PRECHECK_CHANNEL}")
-                rust_probe.send("probe_key", keystroke="escape")
-            time.sleep(1.5)
-            retry = rust_probe.send("probe_inspect")
-            if isinstance(retry, dict) and retry.get("ok") is not False:
-                inspect = retry
-                elements = inspect.get("elements") if isinstance(inspect.get("elements"), list) else []
+        ),
+        None,
+    )
+    a11y_dump = json.dumps(inspect.get("a11y") or {}, ensure_ascii=False)
+    mic_ok = "Mute microphone" in a11y_dump
+    return elements, status, header, mic_ok
 
+
+def _poll_rust_precheck(
+    probe_fn: Callable[[], dict],
+    wake_a11y_fn: Callable[[], object],
+    deep_link_fn: Callable[[str], object],
+    escape_fn: Callable[[], object],
+    *,
+    timeout_s: float = PRECHECK_POLL_TIMEOUT_S,
+    interval_s: float = PRECHECK_POLL_INTERVAL_S,
+    sleep_fn: Callable[[float], None] = time.sleep,
+    monotonic_fn: Callable[[], float] = time.monotonic,
+) -> tuple[dict, list[str], int]:
+    """Poll rust_probe until Online, member list 2, and a11y mic are ready or timeout expires."""
+    deadline = monotonic_fn() + max(0.0, timeout_s)
+    deep_linked = False
+    woke_a11y = False
+    attempts = 0
+    inspect: dict = {}
+    last_error = ""
+    elements: list = []
+    status: str | None = None
+    header: str | None = None
+    mic_ok = False
+
+    while True:
+        attempts += 1
+        try:
+            reply = probe_fn()
+        except Exception as exc:  # noqa: BLE001  (report any probe transport failure)
+            inspect = {}
+            last_error = f"rust probe unreachable: {type(exc).__name__}: {exc}"
+        else:
+            if isinstance(reply, dict) and reply.get("ok") is False:
+                inspect = reply
+                last_error = f"rust probe_inspect failed: {reply.get('error', 'unknown error')}"
+            elif isinstance(reply, dict):
+                inspect = reply
+                last_error = ""
+            else:
+                inspect = {}
+                last_error = ""
+
+        elements, status, header, mic_ok = _evaluate_rust_inspect(inspect)
+        if elements and status == "Online" and header and mic_ok:
+            return inspect, [], attempts
+
+        now = monotonic_fn()
+        if now >= deadline:
+            break
+
+        if elements and status == "Online":
+            if not inspect.get("a11y") or (not mic_ok and not woke_a11y):
+                try:
+                    wake_a11y_fn()
+                except Exception:  # noqa: BLE001
+                    pass
+                woke_a11y = True
+            if not header and not deep_linked:
+                try:
+                    deep_link_fn(f"fluxer://channels/{PRECHECK_GUILD}/{PRECHECK_CHANNEL}")
+                    escape_fn()
+                except Exception:  # noqa: BLE001
+                    pass
+                deep_linked = True
+
+        remaining = deadline - monotonic_fn()
+        if remaining <= 0:
+            break
+        sleep_fn(min(interval_s, remaining) if interval_s > 0 else 0.0)
+
+    fails: list[str] = []
+    if last_error:
+        fails.append(last_error)
     if not elements:
         if not fails:
             fails.append("rust inspect returned no elements")
     else:
-        status = next(
-            (e.get("text") for e in elements if e.get("flx") == "app.user-area.user-area-inner.user-status"),
-            None,
-        )
+        if status != "Online":
+            fails.append(f"rust status {status!r} != 'Online'")
+        if not header:
+            fails.append("no member-list-group-header text starting with 'Online' and containing '2'")
+        if not mic_ok:
+            fails.append("rust mic not on ('Mute microphone' missing from a11y)")
+    return inspect, fails, attempts
+
+
+def _precheck_once(args: argparse.Namespace, out_dir: Path) -> Result:
+    log = out_dir / "precheck.log"
+    lines: list[str] = []
+
+    sys.path.insert(0, str(HERE))
+    import rust_probe  # noqa: PLC0415  (module reads the IPC file only when called)
+
+    inspect, fails, attempts = _poll_rust_precheck(
+        lambda: rust_probe.send("probe_inspect"),
+        rust_probe.wake_a11y,
+        rust_probe.deep_link,
+        lambda: rust_probe.send("probe_key", keystroke="escape"),
+    )
+    if attempts > 1:
+        lines.append(f"rust: precheck polled {attempts} attempt(s)")
+
+    elements, status, header, mic_ok = _evaluate_rust_inspect(inspect)
+    if elements:
         if status == "Online":
             lines.append("rust: status 'Online' OK")
-        else:
-            fails.append(f"rust status {status!r} != 'Online'")
-        header = next(
-            (
-                str(e.get("text"))
-                for e in elements
-                if e.get("flx") == "channel.member-list-group-header"
-                and str(e.get("text") or "").strip().startswith("Online")
-                and "2" in str(e.get("text") or "")
-            ),
-            None,
-        )
         if header:
             lines.append(f"rust: member-list-group-header {header!r} OK")
-        else:
-            fails.append("no member-list-group-header text starting with 'Online' and containing '2'")
-        a11y_dump = json.dumps(inspect.get("a11y") or {}, ensure_ascii=False)
-        if "Mute microphone" in a11y_dump:
+        if mic_ok:
             lines.append("rust: 'Mute microphone' present in a11y OK (mic on)")
-        else:
-            fails.append("rust mic not on ('Mute microphone' missing from a11y)")
 
     port = 9334
     code, text, timed_out = capture(["node", str(HERE / "mic_state.mjs"), "--attach", str(port)], 30)
@@ -700,6 +759,60 @@ def selftest() -> None:
     assert restore_client(lambda: next(states), lambda: (0, "")).detail == "restarted"
     assert restore_client(lambda: False, lambda: (1, "boom")).status == "FAIL"
     assert restore_client(lambda: False, lambda: (None, "")).status == "FAIL"
+    # _poll_rust_precheck: transient not-ready -> retry success, and timeout failure
+    clock = [0.0]
+
+    def _fake_sleep(dt: float) -> None:
+        clock[0] += dt
+
+    ready_payload = {
+        "ok": True,
+        "elements": [
+            {"flx": "app.user-area.user-area-inner.user-status", "text": "Online"},
+            {"flx": "channel.member-list-group-header", "text": "Online—2"},
+        ],
+        "a11y": {"name": "Mute microphone"},
+    }
+    probe_seq = iter([
+        OSError("starting"),
+        {"ok": True, "elements": [{"flx": "app.user-area.user-area-inner.user-status", "text": "Online"}], "a11y": {}},
+        ready_payload,
+    ])
+    wakes: list[int] = []
+    links: list[str] = []
+    escapes: list[int] = []
+
+    def _next_probe() -> dict:
+        item = next(probe_seq)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+    _, poll_fails, poll_attempts = _poll_rust_precheck(
+        _next_probe,
+        lambda: wakes.append(1),
+        lambda url: links.append(url),
+        lambda: escapes.append(1),
+        timeout_s=10.0,
+        interval_s=1.0,
+        sleep_fn=_fake_sleep,
+        monotonic_fn=lambda: clock[0],
+    )
+    assert poll_fails == [] and poll_attempts == 3, (poll_fails, poll_attempts)
+    assert len(wakes) == 1 and len(links) == 1 and len(escapes) == 1
+
+    clock[0] = 0.0
+    _, timeout_fails, timeout_attempts = _poll_rust_precheck(
+        lambda: {"ok": True, "elements": [{"flx": "app.user-area.user-area-inner.user-status", "text": "Online"}], "a11y": {}},
+        lambda: None,
+        lambda _url: None,
+        lambda: None,
+        timeout_s=3.0,
+        interval_s=1.5,
+        sleep_fn=_fake_sleep,
+        monotonic_fn=lambda: clock[0],
+    )
+    assert timeout_attempts == 3 and len(timeout_fails) == 2, (timeout_attempts, timeout_fails)
     assert build_parser().parse_args(["--no-restore-client"]).no_restore_client
     assert callable(load_env_module().submit_broker_request)
     assert use_broker({}, interactive=False) and not use_broker({}, interactive=True)

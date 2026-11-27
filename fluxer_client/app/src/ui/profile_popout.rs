@@ -715,6 +715,113 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
         );
     }
 
+    if card.created_date.is_some() || card.joined_date.is_some() {
+        let mut rows = div().flex().flex_col().gap_1();
+        if let Some(created) = card.created_date.clone() {
+            let tip = l10n::tr("Account creation date");
+            rows = rows.child(
+                div()
+                    .id("profile-membership-created")
+                    .text_sm()
+                    .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
+                    .child(format!("{} {created}", l10n::tr("Member since"))),
+            );
+        }
+        if let Some(joined) = card.joined_date.clone() {
+            let tip = l10n::tr("Community join date");
+            rows = rows.child(
+                div()
+                    .id("profile-membership-joined")
+                    .text_sm()
+                    .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
+                    .child(format!("{} {joined}", l10n::tr("Joined this community"))),
+            );
+        }
+        body = body.child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .flx("membership")
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(theme.muted_foreground)
+                        .child(l10n::tr("Membership")),
+                )
+                .child(rows),
+        );
+    }
+
+    if let Some(voice) = card.voice_activity.clone() {
+        let tip = l10n::tr("Currently in a voice channel");
+        let place = match &voice.guild_name {
+            Some(guild) => format!("{} / {guild}", voice.channel_name),
+            None => voice.channel_name.clone(),
+        };
+        body = body.child(
+            div()
+                .id("profile-voice-activity")
+                .flex()
+                .flex_col()
+                .gap_1()
+                .flx("voice-activity")
+                .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
+                .child(
+                    div()
+                        .text_xs()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(theme.muted_foreground)
+                        .child(l10n::tr("Voice Activity")),
+                )
+                .child(div().text_sm().truncate().child(place)),
+        );
+    }
+
+    if !card.mutual_friends.is_empty() {
+        let tip = l10n::tr("Friends you both have");
+        body = body.child(
+            div()
+                .flex()
+                .flex_col()
+                .gap_1()
+                .flx("mutual-friends")
+                .child(
+                    div()
+                        .id("profile-mutual-friends-title")
+                        .text_xs()
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(theme.muted_foreground)
+                        .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
+                        .child(format!("{} \u{2014} {}", l10n::tr("Mutual Friends"), card.mutual_friends.len())),
+                )
+                // TODO(backlog): official rows open the friend's profile; display-only for now.
+                .children(card.mutual_friends.iter().map(|f| {
+                    div()
+                        .id(("profile-mutual-friend", f.id.0))
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .gap_2()
+                        .px_2()
+                        .py_1()
+                        .child(
+                            div()
+                                .size(px(22.))
+                                .rounded_full()
+                                .bg(theme.muted)
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .text_xs()
+                                .child(f.initials.clone()),
+                        )
+                        .child(div().text_sm().truncate().child(f.name.clone()))
+                })),
+        );
+    }
+
     if !card.mutual_guilds.is_empty() {
         body = body.child(
             div()

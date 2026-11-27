@@ -134,6 +134,7 @@ fn profile_opens_loads_saves_note_and_navigates(cx: &mut TestAppContext) {
             roles: vec![ROLE_MOD],
             profile_flags: 0,
         }),
+        mutual_friends: None,
         mutual_guilds: Some(vec![MutualGuild { id: SECOND_GUILD, nick: None }]),
     };
     view.update(cx, |v, cx| {

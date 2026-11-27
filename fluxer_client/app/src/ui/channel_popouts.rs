@@ -1094,6 +1094,15 @@ fn render_translate_submenu(
         .into_any_element()
 }
 
+impl ClientView {
+    /// Mutes `channel_id` for `duration_ms` ms (`None` = until turned back on).
+    fn mute_channel_for(&mut self, channel_id: Snowflake, duration_ms: Option<i64>, cx: &mut Context<Self>) {
+        let guild_id = self.backend.state().channels.get(&channel_id).and_then(|c| c.guild_id);
+        self.backend.set_channel_muted_until(guild_id, channel_id, duration_ms);
+        self.refresh(cx);
+    }
+}
+
 fn channel_notification_state(state: &ClientState, channel_id: Snowflake) -> (bool, u8, i8) {
     let guild_id = state.channels.get(&channel_id).and_then(|c| c.guild_id);
     let now_ms = i64::try_from(crate::accounts::now_ms()).unwrap_or(i64::MAX);
@@ -1208,36 +1217,88 @@ fn render_notification_settings(
         div().mx(px(2.)).my(px(4.)).h(px(1.)).w(px(190.)).flex_none().bg(gpui_kit::Hsla::from(rgba(0xc9c5d326))).flx("ui.action-menu.context-menu.separator")
     };
 
-    div()
-        .p(px(6.))
-        .flex()
-        .flex_col()
+    // Official mute durations (TimeWindowPresets.ts, ms); `None` = "Until I turn it back on".
+    const MIN: i64 = 60_000;
+    let durations: [(&str, &str, Option<i64>, &'static str); 9] = [
+        ("15m", "For 15 minutes", Some(15 * MIN), "mute-duration-15m"),
+        ("30m", "For 30 minutes", Some(30 * MIN), "mute-duration-30m"),
+        ("1h", "For 1 hour", Some(60 * MIN), "mute-duration-1h"),
+        ("3h", "For 3 hours", Some(3 * 60 * MIN), "mute-duration-3h"),
+        ("4h", "For 4 hours", Some(4 * 60 * MIN), "mute-duration-4h"),
+        ("8h", "For 8 hours", Some(8 * 60 * MIN), "mute-duration-8h"),
+        ("24h", "For 24 hours", Some(24 * 60 * MIN), "mute-duration-24h"),
+        ("3d", "For 3 days", Some(3 * 24 * 60 * MIN), "mute-duration-3d"),
+        ("forever", "Until I turn it back on", None, "mute-duration-forever"),
+    ];
+    let mute_trigger = context_menu_item("notif-popout-mute".to_owned(), hover_bg)
+        .flx("ui.action-menu.context-menu.sub-menu.trigger")
         .child(
-            context_menu_item("notif-popout-mute".to_owned(), hover_bg)
-                .on_click(cx.listener(|this, _, window, cx| {
-                    this.toggle_channel_mute(cx);
+            div()
+                .flex_1()
+                .min_w_0()
+                .h(px(18.))
+                .text_size(px(13.))
+                .text_color(theme.foreground)
+                .flx("ui.action-menu.context-menu.sub-menu.item-label-container")
+                .flx("ui.action-menu.context-menu.sub-menu.item-label-text")
+                .child(mute_label),
+        );
+    let mute_row = if muted {
+        // Muted: the row unmutes (TODO(backlog): official shows the mute expiry under the label).
+        mute_trigger
+            .on_click(cx.listener(|this, _, window, cx| {
+                this.toggle_channel_mute(cx);
+                this.close_overlay(window, cx);
+            }))
+            .into_any_element()
+    } else {
+        let submenu_items = durations.into_iter().map(|(key, label, ms, flx_id)| {
+            context_menu_item(format!("mute-duration-{key}"), hover_bg)
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.mute_channel_for(channel_id, ms, cx);
                     this.close_overlay(window, cx);
                 }))
-                .flx("ui.action-menu.context-menu.sub-menu.trigger")
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w_0()
-                        .h(px(18.))
-                        .text_size(px(13.))
-                        .text_color(theme.foreground)
-                        .flx("ui.action-menu.context-menu.sub-menu.item-label-container")
-                        .flx("ui.action-menu.context-menu.sub-menu.item-label-text")
-                        .child(mute_label),
-                )
-                .child(
+                .flx(flx_id)
+                .child(div().h(px(18.)).text_size(px(13.)).text_color(theme.foreground).child(l10n::tr(label)))
+        });
+        div()
+            .group("mute-channel-trigger")
+            .relative()
+            .child(
+                mute_trigger.child(
                     div()
                         .size(px(14.))
                         .flex_none()
                         .flx("ui.action-menu.context-menu.sub-menu.submenu-caret")
                         .child(Icon::new(AppIcon::CaretRight).with_size(px(14.)).text_color(theme.muted_foreground)),
                 ),
-        )
+            )
+            .child(
+                div()
+                    .absolute()
+                    .top(px(-6.))
+                    .left_full()
+                    .ml(px(4.))
+                    .hidden()
+                    .group_hover("mute-channel-trigger", |s| s.flex())
+                    .flex_col()
+                    .w(px(220.))
+                    .p(px(6.))
+                    .rounded(px(8.))
+                    .bg(theme.background)
+                    .border_1()
+                    .border_color(theme.border)
+                    .flx("mute-channel-submenu")
+                    .children(submenu_items),
+            )
+            .into_any_element()
+    };
+
+    div()
+        .p(px(6.))
+        .flex()
+        .flex_col()
+        .child(mute_row)
         .child(separator())
         .children(default_option.map(radio_row))
         .child(separator())

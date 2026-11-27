@@ -101,6 +101,11 @@ pub(crate) fn format_stage_header(
     }
 }
 
+/// Viewer body state: a frame is shown once dimensions are known, otherwise waiting.
+pub(crate) fn viewer_is_waiting(frame_dims: Option<(u32, u32)>) -> bool {
+    frame_dims.is_none()
+}
+
 fn screen_share_context_menu(source: VoiceTrackSource, expanded: bool, popouts_enabled: bool) -> Option<VoiceMenuKind> {
     match (source, expanded, popouts_enabled) {
         (VoiceTrackSource::ScreenShare, false, true) => Some(VoiceMenuKind::DisableScreenSharePopouts),
@@ -183,6 +188,7 @@ fn render_inner(
             div()
                 .when(expanded, |d| d.flex_1().min_h(px(260.0)))
                 .when(!expanded, |d| d.h(px(260.0)))
+                .when(viewer_is_waiting(dims), |d| d.debug_selector(|| "video-viewer-waiting-body".to_owned()))
                 .w_full()
                 .rounded(px(6.))
                 .overflow_hidden()
@@ -200,6 +206,7 @@ fn render_inner(
                         div()
                             .text_xs()
                             .text_color(theme.muted_foreground)
+                            .flx("video-viewer-waiting")
                             .child(l10n::tr("Waiting for video frames...")),
                     ),
                 }),

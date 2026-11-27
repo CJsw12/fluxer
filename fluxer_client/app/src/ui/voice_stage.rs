@@ -722,7 +722,7 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
                         Button::new(SharedString::from(format!("stage-extra-watch-{}", track.track_sid)))
                             .primary()
                             .small()
-                            .icon(AppIcon::Monitor)
+                            .icon(AppIcon::MonitorPlay)
                             .label(label)
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.toggle_watch_video_track(track.clone(), cx);
@@ -1306,7 +1306,7 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
                     .hover(|s| s.border_color(theme.vc_corner_hover_border))
                     .on_click(cx.listener(|this, _, _, cx| this.toggle_voice_stage_expanded(cx)))
                     .flx("voice.compact-voice-call-view.compact-call-height-toggle-button.height-toggle-pill")
-                    .child(Icon::new(AppIcon::ChatCircleFill).with_size(px(20.)).text_color(theme.vc_control_fg)),
+                    .child(Icon::new(AppIcon::ChatTeardropFill).with_size(px(20.)).text_color(theme.vc_control_fg)),
             )
         });
 

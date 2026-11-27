@@ -425,7 +425,7 @@ pub(super) fn render_custom_keybind_row(
                     .text_color(theme.status_idle)
                     .flx("user.keybinds-tab.custom-keybind-row.conflict-warning")
                     .child(
-                        Icon::new(AppIcon::WarningCircle)
+                        Icon::new(AppIcon::WarningFill)
                             .size(px(14.))
                             .text_color(theme.status_idle),
                     )
@@ -663,7 +663,7 @@ pub(super) fn render_default_shortcut_row(
                                     this.settings_toggle_keybind_default_menu(row_key.to_owned(), cx);
                                 }))
                                 .child(
-                                    Icon::new(AppIcon::DotsThreeBold)
+                                    Icon::new(AppIcon::DotsThreeVerticalBold)
                                         .size(px(16.))
                                         .text_color(theme.muted_foreground),
                                 ),

@@ -280,8 +280,8 @@ pub fn render_sidebar(view: &ClientView, theme: &Theme, cx: &mut Context<ClientV
                         .gap(px(4.))
                         .flx("discovery.discovery.discovery-sidebar.nav-list")
                         .child(communities_item)
-                        .child(coming_soon_row("explore-nav-apps", AppIcon::Monitor, l10n::tr("Apps")))
-                        .child(coming_soon_row("explore-nav-themes", AppIcon::Swatches, l10n::tr("Themes"))),
+                        .child(coming_soon_row("explore-nav-apps", AppIcon::AppWindowBold, l10n::tr("Apps")))
+                        .child(coming_soon_row("explore-nav-themes", AppIcon::PaletteBold, l10n::tr("Themes"))),
                 ),
         );
 
@@ -339,7 +339,7 @@ pub fn render_page(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView
                     .hover(|s| s.bg(theme.hover_bg))
                     .on_click(cx.listener(|this, _, window, cx| this.clear_explore_search(window, cx)))
                     .flx("discovery.discovery.discovery-navbar.back-button")
-                    .child(Icon::new(AppIcon::ArrowBendUpLeft).with_size(px(18.)).text_color(theme.foreground)),
+                    .child(Icon::new(AppIcon::ArrowLeftBold).with_size(px(18.)).text_color(theme.foreground)),
             )
             .child(
                 div()

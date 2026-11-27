@@ -737,7 +737,7 @@ fn render_message_menu(
                         message_actions::tooltip(action, target)
                     };
                     let item_icon = if action == MessageAction::Speak && speaking {
-                        AppIcon::SpeakerSlash
+                        AppIcon::StopCircleFill
                     } else {
                         message_actions::icon(action, target)
                     };
@@ -1305,7 +1305,7 @@ fn render_pins(
                 .justify_center()
                 .gap_2()
                 .flx("channel.channel-pins-popout.empty")
-                .child(Icon::new(AppIcon::Star).with_size(px(36.)).text_color(theme.muted_foreground))
+                .child(Icon::new(AppIcon::PushPin).with_size(px(36.)).text_color(theme.muted_foreground))
                 .child(
                     div()
                         .text_base()
@@ -1386,8 +1386,8 @@ fn render_inbox(
     let tab_active_bg: gpui_kit::Hsla = if theme.background.l < 0.5 { rgba(0xffffff1a).into() } else { active_bg };
     let tabs = [
         (InboxTab::Unread, AppIcon::Bell, "Unread"),
-        (InboxTab::Bookmarks, AppIcon::Star, "Bookmarks"),
-        (InboxTab::Mentions, AppIcon::ChatCircleFill, "Mentions"),
+        (InboxTab::Bookmarks, AppIcon::BookmarkSimple, "Bookmarks"),
+        (InboxTab::Mentions, AppIcon::AtBold, "Mentions"),
     ];
 
     let body: AnyElement = match tab {
@@ -1421,7 +1421,7 @@ fn render_inbox(
                     .justify_center()
                     .gap_2()
                     .flx("messaging.inbox-popout.empty")
-                    .child(Icon::new(AppIcon::Bell).with_size(px(36.)).text_color(theme.muted_foreground))
+                    .child(Icon::new(AppIcon::SparkleFill).with_size(px(36.)).text_color(theme.muted_foreground))
                     .child(
                         div()
                             .text_base()
@@ -1504,7 +1504,7 @@ fn render_inbox(
                     .justify_center()
                     .gap_2()
                     .flx("messaging.inbox-popout.empty")
-                    .child(Icon::new(AppIcon::Star).with_size(px(36.)).text_color(theme.muted_foreground))
+                    .child(Icon::new(AppIcon::SparkleFill).with_size(px(36.)).text_color(theme.muted_foreground))
                     .child(
                         div()
                             .text_base()
@@ -1682,7 +1682,7 @@ fn render_inbox(
                         .gap_2()
                         .flx("messaging.inbox-popout.empty")
                         .child(
-                            Icon::new(AppIcon::ChatCircleFill)
+                            Icon::new(AppIcon::SparkleFill)
                                 .with_size(px(32.))
                                 .text_color(theme.muted_foreground),
                         )
@@ -1858,7 +1858,7 @@ fn render_composer_plus(has_text: bool, theme: &Theme, hover_bg: gpui_kit::Hsla,
         .flex()
         .flex_col()
         .child(
-            item_row("composer-menu-upload", AppIcon::LinkSimple, upload_lbl.clone(), None)
+            item_row("composer-menu-upload", AppIcon::UploadSimpleFill, upload_lbl.clone(), None)
                 .flx_text("ui.action-menu.context-menu.menu-item.item", upload_lbl)
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.close_overlay(window, cx);
@@ -1866,7 +1866,7 @@ fn render_composer_plus(has_text: bool, theme: &Theme, hover_bg: gpui_kit::Hsla,
                 })),
         )
         .children(has_text.then(|| {
-            item_row("composer-menu-upload-text", AppIcon::Plus, as_file_lbl.clone(), None)
+            item_row("composer-menu-upload-text", AppIcon::PaperclipBold, as_file_lbl.clone(), None)
                 .flx_text("ui.action-menu.context-menu.menu-item.item", as_file_lbl)
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.upload_composer_text_as_file(window, cx);
@@ -1883,7 +1883,7 @@ fn render_composer_plus(has_text: bool, theme: &Theme, hover_bg: gpui_kit::Hsla,
         .child(
             item_row(
                 "composer-menu-voice",
-                AppIcon::Microphone,
+                AppIcon::MicrophoneBold,
                 voice_lbl.clone(),
                 Some(
                     div()

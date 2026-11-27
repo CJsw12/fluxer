@@ -534,7 +534,7 @@ pub fn render(
                         .justify_center()
                         .gap_2()
                         .px_6()
-                        .child(Icon::new(AppIcon::Image).with_size(px(36.)).text_color(theme.muted_foreground))
+                        .child(Icon::new(AppIcon::SmileySadFill).with_size(px(36.)).text_color(theme.muted_foreground))
                         .child(
                             div()
                                 .text_base()

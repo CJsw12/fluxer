@@ -168,10 +168,10 @@ impl SettingsTab {
 
     const fn icon(self) -> AppIcon {
         match self {
-            Self::Profile => AppIcon::UserCircle,
+            Self::Profile => AppIcon::UserFill,
             Self::Account => AppIcon::Shield,
             Self::PrivacySafety => AppIcon::EyeSlash,
-            Self::Connections => AppIcon::Users,
+            Self::Connections => AppIcon::UserListFill,
             Self::Appearance => AppIcon::PaintBrush,
             Self::Themes => AppIcon::Swatches,
             Self::Notifications => AppIcon::Bell,
@@ -180,7 +180,7 @@ impl SettingsTab {
             Self::Accessibility => AppIcon::PersonSimpleCircle,
             Self::Language => AppIcon::Translate,
             Self::Keybinds => AppIcon::Keyboard,
-            Self::WindowsApp => AppIcon::Monitor,
+            Self::WindowsApp => AppIcon::DesktopFill,
             Self::Advanced => AppIcon::Gear,
             Self::Applications => AppIcon::Code,
         }

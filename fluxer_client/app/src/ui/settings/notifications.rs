@@ -323,7 +323,7 @@ fn render_sound_row(
                                 .items_center()
                                 .justify_center()
                                 .flx("user.notifications-tab.sounds.upload-icon")
-                                .child(Icon::new(AppIcon::ArrowBendUpRight).size(px(16.)).text_color(theme.foreground)),
+                                .child(Icon::new(AppIcon::UploadFill).size(px(16.)).text_color(theme.foreground)),
                         ),
                 )
                 .child(
@@ -674,7 +674,7 @@ pub(super) fn render_notifications_tab(view: &ClientView, theme: &Theme, cx: &mu
                             }
                         }))
                         .child(
-                            Icon::new(AppIcon::ArrowClockwise)
+                            Icon::new(AppIcon::ArrowCounterClockwiseBold)
                                 .size(px(16.))
                                 .text_color(theme.text_secondary),
                         ),

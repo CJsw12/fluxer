@@ -122,7 +122,7 @@ pub fn heading_link_button(id: Option<&'static str>, href: Option<String>, theme
         .items_center()
         .justify_center()
         .flx("app.settings-heading-link-button.link-icon")
-        .child(Icon::new(AppIcon::LinkSimple).with_size(px(15.)));
+        .child(Icon::new(AppIcon::LinkBold).with_size(px(15.)));
     let base = div()
         .size(px(28.))
         .flex_none()

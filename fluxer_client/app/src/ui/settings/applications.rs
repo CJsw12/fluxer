@@ -174,7 +174,7 @@ pub(super) fn render_applications_tab(modal: &SettingsModal, theme: &Theme, cx: 
                     Button::new("settings-applications-docs")
                         .ghost()
                         .small()
-                        .icon(AppIcon::ArrowSquareOut)
+                        .icon(AppIcon::BookOpenFill)
                         .label(l10n::tr("Read the documentation (docs.fluxer.app)"))
                         .on_click(cx.listener(|this, _, _, cx| {
                             #[cfg(test)]
@@ -231,7 +231,7 @@ pub(super) fn render_applications_tab(modal: &SettingsModal, theme: &Theme, cx: 
             .items_center()
             .gap_2()
             .flx("user.applications-tab.applications-list.empty-state")
-            .child(Icon::new(AppIcon::Code).with_size(px(28.)).text_color(theme.muted_foreground))
+            .child(Icon::new(AppIcon::AppWindowFill).with_size(px(28.)).text_color(theme.muted_foreground))
             .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("No applications yet")))
             .child(
                 div()

@@ -88,7 +88,7 @@ pub(super) fn render_connections_tab(modal: &SettingsModal, theme: &Theme, cx: &
             .items_center()
             .gap_2()
             .flx("user.linked-accounts-tab.empty-state")
-            .child(Icon::new(AppIcon::Users).with_size(px(28.)).text_color(theme.muted_foreground))
+            .child(Icon::new(AppIcon::UserListFill).with_size(px(28.)).text_color(theme.muted_foreground))
             .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("No connections yet")))
             .child(
                 div()

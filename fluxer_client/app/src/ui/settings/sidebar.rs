@@ -403,7 +403,7 @@ pub(super) fn render_sidebar(
                     .items_center()
                     .justify_center()
                     .flx("app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-icon")
-                    .child(Icon::new(AppIcon::SignOut).with_size(px(20.)).text_color(theme.danger)),
+                    .child(Icon::new(AppIcon::SignOutFill).with_size(px(20.)).text_color(theme.danger)),
             )
             .child(
                 div()

@@ -352,6 +352,16 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             d.bg(theme.background_secondary)
                 .flx("channel.direct-message.dm-list.desktop-scroller")
         })
+        .when(view.place != Place::Home, |d| {
+            d.on_mouse_down(
+                MouseButton::Right,
+                cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
+                    cx.stop_propagation();
+                    // TODO(backlog): open ChannelListContextMenu (Hide muted / Invite people / Create channel / Create category)
+                    this.close_overlay(window, cx);
+                }),
+            )
+        })
         .overflow_y_scroll();
     let mut list = div()
         .flex()
@@ -675,6 +685,8 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                     .min_w_0()
                     .truncate()
                     .flx_text("app.channel-item-content.category-name", c.name.to_string())
+                    .flx("app.channel-item-content.tooltip--2")
+                    .flx("app.channel-item-content.tooltip--3")
                     .tooltip({
                         let tip = c.name.clone();
                         move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
@@ -807,6 +819,10 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 .when(is_dm && selected, |d| {
                     d.flx("channel.direct-message.dm-list-item.dm-item-content--2")
                 })
+                .when(!is_dm, |d| {
+                    d.flx("app.channel-item.channel-item-core.tooltip")
+                        .flx("app.channel-item.channel-item-core.tooltip--2")
+                })
                 .child(if c.icon == ChannelIcon::Dm {
                     div()
                         .debug_selector(|| "dm-row-avatar".to_owned())
@@ -856,6 +872,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                                 ),
                         )
                         .flx("app.channel-item-content.div")
+                        .flx("app.channel-item-icon.tooltip")
                         .tooltip({
                             let tip = c.name.clone();
                             move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
@@ -894,6 +911,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                         .min_w_0()
                         .truncate()
                         .flx_text("app.channel-item-content.channel-name", c.name.to_string())
+                        .flx("app.channel-item-content.tooltip")
                         .tooltip({
                             let tip = c.name.clone();
                             move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
@@ -1023,6 +1041,14 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 .cursor_pointer()
                 .hover(|s| s.bg(theme.hover_bg))
                 .flx("app.voice-participant-item.participant-row.click")
+                .on_mouse_down(
+                    MouseButton::Right,
+                    cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
+                        cx.stop_propagation();
+                        // TODO(backlog): open VoiceParticipantContextMenu (local mute / volume / entrance sound)
+                        this.close_overlay(window, cx);
+                    }),
+                )
                 .child(render_avatar(
                     AvatarSpec {
                         user_id: uid,
@@ -1036,6 +1062,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 ))
                 .child(
                     div()
+                        .id(("voice-member-name", uid.0))
                         .flex_1()
                         .min_w_0()
                         .text_size(px(14.))
@@ -1044,6 +1071,11 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                         .text_color(muted_fg)
                         .truncate()
                         .flx_text("app.voice-participant-item.participant-name", display.to_string())
+                        .flx("app.voice-participant-item.tooltip")
+                        .tooltip({
+                            let tip = display.clone();
+                            move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
+                        })
                         .child(display),
                 )
                 .when(is_streaming || is_muted || is_deaf, |row| {
@@ -1065,6 +1097,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                                     .when(is_streaming, |r| {
                                         r.child(
                                             div()
+                                                .id(("voice-member-live", uid.0))
                                                 .debug_selector(move || format!("voice-member-live-{}", uid.0))
                                                 .px_1()
                                                 .rounded(px(3.))
@@ -1072,18 +1105,27 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                                                 .text_color(theme.on_fill)
                                                 .text_size(px(9.))
                                                 .font_weight(FontWeight::BOLD)
+                                                .flx("app.voice-state-icons.tooltip")
+                                                .tooltip(move |window, cx| {
+                                                    Tooltip::new(l10n::tr("Live")).build(window, cx)
+                                                })
                                                 .child("LIVE"),
                                         )
                                     })
                                     .when(is_muted, |r| {
                                         r.child(
                                             div()
+                                                .id(("voice-member-muted", uid.0))
                                                 .debug_selector(move || format!("voice-member-muted-{}", uid.0))
                                                 .size(px(16.))
                                                 .flex()
                                                 .items_center()
                                                 .justify_center()
                                                 .flx("app.voice-state-icons.icon")
+                                                .flx("app.voice-state-icons.tooltip--2")
+                                                .tooltip(move |window, cx| {
+                                                    Tooltip::new(l10n::tr("Muted")).build(window, cx)
+                                                })
                                                 .child(
                                                     Icon::new(AppIcon::MicrophoneSlash)
                                                         .with_size(px(16.))
@@ -1094,12 +1136,17 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                                     .when(is_deaf, |r| {
                                         r.child(
                                             div()
+                                                .id(("voice-member-deaf", uid.0))
                                                 .debug_selector(move || format!("voice-member-deaf-{}", uid.0))
                                                 .size(px(16.))
                                                 .flex()
                                                 .items_center()
                                                 .justify_center()
                                                 .flx("app.voice-state-icons.icon")
+                                                .flx("app.voice-state-icons.tooltip--3")
+                                                .tooltip(move |window, cx| {
+                                                    Tooltip::new(l10n::tr("Deafened")).build(window, cx)
+                                                })
                                                 .child(
                                                     Icon::new(AppIcon::SpeakerSlash)
                                                         .with_size(px(16.))

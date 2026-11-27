@@ -9,7 +9,7 @@ use fluxer_client_core::state::{ClientState, MESSAGE_TYPE_REPLY, Message, Messag
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Enter, Escape, IndentInline, Input, InputContent, MoveDown, MoveUp};
-use gpui_kit::{AnyElement, App, Context, Div, SharedString, Window, div, prelude::*, px};
+use gpui_kit::{AnyElement, App, Context, Div, MouseButton, SharedString, Window, div, prelude::*, px};
 
 use crate::client_view::ClientView;
 use crate::icons::AppIcon;
@@ -61,16 +61,20 @@ pub fn render_with(
                     .child(crate::ui::channel_popouts::track_trigger("composer-upload-btn"))
                     .children(composer_icon_slot())
                     .child(
-                        Button::new("composer-upload-btn")
-                            .ghost()
-                            .with_size(px(32.))
-                            .rounded(px(6.))
-                            .icon(composer_icon(AppIcon::Plus, theme))
-                            .tooltip(l10n::tr("Open menu"))
-                            .accessibility_label(l10n::tr("Open menu"))
-                            .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
-                                v.toggle_composer_plus_menu(ev.position(), window, cx);
-                            })),
+                        div()
+                            .flx("channel.textarea.textarea-button.tooltip")
+                            .child(
+                                Button::new("composer-upload-btn")
+                                    .ghost()
+                                    .with_size(px(32.))
+                                    .rounded(px(6.))
+                                    .icon(composer_icon(AppIcon::Plus, theme))
+                                    .tooltip(l10n::tr("Open menu"))
+                                    .accessibility_label(l10n::tr("Open menu"))
+                                    .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
+                                        v.toggle_composer_plus_menu(ev.position(), window, cx);
+                                    })),
+                            ),
                     ),
             )
     });
@@ -81,16 +85,20 @@ pub fn render_with(
             .child(crate::ui::channel_popouts::track_trigger("composer-gif-btn"))
             .children(composer_icon_slot())
             .child(
-                Button::new("composer-gif-btn")
-                    .ghost()
-                    .with_size(px(32.))
-                    .rounded(px(6.))
-                    .icon(composer_icon(AppIcon::Image, theme))
-                    .tooltip(l10n::tr("Media"))
-                    .accessibility_label(l10n::tr("Media"))
-                    .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
-                        v.toggle_expression_tab(ExpressionTab::Media, ev.position(), window, cx);
-                    })),
+                div()
+                    .flx("channel.textarea.textarea-button.tooltip")
+                    .child(
+                        Button::new("composer-gif-btn")
+                            .ghost()
+                            .with_size(px(32.))
+                            .rounded(px(6.))
+                            .icon(composer_icon(AppIcon::Image, theme))
+                            .tooltip(l10n::tr("Media"))
+                            .accessibility_label(l10n::tr("Media"))
+                            .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
+                                v.toggle_expression_tab(ExpressionTab::Media, ev.position(), window, cx);
+                            })),
+                    ),
             )
     });
     let sticker_btn = view.can_send.then(|| {
@@ -100,16 +108,20 @@ pub fn render_with(
             .child(crate::ui::channel_popouts::track_trigger("composer-sticker-btn"))
             .children(composer_icon_slot())
             .child(
-                Button::new("composer-sticker-btn")
-                    .ghost()
-                    .with_size(px(32.))
-                    .rounded(px(6.))
-                    .icon(composer_icon(AppIcon::Sticker, theme))
-                    .tooltip(l10n::tr("Stickers"))
-                    .accessibility_label(l10n::tr("Stickers"))
-                    .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
-                        v.toggle_expression_tab(ExpressionTab::Stickers, ev.position(), window, cx);
-                    })),
+                div()
+                    .flx("channel.textarea.textarea-button.tooltip")
+                    .child(
+                        Button::new("composer-sticker-btn")
+                            .ghost()
+                            .with_size(px(32.))
+                            .rounded(px(6.))
+                            .icon(composer_icon(AppIcon::Sticker, theme))
+                            .tooltip(l10n::tr("Stickers"))
+                            .accessibility_label(l10n::tr("Stickers"))
+                            .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
+                                v.toggle_expression_tab(ExpressionTab::Stickers, ev.position(), window, cx);
+                            })),
+                    ),
             )
     });
     let emoji = view.can_send.then(|| {
@@ -119,16 +131,20 @@ pub fn render_with(
             .child(crate::ui::channel_popouts::track_trigger("composer-emoji-btn"))
             .children(composer_icon_slot())
             .child(
-                Button::new("composer-emoji-btn")
-                    .ghost()
-                    .with_size(px(32.))
-                    .rounded(px(6.))
-                    .icon(composer_icon(AppIcon::Smiley, theme))
-                    .tooltip(l10n::tr("Emojis"))
-                    .accessibility_label(l10n::tr("Emojis"))
-                    .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
-                        v.toggle_expression_tab(ExpressionTab::Emojis, ev.position(), window, cx);
-                    })),
+                div()
+                    .flx("channel.textarea.textarea-button.tooltip")
+                    .child(
+                        Button::new("composer-emoji-btn")
+                            .ghost()
+                            .with_size(px(32.))
+                            .rounded(px(6.))
+                            .icon(composer_icon(AppIcon::Smiley, theme))
+                            .tooltip(l10n::tr("Emojis"))
+                            .accessibility_label(l10n::tr("Emojis"))
+                            .on_click(cx.listener(|v, ev: &gpui_kit::ClickEvent, window, cx| {
+                                v.toggle_expression_tab(ExpressionTab::Emojis, ev.position(), window, cx);
+                            })),
+                    ),
             )
     });
     let input = div()
@@ -171,6 +187,14 @@ pub fn render_with(
                                         .items_center()
                                         .line_height(px(22.))
                                         .flx("channel.lexical-channel-textarea-content.flx-channel-textarea-composer")
+                                        .on_mouse_down(
+                                            MouseButton::Right,
+                                            cx.listener(|this, _, window, cx| {
+                                                cx.stop_propagation();
+                                                // TODO(backlog): open TextareaContextMenu (Undo/Redo/Cut/Copy/Paste/Select all/Spellcheck)
+                                                this.close_overlay(window, cx);
+                                            }),
+                                        )
                                         .child(field),
                                 ),
                         )

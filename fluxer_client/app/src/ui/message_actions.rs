@@ -10,6 +10,7 @@ use fluxer_client_core::state::{ClientState, Message, MessageState, PartialEmoji
 use crate::icons::AppIcon;
 use gpui_kit::component::WindowExt as _;
 use gpui_kit::component::button::ButtonVariant;
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
     AnyElement, App, BoxShadow, ClipboardItem, ElementId, Hsla, IntoElement, Pixels, Point, Role, SharedString, Window, div,
@@ -304,29 +305,35 @@ pub fn action_bar(
     let quick = quick_names.iter().map(|name| {
         let on_react = on_react.clone();
         let emoji = PartialEmoji { id: None, name: (*name).to_owned(), animated: false };
+        let quick_tip = format!("React with {name}");
         div()
-            .id(SharedString::from(format!("msg-quick-{key}-{name}")))
-            .role(Role::Button)
-            .aria_label(format!("React with {name}"))
-            .size(px(28.))
-            .rounded(px(6.))
-            .flex()
-            .items_center()
-            .justify_center()
-            .cursor_pointer()
-            .hover(move |s| s.bg(hover_bg))
-            .flx("channel.message-action-bar.button.click")
-            .on_click(move |_, window, cx| on_react(emoji.clone(), window, cx))
+            .flx("channel.message-action-bar.tooltip")
             .child(
                 div()
-                    .size(px(20.))
+                    .id(SharedString::from(format!("msg-quick-{key}-{name}")))
+                    .role(Role::Button)
+                    .aria_label(quick_tip.clone())
+                    .size(px(28.))
+                    .rounded(px(6.))
                     .flex()
                     .items_center()
                     .justify_center()
-                    .text_size(px(17.))
-                    .line_height(px(20.))
-                    .flx("channel.message-action-bar.emoji-image")
-                    .child(*name),
+                    .cursor_pointer()
+                    .hover(move |s| s.bg(hover_bg))
+                    .flx("channel.message-action-bar.button.click")
+                    .tooltip(move |window, cx| Tooltip::new(quick_tip.clone()).build(window, cx))
+                    .on_click(move |_, window, cx| on_react(emoji.clone(), window, cx))
+                    .child(
+                        div()
+                            .size(px(20.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .text_size(px(17.))
+                            .line_height(px(20.))
+                            .flx("channel.message-action-bar.emoji-image")
+                            .child(*name),
+                    ),
             )
             .into_any_element()
     });
@@ -335,34 +342,39 @@ pub fn action_bar(
         let id = SharedString::from(format!("msg-action-{key}-{action:?}"));
         let label = tooltip(action, target);
         div()
-            .id(id)
-            .role(Role::Button)
-            .aria_label(label)
-            .size(px(28.))
-            .rounded(px(6.))
-            .flex()
-            .items_center()
-            .justify_center()
-            .cursor_pointer()
-            .hover(move |s| s.bg(hover_bg))
-            .flx("channel.message-action-bar.message-action-bar-button.button.click")
-            .when(action == MessageAction::More, |d| d.child(track_trigger(MORE_TRIGGER)))
-            .on_click(move |event, window, cx| {
-                let action = if action == MessageAction::Delete && event.modifiers().shift {
-                    MessageAction::DeleteNow
-                } else {
-                    action
-                };
-                on_action(action, window, cx);
-            })
+            .flx("channel.message-action-bar.message-action-bar-button.tooltip")
             .child(
                 div()
-                    .flx("channel.message-action-bar.message-action-bar-button.action-bar-icon")
-                    .when_some(bar_icon_flx(action), |d, id| d.flx(id))
+                    .id(id)
+                    .role(Role::Button)
+                    .aria_label(label.clone())
+                    .size(px(28.))
+                    .rounded(px(6.))
                     .flex()
                     .items_center()
                     .justify_center()
-                    .child(Icon::new(icon(action, target)).with_size(px(20.)).text_color(icon_color)),
+                    .cursor_pointer()
+                    .hover(move |s| s.bg(hover_bg))
+                    .flx("channel.message-action-bar.message-action-bar-button.button.click")
+                    .tooltip(move |window, cx| Tooltip::new(label.clone()).build(window, cx))
+                    .when(action == MessageAction::More, |d| d.child(track_trigger(MORE_TRIGGER)))
+                    .on_click(move |event, window, cx| {
+                        let action = if action == MessageAction::Delete && event.modifiers().shift {
+                            MessageAction::DeleteNow
+                        } else {
+                            action
+                        };
+                        on_action(action, window, cx);
+                    })
+                    .child(
+                        div()
+                            .flx("channel.message-action-bar.message-action-bar-button.action-bar-icon")
+                            .when_some(bar_icon_flx(action), |d, id| d.flx(id))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .child(Icon::new(icon(action, target)).with_size(px(20.)).text_color(icon_color)),
+                    ),
             )
             .into_any_element()
     });

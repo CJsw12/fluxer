@@ -12,7 +12,7 @@
 use fluxer_client_core::state::Unread;
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
-    AnyElement, App, ClickEvent, Context, Div, Hsla, Window, ElementId, FontWeight, ObjectFit, Role, SharedString, Stateful, div, img, prelude::*, px,
+    AnyElement, App, ClickEvent, Context, Div, Hsla, MouseButton, Window, ElementId, FontWeight, ObjectFit, Role, SharedString, Stateful, div, img, prelude::*, px,
 };
 
 use super::{badge, l10n, rail_tooltip};
@@ -76,6 +76,11 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         "app.sidebar-nav.fluxer-button.guild-indicator",
         "app.sidebar-nav.fluxer-button.guild-indicator-bar",
         cx.listener(|this, _, _, cx| this.select_place(Place::Home, cx)),
+        Some(Box::new(cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
+            cx.stop_propagation();
+            // TODO(backlog): open FluxerButtonContextMenu
+            this.close_overlay(window, cx);
+        }))),
         cx.listener(|this, hovered: &bool, _, cx| {
             this.set_rail_hover(RailHoverTarget::Home, *hovered, cx);
         }),
@@ -103,7 +108,12 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             theme.guilds_layout_item_bg,
         )
         .flx("app.sidebar-nav.fluxer-button.fluxer-button-icon"),
-        home_hovered.then(|| rail_tooltip::text(l10n::tr("Direct messages"), theme, rail_tooltip::TOOLTIP_LEFT)),
+        home_hovered.then(|| {
+            wrap_tooltip(
+                "app.sidebar-nav.fluxer-button.tooltip",
+                rail_tooltip::text(l10n::tr("Direct messages"), theme, rail_tooltip::TOOLTIP_LEFT),
+            )
+        }),
     ));
 
     // Official `FavoritesGuildButton` wrapped in the same `rail_item` with left white indicator bar
@@ -127,6 +137,11 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             "app.sidebar-nav.favorites-button.guild-indicator",
             "app.sidebar-nav.favorites-button.guild-indicator-bar",
             cx.listener(|this, _, _, cx| this.select_favorites(cx)),
+            Some(Box::new(cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
+                cx.stop_propagation();
+                // TODO(backlog): open FavoritesGuildContextMenu
+                this.close_overlay(window, cx);
+            }))),
             cx.listener(|this, hovered: &bool, _, cx| {
                 this.set_rail_hover(RailHoverTarget::Favorites, *hovered, cx);
             }),
@@ -154,7 +169,12 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             )
             .debug_selector(|| "rail-favorites-btn".to_owned())
             .flx("app.sidebar-nav.favorites-button.fluxer-button-icon"),
-            fav_hovered.then(|| rail_tooltip::text(l10n::tr("Favorites"), theme, rail_tooltip::TOOLTIP_LEFT)),
+            fav_hovered.then(|| {
+                wrap_tooltip(
+                    "app.sidebar-nav.favorites-button.tooltip",
+                    rail_tooltip::text(l10n::tr("Favorites"), theme, rail_tooltip::TOOLTIP_LEFT),
+                )
+            }),
         ))
         .child(
             div()
@@ -215,6 +235,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             "app.sidebar-nav.guild-list-item-presentation.guild-indicator",
             "app.sidebar-nav.guild-list-item-presentation.guild-indicator-bar",
             cx.listener(move |this, _, _, cx| this.select_place(Place::Guild(id), cx)),
+            None,
             cx.listener(move |this, hovered: &bool, _, cx| {
                 this.set_rail_hover(RailHoverTarget::Guild(id), *hovered, cx);
             }),
@@ -231,7 +252,12 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             )
             .flx("app.sidebar-nav.guild-list-item-presentation.guild-icon")
             .when(in_voice, |d| d.child(rail_tooltip::voice_badge(theme))),
-            hovered.then(|| rail_tooltip::guild(g.name.clone(), g.counts, theme)),
+            hovered.then(|| {
+                wrap_tooltip(
+                    "app.sidebar-nav.guild-list-item-content.tooltip",
+                    rail_tooltip::guild(g.name.clone(), g.counts, theme),
+                )
+            }),
         ));
     }
 
@@ -267,6 +293,14 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 this.set_rail_hover(RailHoverTarget::Discover, *hovered, cx);
             }))
             .on_click(cx.listener(|this, _, _, cx| this.open_explore(cx)))
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
+                    cx.stop_propagation();
+                    // TODO(backlog): open DiscoveryGuildContextMenu
+                    this.close_overlay(window, cx);
+                }),
+            )
             .flx("app.sidebar-nav.discovery-button.div--2")
             .child(
                 div()
@@ -275,7 +309,12 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     .flx("app.sidebar-nav.discovery-button.icon-text")
                     .child(Icon::new(AppIcon::Compass).with_size(px(20.)).text_color(discover_fg)),
             ),
-        discover_hovered.then(|| rail_tooltip::text(l10n::tr("Explore communities"), theme, 76.)),
+        discover_hovered.then(|| {
+            wrap_tooltip(
+                "app.sidebar-nav.discovery-button.div",
+                rail_tooltip::text(l10n::tr("Explore communities"), theme, 76.),
+            )
+        }),
     ))
     .child(slot(4., 68., 44., "app.sidebar-nav.add-guild-button.button.add-guild",
         div()
@@ -301,6 +340,14 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 this.set_rail_hover(RailHoverTarget::Join, *hovered, cx);
             }))
             .on_click(cx.listener(|this, _, window, cx| this.open_join_guild(window, cx)))
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
+                    cx.stop_propagation();
+                    // TODO(backlog): open AddGuildContextMenu (Create / Join community)
+                    this.close_overlay(window, cx);
+                }),
+            )
             .flx("app.sidebar-nav.add-guild-button.div--2")
             .child(
                 div()
@@ -309,8 +356,17 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     .flx("app.sidebar-nav.add-guild-button.icon-text")
                     .child(Icon::new(AppIcon::Plus).with_size(px(20.)).text_color(if join_hovered { theme.foreground } else { theme.muted_foreground })),
             ),
-        join_hovered.then(|| rail_tooltip::create_or_join(l10n::tr("Create or join a community"), theme, 76.)),
+        join_hovered.then(|| {
+            wrap_tooltip(
+                "app.sidebar-nav.add-guild-button.tooltip-with-keybind",
+                rail_tooltip::create_or_join(l10n::tr("Create or join a community"), theme, 76.),
+            )
+        }),
     ))
+}
+
+fn wrap_tooltip(flx: &'static str, tooltip: AnyElement) -> AnyElement {
+    div().flx(flx).child(tooltip).into_any_element()
 }
 
 /// Full-width slot that carries the official click-area tag; hover and click live here.
@@ -344,6 +400,7 @@ fn rail_item(
     indicator_wrap_flx: &'static str,
     indicator_flx: &'static str,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
+    on_right_click: Option<Box<dyn Fn(&gpui_kit::MouseDownEvent, &mut Window, &mut App) + 'static>>,
     on_hover: impl Fn(&bool, &mut Window, &mut App) + 'static,
     button: impl IntoElement,
     tooltip: Option<AnyElement>,
@@ -363,6 +420,7 @@ fn rail_item(
         .cursor_pointer()
         .on_hover(on_hover)
         .on_click(on_click)
+        .when_some(on_right_click, |d, handler| d.on_mouse_down(MouseButton::Right, handler))
         .child(button)
         .children(tooltip)
         .children(pill.map(|h| {

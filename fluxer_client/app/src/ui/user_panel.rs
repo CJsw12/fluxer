@@ -6,6 +6,7 @@
 //! danger highlight and moderator/permission lock state).
 
 use fluxer_client_core::state::{Snowflake, Status};
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
     AnyElement, ClipboardItem, Context, FontWeight, Hsla, MouseButton, ObjectFit, Role, SharedString, deferred, div, img,
@@ -34,6 +35,7 @@ fn render_control_icon_button(
     theme: &Theme,
     on_hover: impl Fn(&bool, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
     on_click: impl Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
+    on_right_click: impl Fn(&gpui_kit::MouseDownEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
 ) -> AnyElement {
     let mut danger_bg = theme.danger;
     danger_bg.a = 0.10;
@@ -59,6 +61,12 @@ fn render_control_icon_button(
         "user-panel-settings" => Some("app.user-area.user-area-inner.control-icon--5"),
         _ => None,
     };
+    let tooltip_flx = match id {
+        "user-panel-mute" => Some("app.user-area.user-area-inner.controls-container"),
+        "user-panel-deafen" => Some("app.user-area.user-area-inner.control-icon--2"),
+        "user-panel-settings" => Some("app.user-area.user-area-inner.tooltip-with-keybind--3"),
+        _ => None,
+    };
     let tip_text = label.clone();
     div()
         .id(id)
@@ -75,6 +83,7 @@ fn render_control_icon_button(
         .when(active_danger, |d| d.bg(danger_bg))
         .when(locked, |d| d.opacity(0.5))
         .on_hover(on_hover)
+        .on_mouse_down(MouseButton::Right, on_right_click)
         .when(!locked, |d| {
             d.cursor_pointer()
                 .hover(move |s| {
@@ -94,7 +103,11 @@ fn render_control_icon_button(
                 .child(Icon::new(icon).with_size(px(20.)).text_color(icon_color)),
         )
         .when(hovered, |d| {
-            d.child(rail_tooltip::above(tip_text, tooltip_keys, theme))
+            let tt = rail_tooltip::above(tip_text, tooltip_keys, theme);
+            match tooltip_flx {
+                Some(tf) => d.child(div().flx(tf).child(tt)),
+                None => d.child(tt),
+            }
         })
         .into_any_element()
 }
@@ -337,6 +350,11 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 this.set_user_control_hover(UserControlHoverTarget::Mute, *hovered, cx);
                             }),
                             cx.listener(|this, _, _, cx| this.toggle_voice_mute(cx)),
+                            cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
+                                cx.stop_propagation();
+                                // TODO(backlog): open VoiceAudioSettingsMenu (input)
+                                this.close_overlay(window, cx);
+                            }),
                         ))
                         .child(render_control_icon_button(
                             "user-panel-deafen",
@@ -355,6 +373,11 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 this.set_user_control_hover(UserControlHoverTarget::Deafen, *hovered, cx);
                             }),
                             cx.listener(|this, _, _, cx| this.toggle_voice_deaf(cx)),
+                            cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
+                                cx.stop_propagation();
+                                // TODO(backlog): open VoiceAudioSettingsMenu (output)
+                                this.close_overlay(window, cx);
+                            }),
                         ))
                         .child(render_control_icon_button(
                             "user-panel-settings",
@@ -369,6 +392,11 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 this.set_user_control_hover(UserControlHoverTarget::Settings, *hovered, cx);
                             }),
                             cx.listener(|this, _, window, cx| this.open_settings(window, cx)),
+                            cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
+                                cx.stop_propagation();
+                                // TODO(backlog): open SettingsContextMenu
+                                this.close_overlay(window, cx);
+                            }),
                         )),
                 ),
         )
@@ -576,6 +604,8 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                                 .group_hover("user-area-popout-username", |s| s.opacity(1.))
                                 .hover(|s| s.bg(theme.hover_bg))
                                 .flx("app.floating.user-area-popout.copy-username-button.copy-user-tag")
+                                .flx("app.floating.user-area-popout.tooltip")
+                                .tooltip(move |window, cx| Tooltip::new(l10n::tr("Copy username")).build(window, cx))
                                 .on_click(cx.listener(move |_, _, _, cx| {
                                     cx.write_to_clipboard(ClipboardItem::new_string(copy_name.clone()));
                                 }))

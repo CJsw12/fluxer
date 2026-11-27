@@ -6,6 +6,7 @@ use std::ops::Range;
 use fluxer_client_core::state::{ClientState, Message, ReplyPreview, Snowflake, User};
 use crate::icons::AppIcon;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::{
     AnyElement, App, ElementId, FontWeight, HighlightStyle, SharedString, StyledText, Window, div, prelude::*, px,
 };
@@ -349,6 +350,11 @@ pub fn replying_to_bar(
                 }),
         )
         .when(target.can_mention, |bar| {
+            let mention_tip = l10n::tr(if target.mention {
+                "Click to disable pinging the user you're replying to"
+            } else {
+                "Click to enable pinging the user you're replying to"
+            });
             bar.child(
                 div()
                     .id("reply-bar-mention")
@@ -357,6 +363,8 @@ pub fn replying_to_bar(
                     .font_weight(FontWeight::BOLD)
                     .text_xs()
                     .text_color(mention_color)
+                    .flx("channel.reply-bar.controls")
+                    .tooltip(move |window, cx| Tooltip::new(mention_tip.clone()).build(window, cx))
                     .on_click(move |_, window, cx| on_toggle_mention(window, cx))
                     .child(mention_label),
             )

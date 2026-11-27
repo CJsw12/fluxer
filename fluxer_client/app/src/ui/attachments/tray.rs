@@ -5,10 +5,12 @@
 use crate::icons::AppIcon;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::{AnyElement, Context, ObjectFit, StyledImage as _, div, img, prelude::*, px};
 
 use super::{PendingAttachment, Preview, format_size};
 use crate::client_view::ClientView;
+use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 use crate::ui::l10n;
 
@@ -108,15 +110,26 @@ fn chip(file: &PendingAttachment, theme: &Theme, cx: &mut Context<ClientView>) -
                 .child(thumb)
                 .children(spoiler_cover),
         )
-        .child(div().text_xs().truncate().child(file.file.name.clone()))
+        .child(
+            div()
+                .id(("attachment-name", id))
+                .text_xs()
+                .truncate()
+                .flx("channel.channel-attachment-area.sortable-attachment-item.tooltip")
+                .tooltip({
+                    let name = file.file.name.clone();
+                    move |window, cx| Tooltip::new(name.clone()).build(window, cx)
+                })
+                .child(file.file.name.clone()),
+        )
         .child(
             div()
                 .flex()
                 .flex_row()
                 .items_center()
                 .child(div().flex_1().text_xs().text_color(theme.muted_foreground).child(format_size(file.file.size)))
-                .child(spoiler)
-                .child(remove),
+                .child(div().flx("channel.channel-attachment-area.attachment-action-bar-button.tooltip").child(spoiler))
+                .child(div().flx("channel.channel-attachment-area.attachment-action-bar-button.tooltip").child(remove)),
         )
         .into_any_element()
 }

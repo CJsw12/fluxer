@@ -70,9 +70,29 @@
           "deltas": 9,
           "missing": 0
         },
+        "settings-accessibility": {
+          "deltas": 22,
+          "missing": 23
+        },
+        "settings-advanced": {
+          "deltas": 14,
+          "missing": 19
+        },
         "settings-appearance": {
           "deltas": 9,
           "missing": 1
+        },
+        "settings-applications": {
+          "deltas": 36,
+          "missing": 3
+        },
+        "settings-chat": {
+          "deltas": 4,
+          "missing": 14
+        },
+        "settings-connections": {
+          "deltas": 29,
+          "missing": 3
         },
         "settings-keybinds": {
           "deltas": 292,
@@ -90,8 +110,20 @@
           "deltas": 13,
           "missing": 1
         },
+        "settings-privacy": {
+          "deltas": 111,
+          "missing": 9
+        },
+        "settings-themes": {
+          "deltas": 11,
+          "missing": 7
+        },
         "settings-voice-video": {
           "deltas": 7,
+          "missing": 1
+        },
+        "settings-windows": {
+          "deltas": 27,
           "missing": 1
         }
       },

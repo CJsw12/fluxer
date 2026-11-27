@@ -2702,7 +2702,7 @@
   {
    "rust_icon": "Check",
    "file": "fluxer_client/app/src/ui/settings/appearance.rs",
-   "line": 261,
+   "line": 296,
    "rust_asset": "fluxer_client/app/assets/icons/check.svg",
    "kind": "phosphor",
    "phosphor": "bold/check-bold.svg",

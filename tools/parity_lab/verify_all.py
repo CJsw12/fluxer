@@ -56,8 +56,8 @@ PRECHECK_CHANNEL = "1572284491404148743"
 PRECHECK_POLL_TIMEOUT_S = 18.0
 PRECHECK_POLL_INTERVAL_S = 0.35
 ORCA_WAKE_TIMEOUT_S = 10
-STEPS = ("build", "precheck", "icons", "colors", "ratchet", "resize", "surface", "state", "user-area")
-LIVE_STEPS = ("ratchet", "resize", "surface", "state", "user-area")
+STEPS = ("build", "precheck", "icons", "colors", "ratchet", "resize", "surface", "state", "shots", "user-area")
+LIVE_STEPS = ("ratchet", "resize", "surface", "state", "shots", "user-area")
 TIMEOUTS = {
     "build": 2400,
     "precheck": 120,
@@ -68,6 +68,7 @@ TIMEOUTS = {
     "resize": 900,
     "surface": 900,
     "state": 1200,
+    "shots": 600,
     "user-area": 60,
 }
 DETAIL_MAX = 96
@@ -122,7 +123,7 @@ def capture(cmd: list[str], timeout: int) -> tuple[int | None, str, bool]:
         return None, f"[verify_all] could not start {cmd[0]}: {exc}\n", False
 
 
-BROKER_GATE_STEPS = ("surface", "state", "user-area")
+BROKER_GATE_STEPS = ("surface", "state", "shots", "user-area")
 BROKER_LOGS: dict[str, int] = {}  # step -> broker exit code, for steps whose log was written by the broker
 STATE_OFFICIAL_CACHE = REPO / "target" / "parity-tmp" / "state_official_cache"
 
@@ -720,6 +721,22 @@ def step_state(args: argparse.Namespace, out_dir: Path) -> Result:
     return Result("PASS", detail, log)
 
 
+def step_shots(args: argparse.Namespace, out_dir: Path) -> Result:
+    cmd = [sys.executable, "-I", str(HERE / "shot_regress.py"), "--out", str(out_dir),
+           "--shots-baseline", args.shots_baseline]
+    if args.refresh_shots:
+        cmd.append("--refresh-shots")
+    code, text, timed_out, log = run_logged("shots", cmd, out_dir, TIMEOUTS["shots"])
+    if timed_out:
+        return Result("FAIL", f"timeout after {TIMEOUTS['shots']}s", log)
+    match = re.search(r"^SHOTS (PASS|WARN|FAIL|SEEDED) (.+)$", text, re.MULTILINE)
+    if not match or not (out_dir / "shots.json").is_file():
+        return Result("FAIL", clip(f"no usable shots.json ({first_error(text)})"), log)
+    status, detail = match.groups()
+    return Result("FAIL" if code else "WARN" if status == "SEEDED" else status,
+                  clip(f"SEEDED {detail}" if status == "SEEDED" else detail), log)
+
+
 def step_user_area(args: argparse.Namespace, out_dir: Path) -> Result:
     return _step_passed_gate(
         "user-area",
@@ -737,6 +754,7 @@ STEP_FUNCS = {
     "resize": step_resize,
     "surface": step_surface,
     "state": step_state,
+    "shots": step_shots,
     "user-area": step_user_area,
 }
 
@@ -876,13 +894,14 @@ def selftest() -> None:
         assert presync_icons(Path("."), runner) is None and len(calls) == 1, real_gap
     assert parse_gate_summary("no summary") is None
 
-    assert select_steps(None, False) == ["precheck", "icons", "colors", "ratchet", "resize", "surface", "state", "user-area"]
+    assert select_steps(None, False) == ["precheck", "icons", "colors", "ratchet", "resize", "surface", "state", "shots", "user-area"]
     assert select_steps(None, True)[0] == "build"
     assert select_steps("colors", False) == ["precheck", "colors"]
+    assert select_steps("shots", False) == ["precheck", "shots"]
     assert select_steps("colors,-precheck", False) == ["colors"]
     assert select_steps("!precheck,icons", False) == ["icons"]
     assert select_steps("build", True) == ["build", "precheck"]
-    assert select_steps("-resize", False) == ["precheck", "icons", "colors", "ratchet", "surface", "state", "user-area"]
+    assert select_steps("-resize", False) == ["precheck", "icons", "colors", "ratchet", "surface", "state", "shots", "user-area"]
     for bad in ("nope", "colors,nope"):
         try:
             select_steps(bad, False)
@@ -1099,6 +1118,8 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="re-capture official state_matrix instead of reusing target/parity-tmp/state_official_cache",
     )
+    p.add_argument("--refresh-shots", action="store_true", help="refresh screenshots from clean HEAD")
+    p.add_argument("--shots-baseline", default="HEAD", metavar="REF", help="baseline commit for the shots gate")
     return p
 
 
@@ -1167,7 +1188,9 @@ def run_steps(
 ) -> tuple[dict[str, Result], dict[str, float]]:
     results: dict[str, Result] = {}
     durations: dict[str, float] = {}
-    broker_decision = any(n in BROKER_GATE_STEPS for n in steps) and use_broker()
+    # The shots runner forwards individual window captures to the broker and keeps its CLI flags locally.
+    broker_steps = tuple(n for n in BROKER_GATE_STEPS if n in steps and n != "shots")
+    broker_decision = bool(broker_steps) and use_broker()
     broker_rows = {}
     gate_failure = ""
     for name in STEPS:
@@ -1181,16 +1204,16 @@ def run_steps(
             continue
         started = time.monotonic()
         via_broker = False
-        if name in BROKER_GATE_STEPS and broker_decision:
-            if not BROKER_LOGS and not gate_failure:
-                names = [n for n in BROKER_GATE_STEPS if n in steps]
+        if name in broker_steps and broker_decision:
+            if name not in BROKER_LOGS and not gate_failure:
+                names = [n for n in broker_steps if "shots" not in steps or (n == "user-area") == (name == "user-area")]
                 summary_file = out_dir / "summary.json"
                 summary_file.unlink(missing_ok=True)
                 code, tail = run_gate_via_broker(names, out_dir)
                 if code in (2, 3, 4):
                     gate_failure = tail
                 elif summary_file.is_file():
-                    broker_rows = {row["name"]: row for row in json.loads(summary_file.read_text(encoding="utf-8"))["steps"]}
+                    broker_rows.update({row["name"]: row for row in json.loads(summary_file.read_text(encoding="utf-8"))["steps"]})
                     for n in names:
                         BROKER_LOGS[n] = code
                 else:

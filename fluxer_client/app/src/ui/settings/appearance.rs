@@ -3,26 +3,11 @@ use super::*;
 pub(super) fn render_appearance_preview(view: &ClientView, theme: &Theme) -> AnyElement {
     let display = view.prefs.data.display();
     let msg_size = px(f32::from(display.font_size));
-    let (avatar_el, user_name) = match &view.user {
-        Some(user) => (
-            render_avatar(
-                AvatarSpec {
-                    user_id: user.id,
-                    avatar_url: user.avatar_url.clone(),
-                    display_name: user.name.clone(),
-                    size: 40.,
-                    status: None,
-                    status_border_bg: None,
-                },
-                theme,
-            ),
-            user.name.clone(),
-        ),
-        None => (
-            div().size(px(40.)).rounded_full().bg(theme.muted).into_any_element(),
-            SharedString::new_static("Fluxer User"),
-        ),
-    };
+    let user_name = view
+        .user
+        .as_ref()
+        .map(|user| user.name.clone())
+        .unwrap_or_else(|| SharedString::new_static("Fluxer User"));
 
     let preview_body = if display.compact {
         div()
@@ -51,31 +36,81 @@ pub(super) fn render_appearance_preview(view: &ClientView, theme: &Theme) -> Any
             )
             .into_any_element()
     } else {
+        let group = |time: &'static str, messages: &[&'static str]| {
+            let avatar = match &view.user {
+                Some(user) => render_avatar(
+                    AvatarSpec {
+                        user_id: user.id,
+                        avatar_url: user.avatar_url.clone(),
+                        display_name: user.name.clone(),
+                        size: 40.,
+                        status: None,
+                        status_border_bg: None,
+                    },
+                    theme,
+                ),
+                None => div()
+                    .size(px(40.))
+                    .rounded_full()
+                    .bg(theme.muted)
+                    .into_any_element(),
+            };
+            div()
+                .flex()
+                .flex_row()
+                .items_start()
+                .gap_3()
+                .child(div().flex_none().mt(px(4.)).child(avatar))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .h(px(23.))
+                                .flex()
+                                .flex_row()
+                                .items_baseline()
+                                .gap_2()
+                                .child(
+                                    div()
+                                        .text_size(msg_size)
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .child(user_name.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .child(time),
+                                ),
+                        )
+                        .children(messages.iter().enumerate().map(|(index, message)| {
+                            div()
+                                .when(index != 0, |el| el.mt(px(5.)))
+                                .text_size(msg_size)
+                                .line_height(px(24.))
+                                .child(l10n::tr(message))
+                        })),
+                )
+        };
         div()
+            .pl(px(16.))
+            .pt(px(2.))
             .flex()
-            .flex_row()
-            .items_start()
-            .gap_3()
-            .child(div().flex_none().child(avatar_el))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .flex()
-                    .flex_col()
-                    .gap_1()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .items_baseline()
-                            .gap_2()
-                            .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(user_name))
-                            .child(div().text_xs().text_color(theme.muted_foreground).child("Today at 12:00 PM")),
-                    )
-                    .child(div().text_size(msg_size).child(l10n::tr("This is how messages appear")))
-                    .child(div().text_size(msg_size).child(l10n::tr("With different display modes available"))),
-            )
+            .flex_col()
+            .gap(px(21.))
+            .child(group(
+                "Today at 12:00 PM",
+                &[
+                    "This is how messages appear",
+                    "With different display modes available",
+                    "Customize the spacing and size",
+                ],
+            ))
+            .child(group("Today at 12:20 PM", &["Waiting for you to..."]))
             .into_any_element()
     };
 
@@ -317,7 +352,7 @@ fn appearance_section(first: bool, title: String, content: AnyElement, theme: &T
         .into_any_element()
 }
 
-fn appearance_radio_option(
+pub(super) fn appearance_radio_option(
     id: &'static str,
     title: &'static str,
     desc: &'static str,
@@ -332,15 +367,14 @@ fn appearance_radio_option(
         .role(gpui_kit::Role::Button)
         .aria_label(l10n::tr(title))
         .aria_selected(selected)
-        .py_1p5()
-        .px_2()
+        .py(px(4.))
         .rounded(px(6.))
         .cursor_pointer()
         .hover(move |s| s.bg(hover_bg))
         .flex()
         .flex_row()
         .items_start()
-        .gap_3()
+        .gap(px(8.))
         .on_click(cx.listener(on_click))
         .child(
             div()
@@ -355,16 +389,28 @@ fn appearance_radio_option(
                         .flex()
                         .items_center()
                         .justify_center()
-                        .child(div().size(px(6.)).rounded_full().bg(theme.on_fill))
+                        .child(div().size(px(7.2)).rounded_full().bg(theme.on_fill))
                 }),
         )
         .child(
             div()
                 .flex()
                 .flex_col()
-                .gap_0p5()
-                .child(div().text_sm().font_weight(FontWeight::MEDIUM).child(l10n::tr(title)))
-                .child(div().text_xs().text_color(theme.muted_foreground).child(l10n::tr(desc))),
+                .gap_1()
+                .child(
+                    div()
+                        .text_sm()
+                        .line_height(px(21.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .child(l10n::tr(title)),
+                )
+                .child(
+                    div()
+                        .text_sm()
+                        .line_height(px(19.6))
+                        .text_color(theme.muted_foreground)
+                        .child(l10n::tr(desc)),
+                ),
         )
         .into_any_element()
 }
@@ -437,7 +483,7 @@ pub(super) fn render_appearance_tab(view: &ClientView, theme: &Theme, cx: &mut C
         .h(px(111.19))
         .flex()
         .flex_col()
-        .gap(px(8.))
+        .gap(px(6.))
         .child(appearance_radio_option(
             "appearance-hdr-full",
             "Full dynamic range",

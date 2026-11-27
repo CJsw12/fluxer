@@ -255,5 +255,242 @@
    "app.settings-",
    "app.modal."
   ]
+ },
+ {
+  "slug": "settings-privacy",
+  "official": [
+   {
+    "click": "[data-flx=\"app.user-area.user-area-inner.control-button.settings-click\"]"
+   },
+   {
+    "click_text": "Privacy",
+    "within": "[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button\"],[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button--2\"]"
+   }
+  ],
+  "official_restore": [
+   {
+    "key": "Escape"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://scene/settings/privacy"
+   }
+  ],
+  "expect_flx": "user.privacy-safety-tab.communication-tab.communication-tab-content.select.incoming-call-base-change.row",
+  "rust_expect_flx": "app.settings-tab-layout.settings-tab-content.content",
+  "scope": [
+   "user.privacy-safety-tab.",
+   "app.settings-section.",
+   "app.settings-",
+   "app.modal."
+  ]
+ },
+ {
+  "slug": "settings-connections",
+  "official": [
+   {
+    "click": "[data-flx=\"app.user-area.user-area-inner.control-button.settings-click\"]"
+   },
+   {
+    "click_text": "Connections",
+    "within": "[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button\"],[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button--2\"]"
+   }
+  ],
+  "official_restore": [
+   {
+    "key": "Escape"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://scene/settings/connections"
+   }
+  ],
+  "expect_flx": "user.user-settings-modal.modal-root",
+  "rust_expect_flx": "user.linked-accounts-tab.platform-row",
+  "scope": [
+   "user.linked-accounts-tab.",
+   "app.settings-",
+   "app.modal."
+  ]
+ },
+ {
+  "slug": "settings-themes",
+  "official": [
+   {
+    "click": "[data-flx=\"app.user-area.user-area-inner.control-button.settings-click\"]"
+   },
+   {
+    "click_text": "Themes",
+    "within": "[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button\"],[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button--2\"]"
+   }
+  ],
+  "official_restore": [
+   {
+    "key": "Escape"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://scene/settings/themes"
+   }
+  ],
+  "expect_flx": "user.user-settings-modal.modal-root",
+  "rust_expect_flx": "app.settings-modal-layout.settings-modal-desktop-sidebar.desktop-sidebar",
+  "scope": [
+   "user.themes-tab.",
+   "app.settings-",
+   "app.modal."
+  ]
+ },
+ {
+  "slug": "settings-chat",
+  "official": [
+   {
+    "click": "[data-flx=\"app.user-area.user-area-inner.control-button.settings-click\"]"
+   },
+   {
+    "click_text": "Chat",
+    "within": "[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button\"],[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button--2\"]"
+   }
+  ],
+  "official_restore": [
+   {
+    "key": "Escape"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://scene/settings/chat"
+   }
+  ],
+  "expect_flx": "user.user-settings-modal.modal-root",
+  "rust_expect_flx": "app.settings-modal-layout.settings-modal-desktop-sidebar.desktop-sidebar",
+  "scope": [
+   "user.chat-settings-tab.",
+   "app.settings-section.",
+   "app.settings-",
+   "app.modal."
+  ]
+ },
+ {
+  "slug": "settings-accessibility",
+  "official": [
+   {
+    "click": "[data-flx=\"app.user-area.user-area-inner.control-button.settings-click\"]"
+   },
+   {
+    "click_text": "Accessibility",
+    "within": "[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button\"],[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button--2\"]"
+   }
+  ],
+  "official_restore": [
+   {
+    "key": "Escape"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://scene/settings/accessibility"
+   }
+  ],
+  "expect_flx": "user.user-settings-modal.modal-root",
+  "rust_expect_flx": "app.settings-modal-layout.settings-modal-desktop-sidebar.desktop-sidebar",
+  "scope": [
+   "user.accessibility-tab.",
+   "app.settings-section.",
+   "app.settings-",
+   "app.modal."
+  ]
+ },
+ {
+  "slug": "settings-windows",
+  "official": [
+   {
+    "click": "[data-flx=\"app.user-area.user-area-inner.control-button.settings-click\"]"
+   },
+   {
+    "click_text": "Windows app",
+    "within": "[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button\"],[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button--2\"]"
+   }
+  ],
+  "official_restore": [
+   {
+    "key": "Escape"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://scene/settings/windows"
+   }
+  ],
+  "expect_flx": "user.user-settings-modal.modal-root",
+  "rust_expect_flx": "app.settings-modal-layout.settings-modal-desktop-sidebar.desktop-sidebar",
+  "scope": [
+   "user.desktop-settings-tab.",
+   "app.settings-section.",
+   "app.settings-",
+   "app.modal."
+  ]
+ },
+ {
+  "slug": "settings-advanced",
+  "official": [
+   {
+    "click": "[data-flx=\"app.user-area.user-area-inner.control-button.settings-click\"]"
+   },
+   {
+    "click_text": "Advanced",
+    "within": "[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button\"],[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button--2\"]"
+   }
+  ],
+  "official_restore": [
+   {
+    "key": "Escape"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://scene/settings/advanced"
+   }
+  ],
+  "expect_flx": "user.user-settings-modal.modal-root",
+  "rust_expect_flx": "app.settings-modal-layout.settings-modal-desktop-sidebar.desktop-sidebar",
+  "scope": [
+   "user.advanced-settings-tab.",
+   "app.settings-section.",
+   "app.settings-",
+   "app.modal."
+  ]
+ },
+ {
+  "slug": "settings-applications",
+  "official": [
+   {
+    "click": "[data-flx=\"app.user-area.user-area-inner.control-button.settings-click\"]"
+   },
+   {
+    "click_text": "Applications",
+    "within": "[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button\"],[data-flx=\"app.settings-modal-layout.settings-modal-sidebar-item.button--2\"]"
+   }
+  ],
+  "official_restore": [
+   {
+    "key": "Escape"
+   }
+  ],
+  "rust": [
+   {
+    "link": "fluxer://scene/settings/applications"
+   }
+  ],
+  "expect_flx": "user.user-settings-modal.modal-root",
+  "rust_expect_flx": "user.applications-tab.button-container",
+  "scope": [
+   "user.applications-tab.",
+   "app.settings-",
+   "app.modal."
+  ]
  }
 ]

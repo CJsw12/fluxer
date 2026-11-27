@@ -8,7 +8,7 @@
 // actions (delete, leave, kick, ban, block, report, logout, send, call) are never clicked, and a
 // CDP network guard fails every non-GET API request so no click can mutate server state
 // (reactions, pins, settings). States and the click log are written as they are found.
-import {mkdirSync, writeFileSync} from 'node:fs';
+import {mkdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {Cdp, DOM_DUMP, SVG_DUMP, clientInfo, helpers, pageWsUrl, sleep} from './lib.mjs';
 
@@ -32,11 +32,14 @@ const MAX = Number(args.max ?? 400);
 const HOVER_MAX = Number(args['hover-max'] ?? 80);
 const WIDTH = Number(args.width ?? 1280);
 const HEIGHT = Number(args.height ?? 800);
+const INVENTORY = args.inventory;
+const INVENTORY_TABS = new Set(['Account', 'Privacy', 'Connections', 'Appearance', 'Themes', 'Notifications',
+	'Chat', 'Voice & video', 'Accessibility', 'Language', 'Keybinds', 'Windows app', 'Advanced', 'Applications']);
 if (!PORT || !ORIGIN || !ROUTE || !OUT) {
 	console.error('usage: --attach PORT --origin ORIGIN --route PATH --out DIR [--hover] [--hover-max N]');
 	process.exit(2);
 }
-mkdirSync(join(OUT, HOVER ? 'hover' : 'states'), {recursive: true});
+mkdirSync(INVENTORY ? OUT : join(OUT, HOVER ? 'hover' : 'states'), {recursive: true});
 
 const DENY = new RegExp(
 	[
@@ -67,7 +70,7 @@ const WRITE_GUARD = `(() => {
   if (window.__parityGuard) return; window.__parityGuard = true; window.__parityBlocked = [];
   const isApi = (u) => String(u).includes('/api/') || String(u).includes('%2Fapi');
   const deny = (m, u) => { window.__parityBlocked.push(m + ' ' + String(u).slice(-80)); return new TypeError('parity write guard'); };
-  const f = window.fetch;
+  const f = window.fetch, beacon = navigator.sendBeacon;
   window.fetch = function (input, init) {
     const url = typeof input === 'string' ? input : input && input.url;
     const method = ((init && init.method) || (input && input.method) || 'GET').toUpperCase();
@@ -75,6 +78,7 @@ const WRITE_GUARD = `(() => {
     return f.apply(this, arguments);
   };
   const open = XMLHttpRequest.prototype.open, send = XMLHttpRequest.prototype.send;
+  window.__parityRestoreGuard = () => { window.fetch = f; XMLHttpRequest.prototype.open = open; XMLHttpRequest.prototype.send = send; if (beacon) navigator.sendBeacon = beacon; window.__parityGuard = false; };
   XMLHttpRequest.prototype.open = function (m, u) { this.__pm = String(m).toUpperCase(); this.__pu = u; return open.apply(this, arguments); };
   XMLHttpRequest.prototype.send = function () {
     if (isApi(this.__pu) && !['GET', 'HEAD', 'OPTIONS'].includes(this.__pm)) { deny(this.__pm, this.__pu); throw new TypeError('parity write guard'); }
@@ -82,7 +86,7 @@ const WRITE_GUARD = `(() => {
   };
   if (navigator.sendBeacon) navigator.sendBeacon = (u) => { if (isApi(u)) { deny('BEACON', u); return false; } return true; };
 })()`;
-await cdp.send('Page.addScriptToEvaluateOnNewDocument', {source: WRITE_GUARD});
+const guard = await cdp.send('Page.addScriptToEvaluateOnNewDocument', {source: WRITE_GUARD});
 await cdp.eval(WRITE_GUARD).catch(() => {});
 const blockedWrites = () => cdp.eval('window.__parityBlocked || []').catch(() => []);
 const blocked = [];
@@ -139,13 +143,16 @@ async function reset(baselineIds) {
 // Clickable controls inside an optional subset of flx ids (for depth-2 crawling inside a layer).
 async function candidates(within) {
 	const list = await cdp.eval(`(() => {
-	  const sel = 'button,a[href],[role="button"],[role="tab"],[role="menuitem"],[role="menuitemradio"],[role="menuitemcheckbox"],[role="switch"],[role="checkbox"],[role="radio"],[role="option"],[role="treeitem"]';
+	  const inventory = ${Boolean(INVENTORY)};
+	  const sel = inventory ? 'button,[role="button"],[role="tab"],[role="menuitem"],a'
+	    : 'button,a[href],[role="button"],[role="tab"],[role="menuitem"],[role="menuitemradio"],[role="menuitemcheckbox"],[role="switch"],[role="checkbox"],[role="radio"],[role="option"],[role="treeitem"]';
 	  const seen = new Map(); const out = [];
 	  for (const el of document.querySelectorAll(sel)) {
-	    const host = el.hasAttribute('data-flx') ? el : el.closest('[data-flx]');
+	    const host = el.hasAttribute('data-flx') ? el : inventory ? null : el.closest('[data-flx]');
 	    if (!host) continue;
 	    const r = el.getBoundingClientRect();
 	    if (r.width < 4 || r.height < 4 || r.top < 0 || r.left < 0 || r.bottom > innerHeight || r.right > innerWidth) continue;
+	    if (inventory && !el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2))) continue;
 	    const cs = getComputedStyle(el);
 	    if (cs.visibility === 'hidden' || Number(cs.opacity) === 0 || el.disabled || el.getAttribute('aria-disabled') === 'true') continue;
 	    const flx = host.getAttribute('data-flx');
@@ -162,10 +169,84 @@ async function candidates(within) {
 	return list.filter((c) => {
 		if (within && !within.has(base(c.flx))) return false;
 		if (c.href && /^https?:/i.test(c.href)) return false;
+		if (INVENTORY && /\b(?:invite|save|apply|submit|send|mute|deafen|unpin|pin|logout|favorite|favourite|reset|toggle)\b/i.test(`${c.flx} ${c.label} ${c.text}`)) return false;
 		return !DENY.test(`${c.flx} ${c.label} ${c.text}`);
 	});
 }
 const target = (c) => `[...document.querySelectorAll('[data-flx="${c.flx.replace(/"/g, '\\"')}"]')][${c.idx}]`;
+
+if (INVENTORY) {
+	const rooms = JSON.parse(readFileSync(INVENTORY, 'utf8'));
+	const current = () => cdp.eval('location.pathname + location.search');
+	const initial = await current();
+	const modal = '[data-flx="user.user-settings-modal.modal-root"]';
+	const settings = '[data-flx="app.user-area.user-area-inner.control-button.settings-click"]';
+	const tabs = '[data-flx="app.settings-modal-layout.settings-modal-sidebar-item.button"],[data-flx="app.settings-modal-layout.settings-modal-sidebar-item.button--2"]';
+	const go = async (route) => {
+		if (!/^\/channels\/(?:@me|\d+)(?:\/\d+)?$/.test(route)) throw new Error('inventory route must be a channel');
+		if ((await current()) === route) return;
+		await cdp.send('Page.navigate', {url: ORIGIN + route});
+		const ready = await waitFor(`location.pathname + location.search === ${JSON.stringify(route)} && document.querySelectorAll('[data-flx]').length > 10`, 20000);
+		if (!ready) throw new Error('inventory route did not load');
+		await cdp.eval(WRITE_GUARD);
+	};
+	const report = [];
+	try {
+		for (const room of rooms) {
+			const rec = {slug: room.slug, status: 'ok', controls: []};
+			try {
+				await pressKey('Escape', 27);
+				await go(room.route);
+				if (room.dm) {
+					const click = async (flx) => {
+						if (!await realClickExpr(`document.querySelector('[data-flx=' + CSS.escape(${JSON.stringify(flx)}) + ']')`)) {
+							throw new Error('DM inventory entry control not found');
+						}
+					};
+					await click('app.sidebar-nav.fluxer-button.fluxer-button.select');
+					if (!await waitFor(`!!document.querySelector('[data-flx="channel.direct-message.dm-layout.dm-layout-container"]')`, 5000)) {
+						throw new Error('DM home did not open');
+					}
+					if (room.dm === 'friends') {
+						await click('channel.direct-message.dm-list.clickable-item.clickable-item.button');
+						await click('channel.direct-message.dm-friends-view.tab-button.set-active-tab--2');
+					}
+				}
+				if (room.tab) {
+					if (!INVENTORY_TABS.has(room.tab)) throw new Error('unknown settings tab in inventory');
+					if (!await realClickExpr(`document.querySelector(${JSON.stringify(settings)})`)) throw new Error('settings did not open');
+					await waitFor(`!!document.querySelector(${JSON.stringify(modal)})`, 4000);
+					if (!await realClickExpr(`[...document.querySelectorAll(${JSON.stringify(tabs)})].find(e => e.innerText.trim().split('\\n')[0] === ${JSON.stringify(room.tab)})`)) {
+						throw new Error('settings tab did not open');
+					}
+				}
+				await sleep(600);
+				rec.controls = (await candidates()).map(({flx, idx, role, tag}) => ({flx, idx, role, tag}));
+				if (!rec.controls.length) throw new Error('no eligible controls');
+			} catch (error) {
+				rec.status = 'failed';
+				rec.error = error.message;
+			} finally {
+				await pressKey('Escape', 27);
+				const denied = (await blockedWrites()).length;
+				if (denied) rec.blocked_writes = denied;
+				report.push(rec);
+				writeFileSync(join(OUT, 'inventory.json'), JSON.stringify(report, null, 1));
+			}
+		}
+	} finally {
+		try {
+			await go(initial);
+		} finally {
+			await cdp.eval('window.__parityRestoreGuard?.()').catch(() => {});
+			await cdp.send('Page.removeScriptToEvaluateOnNewDocument', {identifier: guard.identifier}).catch(() => {});
+			await cdp.send('Emulation.clearDeviceMetricsOverride').catch(() => {});
+			await cdp.send('Emulation.setEmulatedMedia', {features: []}).catch(() => {});
+			cdp.ws.close();
+		}
+	}
+	process.exit(report.some(r => r.status !== 'ok') ? 1 : 0);
+}
 
 await loadRoute();
 const baseline = await dump();

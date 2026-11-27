@@ -1,0 +1,12 @@
+[
+  {"slug": "settings-appearance", "wait_ms": 600, "masks": []},
+  {"slug": "settings-notifications", "wait_ms": 600, "masks": []},
+  {"slug": "settings-voice-video", "wait_ms": 600, "masks": []},
+  {"slug": "settings-language", "wait_ms": 600, "masks": []},
+  {"slug": "settings-my-account", "wait_ms": 600, "masks": []},
+  {"slug": "settings-keybinds", "wait_ms": 600, "masks": []},
+  {"slug": "settings-themes", "wait_ms": 600, "masks": []},
+  {"slug": "settings-chat", "wait_ms": 600, "masks": []},
+  {"slug": "settings-accessibility", "wait_ms": 600, "masks": []},
+  {"slug": "settings-advanced", "wait_ms": 600, "masks": []}
+]

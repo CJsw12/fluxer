@@ -7,6 +7,7 @@
 // CSS.forcePseudoState is always reverted (also on error).
 //   node spec_official.mjs --attach 9334 --out <spec.json> [--hover <flx>]... [--viewport 1280x800]
 import {mkdirSync, readdirSync, readFileSync, statSync, writeFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {dirname, join, relative, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {Cdp, clientInfo, helpers, navigate, pageWsUrl, sleep} from './lib.mjs';
@@ -25,10 +26,13 @@ for (let i = 0; i < argv.length; i++) {
 	else if (a === '--scenes') opts.scenes = argv[++i];
 	else if (a === '--out-dir') opts.outDir = argv[++i];
 	else if (a === '--expected-web-build') opts.expectedWebBuild = argv[++i];
+	else if (a === '--only') opts.only = new Set(argv[++i].split(','));
+	else if (a === '--scene-bundles') opts.bundles = true;
+	else if (a === '--skip-captured') opts.skipCaptured = true;
 }
 if (!opts.attach || !(opts.out || (opts.scenes && opts.outDir))) {
 	console.error('usage: node spec_official.mjs --attach <port> --out <spec.json> [--hover <flx>]... [--viewport 1280x800] [--expected-web-build <ver>]');
-	console.error('   or: node spec_official.mjs --attach <port> --scenes <scenes.json> --out-dir <dir> [--viewport 1280x800] [--expected-web-build <ver>]');
+	console.error('   or: node spec_official.mjs --attach <port> --scenes <scenes.json> --out-dir <dir> [--viewport 1280x800] [--expected-web-build <ver>] [--only slug,...] [--scene-bundles] [--skip-captured]');
 	process.exit(2);
 }
 
@@ -239,7 +243,7 @@ const forced = new Set();
 let exitCode = 0;
 const modules = indexModules();
 
-async function capture(hoverList) {
+async function capture(hoverList, includeRules = true) {
 	const page = await cdp.eval(`(${pageSpec.toString()})(${JSON.stringify(PROPS)})`);
 	const rows = page.rows;
 
@@ -261,15 +265,18 @@ async function capture(hoverList) {
 		paint.set(`${f}|${n}`, doc.layout.paintOrders?.[li] ?? null);
 	});
 
-	const root = await cdp.send('DOM.getDocument', {depth: 0});
-	const q = await cdp.send('DOM.querySelectorAll', {nodeId: root.root.nodeId, selector: '[data-flx]'});
-	if (q.nodeIds.length !== rows.length) throw new Error(`DOM/page flx count mismatch ${q.nodeIds.length} vs ${rows.length}`);
-
-	const matchedAll = await Promise.all(
-		q.nodeIds.map((id, i) =>
-			rows[i].rendered ? cdp.send('CSS.getMatchedStylesForNode', {nodeId: id}).catch(() => null) : null,
-		),
-	);
+	let matchedAll = [];
+	if (includeRules) {
+		const root = await cdp.send('DOM.getDocument', {depth: 0});
+		const q = await cdp.send('DOM.querySelectorAll', {nodeId: root.root.nodeId, selector: '[data-flx]'});
+		if (q.nodeIds.length !== rows.length) throw new Error(`DOM/page flx count mismatch ${q.nodeIds.length} vs ${rows.length}`);
+		// Keep the renderer responsive while collecting styles for deeply nested settings screens.
+		for (let start = 0; start < rows.length; start += 64) {
+			const batch = q.nodeIds.slice(start, start + 64);
+			matchedAll.push(...await Promise.all(batch.map((id, i) => rows[start + i].rendered
+				? cdp.send('CSS.getMatchedStylesForNode', {nodeId: id}).catch(() => null) : null)));
+		}
+	}
 
 	const elements = [];
 	const orderOf = [];
@@ -402,7 +409,14 @@ const WRITE_GUARD = `(() => {
 })()`;
 
 async function runScenes() {
-	const scenes = JSON.parse(readFileSync(opts.scenes, 'utf8'));
+	const allScenes = JSON.parse(readFileSync(opts.scenes, 'utf8'));
+	const scenes = allScenes.filter((sc) => !opts.only || opts.only.has(sc.slug));
+	if (!scenes.length || (opts.only && scenes.length !== opts.only.size)) throw new Error('unknown or empty scene selection');
+	const actualBuild = extractWebBuild(await clientInfo(cdp));
+	if (opts.bundles && (!opts.viewport || !actualBuild || checkVersionWarning(actualBuild, resolveExpectedWebBuild()))) {
+		throw new Error(`scene bundles require an explicit viewport and the expected build; live build: ${actualBuild}`);
+	}
+	if (opts.skipCaptured && !opts.bundles) throw new Error('--skip-captured requires --scene-bundles');
 	const {realClickExpr, realClick, pressKey, waitFor, clickText} = helpers(cdp);
 	await cdp.send('Page.enable').catch(() => {});
 	const guardDoc = await cdp.send('Page.addScriptToEvaluateOnNewDocument', {source: WRITE_GUARD}).catch(() => null);
@@ -420,7 +434,7 @@ async function runScenes() {
 	const initialThemeDark = await cdp.eval(`document.documentElement.classList.contains('theme-dark')`);
 	const initiallyInVoice = await cdp.eval(`!!document.querySelector(${JSON.stringify(VOICE_CONN_SEL)})`);
 	const blockedWrites = [];
-	const navigateTo = async (targetRoute) => {
+	const navigateTo = async (targetRoute, dismissPrompt = true) => {
 		const prevBlocked = await cdp.eval('window.__specBlocked || []').catch(() => []);
 		blockedWrites.push(...prevBlocked);
 		const dest = targetRoute === '__BASE__' ? baseRoute : targetRoute;
@@ -429,7 +443,7 @@ async function runScenes() {
 		await waitFor(`document.readyState === 'complete' && document.querySelectorAll('[data-flx]').length > 10`, 20000);
 		await sleep(1500);
 		await cdp.eval(WRITE_GUARD).catch(() => {});
-		await clickText('^Not now$').catch(() => false);
+		if (dismissPrompt) await clickText('^Not now$').catch(() => false);
 	};
 	const ensureMicMuted = async () => {
 		await waitFor(`!!document.querySelector('[data-flx="voice.voice-control-bar.voice-control-bar-inner.container"]')`, 8000);
@@ -479,9 +493,29 @@ async function runScenes() {
 	};
 	mkdirSync(resolve(opts.outDir), {recursive: true});
 	const report = [];
+	const flush = () => writeFileSync(join(resolve(opts.outDir), 'scenes.report.json'), JSON.stringify({base_route: baseRoute, blocked_writes: blockedWrites, scenes: report}, null, 1), 'utf8');
 	try {
 		for (const sc of scenes) {
 			const rec = {slug: sc.slug, status: 'ok', error: null, elements: 0};
+			const outDir = opts.bundles ? join(resolve(opts.outDir), sc.slug) : resolve(opts.outDir);
+			const specPath = join(outDir, `${sc.slug}.spec.json`);
+			const pngPath = join(outDir, `${sc.slug}.png`);
+			const metaPath = join(outDir, `${sc.slug}.meta.json`);
+			const sceneHash = createHash('sha256').update(JSON.stringify(sc)).digest('hex');
+			const theme = sc.expect_theme ?? (initialThemeDark ? 'theme-dark' : 'theme-light');
+			if (opts.skipCaptured) {
+				try {
+					const meta = JSON.parse(readFileSync(metaPath, 'utf8'));
+					if (meta.build === actualBuild && meta.scene_hash === sceneHash && meta.viewport.join('x') === opts.viewport &&
+						meta.theme === theme && statSync(specPath).size > 0 && statSync(pngPath).size > 0) {
+						report.push({...rec, status: 'skipped', elements: meta.elements});
+						flush();
+						console.log(`skip   ${sc.slug} (matching capture)`);
+						continue;
+					}
+				} catch {}
+			}
+			let stage = 'actions';
 			try {
 				for (const act of sc.official ?? []) {
 					if (act.if_not_flx && (await cdp.eval(shown(act.if_not_flx)))) continue;
@@ -511,7 +545,8 @@ async function runScenes() {
 							: await clickText(act.click_text);
 						if (!ok && !act.optional) throw new Error(`click_text failed: ${act.click_text}`);
 					} else if (act.navigate) {
-						await navigateTo(act.navigate);
+						if (sc.auto && (await route()) === act.navigate) continue;
+						await navigateTo(act.navigate, !sc.auto);
 						continue;
 					} else if (act.voice_mute) {
 						await ensureMicMuted();
@@ -529,14 +564,36 @@ async function runScenes() {
 				}
 				await sleep(500); // let open animations settle
 				await cdp.eval(`window.__dropHidden = ${sc.drop_hidden ? 'true' : 'false'}`);
-				const spec = await capture([]);
+				stage = 'screenshot';
+				const screenshot = opts.bundles
+					? await cdp.send('Page.captureScreenshot', {format: 'png', fromSurface: false})
+					: null;
+				stage = 'spec';
+				const spec = await capture([], !sc.auto);
 				spec.scene = sc.slug;
 				rec.elements = spec.elements.length;
-				writeFileSync(join(resolve(opts.outDir), `${sc.slug}.spec.json`), JSON.stringify(spec, null, 1), 'utf8');
+				if (opts.bundles) {
+					const build = extractWebBuild(spec.client_info) ?? actualBuild;
+					if (build !== actualBuild || spec.viewport.join('x') !== opts.viewport || !spec.theme_class.split(/\s+/).includes(theme)) {
+						throw new Error('captured build, viewport, or theme changed');
+					}
+					const png = Buffer.from(screenshot.data, 'base64');
+					if (png.length < 24 || [png.readUInt32BE(16), png.readUInt32BE(20)].join('x') !== opts.viewport) {
+						throw new Error('captured PNG does not match the viewport');
+					}
+					mkdirSync(outDir, {recursive: true});
+					writeFileSync(pngPath, png);
+					writeFileSync(specPath, JSON.stringify(spec, null, 1), 'utf8');
+					writeFileSync(metaPath, JSON.stringify({build, scene_hash: sceneHash, viewport: spec.viewport, theme,
+						offset: [0, 0], provenance: 'official-scene', captured_at: new Date().toISOString(), elements: rec.elements}, null, 1), 'utf8');
+				} else {
+					writeFileSync(specPath, JSON.stringify(spec, null, 1), 'utf8');
+				}
 			} catch (e) {
 				rec.status = 'failed';
-				rec.error = String(e?.message ?? e);
+				rec.error = `${stage}: ${e?.message ?? e}`;
 			}
+			try {
 			// restore: optional scene-specific actions (e.g. leave a DM, disconnect voice, restore dark theme), then Escape
 			for (const act of sc.official_restore ?? []) {
 				try {
@@ -545,7 +602,8 @@ async function runScenes() {
 						if (act.within) await realClickExpr(`[...document.querySelectorAll(${JSON.stringify(act.within)})].find((e) => e.innerText.trim().split('\\n')[0] === ${JSON.stringify(act.click_text)})`, 'left');
 						else await clickText(act.click_text);
 					} else if (act.navigate) {
-						await navigateTo(act.navigate);
+						if (sc.auto && (await route()) === baseRoute && act.navigate === '__BASE__') continue;
+						await navigateTo(act.navigate, !sc.auto);
 						continue;
 					} else if (act.key) await pressKey(act.key, {Escape: 27, Enter: 13}[act.key] ?? 0);
 					else if (act.wait_ms) {
@@ -553,7 +611,9 @@ async function runScenes() {
 						continue;
 					}
 					await sleep(act.wait_ms ?? 700);
-				} catch {}
+				} catch (error) {
+					throw new Error(`restore action failed: ${error?.message ?? error}`);
+				}
 			}
 			await restoreAudioAndVoice().catch(() => {});
 			await restoreThemeIfNeeded().catch(() => {});
@@ -576,10 +636,22 @@ async function runScenes() {
 			const r = await route();
 			if (r !== baseRoute) {
 				rec.status = 'failed';
-				rec.error = (rec.error ? rec.error + '; ' : '') + `route changed ${baseRoute} -> ${r}`;
+				rec.error = (rec.error ? rec.error + '; ' : '') + 'restore: route changed';
+				await navigateTo(baseRoute, !sc.auto);
 			}
-			console.log(`${rec.status.padEnd(6)} ${sc.slug} (${rec.elements} elements)${rec.error ? ' - ' + rec.error : ''}`);
-			report.push(rec);
+			} catch (error) {
+				rec.status = 'failed';
+				rec.error = (rec.error ? rec.error + '; ' : '') + `restore: ${error?.message ?? error}`;
+				throw error;
+			} finally {
+				report.push(rec);
+				flush();
+				if (opts.bundles) {
+					mkdirSync(outDir, {recursive: true});
+					writeFileSync(join(outDir, `${sc.slug}.report.json`), JSON.stringify(rec, null, 1));
+				}
+				console.log(`${rec.status.padEnd(6)} ${sc.slug} (${rec.elements} elements)${rec.error ? ' - ' + rec.error : ''}`);
+			}
 		}
 	} finally {
 		await restoreAudioAndVoice().catch(() => {});
@@ -594,9 +666,9 @@ async function runScenes() {
 			await cdp.send('Page.removeScriptToEvaluateOnNewDocument', {identifier: guardDoc.identifier}).catch(() => {});
 		}
 	}
-	writeFileSync(join(resolve(opts.outDir), 'scenes.report.json'), JSON.stringify({base_route: baseRoute, blocked_writes: blockedWrites, scenes: report}, null, 1), 'utf8');
-	if (blockedWrites.length) console.log(`blocked writes: ${blockedWrites.join('; ')}`);
-	if (report.some((r) => r.status !== 'ok')) exitCode = 1;
+	flush();
+	if (blockedWrites.length) console.log(`blocked writes: ${blockedWrites.length} (details in scenes.report.json)`);
+	if (report.some((r) => r.status === 'failed')) exitCode = 1;
 }
 
 try {
@@ -615,7 +687,7 @@ try {
 	}
 } catch (e) {
 	console.error(String(e?.stack ?? e));
-	exitCode = 1;
+	exitCode = opts.scenes ? 2 : 1;
 } finally {
 	for (const id of forced) await cdp.send('CSS.forcePseudoState', {nodeId: id, forcedPseudoClasses: []}).catch(() => {});
 	if (opts.viewport) await cdp.send('Emulation.clearDeviceMetricsOverride').catch(() => {});

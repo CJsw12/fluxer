@@ -53,6 +53,19 @@ impl ClientState {
         self.guild_voice.get(&guild_id).is_some_and(|m| !m.is_empty())
     }
 
+    /// The `(guild, channel)` the user is connected to, preferring `guild_id`
+    /// when given. Read-only view for the profile voice-activity card.
+    pub fn user_voice_channel(&self, user_id: Snowflake, guild_id: Option<Snowflake>) -> Option<(Snowflake, Snowflake)> {
+        let find = |guild: Snowflake| {
+            self.guild_voice
+                .get(&guild)?
+                .iter()
+                .find(|((user, _), _)| *user == user_id)
+                .map(|(_, channel)| (guild, *channel))
+        };
+        guild_id.and_then(find).or_else(|| self.guild_voice.keys().find_map(|g| find(*g)))
+    }
+
     /// `(online, members)` from the guild payload (`GuildCount.hydrate`);
     /// `None` until both are known.
     pub fn guild_counts(&self, guild_id: Snowflake) -> Option<(u64, u64)> {
@@ -97,6 +110,18 @@ mod tests {
         // Malformed (no user) is ignored.
         let bad = Dispatch { t: "VOICE_STATE_UPDATE".into(), s: 0, d: json!({"guild_id": "10"}) };
         assert!(s.apply(&bad).is_empty());
+    }
+
+    #[test]
+    fn user_voice_channel_lookup() {
+        let mut s = ClientState::new();
+        assert_eq!(s.user_voice_channel(Snowflake(1), None), None);
+        s.apply(&upd("1", "a", Some("100")));
+        assert_eq!(s.user_voice_channel(Snowflake(1), None), Some((Snowflake(10), Snowflake(100))));
+        assert_eq!(s.user_voice_channel(Snowflake(1), Some(Snowflake(99))), Some((Snowflake(10), Snowflake(100))));
+        assert_eq!(s.user_voice_channel(Snowflake(2), Some(Snowflake(10))), None);
+        s.apply(&upd("1", "a", None));
+        assert_eq!(s.user_voice_channel(Snowflake(1), None), None);
     }
 
     #[test]

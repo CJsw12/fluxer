@@ -16,7 +16,7 @@ impl Backend {
         self.runtime.spawn(async move {
             let query = ProfileQuery {
                 guild_id: guild_id.map(|id| id.to_string()),
-                with_mutual_friends: false,
+                with_mutual_friends: true,
                 with_mutual_guilds: true,
             };
             let result = match rest.get_user_profile(&user_id.to_string(), &query).await {

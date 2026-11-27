@@ -702,6 +702,12 @@ fn voice_stage_lifecycle_tiles_screen_share_controls_and_back_to_chat(cx: &mut T
     vcx.run_until_parked();
     draw(vcx);
     assert!(vcx.debug_bounds("screen-share-picker-modal").is_some(), "clicking share opens picker modal");
+    // Go Live needs a real source now that the fake `Primary Display` fallback is gone.
+    view.update(vcx, |v, _| {
+        v.voice.screen_sources =
+            vec![crate::backend::voice::ScreenSourceInfo { id: 1, kind: "screen".into(), title: "Display 1".into(), display_id: 1 }];
+    });
+    draw(vcx);
     let go_live_pos = vcx.debug_bounds("screen-share-go-live-btn").unwrap().center();
     vcx.simulate_click(go_live_pos, gpui_kit::Modifiers::default());
     vcx.run_until_parked();
@@ -1113,4 +1119,57 @@ fn screen_share_picker_modal_sources_quality_active_speakers_and_stage_header(cx
         assert!(!v.voice.self_stream);
         assert!(matches!(v.overlay, Overlay::None));
     });
+}
+
+#[test]
+fn screen_share_picker_selection_refresh_missing_and_empty() {
+    use crate::backend::voice::ScreenSourceInfo;
+    use crate::ui::screen_share_modal::{
+        ScreenShareTab, Selection, go_live_enabled, resolve_selection, sources_for_tab,
+    };
+    let src = |id: u64, kind: &str| ScreenSourceInfo {
+        id,
+        kind: kind.into(),
+        title: format!("S{id}"),
+        display_id: 0,
+    };
+    let before = vec![src(1, "screen"), src(2, "screen"), src(9, "window")];
+    let screens = sources_for_tab(&before, ScreenShareTab::Screens);
+    assert_eq!(screens.len(), 2);
+    assert_eq!(resolve_selection(&screens, None), Selection::Ok(1));
+    assert_eq!(resolve_selection(&screens, Some(2)), Selection::Ok(2));
+
+    // Refresh replaces the list; the same ID stays selected.
+    let after = sources_for_tab(&[src(2, "screen"), src(3, "screen")], ScreenShareTab::Screens);
+    assert_eq!(resolve_selection(&after, Some(2)), Selection::Ok(2));
+
+    // A vanished ID is reported as Missing, never replaced by the first source.
+    let gone = sources_for_tab(&[src(3, "screen")], ScreenShareTab::Screens);
+    let sel = resolve_selection(&gone, Some(2));
+    assert_eq!(sel, Selection::Missing);
+    assert!(!go_live_enabled(sel));
+    // Picking another source clears the error.
+    assert!(go_live_enabled(resolve_selection(&gone, Some(3))));
+
+    // Empty list: Go Live disabled, no fake Primary Display entry.
+    let empty = sources_for_tab(&[], ScreenShareTab::Screens);
+    assert!(empty.is_empty());
+    assert_eq!(resolve_selection(&empty, None), Selection::Empty);
+    assert!(!go_live_enabled(Selection::Empty));
+}
+
+#[test]
+fn video_viewer_header_waiting_state_and_kind() {
+    use crate::ui::video_viewer::{format_stage_header, viewer_is_waiting};
+    let track = TrackSubscriptionKey {
+        participant_identity: "x".into(),
+        participant_sid: "PA".into(),
+        track_sid: "TR".into(),
+        source: VoiceTrackSource::ScreenShare,
+    };
+    assert_eq!(format_stage_header(&track, "Al", Some((1920, 1080)), Some(60)), "Al's screen · 1080p 60 FPS");
+    assert_eq!(format_stage_header(&track, "Al", None, None), "Al's screen");
+    assert_eq!(format_stage_header(&track, "Al", None, Some(30)), "Al's screen · 30 FPS");
+    assert!(viewer_is_waiting(None));
+    assert!(!viewer_is_waiting(Some((1, 1))));
 }

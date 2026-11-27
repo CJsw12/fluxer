@@ -47,11 +47,35 @@ fn existing_channel_overrides(raw: Option<&Value>) -> Map<String, Value> {
 
 /// Builds the full `channel_overrides` map sent to `PATCH /users/@me/guilds/{g|@me}/settings`
 /// (the server replaces the whole map, so siblings and existing channel flags must be preserved).
+#[cfg(test)]
 pub(crate) fn build_channel_override_patch(
     existing: Option<&UserGuildSettings>,
     channel_id: Snowflake,
     muted: Option<bool>,
     message_notifications: Option<u8>,
+) -> GuildSettingsPatch {
+    build_channel_override_patch_with(existing, channel_id, muted, message_notifications, None)
+}
+
+/// Official `createMuteConfig`: `None` duration (indefinite) -> no config (`null`); otherwise
+/// `selected_time_window` is the duration in milliseconds and `end_time` is `now + duration`.
+pub(crate) fn mute_config_for(now: chrono::DateTime<chrono::Utc>, duration_ms: Option<i64>) -> Option<MuteConfig> {
+    let ms = duration_ms?;
+    let end = now.checked_add_signed(chrono::Duration::milliseconds(ms))?;
+    Some(MuteConfig {
+        end_time: Some(end.to_rfc3339_opts(chrono::SecondsFormat::Millis, true)),
+        selected_time_window: ms,
+    })
+}
+
+/// Like [`build_channel_override_patch`], additionally carrying a timed `mute_config`
+/// when `muted == Some(true)` and `mute_config` is `Some`.
+pub(crate) fn build_channel_override_patch_with(
+    existing: Option<&UserGuildSettings>,
+    channel_id: Snowflake,
+    muted: Option<bool>,
+    message_notifications: Option<u8>,
+    mute_config: Option<MuteConfig>,
 ) -> GuildSettingsPatch {
     let mut patch_overrides = BTreeMap::new();
     if let Some(settings) = existing {
@@ -78,7 +102,7 @@ pub(crate) fn build_channel_override_patch(
     target.muted.get_or_insert(false);
     if let Some(m) = muted {
         target.muted = Some(m);
-        target.mute_config = Some(None);
+        target.mute_config = Some(if m { mute_config } else { None });
     }
     if let Some(level) = message_notifications {
         target.message_notifications = Some(level);
@@ -166,7 +190,20 @@ impl Backend {
     /// Optimistically mutes or unmutes `channel_id` (inside `guild_id` or `@me`
     /// for DMs), then calls `PATCH /users/@me/guilds/{g|@me}/settings`.
     pub fn set_channel_muted(&self, guild_id: Option<Snowflake>, channel_id: Snowflake, muted: bool) {
-        self.update_channel_override(guild_id, channel_id, Some(muted), None, "Could not update channel mute");
+        self.update_channel_override(guild_id, channel_id, Some(muted), None, None, "Could not update channel mute");
+    }
+
+    /// Mutes `channel_id` for `duration_ms` milliseconds (`None` = until unmuted) using the
+    /// official `mute_config { end_time, selected_time_window }` shape. Expiry is handled by
+    /// `mute_active` on read.
+    pub fn set_channel_muted_until(
+        &self,
+        guild_id: Option<Snowflake>,
+        channel_id: Snowflake,
+        duration_ms: Option<i64>,
+    ) {
+        let config = mute_config_for(chrono::Utc::now(), duration_ms);
+        self.update_channel_override(guild_id, channel_id, Some(true), None, config, "Could not update channel mute");
     }
 
     /// Optimistically updates `message_notifications` (`0`=all, `1`=mentions,
@@ -178,6 +215,7 @@ impl Backend {
             channel_id,
             None,
             Some(level),
+            None,
             "Could not update notification settings",
         );
     }
@@ -188,6 +226,7 @@ impl Backend {
         channel_id: Snowflake,
         muted: Option<bool>,
         message_notifications: Option<u8>,
+        mute_config: Option<MuteConfig>,
         err_prefix: &'static str,
     ) {
         let seq = {
@@ -198,8 +237,20 @@ impl Backend {
         };
         let (patch, previous_entry) = {
             let mut state = self.state();
-            let patch =
-                build_channel_override_patch(state.guild_settings.get(&guild_id), channel_id, muted, message_notifications);
+            let local_mute_config = match (&mute_config, muted) {
+                (Some(c), Some(true)) => Some(json!({
+                    "end_time": c.end_time,
+                    "selected_time_window": c.selected_time_window,
+                })),
+                _ => None,
+            };
+            let patch = build_channel_override_patch_with(
+                state.guild_settings.get(&guild_id),
+                channel_id,
+                muted,
+                message_notifications,
+                mute_config,
+            );
             let mut merged = existing_channel_overrides(state.guild_settings.get(&guild_id).map(|s| &s.raw));
             let key = channel_id.to_string();
             let previous_entry = merged.get(&key).cloned();
@@ -211,7 +262,7 @@ impl Backend {
             entry.insert("channel_id".to_owned(), Value::String(key.clone()));
             if let Some(m) = muted {
                 entry.insert("muted".to_owned(), Value::Bool(m));
-                entry.insert("mute_config".to_owned(), Value::Null);
+                entry.insert("mute_config".to_owned(), local_mute_config.unwrap_or(Value::Null));
             } else {
                 entry.entry("muted".to_owned()).or_insert(Value::Bool(false));
             }
@@ -594,5 +645,71 @@ mod tests {
         );
         assert!(state.is_channel_muted(Some(guild), target, 0));
         assert!(!state.is_channel_muted(Some(guild), sibling, 0));
+    }
+
+    use chrono::{TimeZone as _, Utc};
+
+
+    #[test]
+    fn mute_config_for_sets_end_time_and_ms_window() {
+        let now = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).single().expect("valid time");
+        let c = mute_config_for(now, Some(15 * 60_000)).expect("config");
+        assert_eq!(c.selected_time_window, 900_000);
+        assert_eq!(c.end_time.as_deref(), Some("2026-01-01T00:15:00.000Z"));
+        let c = mute_config_for(now, Some(3 * 24 * 60 * 60_000)).expect("config");
+        assert_eq!(c.end_time.as_deref(), Some("2026-01-04T00:00:00.000Z"));
+        assert_eq!(c.selected_time_window, 259_200_000);
+    }
+
+    #[test]
+    fn indefinite_mute_has_no_config() {
+        let now = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).single().expect("valid time");
+        assert!(mute_config_for(now, None).is_none());
+        let patch = build_channel_override_patch_with(None, Snowflake(5), Some(true), None, None);
+        let ov = &patch.channel_overrides.flatten().expect("overrides")["5"];
+        assert_eq!(ov.muted, Some(true));
+        assert_eq!(ov.mute_config, Some(None));
+    }
+
+    #[test]
+    fn timed_mute_patch_carries_config_and_unmute_clears_it() {
+        let now = Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).single().expect("valid time");
+        let cfg = mute_config_for(now, Some(60 * 60_000));
+        let patch = build_channel_override_patch_with(None, Snowflake(5), Some(true), None, cfg.clone());
+        let ov = &patch.channel_overrides.flatten().expect("overrides")["5"];
+        assert_eq!(ov.mute_config, Some(cfg.clone()));
+        let patch = build_channel_override_patch_with(None, Snowflake(5), Some(false), None, cfg);
+        let ov = &patch.channel_overrides.flatten().expect("overrides")["5"];
+        assert_eq!(ov.muted, Some(false));
+        assert_eq!(ov.mute_config, Some(None));
+    }
+
+    #[test]
+    fn expired_end_time_is_not_muted_and_rollback_keeps_sibling() {
+        let mut state = ClientState::new();
+        let guild = Snowflake(1);
+        let target = Snowflake(11);
+        let sibling = Snowflake(12);
+        state.apply(&Dispatch {
+            t: "USER_GUILD_SETTINGS_UPDATE".to_owned(),
+            s: 1,
+            d: json!({
+                "guild_id": guild.to_string(),
+                "channel_overrides": {
+                    target.to_string(): {
+                        "channel_id": target.to_string(), "muted": true,
+                        "mute_config": {"end_time": "2026-01-01T00:15:00.000Z", "selected_time_window": 900000}
+                    },
+                    sibling.to_string(): {"channel_id": sibling.to_string(), "muted": true}
+                }
+            }),
+        });
+        let before = Utc.with_ymd_and_hms(2026, 1, 1, 0, 14, 0).single().expect("t").timestamp_millis();
+        let after = Utc.with_ymd_and_hms(2026, 1, 1, 0, 16, 0).single().expect("t").timestamp_millis();
+        assert!(state.is_channel_muted(Some(guild), target, before));
+        assert!(!state.is_channel_muted(Some(guild), target, after));
+        apply_channel_mute_rollback(&mut state, Some(guild), target, None);
+        assert!(!state.is_channel_muted(Some(guild), target, before));
+        assert!(state.is_channel_muted(Some(guild), sibling, before));
     }
 }

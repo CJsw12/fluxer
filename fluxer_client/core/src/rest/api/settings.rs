@@ -92,7 +92,7 @@ pub struct UserSettingsPatch {
 pub struct MuteConfig {
     /// ISO 8601 end time; `None` serializes as `null` (muted until unmuted).
     pub end_time: Option<String>,
-    /// Selected duration in seconds (the web client's `selected_time_window`).
+    /// Selected duration in milliseconds (the web client's `selected_time_window`, `MuteOptions.ts`).
     pub selected_time_window: i64,
 }
 

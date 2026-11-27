@@ -34,6 +34,9 @@ pub struct UserProfileFull {
     pub guild_member: Option<GuildMemberSummary>,
     #[serde(default)]
     pub mutual_guilds: Option<Vec<MutualGuild>>,
+    /// `with_mutual_friends=true` users; `null`/absent -> `None`.
+    #[serde(default)]
+    pub mutual_friends: Option<Vec<ProfileUser>>,
 }
 
 /// The profile's user subset. `username` falls back to an empty string when

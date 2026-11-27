@@ -213,6 +213,17 @@ impl ClientView {
         }
     }
 
+    /// Re-requests the capture source list; the modal keeps its selected ID, and the
+    /// render resolves it against the refreshed list (Missing if it disappeared).
+    pub(crate) fn refresh_screen_share_sources(&mut self, cx: &mut Context<Self>) {
+        if !matches!(self.overlay, Overlay::ScreenSharePicker(_)) {
+            return;
+        }
+        self.backend.request_screen_sources();
+        self.voice = self.backend.voice_snapshot();
+        cx.notify();
+    }
+
     pub(crate) fn set_screen_share_picker_resolution(
         &mut self,
         resolution: String,
@@ -260,6 +271,12 @@ impl ClientView {
         }) else {
             return;
         };
+        let tab_sources = ui::screen_share_modal::sources_for_tab(&self.voice.screen_sources, modal.tab);
+        let mut modal = modal;
+        match ui::screen_share_modal::resolve_selection(&tab_sources, modal.selected_source_id) {
+            ui::screen_share_modal::Selection::Ok(id) => modal.selected_source_id = Some(id),
+            ui::screen_share_modal::Selection::Missing | ui::screen_share_modal::Selection::Empty => return,
+        }
         let opts = modal.to_options(self.prefs.data.video_bitrate_kbps);
         match self.backend.start_screen_share_with_options(opts) {
             Ok(()) => {

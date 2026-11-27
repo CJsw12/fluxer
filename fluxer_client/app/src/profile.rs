@@ -11,7 +11,7 @@
 use fluxer_client_core::rest::{
     GuildMemberSummary, PROFILE_FLAG_AVATAR_UNSET, PROFILE_FLAG_BANNER_UNSET, ProfileUser, UserProfileFull,
 };
-use fluxer_client_core::state::{ClientState, RelationshipKind, Snowflake, User};
+use fluxer_client_core::state::{ClientState, RelationshipKind, Snowflake, User, parse_timestamp_ms};
 
 use crate::format::{DEFAULT_AVATAR_COLORS, default_avatar_index, initials};
 
@@ -35,6 +35,21 @@ pub struct MutualGuildItem {
     pub nick: Option<String>,
 }
 
+/// A mutual friend row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MutualFriendItem {
+    pub id: Snowflake,
+    pub name: String,
+    pub initials: String,
+}
+
+/// The voice channel the profile user is currently in.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VoiceActivityItem {
+    pub channel_name: String,
+    pub guild_name: Option<String>,
+}
+
 /// Everything the profile surface draws, built under the state lock.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProfileCard {
@@ -51,6 +66,14 @@ pub struct ProfileCard {
     pub pronouns: Option<String>,
     pub roles: Vec<ProfileRole>,
     pub mutual_guilds: Vec<MutualGuildItem>,
+    /// Empty when the fetch has no `mutual_friends` (section hidden).
+    pub mutual_friends: Vec<MutualFriendItem>,
+    /// Account creation date from the user-id snowflake, e.g. `Nov 28, 2026`.
+    pub created_date: Option<String>,
+    /// Guild join date from loaded member state; `None` outside a guild.
+    pub joined_date: Option<String>,
+    /// `None` unless the user is in a voice channel (see `voice_activity_item`).
+    pub voice_activity: Option<VoiceActivityItem>,
     pub note: String,
     pub is_self: bool,
     pub is_blocked: bool,
@@ -307,6 +330,33 @@ pub fn build_profile_card(
         })
         .unwrap_or_default();
 
+    let mutual_friends = fetched
+        .and_then(|f| f.mutual_friends.as_deref())
+        .map(|friends| {
+            friends
+                .iter()
+                .map(|friend| {
+                    let name = non_empty(friend.global_name.as_deref())
+                        .or_else(|| non_empty(Some(friend.username.as_str())))
+                        .unwrap_or("Unknown")
+                        .to_owned();
+                    MutualFriendItem { id: friend.id, initials: initials(&name), name }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let created_date = Some(format_date_utc(user_id.timestamp_ms() as i64));
+    let joined_date = state_member
+        .and_then(|member| member.joined_at.as_deref())
+        .and_then(parse_timestamp_ms)
+        .map(format_date_utc);
+    let voice_activity = state.user_voice_channel(user_id, guild_id).and_then(|(voice_guild, channel)| {
+        voice_activity_item(
+            state.channels.get(&channel).and_then(|c| c.name.as_deref()),
+            state.guilds.get(&voice_guild).map(|g| g.name.as_str()),
+        )
+    });
+
     let relationship = state.relationship_kind(user_id);
     ProfileCard {
         user_id,
@@ -322,6 +372,10 @@ pub fn build_profile_card(
         pronouns,
         roles,
         mutual_guilds,
+        mutual_friends,
+        created_date,
+        joined_date,
+        voice_activity,
         note: state.note(user_id).unwrap_or_default().to_owned(),
         is_self: state.current_user_id() == Some(user_id),
         is_blocked: relationship == Some(RelationshipKind::Blocked),
@@ -330,6 +384,31 @@ pub fn build_profile_card(
         loaded: fetched.is_some(),
     }
 }
+
+/// `Mon D, YYYY` (UTC) for Unix milliseconds.
+pub fn format_date_utc(ms: i64) -> String {
+    const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    let days = ms.div_euclid(86_400_000);
+    // Howard Hinnant's civil-from-days.
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    let name = MONTHS.get((month - 1) as usize).copied().unwrap_or("Jan");
+    format!("{name} {day}, {year}")
+}
+
+/// Voice card content; hidden (`None`) when the user is not in a channel.
+pub fn voice_activity_item(channel_name: Option<&str>, guild_name: Option<&str>) -> Option<VoiceActivityItem> {
+    let channel_name = non_empty(channel_name)?.to_owned();
+    Some(VoiceActivityItem { channel_name, guild_name: non_empty(guild_name).map(str::to_owned) })
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -440,6 +519,7 @@ mod tests {
                 roles: vec![Snowflake(100), Snowflake(3), Snowflake(2), Snowflake(4), Snowflake(999)],
                 profile_flags: 0,
             }),
+            mutual_friends: None,
             mutual_guilds: Some(vec![
                 MutualGuild { id: Snowflake(100), nick: Some("MyNick".to_owned()) },
                 MutualGuild { id: Snowflake(999), nick: None },
@@ -578,6 +658,7 @@ mod tests {
             user_profile: Some(profile_data(None, None, None, banner_color, accent_color)),
             guild_member_profile: None,
             guild_member: None,
+            mutual_friends: None,
             mutual_guilds: None,
         };
         build_profile_card(&state, None, Snowflake(user_id), None, Some(&fetched)).banner_color
@@ -617,6 +698,7 @@ mod tests {
                 roles: Vec::new(),
                 profile_flags: 0,
             }),
+            mutual_friends: None,
             mutual_guilds: None,
         };
 
@@ -670,6 +752,7 @@ mod tests {
                 roles: vec![Snowflake(100), Snowflake(5)],
                 profile_flags: 0,
             }),
+            mutual_friends: None,
             mutual_guilds: None,
         };
 
@@ -710,5 +793,54 @@ mod tests {
         assert_eq!(card_for("alice", None, Some("0"), None).username_tag, "alice");
         assert_eq!(card_for("alice", None, Some(""), None).username_tag, "alice");
         assert_eq!(card_for("alice", None, None, None).username_tag, "alice");
+    }
+
+    #[test]
+    fn format_date_utc_from_snowflake_and_epoch() {
+        assert_eq!(format_date_utc(0), "Jan 1, 1970");
+        assert_eq!(format_date_utc(1_420_070_400_000), "Jan 1, 2015");
+        assert_eq!(format_date_utc(Snowflake(0).timestamp_ms() as i64), "Jan 1, 2015");
+        assert_eq!(format_date_utc(1_709_164_800_000), "Feb 29, 2024");
+    }
+
+    #[test]
+    fn voice_activity_hidden_without_channel() {
+        assert_eq!(voice_activity_item(None, Some("G")), None);
+        assert_eq!(voice_activity_item(Some(""), Some("G")), None);
+        let item = voice_activity_item(Some("Lounge"), Some("G"));
+        assert_eq!(item.map(|i| (i.channel_name, i.guild_name)), Some(("Lounge".to_owned(), Some("G".to_owned()))));
+    }
+
+    #[test]
+    fn mutual_friends_parse_array_empty_null_missing() {
+        let parse = |v: &str| serde_json::from_str::<UserProfileFull>(v).map(|p| p.mutual_friends);
+        assert_eq!(parse(r#"{"mutual_friends":[{"id":"5","username":"bob"}]}"#).ok().flatten().map(|f| f.len()), Some(1));
+        assert_eq!(parse(r#"{"mutual_friends":[]}"#).ok(), Some(Some(Vec::new())));
+        assert_eq!(parse(r#"{"mutual_friends":null}"#).ok(), Some(None));
+        assert_eq!(parse(r#"{}"#).ok(), Some(None));
+    }
+
+    #[test]
+    fn card_mutual_friends_and_membership_sections() {
+        let state = ClientState::new();
+        let mut fetched = fetched_profile();
+        fetched.mutual_friends = Some(vec![ProfileUser {
+            id: Snowflake(5),
+            username: "bob".to_owned(),
+            discriminator: None,
+            global_name: Some("Bobby".to_owned()),
+            avatar: None,
+            avatar_color: None,
+            banner: None,
+            bot: false,
+        }]);
+        let card = build_profile_card(&state, None, Snowflake(10), None, Some(&fetched));
+        assert_eq!(card.mutual_friends.len(), 1);
+        assert_eq!(card.mutual_friends[0].name, "Bobby");
+        assert_eq!(card.created_date.as_deref(), Some("Jan 1, 2015"));
+        assert_eq!(card.joined_date, None);
+        assert!(card.voice_activity.is_none());
+        let none = build_profile_card(&state, None, Snowflake(10), None, None);
+        assert!(none.mutual_friends.is_empty());
     }
 }

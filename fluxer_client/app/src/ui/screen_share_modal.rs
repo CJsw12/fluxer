@@ -2,7 +2,7 @@
 //! Allows choosing between Screens / Applications, capture source, resolution,
 //! frame rate, codec, and system audio before clicking `"Go Live"`.
 
-use gpui_kit::component::Sizable as _;
+use gpui_kit::component::{Disableable as _, Sizable as _};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::{AnyElement, Context, FontWeight, Role, SharedString, div, prelude::*, px};
@@ -85,35 +85,56 @@ impl ScreenSharePickerModal {
     }
 }
 
+/// Result of matching the modal's selected source ID against the current source list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Selection {
+    /// A concrete source is selected (explicitly, or the first one when nothing was picked yet).
+    Ok(u64),
+    /// The previously selected source ID is no longer in the list.
+    Missing,
+    /// There are no sources to pick from.
+    Empty,
+}
+
+/// Pure selection check; `sources` must already be filtered to the active tab.
+pub fn resolve_selection(sources: &[ScreenSourceInfo], selected_id: Option<u64>) -> Selection {
+    match (sources.first(), selected_id) {
+        (None, _) => Selection::Empty,
+        (Some(first), None) => Selection::Ok(first.id),
+        (Some(_), Some(id)) if sources.iter().any(|s| s.id == id) => Selection::Ok(id),
+        (Some(_), Some(_)) => Selection::Missing,
+    }
+}
+
+pub fn go_live_enabled(selection: Selection) -> bool {
+    matches!(selection, Selection::Ok(_))
+}
+
+/// Sources belonging to the picker tab, in list order.
+pub fn sources_for_tab(all: &[ScreenSourceInfo], tab: ScreenShareTab) -> Vec<ScreenSourceInfo> {
+    let want_kind = match tab {
+        ScreenShareTab::Screens => "screen",
+        ScreenShareTab::Applications => "window",
+    };
+    all.iter()
+        .filter(|s| s.kind.eq_ignore_ascii_case(want_kind))
+        .cloned()
+        .collect()
+}
+
 pub fn render(
     view: &ClientView,
     modal: &ScreenSharePickerModal,
     theme: &Theme,
     cx: &mut Context<ClientView>,
 ) -> AnyElement {
-    let want_kind = match modal.tab {
-        ScreenShareTab::Screens => "screen",
-        ScreenShareTab::Applications => "window",
+    let sources = sources_for_tab(&view.voice.screen_sources, modal.tab);
+    let selection = resolve_selection(&sources, modal.selected_source_id);
+    let selected_id = match selection {
+        Selection::Ok(id) => Some(id),
+        Selection::Missing | Selection::Empty => None,
     };
-    let mut sources: Vec<ScreenSourceInfo> = view
-        .voice
-        .screen_sources
-        .iter()
-        .filter(|s| s.kind.eq_ignore_ascii_case(want_kind))
-        .cloned()
-        .collect();
-    if modal.tab == ScreenShareTab::Screens && sources.is_empty() {
-        sources.push(ScreenSourceInfo {
-            id: 0,
-            kind: "screen".to_owned(),
-            title: l10n::tr("Primary Display"),
-            display_id: 0,
-        });
-    }
-
-    let selected_id = modal
-        .selected_source_id
-        .or_else(|| sources.first().map(|s| s.id));
+    let source_count = sources.len();
 
     let tabs = div()
         .flex()
@@ -172,12 +193,17 @@ pub fn render(
         .bg(theme.background);
 
     if sources.is_empty() {
+        let empty_text = match modal.tab {
+            ScreenShareTab::Screens => "No capturable screens found",
+            ScreenShareTab::Applications => "No capturable application windows found",
+        };
         source_list = source_list.child(
             div()
                 .py_4()
                 .text_xs()
                 .text_color(theme.muted_foreground)
-                .child(l10n::tr("No capturable application windows found")),
+                .flx("screen-share-empty")
+                .child(l10n::tr(empty_text)),
         );
     } else {
         for (idx, src) in sources.into_iter().enumerate() {
@@ -244,6 +270,40 @@ pub fn render(
             );
         }
     }
+
+    let missing_notice = (selection == Selection::Missing).then(|| {
+        div()
+            .text_xs()
+            .text_color(theme.muted_foreground)
+            .flx("screen-share-missing-source")
+            .child(l10n::tr("The selected source is no longer available. Pick another source."))
+    });
+
+    let source_header = div()
+        .flex()
+        .flex_row()
+        .items_center()
+        .justify_between()
+        .child(
+            div()
+                .text_xs()
+                .text_color(theme.muted_foreground)
+                .child(format!("{} {}", source_count, l10n::tr("sources"))),
+        )
+        .child(
+            div()
+                .debug_selector(|| "screen-share-refresh-btn".to_owned())
+                .flx("screen-share-refresh")
+                .child(
+                    Button::new("screen-share-refresh-btn")
+                        .ghost()
+                        .xsmall()
+                        .label(l10n::tr("Refresh sources"))
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.refresh_screen_share_sources(cx);
+                        })),
+                ),
+        );
 
     let resolution_row = div()
         .flex()
@@ -439,6 +499,7 @@ pub fn render(
                     Button::new("screen-share-go-live-btn")
                         .primary()
                         .small()
+                        .disabled(!go_live_enabled(selection))
                         .label(l10n::tr("Go Live"))
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.confirm_screen_share_picker(window, cx);
@@ -481,7 +542,9 @@ pub fn render(
                 ),
         )
         .child(tabs)
+        .child(source_header)
         .child(source_list)
+        .children(missing_notice)
         .child(resolution_row)
         .child(fps_row)
         .child(codec_row)

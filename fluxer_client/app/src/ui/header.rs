@@ -70,7 +70,16 @@ fn render_header_icon_button(
                 .child(hdr_icon(icon, color)),
         )
         .when(hovered, |d| {
-            d.child(rail_tooltip::below(tooltip_label, tooltip_keys, align_right, theme))
+            let tt = rail_tooltip::below(tooltip_label, tooltip_keys, align_right, theme);
+            if flx.ends_with("toggle-favorite") {
+                d.child(div().flx("channel.channel-header.tooltip--9").child(tt))
+            } else {
+                d.child(
+                    div()
+                        .flx("channel.channel-header-components.channel-header-icon.tooltip--2")
+                        .child(tt),
+                )
+            }
         })
         .into_any_element()
 }
@@ -319,22 +328,30 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             this.toggle_pins_popout(ev.position(), window, cx);
                         }),
                     ))
-                    .child(render_header_icon_button(
-                        "header-favorite-btn",
-                        "channel.channel-header.icon-button.toggle-favorite",
-                        AppIcon::StarBold,
-                        l10n::tr("Add to favorites"),
-                        l10n::tr("Add to favorites"),
-                        &[],
-                        false,
-                        false,
-                        view.hovered_header_item == Some(HeaderHoverTarget::Favorite),
-                        theme,
-                        cx.listener(|this, hovered: &bool, _, cx| {
-                            this.set_header_hover(HeaderHoverTarget::Favorite, *hovered, cx);
-                        }),
-                        |_, _, _| {},
-                    ))
+                    .child({
+                        let is_favorited = false; // TODO(backlog): wire per-channel favorite state
+                        let fav_label = if is_favorited {
+                            l10n::tr("Remove from favorites")
+                        } else {
+                            l10n::tr("Add to favorites")
+                        };
+                        render_header_icon_button(
+                            "header-favorite-btn",
+                            "channel.channel-header.icon-button.toggle-favorite",
+                            AppIcon::StarBold,
+                            fav_label.clone(),
+                            fav_label,
+                            &[],
+                            false,
+                            is_favorited,
+                            view.hovered_header_item == Some(HeaderHoverTarget::Favorite),
+                            theme,
+                            cx.listener(|this, hovered: &bool, _, cx| {
+                                this.set_header_hover(HeaderHoverTarget::Favorite, *hovered, cx);
+                            }),
+                            |_, _, _| {},
+                        )
+                    })
                 })
                 .when(view.member_target.is_some() || view.group_dm.is_some(), |d| {
                     let members_label = if open {

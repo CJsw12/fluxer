@@ -86,7 +86,7 @@ CSS_VISIBILITY_PROP_RE = re.compile(
 
 # Rust inspection patterns
 RUST_FLX_RE = re.compile(r'\.flx(?:_text)?\(\s*"([^"]+)"')
-RUST_TOOLTIP_RE = re.compile(r"\btooltip\b", re.IGNORECASE)
+RUST_TOOLTIP_RE = re.compile(r"\btooltip\b|rail_tooltip::", re.IGNORECASE)
 RUST_CONTEXT_MENU_COMP_RE = re.compile(r"\b([A-Z][A-Za-z0-9_]*ContextMenu)\b")
 RUST_RIGHT_CLICK_RE = re.compile(r"MouseButton::Right|context_menu_item")
 RUST_BUILTIN_SHORTCUT_RE = re.compile(r'should_run_builtin_shortcut\(\s*"([^"]+)"\s*\)')
@@ -130,9 +130,12 @@ def _line_of_offset(text: str, offset: int) -> int:
 def _nearby_flx(text: str, offset: int, window: int = 350) -> str | None:
     start = max(0, offset - window)
     end = min(len(text), offset + window)
-    snippet = text[start:end]
-    m = DATA_FLX_RE.search(snippet)
-    return m.group(1) if m else None
+    best: tuple[int, str] | None = None
+    for m in DATA_FLX_RE.finditer(text, start, end):
+        dist = abs(m.start() - offset)
+        if best is None or dist < best[0]:
+            best = (dist, m.group(1))
+    return best[1] if best else None
 
 
 def _camel_to_kebab(name: str) -> str:

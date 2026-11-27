@@ -34,11 +34,15 @@ struct StageParticipant {
     display_name: SharedString,
     avatar_url: Option<SharedString>,
     muted: bool,
+    moderator_muted: bool,
+    speak_denied: bool,
     deafened: bool,
+    moderator_deafened: bool,
     streaming: bool,
     speaking: bool,
     audio_level: u16,
     is_self: bool,
+    connection_id: Option<String>,
     watch_track: Option<TrackSubscriptionKey>,
 }
 
@@ -92,11 +96,31 @@ fn build_participants(view: &ClientView, channel_id: Snowflake) -> Vec<StagePart
             display_name,
             avatar_url,
             muted,
+            moderator_muted: if is_self {
+                view.voice.server_mute || member.mute
+            } else {
+                member.mute
+            },
+            speak_denied: if is_self {
+                view.voice.speak_denied || member.suppress
+            } else {
+                member.suppress
+            },
             deafened,
+            moderator_deafened: if is_self {
+                view.voice.server_deaf || member.deaf
+            } else {
+                member.deaf
+            },
             streaming,
             speaking: view.voice.is_speaking(member.user_id),
             audio_level: view.voice.audio_level_milli(member.user_id),
             is_self,
+            connection_id: if is_self {
+                view.voice.connection_id.clone()
+            } else {
+                None
+            },
             watch_track,
         });
     }
@@ -111,11 +135,15 @@ fn build_participants(view: &ClientView, channel_id: Snowflake) -> Vec<StagePart
                 display_name: user.name.clone(),
                 avatar_url: user.avatar_url.clone(),
                 muted: view.voice.effective_muted(),
+                moderator_muted: view.voice.server_mute,
+                speak_denied: view.voice.speak_denied,
                 deafened: view.voice.effective_deafened(),
+                moderator_deafened: view.voice.server_deaf,
                 streaming: view.voice.self_stream,
                 speaking: view.voice.is_speaking(user.id),
                 audio_level: view.voice.audio_level_milli(user.id),
                 is_self: true,
+                connection_id: view.voice.connection_id.clone(),
                 watch_track: None,
             },
         );
@@ -311,18 +339,37 @@ fn render_participant_tile(
                 .gap_1()
                 .child(
                     div()
+                        .id(("voice-tile-name", uid.0))
                         .flex_1()
                         .min_w_0()
                         .truncate()
                         .text_xs()
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(theme.on_fill)
+                        .flx("voice.voice-participant-tile.voice-participant-tile-inner.tooltip--5")
+                        .tooltip({
+                            let tip = participant.display_name.clone();
+                            move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
+                        })
                         .child(if participant.is_self {
                             format!("{} ({})", participant.display_name, l10n::tr("You"))
                         } else {
                             participant.display_name.to_string()
                         }),
                 )
+                .when_some(participant.connection_id.as_ref(), |d, conn_id| {
+                    let conn_label = format!("({conn_id})");
+                    let conn_tip: SharedString = format!("Connection: {conn_id}").into();
+                    d.child(
+                        div()
+                            .id(("voice-tile-conn", uid.0))
+                            .text_xs()
+                            .text_color(theme.on_fill)
+                            .flx("voice.voice-participant-tile.voice-participant-tile-inner.tooltip--6")
+                            .tooltip(move |window, cx| Tooltip::new(conn_tip.clone()).build(window, cx))
+                            .child(conn_label),
+                    )
+                })
                 .child(
                     div()
                         .flex()
@@ -330,19 +377,56 @@ fn render_participant_tile(
                         .items_center()
                         .gap_1()
                         .when(participant.muted, |d| {
+                            let mute_tip: SharedString = if participant.moderator_muted {
+                                l10n::tr("Muted by moderators").into()
+                            } else if participant.speak_denied {
+                                if participant.is_self {
+                                    l10n::tr("You can't speak in this channel").into()
+                                } else {
+                                    l10n::tr("This participant can't speak in this channel").into()
+                                }
+                            } else {
+                                l10n::tr("Muted").into()
+                            };
                             d.child(
                                 div()
+                                    .id(("voice-tile-muted", uid.0))
                                     .debug_selector(move || format!("voice-tile-muted-{}", uid.0))
+                                    .flx("voice.voice-participant-tile.voice-participant-tile-inner.tooltip--2")
+                                    .tooltip(move |window, cx| Tooltip::new(mute_tip.clone()).build(window, cx))
                                     .child(Icon::new(AppIcon::MicrophoneSlash).with_size(px(14.)).text_color(theme.danger)),
                             )
                         })
                         .when(participant.deafened, |d| {
+                            let deaf_tip: SharedString = if participant.moderator_deafened {
+                                if participant.is_self {
+                                    l10n::tr("You were deafened by moderators").into()
+                                } else {
+                                    l10n::tr("This participant was deafened by moderators").into()
+                                }
+                            } else if participant.is_self {
+                                l10n::tr("You are deafened").into()
+                            } else {
+                                l10n::tr("This participant is deafened").into()
+                            };
                             d.child(
                                 div()
+                                    .id(("voice-tile-deaf", uid.0))
                                     .debug_selector(move || format!("voice-tile-deaf-{}", uid.0))
+                                    .flx("voice.voice-participant-tile.voice-participant-tile-inner.tooltip--3")
+                                    .tooltip(move |window, cx| Tooltip::new(deaf_tip.clone()).build(window, cx))
                                     .child(Icon::new(AppIcon::SpeakerSlash).with_size(px(14.)).text_color(theme.danger)),
                             )
-                        }),
+                        })
+                        .child(
+                            div()
+                                .id(("voice-tile-device", uid.0))
+                                .flx("voice.voice-participant-tile.voice-participant-tile-inner.participant-icon--2")
+                                .tooltip(move |window, cx| {
+                                    Tooltip::new(l10n::tr("Desktop device")).build(window, cx)
+                                })
+                                .child(Icon::new(AppIcon::Monitor).with_size(px(14.)).text_color(theme.on_fill)),
+                        ),
                 ),
         );
 

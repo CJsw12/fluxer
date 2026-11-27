@@ -12,6 +12,7 @@ use gpui_kit::{
 };
 
 use crate::client_view::ClientView;
+use crate::parity_probe::FlxExt as _;
 use crate::profile::{ProfileCard, build_profile_card};
 use crate::theme::Theme;
 use crate::ui::avatar::{AvatarSpec, render_avatar};
@@ -355,11 +356,18 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
             None | Some(RelationshipKind::Unknown(_)) => {
                 actions = actions
                     .child(
-                        Button::new("profile-add-friend-btn")
-                            .ghost()
-                            .small()
-                            .label(l10n::tr("Add friend"))
-                            .on_click(cx.listener(move |this, _, _, _| this.backend.send_friend_request(user_id))),
+                        div()
+                            .id("profile-add-friend-wrap")
+                            .aria_label(l10n::tr("Send friend request"))
+                            .flx("user.user-profile-modal.render-primary-action-button.tooltip--5")
+                            .child(
+                                Button::new("profile-add-friend-btn")
+                                    .ghost()
+                                    .small()
+                                    .label(l10n::tr("Send friend request"))
+                                    .tooltip(l10n::tr("Send friend request"))
+                                    .on_click(cx.listener(move |this, _, _, _| this.backend.send_friend_request(user_id))),
+                            ),
                     )
                     .child(
                         Button::new("profile-block-btn")
@@ -372,11 +380,18 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
             Some(RelationshipKind::Friend) => {
                 actions = actions
                     .child(
-                        Button::new("profile-remove-friend-btn")
-                            .ghost()
-                            .small()
-                            .label(l10n::tr("Remove friend"))
-                            .on_click(cx.listener(move |this, _, _, _| this.backend.remove_relationship(user_id))),
+                        div()
+                            .id("profile-remove-friend-wrap")
+                            .aria_label(l10n::tr("Remove friend"))
+                            .flx("user.user-profile-modal.render-primary-action-button.tooltip")
+                            .child(
+                                Button::new("profile-remove-friend-btn")
+                                    .ghost()
+                                    .small()
+                                    .label(l10n::tr("Remove friend"))
+                                    .tooltip(l10n::tr("Remove friend"))
+                                    .on_click(cx.listener(move |this, _, _, _| this.backend.remove_relationship(user_id))),
+                            ),
                     )
                     .child(
                         Button::new("profile-block-btn")
@@ -389,11 +404,18 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
             Some(RelationshipKind::IncomingRequest) => {
                 actions = actions
                     .child(
-                        Button::new("profile-accept-btn")
-                            .primary()
-                            .small()
-                            .label(l10n::tr("Accept"))
-                            .on_click(cx.listener(move |this, _, _, _| this.backend.accept_friend_request(user_id))),
+                        div()
+                            .id("profile-accept-wrap")
+                            .aria_label(l10n::tr("Accept friend request"))
+                            .flx("user.user-profile-modal.render-primary-action-button.tooltip--3")
+                            .child(
+                                Button::new("profile-accept-btn")
+                                    .primary()
+                                    .small()
+                                    .label(l10n::tr("Accept friend request"))
+                                    .tooltip(l10n::tr("Accept friend request"))
+                                    .on_click(cx.listener(move |this, _, _, _| this.backend.accept_friend_request(user_id))),
+                            ),
                     )
                     .child(
                         Button::new("profile-ignore-btn")
@@ -413,11 +435,18 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
             Some(RelationshipKind::OutgoingRequest) => {
                 actions = actions
                     .child(
-                        Button::new("profile-cancel-req-btn")
-                            .ghost()
-                            .small()
-                            .label(l10n::tr("Cancel"))
-                            .on_click(cx.listener(move |this, _, _, _| this.backend.remove_relationship(user_id))),
+                        div()
+                            .id("profile-cancel-req-wrap")
+                            .aria_label(l10n::tr("Cancel friend request"))
+                            .flx("user.user-profile-modal.render-primary-action-button.tooltip--4")
+                            .child(
+                                Button::new("profile-cancel-req-btn")
+                                    .ghost()
+                                    .small()
+                                    .label(l10n::tr("Cancel friend request"))
+                                    .tooltip(l10n::tr("Cancel friend request"))
+                                    .on_click(cx.listener(move |this, _, _, _| this.backend.remove_relationship(user_id))),
+                            ),
                     )
                     .child(
                         Button::new("profile-block-btn")
@@ -429,11 +458,18 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
             }
             Some(RelationshipKind::Blocked) => {
                 actions = actions.child(
-                    Button::new("profile-unblock-btn")
-                        .ghost()
-                        .small()
-                        .label(l10n::tr("Unblock"))
-                        .on_click(cx.listener(move |this, _, _, _| this.backend.remove_relationship(user_id))),
+                    div()
+                        .id("profile-unblock-wrap")
+                        .aria_label(l10n::tr("Unblock user"))
+                        .flx("user.user-profile-modal.render-primary-action-button.tooltip--2")
+                        .child(
+                            Button::new("profile-unblock-btn")
+                                .ghost()
+                                .small()
+                                .label(l10n::tr("Unblock user"))
+                                .tooltip(l10n::tr("Unblock user"))
+                                .on_click(cx.listener(move |this, _, _, _| this.backend.remove_relationship(user_id))),
+                        ),
                 );
             }
         }

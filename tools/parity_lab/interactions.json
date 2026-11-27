@@ -14,28 +14,28 @@
   "summary": {
     "total": {
       "total": 770,
-      "present": 127,
-      "missing": 588,
-      "differs": 55
+      "present": 137,
+      "missing": 572,
+      "differs": 61
     },
     "by_category": {
       "resize_drag": {
         "total": 27,
-        "present": 11,
-        "missing": 12,
+        "present": 10,
+        "missing": 13,
         "differs": 4
       },
       "tooltips": {
         "total": 280,
-        "present": 12,
-        "missing": 258,
-        "differs": 10
+        "present": 23,
+        "missing": 244,
+        "differs": 13
       },
       "context_menus": {
         "total": 292,
         "present": 30,
-        "missing": 244,
-        "differs": 18
+        "missing": 241,
+        "differs": 21
       },
       "keybinds": {
         "total": 108,
@@ -384,15 +384,13 @@
         "file": "fluxer_app/src/features/user/components/modals/tabs/LinkedAccountsTab.tsx",
         "line": 189,
         "pattern": "drag-handle",
-        "flx": "user.linked-accounts-tab.connection-card.card"
+        "flx": "user.linked-accounts-tab.connection-card.card-drag-handle"
       },
-      "status": "present",
+      "status": "missing",
       "rust": {
-        "status": "present",
-        "matches": [
-          "fluxer_client/app/src/ui/settings/connections.rs:137"
-        ],
-        "reason": "matched data-flx 'user.linked-accounts-tab.connection-card.card'"
+        "status": "missing",
+        "matches": [],
+        "reason": "no matching resize/drag handle in fluxer_client/app/src"
       }
     },
     {
@@ -456,7 +454,7 @@
         "file": "fluxer_app/src/features/voice/components/compact_voice_call_view/CompactVoiceCallPlaceholderView.tsx",
         "line": 161,
         "pattern": "resize-pill",
-        "flx": "voice.compact-voice-call-view.compact-voice-call-placeholder-view.resize-handle.resize-key-down"
+        "flx": "voice.compact-voice-call-view.compact-voice-call-placeholder-view.resize-pill"
       },
       "status": "present",
       "rust": {
@@ -475,7 +473,7 @@
         "file": "fluxer_app/src/features/voice/components/compact_voice_call_view/CompactVoiceCallPlaceholderView.tsx",
         "line": 147,
         "pattern": "resizeHandle",
-        "flx": "voice.compact-voice-call-view.compact-voice-call-placeholder-view.compact-call-height-toggle-button"
+        "flx": "voice.compact-voice-call-view.compact-voice-call-placeholder-view.focus-ring"
       },
       "status": "present",
       "rust": {
@@ -494,15 +492,15 @@
         "file": "fluxer_app/src/features/voice/components/compact_voice_call_view/CompactVoiceCallViewInner.tsx",
         "line": 562,
         "pattern": "resize-pill",
-        "flx": "voice.compact-voice-call-view.compact-voice-call-view-inner.resize-handle.resize-key-down"
+        "flx": "voice.compact-voice-call-view.compact-voice-call-view-inner.resize-pill"
       },
       "status": "present",
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/voice_stage.rs:1309"
+          "fluxer_client/app/src/ui/voice_stage.rs:1401"
         ],
-        "reason": "matched data-flx 'voice.compact-voice-call-view.compact-voice-call-view-inner.resize-handle.resize-key-down'"
+        "reason": "matched data-flx 'voice.compact-voice-call-view.compact-voice-call-view-inner.resize-pill'"
       }
     },
     {
@@ -513,7 +511,7 @@
         "file": "fluxer_app/src/features/voice/components/compact_voice_call_view/CompactVoiceCallViewInner.tsx",
         "line": 548,
         "pattern": "resizeHandle",
-        "flx": "voice.compact-voice-call-view.compact-voice-call-view-inner.popped-out-overlay"
+        "flx": "voice.compact-voice-call-view.compact-voice-call-view-inner.focus-ring"
       },
       "status": "present",
       "rust": {
@@ -586,7 +584,7 @@
         "line": 197,
         "kind": "Tooltip",
         "detail": "text={grandfatheredTooltip} data-flx=\"app.plutonium.subscription-card.tooltip\"",
-        "flx": "app.plutonium.subscription-card.perks-button.scroll-to-perks--6"
+        "flx": "app.plutonium.subscription-card.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -604,7 +602,7 @@
         "line": 218,
         "kind": "Tooltip",
         "detail": "text={grandfatheredTooltip} data-flx=\"app.plutonium.subscription-card.tooltip--2\"",
-        "flx": "app.plutonium.subscription-card.perks-button.scroll-to-perks--7"
+        "flx": "app.plutonium.subscription-card.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -622,7 +620,7 @@
         "line": 182,
         "kind": "Tooltip",
         "detail": "text={tooltipText} data-flx=\"app.permission-components.permission-overwrite-toggle.tooltip\"",
-        "flx": "app.permission-components.permission-overwrite-toggle.overwrite-toggle-description"
+        "flx": "app.permission-components.permission-overwrite-toggle.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -640,7 +638,7 @@
         "line": 307,
         "kind": "Tooltip",
         "detail": "text={tooltipText} data-flx=\"app.permission-components.permission-role-toggle.tooltip\"",
-        "flx": "app.permission-components.permission-role-toggle.role-toggle"
+        "flx": "app.permission-components.permission-role-toggle.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -694,7 +692,7 @@
         "line": 586,
         "kind": "Tooltip",
         "detail": "text={i18n._(NOTIFICATION_SETTINGS_DESCRIPTOR)} position=\"top\" data-flx=\"app.floating.unread-channels-content.unread-cha",
-        "flx": "app.floating.unread-channels-content.unread-channel-card.collapse-icon"
+        "flx": "app.floating.unread-channels-content.unread-channel-card.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -712,7 +710,7 @@
         "line": 610,
         "kind": "Tooltip",
         "detail": "text={i18n._(MARK_AS_READ_DESCRIPTOR)} position=\"top\" data-flx=\"app.floating.unread-channels-content.unread-channel-card",
-        "flx": "app.floating.unread-channels-content.unread-channel-card.header-icon"
+        "flx": "app.floating.unread-channels-content.unread-channel-card.tooltip--3"
       },
       "status": "missing",
       "rust": {
@@ -730,7 +728,7 @@
         "line": 459,
         "kind": "Tooltip",
         "detail": "text={i18n._(COPY_USERNAME_DESCRIPTOR)} position=\"top\" data-flx=\"app.floating.user-area-popout.tooltip\"",
-        "flx": "app.floating.user-area-popout.profile-card-content"
+        "flx": "app.floating.user-area-popout.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -748,7 +746,7 @@
         "line": 160,
         "kind": "Tooltip",
         "detail": "text={channel.name} data-flx=\"app.channel-item.channel-item-core.tooltip\"",
-        "flx": "app.channel-item.channel-item-core.channel-item-core"
+        "flx": "app.channel-item.channel-item-core.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -766,7 +764,7 @@
         "line": 170,
         "kind": "Tooltip",
         "detail": "text={isChannelNameOverflowing ? channel.name : ''} data-flx=\"app.channel-item.channel-item-core.tooltip--2\"",
-        "flx": "app.channel-item.channel-item-core.tooltip"
+        "flx": "app.channel-item.channel-item-core.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -802,7 +800,7 @@
         "line": 733,
         "kind": "Tooltip",
         "detail": "text={i18n._(CREATE_CHANNEL_DESCRIPTOR)} data-flx=\"app.channel-item.tooltip--2\"",
-        "flx": "app.channel-item.channel-item-icon.invite-click"
+        "flx": "app.channel-item.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -820,7 +818,7 @@
         "line": 27,
         "kind": "Tooltip",
         "detail": "text={isNameOverflowing && name ? name : ''} data-flx=\"app.channel-item-content.tooltip\"",
-        "flx": "app.channel-item-content.category-content"
+        "flx": "app.channel-item-content.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -838,15 +836,13 @@
         "line": 48,
         "kind": "Tooltip",
         "detail": "text={name} data-flx=\"app.channel-item-content.tooltip--2\"",
-        "flx": "app.channel-item-content.category-name"
+        "flx": "app.channel-item-content.tooltip--2"
       },
-      "status": "differs",
+      "status": "missing",
       "rust": {
-        "status": "differs",
-        "matches": [
-          "fluxer_client/app/src/ui/channel_list.rs:674"
-        ],
-        "reason": "flx 'app.channel-item-content.category-name' exists in Rust without tooltip call"
+        "status": "missing",
+        "matches": [],
+        "reason": "no matching tooltip in fluxer_client/app/src"
       }
     },
     {
@@ -858,7 +854,7 @@
         "line": 52,
         "kind": "Tooltip",
         "detail": "text={isNameOverflowing && name ? name : ''} data-flx=\"app.channel-item-content.tooltip--3\"",
-        "flx": "app.channel-item-content.channel-item-actions"
+        "flx": "app.channel-item-content.tooltip--3"
       },
       "status": "missing",
       "rust": {
@@ -894,7 +890,7 @@
         "line": 595,
         "kind": "Tooltip",
         "detail": "text={i18n._(ADD_CHANNEL_DESCRIPTOR)} data-flx=\"app.favorites-channel-list-content.favorite-category-item.tooltip\"",
-        "flx": "app.favorites-channel-list-content.favorite-category-item.div--2"
+        "flx": "app.favorites-channel-list-content.favorite-category-item.tooltip"
       },
       "status": "differs",
       "rust": {
@@ -932,7 +928,7 @@
         "line": 1992,
         "kind": "Tooltip",
         "detail": "position=\"right\" type={'error'} maxWidth=\"xl\" size=\"large\" text={() =",
-        "flx": "app.guilds-layout.render-guild-navigation-row.guild-list-divider"
+        "flx": "app.guilds-layout.render-guild-navigation-row.guild-list-item-slot"
       },
       "status": "missing",
       "rust": {
@@ -956,7 +952,7 @@
       "rust": {
         "status": "differs",
         "matches": [
-          "fluxer_client/app/src/ui/user_panel.rs:315"
+          "fluxer_client/app/src/ui/user_panel.rs:322"
         ],
         "reason": "flx 'app.user-area.user-area-inner.controls-container' exists in Rust without tooltip call"
       }
@@ -988,7 +984,7 @@
         "line": 431,
         "kind": "Tooltip",
         "detail": "text={() =",
-        "flx": "app.user-area.user-area-inner.control-icon--3"
+        "flx": "app.user-area.user-area-inner.tooltip-with-keybind--3"
       },
       "status": "missing",
       "rust": {
@@ -1006,7 +1002,7 @@
         "line": 264,
         "kind": "Tooltip",
         "detail": "text={displayName} position=\"top\" data-flx=\"app.voice-participant-item.tooltip\"",
-        "flx": "app.voice-participant-item.icon-container"
+        "flx": "app.voice-participant-item.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -1024,15 +1020,13 @@
         "line": 65,
         "kind": "Tooltip",
         "detail": "text={i18n._(CAMERA_ON_DESCRIPTOR)} data-flx=\"app.voice-state-icons.tooltip\"",
-        "flx": "app.voice-state-icons.container"
+        "flx": "app.voice-state-icons.tooltip"
       },
-      "status": "differs",
+      "status": "missing",
       "rust": {
-        "status": "differs",
-        "matches": [
-          "fluxer_client/app/src/ui/channel_list.rs:1046"
-        ],
-        "reason": "flx 'app.voice-state-icons.container' exists in Rust without tooltip call"
+        "status": "missing",
+        "matches": [],
+        "reason": "no matching tooltip in fluxer_client/app/src"
       }
     },
     {
@@ -1044,7 +1038,7 @@
         "line": 74,
         "kind": "Tooltip",
         "detail": "text={muteLabel} data-flx=\"app.voice-state-icons.tooltip--2\"",
-        "flx": "app.voice-state-icons.tooltip"
+        "flx": "app.voice-state-icons.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -1062,7 +1056,7 @@
         "line": 83,
         "kind": "Tooltip",
         "detail": "text={deafenLabel} data-flx=\"app.voice-state-icons.tooltip--3\"",
-        "flx": "app.voice-state-icons.tooltip--2"
+        "flx": "app.voice-state-icons.tooltip--3"
       },
       "status": "missing",
       "rust": {
@@ -1080,7 +1074,7 @@
         "line": 85,
         "kind": "tooltip-prop",
         "detail": "{() => ( <TooltipWithKeybind label={buttonLabel}",
-        "flx": "app.sidebar-nav.add-guild-button.handle-context-menu.menu-item.add-guild--2"
+        "flx": "app.sidebar-nav.add-guild-button.tooltip-with-keybind"
       },
       "status": "missing",
       "rust": {
@@ -1116,7 +1110,7 @@
         "line": 55,
         "kind": "tooltip-prop",
         "detail": "{() => i18n._(DOWNLOAD_DESCRIPTOR)}",
-        "flx": "app.sidebar-nav.download-button.handle-context-menu.menu-item.hide-download-button"
+        "flx": "app.sidebar-nav.download-button.icon-text"
       },
       "status": "missing",
       "rust": {
@@ -1152,7 +1146,7 @@
         "line": 131,
         "kind": "Tooltip",
         "detail": "position=\"right\" size=\"large\" text={i18n._(homeDescriptor)} data-flx=\"app.sidebar-nav.fluxer-button.tooltip\"",
-        "flx": "app.sidebar-nav.fluxer-button.handle-context-menu.fluxer-button-context-menu"
+        "flx": "app.sidebar-nav.fluxer-button.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -1170,7 +1164,7 @@
         "line": 701,
         "kind": "Tooltip",
         "detail": "position=\"right\" maxWidth=\"xl\" size=\"large\" text={() =",
-        "flx": "app.sidebar-nav.guild-folder-item.folder-container"
+        "flx": "app.sidebar-nav.guild-folder-item.anime-presence"
       },
       "status": "missing",
       "rust": {
@@ -1206,7 +1200,7 @@
         "line": 330,
         "kind": "Tooltip",
         "detail": "position=\"right\" size=\"large\" text={tooltipContent} data-flx=\"app.sidebar-nav.guild-list-dm-item.dm-list-item.tooltip\"",
-        "flx": "app.sidebar-nav.guild-list-dm-item.tooltip-content.avatar-stack"
+        "flx": "app.sidebar-nav.guild-list-dm-item.dm-list-item.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -1224,7 +1218,7 @@
         "line": 106,
         "kind": "Tooltip",
         "detail": "position=\"right\" maxWidth=\"xl\" size=\"large\" text={renderTooltip} data-flx=\"app.sidebar-nav.guild-list-item-content.toolt",
-        "flx": "app.sidebar-nav.guild-list-item-content.render-tooltip.guild-list-item-tooltip"
+        "flx": "app.sidebar-nav.guild-list-item-content.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -1242,7 +1236,7 @@
         "line": 57,
         "kind": "tooltip-prop",
         "detail": "{() => ( <TooltipWithKeybind label={i18n._(HELP_CENTER_DESCRIPTOR)}",
-        "flx": "app.sidebar-nav.help-button.handle-context-menu.menu-item.hide-help-button"
+        "flx": "app.sidebar-nav.help-button.tooltip-with-keybind"
       },
       "status": "missing",
       "rust": {
@@ -1278,7 +1272,7 @@
         "line": 108,
         "kind": "Tooltip",
         "detail": "text={getEmojiNameWithColons(reaction.emoji)} position=\"left\" data-flx=\"app.message-reactions-content.reaction-filter-bu",
-        "flx": "app.message-reactions-content.reaction-filter-button.div--2"
+        "flx": "app.message-reactions-content.reaction-filter-button.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -1296,7 +1290,7 @@
         "line": 351,
         "kind": "Tooltip",
         "detail": "text={fullText} position={tooltipPosition} data-flx=\"app.custom-status-display.custom-status-display.tooltip\"",
-        "flx": "app.custom-status-display.custom-status-display.edit-pencil-icon"
+        "flx": "app.custom-status-display.custom-status-display.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -1314,7 +1308,7 @@
         "line": 478,
         "kind": "Tooltip",
         "detail": "text={fullText} position={tooltipPosition} data-flx=\"app.custom-status-display.custom-status-display.tooltip--2\"",
-        "flx": "app.custom-status-display.custom-status-display.truncated-text--2"
+        "flx": "app.custom-status-display.custom-status-display.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -1350,7 +1344,7 @@
         "line": 695,
         "kind": "Tooltip",
         "detail": "text={frame.backLabel} position=\"bottom\" data-flx=\"auth.accounts.account-switcher-modal.auth-card.back-tooltip\"",
-        "flx": "auth.accounts.account-switcher-modal.auth-card"
+        "flx": "auth.accounts.account-switcher-modal.auth-card.back-tooltip"
       },
       "status": "missing",
       "rust": {
@@ -1368,7 +1362,7 @@
         "line": 43,
         "kind": "Tooltip",
         "detail": "text={renderTooltip} position=\"top\" maxWidth=\"none\" data-flx=\"auth.accounts.account-switcher.instance-badge.tooltip-trig",
-        "flx": "auth.accounts.account-switcher.instance-badge.official"
+        "flx": "auth.accounts.account-switcher.instance-badge.tooltip-trigger"
       },
       "status": "missing",
       "rust": {
@@ -1422,7 +1416,7 @@
         "line": 542,
         "kind": "Tooltip",
         "detail": "text={attachment.filename} data-flx=\"channel.channel-attachment-area.sortable-attachment-item.tooltip\"",
-        "flx": "channel.channel-attachment-area.sortable-attachment-item.filename-container"
+        "flx": "channel.channel-attachment-area.sortable-attachment-item.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -1458,13 +1452,15 @@
         "line": 1093,
         "kind": "Tooltip",
         "detail": "text={isFavorited ? i18n._(REMOVE_FROM_FAVORITES_DESCRIPTOR) : i18n._(ADD_TO_FAVORITES_DESCRIPTOR)} position=\"bottom\" da",
-        "flx": "channel.channel-header.channel-header-icon.open-add-friends-to-group"
+        "flx": "channel.channel-header.tooltip--9"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:75"
+        ],
+        "reason": "flx 'channel.channel-header.tooltip--9' has tooltip in Rust"
       }
     },
     {
@@ -1476,13 +1472,15 @@
         "line": 650,
         "kind": "Tooltip",
         "detail": "text={isDMNameOverflowing && directMessageName ? directMessageName : ''} data-flx=\"channel.channel-header.tooltip\"",
-        "flx": "channel.channel-header.status-aware-avatar"
+        "flx": "channel.channel-header.dm-name-wrapper"
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs"
+        ],
+        "reason": "area 'channelheader' has tooltips in Rust, exact element unverified"
       }
     },
     {
@@ -1494,13 +1492,15 @@
         "line": 681,
         "kind": "Tooltip",
         "detail": "text={isGroupDMNameOverflowing && groupDMName ? groupDMName : ''} data-flx=\"channel.channel-header.tooltip--2\"",
-        "flx": "channel.channel-header.caret-right"
+        "flx": "channel.channel-header.group-dm-avatar"
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs"
+        ],
+        "reason": "area 'channelheader' has tooltips in Rust, exact element unverified"
       }
     },
     {
@@ -1512,13 +1512,15 @@
         "line": 704,
         "kind": "Tooltip",
         "detail": "text={isGuildChannelNameOverflowing && channelName ? channelName : ''} data-flx=\"channel.channel-header.tooltip--3\"",
-        "flx": "channel.channel-header.caret-right--2"
+        "flx": "channel.channel-header.tooltip--3"
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs"
+        ],
+        "reason": "area 'channelheader' has tooltips in Rust, exact element unverified"
       }
     },
     {
@@ -1530,13 +1532,15 @@
         "line": 756,
         "kind": "Tooltip",
         "detail": "text={isDMNameOverflowing ? directMessageName : ''} data-flx=\"channel.channel-header.tooltip--4\"",
-        "flx": "channel.channel-header.status-aware-avatar--2"
+        "flx": "channel.channel-header.dm-name-wrapper--2"
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:159"
+        ],
+        "reason": "flx 'channel.channel-header.dm-name-wrapper--2' exists in Rust without tooltip call"
       }
     },
     {
@@ -1548,13 +1552,15 @@
         "line": 804,
         "kind": "Tooltip",
         "detail": "text={isGroupDMNameOverflowing && groupDMName ? groupDMName : ''} data-flx=\"channel.channel-header.tooltip--6\"",
-        "flx": "channel.channel-header.group-dm-header-inner"
+        "flx": "channel.channel-header.dm-name-wrapper--3"
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs"
+        ],
+        "reason": "area 'channelheader' has tooltips in Rust, exact element unverified"
       }
     },
     {
@@ -1566,13 +1572,15 @@
         "line": 831,
         "kind": "Tooltip",
         "detail": "text={isGuildChannelNameOverflowing && channelName ? channelName : ''} data-flx=\"channel.channel-header.tooltip--7\"",
-        "flx": "channel.channel-header.group-dm-edit-icon"
+        "flx": "channel.channel-header.tooltip--7"
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs"
+        ],
+        "reason": "area 'channelheader' has tooltips in Rust, exact element unverified"
       }
     },
     {
@@ -1584,13 +1592,15 @@
         "line": 861,
         "kind": "Tooltip",
         "detail": "text={isGuildChannelNameOverflowing && channelName ? channelName : ''} data-flx=\"channel.channel-header.tooltip--8\"",
-        "flx": "channel.channel-header.thread-parent-crumb"
+        "flx": "channel.channel-header.tooltip--8"
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs"
+        ],
+        "reason": "area 'channelheader' has tooltips in Rust, exact element unverified"
       }
     },
     {
@@ -1602,7 +1612,7 @@
         "line": 163,
         "kind": "Tooltip",
         "detail": "text={ shouldMention ? i18n._(CLICK_TO_DISABLE_PINGING_THE_USER_YOU_RE_DESCRIPTOR) : i18n._(CLICK_TO_ENABLE_PINGING_THE_",
-        "flx": "channel.reply-bar.author-name"
+        "flx": "channel.reply-bar.controls"
       },
       "status": "missing",
       "rust": {
@@ -1620,7 +1630,7 @@
         "line": 83,
         "kind": "Tooltip",
         "detail": "text={i18n._(REMOVE_STICKER_DESCRIPTOR)} position=\"top\" data-flx=\"channel.channel-stickers-area.tooltip\"",
-        "flx": "channel.channel-stickers-area.sticker-name"
+        "flx": "channel.channel-stickers-area.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -1638,7 +1648,7 @@
         "line": 127,
         "kind": "Tooltip",
         "detail": "text={fullText} data-flx=\"channel.compact-member-custom-status.tooltip\"",
-        "flx": "channel.compact-member-custom-status.content"
+        "flx": "channel.compact-member-custom-status.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -1656,7 +1666,7 @@
         "line": 227,
         "kind": "Tooltip",
         "detail": "text={nickname} data-flx=\"channel.member-list-item.name-tooltip\"",
-        "flx": "channel.member-list-item.status-aware-avatar"
+        "flx": "channel.member-list-item.name-tooltip"
       },
       "status": "missing",
       "rust": {
@@ -1674,7 +1684,7 @@
         "line": 235,
         "kind": "Tooltip",
         "detail": "text={i18n._(guildId ? COMMUNITY_OWNER_DESCRIPTOR : GROUP_OWNER_DESCRIPTOR)} data-flx=\"channel.member-list-item.tooltip\"",
-        "flx": "channel.member-list-item.name-tooltip"
+        "flx": "channel.member-list-item.owner-icon"
       },
       "status": "missing",
       "rust": {
@@ -1710,7 +1720,7 @@
         "line": 211,
         "kind": "Tooltip",
         "detail": "text={tooltipContent} data-flx=\"channel.message-action-bar.tooltip\"",
-        "flx": "channel.message-action-bar.tooltip-content.tooltip-hint"
+        "flx": "channel.message-action-bar.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -1746,7 +1756,7 @@
         "line": 383,
         "kind": "Tooltip",
         "detail": "text={filename} data-flx=\"channel.mobile-memes-picker.grid-item.tooltip\"",
-        "flx": "channel.mobile-memes-picker.grid-item.div--3"
+        "flx": "channel.mobile-memes-picker.grid-item.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -1764,7 +1774,7 @@
         "line": 261,
         "kind": "tooltip-prop",
         "detail": "{tooltip}",
-        "flx": "channel.preloadable-user-popout.user-profile-popout"
+        "flx": "channel.preloadable-user-popout.popout"
       },
       "status": "missing",
       "rust": {
@@ -1800,16 +1810,13 @@
         "line": 51,
         "kind": "Tooltip",
         "detail": "delay={750} text={formattedDateTime} maxWidth=\"none\" data-flx=\"channel.timestamp-with-tooltip.tooltip\"",
-        "flx": "channel.timestamp-with-tooltip.container"
+        "flx": "channel.timestamp-with-tooltip.tooltip"
       },
-      "status": "present",
+      "status": "missing",
       "rust": {
-        "status": "present",
-        "matches": [
-          "fluxer_client/app/src/ui/message_row.rs:209",
-          "fluxer_client/app/src/ui/message_row.rs:626"
-        ],
-        "reason": "flx 'channel.timestamp-with-tooltip.container' has tooltip in Rust"
+        "status": "missing",
+        "matches": [],
+        "reason": "no matching tooltip in fluxer_client/app/src"
       }
     },
     {
@@ -1821,7 +1828,7 @@
         "line": 561,
         "kind": "Tooltip",
         "detail": "text={i18n._(THIS_WAS_A_MESSAGE_DESCRIPTOR, {silentMention: SILENT_MENTION})} data-flx=\"channel.user-message.tooltip\"",
-        "flx": "channel.user-message.author-dash-separator--2"
+        "flx": "channel.user-message.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -1839,7 +1846,7 @@
         "line": 208,
         "kind": "Tooltip",
         "detail": "text={i18n._(COMMUNITY_OWNER_DESCRIPTOR)} data-flx=\"channel.channel-details-bottom-sheet-member-list.mobile-member-list-",
-        "flx": "channel.channel-details-bottom-sheet-member-list.mobile-member-list-item.crown-container"
+        "flx": "channel.channel-details-bottom-sheet-member-list.mobile-member-list-item.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -1857,7 +1864,7 @@
         "line": 134,
         "kind": "Tooltip",
         "detail": "text={i18n._(GROUP_OWNER_DESCRIPTOR)} data-flx=\"channel.channel-details-bottom-sheet.tooltip\"",
-        "flx": "channel.channel-details-bottom-sheet.member-item-tags"
+        "flx": "channel.channel-details-bottom-sheet.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -1875,15 +1882,15 @@
         "line": 78,
         "kind": "Tooltip",
         "detail": "text={tooltipText} position=\"bottom\" data-flx=\"channel.channel-header-components.channel-header-icon.tooltip\"",
-        "flx": "channel.channel-header-components.channel-header-icon.button-icon"
+        "flx": "channel.channel-header-components.channel-header-icon.tooltip"
       },
       "status": "differs",
       "rust": {
         "status": "differs",
         "matches": [
-          "fluxer_client/app/src/ui/friends.rs:277"
+          "fluxer_client/app/src/ui/header.rs"
         ],
-        "reason": "flx 'channel.channel-header-components.channel-header-icon.button-icon' exists in Rust without tooltip call"
+        "reason": "area 'channelheader' has tooltips in Rust, exact element unverified"
       }
     },
     {
@@ -1895,13 +1902,15 @@
         "line": 90,
         "kind": "Tooltip",
         "detail": "text={tooltipText} position=\"bottom\" data-flx=\"channel.channel-header-components.channel-header-icon.tooltip--2\"",
-        "flx": "channel.channel-header-components.channel-header-icon.tooltip"
+        "flx": "channel.channel-header-components.channel-header-icon.tooltip--2"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:79"
+        ],
+        "reason": "flx 'channel.channel-header-components.channel-header-icon.tooltip--2' has tooltip in Rust"
       }
     },
     {
@@ -1931,7 +1940,7 @@
         "line": 149,
         "kind": "Tooltip",
         "detail": "text={i18n._(NO_VOICE_CONNECT_PERMISSION_DESCRIPTOR)} data-flx=\"channel.channel-view.guild-channel-view.voice-channel-jo",
-        "flx": "channel.channel-view.guild-channel-view.voice-channel-join-empty-state.voice-join-empty-title"
+        "flx": "channel.channel-view.guild-channel-view.voice-channel-join-empty-state.tooltip.locked"
       },
       "status": "missing",
       "rust": {
@@ -1967,7 +1976,7 @@
         "line": 143,
         "kind": "Tooltip",
         "detail": "text={accountGateReason(i18n, friendRequestGate)} maxWidth=\"xl\" data-flx=\"channel.direct-message.dm-welcome-section.rend",
-        "flx": "channel.direct-message.dm-welcome-section.render-action-button.button.send-friend-request"
+        "flx": "channel.direct-message.dm-welcome-section.render-action-button.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -1985,15 +1994,15 @@
         "line": 691,
         "kind": "Tooltip",
         "detail": "text={ createDmTooltipText ?? (() =",
-        "flx": "channel.direct-message.dm-list.dm-section-header-text"
+        "flx": "channel.direct-message.dm-list.dm-section-header-label"
       },
       "status": "differs",
       "rust": {
         "status": "differs",
         "matches": [
-          "fluxer_client/app/src/ui/channel_list.rs:453"
+          "fluxer_client/app/src/ui/channel_list.rs:460"
         ],
-        "reason": "flx 'channel.direct-message.dm-list.dm-section-header-text' exists in Rust without tooltip call"
+        "reason": "flx 'channel.direct-message.dm-list.dm-section-header-label' exists in Rust without tooltip call"
       }
     },
     {
@@ -2005,7 +2014,7 @@
         "line": 61,
         "kind": "Tooltip",
         "detail": "text={i18n._(CLICK_FOR_DETAILS_DESCRIPTOR)} position=\"top\" data-flx=\"channel.embeds.mature-media-blur-overlay.tooltip\"",
-        "flx": "channel.embeds.mature-media-blur-overlay.handle-open-details.mature-media-gate-details-modal"
+        "flx": "channel.embeds.mature-media-blur-overlay.reveal-overlay"
       },
       "status": "missing",
       "rust": {
@@ -2023,7 +2032,7 @@
         "line": 81,
         "kind": "Tooltip",
         "detail": "text={i18n._(CLICK_TO_REVEAL_DESCRIPTOR)} position=\"top\" data-flx=\"channel.embeds.mature-media-blur-overlay.tooltip--2\"",
-        "flx": "channel.embeds.mature-media-blur-overlay.reveal-button.open-details"
+        "flx": "channel.embeds.mature-media-blur-overlay.reveal-overlay--2"
       },
       "status": "missing",
       "rust": {
@@ -2041,7 +2050,7 @@
         "line": 289,
         "kind": "Tooltip",
         "detail": "text={i18n._(ATTACHMENT_EXPIRED_DESCRIPTOR)} data-flx=\"channel.embeds.attachments.attachment-file.tooltip\"",
-        "flx": "channel.embeds.attachments.attachment-file.span--2"
+        "flx": "channel.embeds.attachments.attachment-file.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2059,7 +2068,7 @@
         "line": 102,
         "kind": "Tooltip",
         "detail": "text={languageButtonLabel} data-flx=\"channel.embeds.attachments.textual-attachment-language-combobox.tooltip\"",
-        "flx": "channel.embeds.attachments.textual-attachment-language-combobox.base-combobox-root"
+        "flx": "channel.embeds.attachments.textual-attachment-language-combobox.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2077,7 +2086,7 @@
         "line": 144,
         "kind": "Tooltip",
         "detail": "text={fullscreenButtonLabel} data-flx=\"channel.embeds.attachments.textual-attachment-preview-footer.tooltip--2\"",
-        "flx": "channel.embeds.attachments.textual-attachment-preview-footer.textual-attachment-language-combobox"
+        "flx": "channel.embeds.attachments.textual-attachment-preview-footer.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -2095,7 +2104,7 @@
         "line": 168,
         "kind": "Tooltip",
         "detail": "text={moreButtonLabel} data-flx=\"channel.embeds.attachments.textual-attachment-preview-footer.tooltip--3\"",
-        "flx": "channel.embeds.attachments.textual-attachment-preview-footer.arrows-out-icon"
+        "flx": "channel.embeds.attachments.textual-attachment-preview-footer.tooltip--3"
       },
       "status": "missing",
       "rust": {
@@ -2113,7 +2122,7 @@
         "line": 84,
         "kind": "Tooltip",
         "detail": "text={expandButtonLabel} data-flx=\"channel.embeds.attachments.textual-attachment-preview-footer.tooltip\"",
-        "flx": "channel.embeds.attachments.textual-attachment-preview-footer.footer"
+        "flx": "channel.embeds.attachments.textual-attachment-preview-footer.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2131,7 +2140,7 @@
         "line": 146,
         "kind": "Tooltip",
         "detail": "text={i18n._(DELETE_DESCRIPTOR)} position=\"top\" data-flx=\"channel.embeds.media.embed-audio.tooltip\"",
-        "flx": "channel.embeds.media.embed-audio.container"
+        "flx": "channel.embeds.media.embed-audio.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2149,7 +2158,7 @@
         "line": 104,
         "kind": "Tooltip",
         "detail": "text={i18n._(DELETE_DESCRIPTOR)} position=\"top\" data-flx=\"channel.embeds.media.media-container.tooltip\"",
-        "flx": "channel.embeds.media.media-container.div"
+        "flx": "channel.embeds.media.media-container.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2167,7 +2176,7 @@
         "line": 128,
         "kind": "Tooltip",
         "detail": "text={i18n._(DOWNLOAD_DESCRIPTOR)} position=\"top\" data-flx=\"channel.embeds.media.media-container.tooltip--2\"",
-        "flx": "channel.embeds.media.media-container.trash-icon"
+        "flx": "channel.embeds.media.media-container.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -2185,7 +2194,7 @@
         "line": 152,
         "kind": "Tooltip",
         "detail": "text={isFavorited ? i18n._(REMOVE_FROM_FAVORITES_DESCRIPTOR) : i18n._(ADD_TO_FAVORITES_DESCRIPTOR)} position=\"top\" data-",
-        "flx": "channel.embeds.media.media-container.download-simple-icon"
+        "flx": "channel.embeds.media.media-container.tooltip--3"
       },
       "status": "missing",
       "rust": {
@@ -2203,7 +2212,7 @@
         "line": 112,
         "kind": "Tooltip",
         "detail": "text={i18n._(FREQUENTLY_USED_DESCRIPTOR)} position=\"left\" data-flx=\"channel.emoji-picker.emoji-picker-category-list.tool",
-        "flx": "channel.emoji-picker.emoji-picker-category-list.category-list-scroll"
+        "flx": "channel.emoji-picker.emoji-picker-category-list.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2221,7 +2230,7 @@
         "line": 133,
         "kind": "Tooltip",
         "detail": "key={guild.id} text={guild.name} position=\"left\" data-flx=\"channel.emoji-picker.emoji-picker-category-list.tooltip--2\"",
-        "flx": "channel.emoji-picker.emoji-picker-category-list.icon-size--4"
+        "flx": "channel.emoji-picker.emoji-picker-category-list.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -2239,7 +2248,7 @@
         "line": 160,
         "kind": "Tooltip",
         "detail": "key={category} text={UnicodeEmojis.getCategoryLabel(category, i18n)} position=\"left\" data-flx=\"channel.emoji-picker.emoj",
-        "flx": "channel.emoji-picker.emoji-picker-category-list.icon-size--5"
+        "flx": "channel.emoji-picker.emoji-picker-category-list.tooltip--3"
       },
       "status": "missing",
       "rust": {
@@ -2275,7 +2284,7 @@
         "line": 408,
         "kind": "tooltip-prop",
         "detail": "{action.tooltip}",
-        "flx": "channel.friends.friend-list-item.friend-actions.stop-propagation"
+        "flx": "channel.friends.friend-list-item.action-button.click"
       },
       "status": "missing",
       "rust": {
@@ -2293,7 +2302,7 @@
         "line": 314,
         "kind": "Tooltip",
         "detail": "text={i18n._(COMMUNITY_OWNER_DESCRIPTOR)} data-flx=\"channel.guild-members-page.member-table-row.tooltip\"",
-        "flx": "channel.guild-members-page.member-table-row.name-row"
+        "flx": "channel.guild-members-page.member-table-row.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2311,7 +2320,7 @@
         "line": 338,
         "kind": "Tooltip",
         "detail": "text={joinedAtAbsolute} data-flx=\"channel.guild-members-page.member-table-row.tooltip--2\"",
-        "flx": "channel.guild-members-page.member-table-row.cell--2"
+        "flx": "channel.guild-members-page.member-table-row.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -2329,7 +2338,7 @@
         "line": 354,
         "kind": "Tooltip",
         "detail": "text={userCreatedAtAbsolute} data-flx=\"channel.guild-members-page.member-table-row.tooltip--3\"",
-        "flx": "channel.guild-members-page.member-table-row.cell--3"
+        "flx": "channel.guild-members-page.member-table-row.tooltip--3"
       },
       "status": "missing",
       "rust": {
@@ -2347,7 +2356,7 @@
         "line": 371,
         "kind": "Tooltip",
         "detail": "text={joinMethodTooltip} data-flx=\"channel.guild-members-page.member-table-row.tooltip--4\"",
-        "flx": "channel.guild-members-page.member-table-row.cell--4"
+        "flx": "channel.guild-members-page.member-table-row.tooltip--4"
       },
       "status": "missing",
       "rust": {
@@ -2365,7 +2374,7 @@
         "line": 406,
         "kind": "Tooltip",
         "detail": "text={i18n._(VIEW_ALL_ROLES_DESCRIPTOR)} data-flx=\"channel.guild-members-page.member-table-row.tooltip--5\"",
-        "flx": "channel.guild-members-page.member-table-row.role-dot"
+        "flx": "channel.guild-members-page.member-table-row.tooltip--5"
       },
       "status": "missing",
       "rust": {
@@ -2383,15 +2392,13 @@
         "line": 371,
         "kind": "Tooltip",
         "detail": "text={scopeTooltipText} position=\"bottom\" data-flx=\"channel.message-search-bar.message-search-bar.tooltip\"",
-        "flx": "channel.message-search-bar.message-search-bar.anchor"
+        "flx": "channel.message-search-bar.message-search-bar.tooltip"
       },
-      "status": "differs",
+      "status": "missing",
       "rust": {
-        "status": "differs",
-        "matches": [
-          "fluxer_client/app/src/ui/header.rs:396"
-        ],
-        "reason": "flx 'channel.message-search-bar.message-search-bar.anchor' exists in Rust without tooltip call"
+        "status": "missing",
+        "matches": [],
+        "reason": "no matching tooltip in fluxer_client/app/src"
       }
     },
     {
@@ -2421,7 +2428,7 @@
         "line": 79,
         "kind": "Tooltip",
         "detail": "text={PermissionLayout.isGrid ? i18n._(SINGLE_COLUMN_DESCRIPTOR) : i18n._(TWO_COLUMNS_DESCRIPTOR)} data-flx=\"channel.cha",
-        "flx": "channel.channel-tabs.channel-permissions-tab.rows-icon"
+        "flx": "channel.channel-tabs.channel-permissions-tab.list-icon"
       },
       "status": "missing",
       "rust": {
@@ -2439,7 +2446,7 @@
         "line": 465,
         "kind": "Tooltip",
         "detail": "text={favoriteTooltipText} position=\"top\" data-flx=\"channel.pickers.gif.gif-picker-grid-item.tooltip\"",
-        "flx": "channel.pickers.gif.gif-picker-grid-item.grid-item-backdrop--2"
+        "flx": "channel.pickers.gif.gif-picker-grid-item.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2457,7 +2464,7 @@
         "line": 101,
         "kind": "Tooltip",
         "detail": "text={i18n._(IMPORT_GIFS_DESCRIPTOR)} position=\"top\" data-flx=\"channel.pickers.gif.gif-picker-header.import-tooltip\"",
-        "flx": "channel.pickers.gif.gif-picker-header.actions"
+        "flx": "channel.pickers.gif.gif-picker-header.import-tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2475,7 +2482,7 @@
         "line": 124,
         "kind": "Tooltip",
         "detail": "text={i18n._(EXPORT_GIF_URLS_DESCRIPTOR)} position=\"top\" data-flx=\"channel.pickers.gif.gif-picker-header.export-tooltip\"",
-        "flx": "channel.pickers.gif.gif-picker-header.upload-simple-icon"
+        "flx": "channel.pickers.gif.gif-picker-header.export-tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2493,7 +2500,7 @@
         "line": 228,
         "kind": "Tooltip",
         "detail": "text={meme.filename} data-flx=\"channel.pickers.memes.meme-grid-item.tooltip\"",
-        "flx": "channel.pickers.memes.meme-grid-item.audio-meta"
+        "flx": "channel.pickers.memes.meme-grid-item.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2511,7 +2518,7 @@
         "line": 242,
         "kind": "Tooltip",
         "detail": "text={i18n._(EDIT_MEDIA_DESCRIPTOR)} position=\"bottom\" data-flx=\"channel.pickers.memes.meme-grid-item.tooltip--2\"",
-        "flx": "channel.pickers.memes.meme-grid-item.div--3"
+        "flx": "channel.pickers.memes.meme-grid-item.div--4"
       },
       "status": "missing",
       "rust": {
@@ -2529,7 +2536,7 @@
         "line": 263,
         "kind": "Tooltip",
         "detail": "text={i18n._(DELETE_MEDIA_DESCRIPTOR)} position=\"bottom\" data-flx=\"channel.pickers.memes.meme-grid-item.tooltip--3\"",
-        "flx": "channel.pickers.memes.meme-grid-item.button.edit"
+        "flx": "channel.pickers.memes.meme-grid-item.tooltip--3"
       },
       "status": "missing",
       "rust": {
@@ -2547,7 +2554,7 @@
         "line": 73,
         "kind": "Tooltip",
         "detail": "text={tooltipText} position=\"top\" data-flx=\"channel.textarea.textarea-button.tooltip\"",
-        "flx": "channel.textarea.textarea-button.tooltip-text.tooltip-with-keybind"
+        "flx": "channel.textarea.textarea-button.tooltip"
       },
       "status": "differs",
       "rust": {
@@ -2567,7 +2574,7 @@
         "line": 453,
         "kind": "Tooltip",
         "detail": "text={NicknameUtils.getDisplayName(emoji.user)} data-flx=\"emoji.emojis.emoji-list-item.tooltip\"",
-        "flx": "emoji.emojis.emoji-list-item.grid-emoji-wrapper"
+        "flx": "emoji.emojis.emoji-list-item.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2585,7 +2592,7 @@
         "line": 500,
         "kind": "Tooltip",
         "detail": "text={i18n._(DELETE_2_DESCRIPTOR)} data-flx=\"emoji.emojis.emoji-list-item.tooltip--2\"",
-        "flx": "emoji.emojis.emoji-list-item.grid-name-text"
+        "flx": "emoji.emojis.emoji-list-item.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -2603,7 +2610,7 @@
         "line": 576,
         "kind": "Tooltip",
         "detail": "text={i18n._(DELETE_2_DESCRIPTOR)} data-flx=\"emoji.emojis.emoji-list-item.tooltip--3\"",
-        "flx": "emoji.emojis.emoji-list-item.unknown-user"
+        "flx": "emoji.emojis.emoji-list-item.tooltip--3"
       },
       "status": "missing",
       "rust": {
@@ -2621,7 +2628,7 @@
         "line": 192,
         "kind": "Tooltip",
         "detail": "text={i18n._(EDIT_DESCRIPTOR)} data-flx=\"emoji.stickers.sticker-grid-item.tooltip\"",
-        "flx": "emoji.stickers.sticker-grid-item.author-name"
+        "flx": "emoji.stickers.sticker-grid-item.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2639,7 +2646,7 @@
         "line": 205,
         "kind": "Tooltip",
         "detail": "text={i18n._(DELETE_DESCRIPTOR)} data-flx=\"emoji.stickers.sticker-grid-item.tooltip--2\"",
-        "flx": "emoji.stickers.sticker-grid-item.action-button.edit"
+        "flx": "emoji.stickers.sticker-grid-item.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -2675,7 +2682,7 @@
         "line": 93,
         "kind": "Tooltip",
         "detail": "text={i18n._(D.COPY_POST_LINK_DESCRIPTOR)} data-flx=\"forum.forum-post-actions.copy-tooltip\"",
-        "flx": "forum.forum-post-actions.bell-icon"
+        "flx": "forum.forum-post-actions.copy-tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2693,7 +2700,7 @@
         "line": 242,
         "kind": "Tooltip",
         "detail": "text={i18n._(D.ATTACH_MEDIA_DESCRIPTOR)} data-flx=\"forum.forum-post-composer.attach-tooltip\"",
-        "flx": "forum.forum-post-composer.error"
+        "flx": "forum.forum-post-composer.attach-tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2711,7 +2718,7 @@
         "line": 266,
         "kind": "tooltip-prop",
         "detail": "{i18n._(D.ADD_EMOJI_DESCRIPTOR)}",
-        "flx": "forum.forum-post-composer.emoji-picker-popout"
+        "flx": "forum.forum-post-composer.emoji-popout"
       },
       "status": "missing",
       "rust": {
@@ -2729,7 +2736,7 @@
         "line": 294,
         "kind": "Tooltip",
         "detail": "text={i18n._(preview ? D.EDIT_DESCRIPTOR : D.PREVIEW_DESCRIPTOR)} data-flx=\"forum.forum-post-composer.preview-tooltip\"",
-        "flx": "forum.forum-post-composer.forum-tag-picker.set-tags"
+        "flx": "forum.forum-post-composer.composer-bar-end"
       },
       "status": "missing",
       "rust": {
@@ -2747,7 +2754,7 @@
         "line": 76,
         "kind": "Tooltip",
         "detail": "text={i18n._(D.MODERATED_TAG_HINT_DESCRIPTOR)} data-flx=\"forum.forum-tag-pill.tooltip\"",
-        "flx": "forum.forum-tag-pill.tag.click.button"
+        "flx": "forum.forum-tag-pill.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2765,7 +2772,7 @@
         "line": 107,
         "kind": "Tooltip",
         "detail": "text={i18n._(SHOW_ALL_BADGES_DESCRIPTOR)} position={tooltipPosition} data-flx=\"guild.guild-badge.more-tooltip\"",
-        "flx": "guild.guild-badge.more-badges-text"
+        "flx": "guild.guild-badge.guild-badges-modal"
       },
       "status": "missing",
       "rust": {
@@ -2783,7 +2790,7 @@
         "line": 191,
         "kind": "Tooltip",
         "detail": "text={tooltip} position={tooltipPosition} data-flx=\"guild.guild-badge.custom-badge-tooltip\"",
-        "flx": "guild.guild-badge.custom-badge-tooltip-content"
+        "flx": "guild.guild-badge.custom-badge-tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2801,7 +2808,7 @@
         "line": 272,
         "kind": "Tooltip",
         "detail": "text={tooltipText} position={tooltipPosition} data-flx=\"guild.guild-badge.tooltip\"",
-        "flx": "guild.guild-badge.replaced-badge-image"
+        "flx": "guild.guild-badge.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2819,7 +2826,7 @@
         "line": 81,
         "kind": "Tooltip",
         "detail": "text={role.name} ariaHidden={true} data-flx=\"guild.role-icon.tooltip\"",
-        "flx": "guild.role-icon.role-icon-image"
+        "flx": "guild.role-icon.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2837,7 +2844,7 @@
         "line": 455,
         "kind": "Tooltip",
         "detail": "text={i18n._(ADD_ROLE_DESCRIPTOR)} data-flx=\"guild.role-management.add-role-button.tooltip\"",
-        "flx": "guild.role-management.handle-click.manage-roles-menu-content"
+        "flx": "guild.role-management.add-role-button.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2855,7 +2862,7 @@
         "line": 86,
         "kind": "Tooltip",
         "detail": "text={removeRoleLabel} position=\"top\" data-flx=\"guild.role-management.role-badge.tooltip\"",
-        "flx": "guild.role-management.role-badge.role-badge.context-menu"
+        "flx": "guild.role-management.role-badge.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2891,7 +2898,7 @@
         "line": 45,
         "kind": "Tooltip",
         "detail": "text={title} data-flx=\"guild.guild-tabs.guild-audit-log-tab-components.inline-code.tooltip\"",
-        "flx": "guild.guild-tabs.guild-audit-log-tab-components.inline-code.inline-code"
+        "flx": "guild.guild-tabs.guild-audit-log-tab-components.inline-code.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2909,7 +2916,7 @@
         "line": 546,
         "kind": "Tooltip",
         "detail": "text={tooltipText} data-flx=\"guild.guild-tabs.guild-moderation-tab.tooltip\"",
-        "flx": "guild.guild-tabs.guild-moderation-tab.switch.change--3"
+        "flx": "guild.guild-tabs.guild-moderation-tab.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2927,7 +2934,7 @@
         "line": 90,
         "kind": "Tooltip",
         "detail": "text={i18n._(MORE_OPTIONS_DESCRIPTOR)} data-flx=\"guild.guild-tabs.user-list-item.tooltip\"",
-        "flx": "guild.guild-tabs.user-list-item.chevron"
+        "flx": "guild.guild-tabs.user-list-item.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2945,7 +2952,7 @@
         "line": 263,
         "kind": "Tooltip",
         "detail": "text={i18n._(YOU_CANNOT_EDIT_THIS_ROLE_BECAUSE_IT_IS_DESCRIPTOR)} data-flx=\"guild.guild-tabs.guild-roles-tab.role-item.t",
-        "flx": "guild.guild-tabs.guild-roles-tab.role-item.role-icon"
+        "flx": "guild.guild-tabs.guild-roles-tab.role-item.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2981,7 +2988,7 @@
         "line": 214,
         "kind": "Tooltip",
         "detail": "text={i18n._(hideInviteLinks ? COPY_PAUSED_WHILE_SHARING_DESCRIPTOR : COPY_INVITE_LINK_DESCRIPTOR)} data-flx=\"invite.inv",
-        "flx": "invite.invite-list-item.code"
+        "flx": "invite.invite-list-item.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -2999,7 +3006,7 @@
         "line": 246,
         "kind": "Tooltip",
         "detail": "text={dateTooltip} data-flx=\"invite.invite-list-item.tooltip--2\"",
-        "flx": "invite.invite-list-item.uses-text"
+        "flx": "invite.invite-list-item.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -3017,7 +3024,7 @@
         "line": 263,
         "kind": "Tooltip",
         "detail": "text={i18n._(REVOKE_INVITE_DESCRIPTOR)} data-flx=\"invite.invite-list-item.tooltip--3\"",
-        "flx": "invite.invite-list-item.date-text"
+        "flx": "invite.invite-list-item.tooltip--3"
       },
       "status": "missing",
       "rust": {
@@ -3053,7 +3060,7 @@
         "line": 31,
         "kind": "Tooltip",
         "detail": "text={display} delay={EXPRESSION_TOOLTIP_DELAY_MS} data-flx=\"lexical.composer.nodes.composer-standard-emoji.tooltip\"",
-        "flx": "lexical.composer.nodes.composer-standard-emoji.plain-text"
+        "flx": "lexical.composer.nodes.composer-standard-emoji.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -3089,7 +3096,7 @@
         "line": 35,
         "kind": "tooltip-prop",
         "detail": "{tooltip}",
-        "flx": "lexical.composer.nodes.mention-tooltip-content.mention-with-tooltip.hover-floating-tooltip-trigger"
+        "flx": "lexical.mention-tooltip-content.surface"
       },
       "status": "missing",
       "rust": {
@@ -3107,7 +3114,7 @@
         "line": 37,
         "kind": "Tooltip",
         "detail": "text={text} type=\"normal\" position=\"bottom\" maxWidth=\"xl\" data-flx=\"messaging.markdown.renderers.link-renderer.tooltip.n",
-        "flx": "messaging.markdown.renderers.link-renderer.warning-icon"
+        "flx": "messaging.markdown.renderers.link-renderer.tooltip.normal"
       },
       "status": "missing",
       "rust": {
@@ -3125,7 +3132,7 @@
         "line": 279,
         "kind": "Tooltip",
         "detail": "key={id} text={emojiData.name} delay={EXPRESSION_TOOLTIP_DELAY_MS} data-flx=\"messaging.markdown.renderers.emoji-renderer",
-        "flx": "messaging.markdown.renderers.emoji-renderer.expression-info-bottom-sheet"
+        "flx": "messaging.markdown.renderers.emoji-renderer.tooltip.plain"
       },
       "status": "missing",
       "rust": {
@@ -3143,7 +3150,7 @@
         "line": 89,
         "kind": "Tooltip",
         "detail": "key={id} text={() =",
-        "flx": "messaging.markdown.renderers.timestamp-renderer.div--2"
+        "flx": "messaging.markdown.renderers.timestamp-renderer.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -3233,7 +3240,7 @@
         "line": 279,
         "kind": "Tooltip",
         "detail": "text={i18n._(MARK_ALL_AS_READ_DESCRIPTOR)} position=\"right\" data-flx=\"messaging.inbox-popout.tooltip\"",
-        "flx": "messaging.inbox-popout.sidebar-footer-actions"
+        "flx": "messaging.inbox-popout.sidebar-footer-actions--2"
       },
       "status": "missing",
       "rust": {
@@ -3251,7 +3258,7 @@
         "line": 126,
         "kind": "tooltip-prop",
         "detail": "{tooltip}",
-        "flx": "messaging.reaction-tooltip.handle-click.message-reactions-modal"
+        "flx": "messaging.reaction-tooltip.hover-floating-tooltip-trigger"
       },
       "status": "missing",
       "rust": {
@@ -3269,7 +3276,7 @@
         "line": 132,
         "kind": "tooltip-prop",
         "detail": "{tooltip}",
-        "flx": "messaging.reaction-tooltip.handle-click.message-reactions-modal"
+        "flx": "messaging.reaction-tooltip.div"
       },
       "status": "missing",
       "rust": {
@@ -3287,7 +3294,7 @@
         "line": 158,
         "kind": "Tooltip",
         "detail": "text={i18n._(REMOVE_MENTION_DESCRIPTOR)} position=\"top\" data-flx=\"messaging.recent-mentions-content.tooltip\"",
-        "flx": "messaging.recent-mentions-content.message-card"
+        "flx": "messaging.recent-mentions-content.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -3305,7 +3312,7 @@
         "line": 149,
         "kind": "Tooltip",
         "detail": "text={i18n._(REMOVE_BOOKMARK_DESCRIPTOR)} position=\"top\" data-flx=\"messaging.saved-messages-content.tooltip\"",
-        "flx": "messaging.saved-messages-content.message-card"
+        "flx": "messaging.saved-messages-content.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -3323,7 +3330,7 @@
         "line": 269,
         "kind": "Tooltip",
         "detail": "text={i18n._(MARK_AS_READ_DESCRIPTOR)} position=\"top\" data-flx=\"messaging.inbox.other-accounts.channel-row.tooltip\"",
-        "flx": "messaging.inbox.other-accounts.channel-row.unread-dot"
+        "flx": "messaging.inbox.other-accounts.channel-row.mark-read.focus-ring"
       },
       "status": "missing",
       "rust": {
@@ -3377,7 +3384,7 @@
         "line": 407,
         "kind": "Tooltip",
         "detail": "text={i18n._(REMOVE_BACKGROUND_DESCRIPTOR)} data-flx=\"theme.background-image-gallery-modal.background-item.tooltip\"",
-        "flx": "theme.background-image-gallery-modal.background-item.image-overlay"
+        "flx": "theme.background-image-gallery-modal.background-item.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -3395,7 +3402,7 @@
         "line": 818,
         "kind": "Tooltip",
         "detail": "text={i18n._(REPLACE_BACKGROUND_2_DESCRIPTOR)} data-flx=\"theme.background-image-gallery-modal.tooltip\"",
-        "flx": "theme.background-image-gallery-modal.background-item.background-select"
+        "flx": "theme.background-image-gallery-modal.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -3413,7 +3420,7 @@
         "line": 842,
         "kind": "Tooltip",
         "detail": "text={i18n._(REPLACE_WITH_A_GIF_DESCRIPTOR)} data-flx=\"theme.background-image-gallery-modal.tooltip--gif\"",
-        "flx": "theme.background-image-gallery-modal.action-button-icon"
+        "flx": "theme.background-image-gallery-modal.tooltip--gif"
       },
       "status": "missing",
       "rust": {
@@ -3431,7 +3438,7 @@
         "line": 866,
         "kind": "Tooltip",
         "detail": "text={i18n._(REMOVE_BACKGROUND_DESCRIPTOR)} data-flx=\"theme.background-image-gallery-modal.tooltip--2\"",
-        "flx": "theme.background-image-gallery-modal.action-button-icon--gif"
+        "flx": "theme.background-image-gallery-modal.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -3467,7 +3474,7 @@
         "line": 630,
         "kind": "Tooltip",
         "detail": "text={description} position=\"bottom\" data-flx=\"theme-settings.quick-css-files.file-tooltip\"",
-        "flx": "theme-settings.quick-css-editor-window.file-combobox.request-editor-file"
+        "flx": "theme-settings.quick-css-files.file-tooltip"
       },
       "status": "missing",
       "rust": {
@@ -3503,7 +3510,7 @@
         "line": 155,
         "kind": "Tooltip",
         "detail": "text={i18n._(KEYBOARD_SHORTCUTS_DESCRIPTOR)} position=\"top\" data-flx=\"theme-settings.quick-css-status-bar.shortcuts-tool",
-        "flx": "theme-settings.quick-css-status-bar.warnings"
+        "flx": "theme-settings.quick-css-status-bar.shortcuts-tooltip"
       },
       "status": "missing",
       "rust": {
@@ -3539,7 +3546,7 @@
         "line": 181,
         "kind": "Tooltip",
         "detail": "key={option.type} text={option.tooltip} position=\"top\" delay={200} data-flx=\"user.appearance-tab.theme.theme-tab-content",
-        "flx": "user.appearance-tab.theme.theme-tab-content.theme-button-group"
+        "flx": "user.appearance-tab.theme.theme-tab-content.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -3557,7 +3564,7 @@
         "line": 260,
         "kind": "Tooltip",
         "detail": "text={tooltipContent} allowWhenContextMenuOpen={true} data-flx=\"ui.action-menu.message-context-menu.quick-reaction-conte",
-        "flx": "ui.action-menu.message-context-menu.tooltip-content.span--2"
+        "flx": "ui.action-menu.message-context-menu.quick-reaction-context-menu-item.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -3629,7 +3636,7 @@
         "line": 101,
         "kind": "tooltip-prop",
         "detail": "{showTooltips ? displayName : undefined}",
-        "flx": "ui.avatars.avatar-stack.avatar"
+        "flx": "ui.avatars.avatar-stack.preloadable-user-popout"
       },
       "status": "missing",
       "rust": {
@@ -3647,7 +3654,7 @@
         "line": 123,
         "kind": "Tooltip",
         "detail": "text={displayName} data-flx=\"ui.avatars.avatar-stack.tooltip\"",
-        "flx": "ui.avatars.avatar-stack.avatar-content"
+        "flx": "ui.avatars.avatar-stack.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -3665,7 +3672,7 @@
         "line": 105,
         "kind": "Tooltip",
         "detail": "key={option.value} text={option.label} position=\"top\" data-flx=\"ui.card-alignment-controls.card-alignment-controls.toolt",
-        "flx": "ui.card-alignment-controls.card-alignment-controls.icon"
+        "flx": "ui.card-alignment-controls.card-alignment-controls.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -3683,7 +3690,7 @@
         "line": 119,
         "kind": "Tooltip",
         "detail": "text={disabledTooltipText} position={tooltipPosition} data-flx=\"ui.card-alignment-controls.card-alignment-controls.toolt",
-        "flx": "ui.card-alignment-controls.card-alignment-controls.tooltip"
+        "flx": "ui.card-alignment-controls.card-alignment-controls.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -3719,7 +3726,7 @@
         "line": 67,
         "kind": "Tooltip",
         "detail": "text={tooltipText} data-flx=\"ui.character-counter.character-counter.tooltip--2\"",
-        "flx": "ui.character-counter.character-counter.counter-button.upgrade-click"
+        "flx": "ui.character-counter.character-counter.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -3737,7 +3744,7 @@
         "line": 432,
         "kind": "Tooltip",
         "detail": "text={effectiveStatusLabel || i18n._(AVATAR_DESCRIPTOR)} data-flx=\"ui.base-avatar.tooltip\"",
-        "flx": "ui.base-avatar.hover-overlay"
+        "flx": "ui.base-avatar.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -3755,7 +3762,7 @@
         "line": 37,
         "kind": "Tooltip",
         "detail": "text={i18n._(SCREEN_SHARING_DESCRIPTOR)} position={tooltipPosition} data-flx=\"ui.live-badge.tooltip\"",
-        "flx": "ui.live-badge.live-badge"
+        "flx": "ui.live-badge.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -3773,7 +3780,7 @@
         "line": 362,
         "kind": "tooltip-prop",
         "detail": "{tooltip}",
-        "flx": "ui.slider.control"
+        "flx": "ui.slider.slider-tooltip-portal"
       },
       "status": "missing",
       "rust": {
@@ -3809,7 +3816,7 @@
         "line": 234,
         "kind": "Tooltip",
         "detail": "text={i18n._(GET_TO_CUSTOMIZE_YOUR_TAG_OR_KEEP_IT_DESCRIPTOR, { premiumProductName: PREMIUM_PRODUCT_NAME, })} data-flx=\"",
-        "flx": "user.fluxer-tag-change-modal.controller"
+        "flx": "user.fluxer-tag-change-modal.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -3827,7 +3834,7 @@
         "line": 274,
         "kind": "Tooltip",
         "detail": "text={i18n._(CUSTOM_DISCRIMINATORS_ARE_NOT_AVAILABLE_ON_THIS_INSTANCE_DESCRIPTOR)} data-flx=\"user.fluxer-tag-change-moda",
-        "flx": "user.fluxer-tag-change-modal.discriminator-overlay.open.button"
+        "flx": "user.fluxer-tag-change-modal.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -3863,7 +3870,7 @@
         "line": 510,
         "kind": "Tooltip",
         "detail": "text={i18n._(YOU_CAN_T_MESSAGE_YOURSELF_DESCRIPTOR)} maxWidth=\"xl\" data-flx=\"user.user-profile-modal.render-action-butto",
-        "flx": "user.user-profile-modal.render-action-buttons.user-plus-icon"
+        "flx": "user.user-profile-modal.render-action-buttons.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -3883,11 +3890,13 @@
         "detail": "text={i18n._(REMOVE_FRIEND_DESCRIPTOR)} maxWidth=\"xl\" data-flx=\"user.user-profile-modal.render-primary-action-button.too",
         "flx": "user.user-profile-modal.render-primary-action-button.tooltip"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/profile_popout.rs:384"
+        ],
+        "reason": "flx 'user.user-profile-modal.render-primary-action-button.tooltip' has tooltip in Rust"
       }
     },
     {
@@ -3899,13 +3908,15 @@
         "line": 610,
         "kind": "Tooltip",
         "detail": "text={i18n._(UNBLOCK_USER_DESCRIPTOR)} maxWidth=\"xl\" data-flx=\"user.user-profile-modal.render-primary-action-button.tool",
-        "flx": "user.user-profile-modal.render-primary-action-button.button.remove-friend"
+        "flx": "user.user-profile-modal.render-primary-action-button.tooltip--2"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/profile_popout.rs:459"
+        ],
+        "reason": "flx 'user.user-profile-modal.render-primary-action-button.tooltip--2' has tooltip in Rust"
       }
     },
     {
@@ -3917,13 +3928,15 @@
         "line": 636,
         "kind": "Tooltip",
         "detail": "text={i18n._(ACCEPT_FRIEND_REQUEST_DESCRIPTOR)} maxWidth=\"xl\" data-flx=\"user.user-profile-modal.render-primary-action-bu",
-        "flx": "user.user-profile-modal.render-primary-action-button.button.unblock-user"
+        "flx": "user.user-profile-modal.render-primary-action-button.tooltip--3"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/profile_popout.rs:407"
+        ],
+        "reason": "flx 'user.user-profile-modal.render-primary-action-button.tooltip--3' has tooltip in Rust"
       }
     },
     {
@@ -3935,13 +3948,15 @@
         "line": 662,
         "kind": "Tooltip",
         "detail": "text={i18n._(CANCEL_FRIEND_REQUEST_DESCRIPTOR)} maxWidth=\"xl\" data-flx=\"user.user-profile-modal.render-primary-action-bu",
-        "flx": "user.user-profile-modal.render-primary-action-button.button.accept-friend-request"
+        "flx": "user.user-profile-modal.render-primary-action-button.tooltip--4"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/profile_popout.rs:437"
+        ],
+        "reason": "flx 'user.user-profile-modal.render-primary-action-button.tooltip--4' has tooltip in Rust"
       }
     },
     {
@@ -3955,11 +3970,13 @@
         "detail": "text={tooltipText} maxWidth=\"xl\" data-flx=\"user.user-profile-modal.render-primary-action-button.tooltip--5\"",
         "flx": "user.user-profile-modal.render-primary-action-button.tooltip--5"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/profile_popout.rs:361"
+        ],
+        "reason": "flx 'user.user-profile-modal.render-primary-action-button.tooltip--5' has tooltip in Rust"
       }
     },
     {
@@ -3971,7 +3988,7 @@
         "line": 261,
         "kind": "Tooltip",
         "detail": "text={i18n._(VIEW_PERMISSIONS_DESCRIPTOR)} data-flx=\"user.authorized-apps-tab.tooltip.scopes\"",
-        "flx": "user.authorized-apps-tab.meta-text"
+        "flx": "user.authorized-apps-tab.tooltip.scopes"
       },
       "status": "missing",
       "rust": {
@@ -3989,7 +4006,7 @@
         "line": 276,
         "kind": "Tooltip",
         "detail": "text={i18n._(REVOKE_ACCESS_DESCRIPTOR)} data-flx=\"user.authorized-apps-tab.tooltip.revoke\"",
-        "flx": "user.authorized-apps-tab.info-icon"
+        "flx": "user.authorized-apps-tab.tooltip.revoke"
       },
       "status": "missing",
       "rust": {
@@ -4007,7 +4024,7 @@
         "line": 268,
         "kind": "Tooltip",
         "detail": "text={i18n._(VIEW_DEVICE_DETAILS_DESCRIPTOR)} data-flx=\"user.devices-tab.auth-session-item.tooltip.details\"",
-        "flx": "user.devices-tab.auth-session-item.device-metadata-line"
+        "flx": "user.devices-tab.auth-session-item.tooltip.details"
       },
       "status": "missing",
       "rust": {
@@ -4025,7 +4042,7 @@
         "line": 292,
         "kind": "Tooltip",
         "detail": "text={i18n._(REVOKE_DEVICE_DESCRIPTOR)} data-flx=\"user.devices-tab.auth-session-item.tooltip.revoke\"",
-        "flx": "user.devices-tab.auth-session-item.info-icon"
+        "flx": "user.devices-tab.auth-session-item.tooltip.revoke"
       },
       "status": "missing",
       "rust": {
@@ -4061,15 +4078,13 @@
         "line": 330,
         "kind": "Tooltip",
         "detail": "text={() =",
-        "flx": "user.language-selector.render-language-content.language-details"
+        "flx": "user.language-selector.render-language-content.tooltip-content"
       },
-      "status": "differs",
+      "status": "missing",
       "rust": {
-        "status": "differs",
-        "matches": [
-          "fluxer_client/app/src/ui/settings/language.rs:322"
-        ],
-        "reason": "flx 'user.language-selector.render-language-content.language-details' exists in Rust without tooltip call"
+        "status": "missing",
+        "matches": [],
+        "reason": "no matching tooltip in fluxer_client/app/src"
       }
     },
     {
@@ -4081,7 +4096,7 @@
         "line": 197,
         "kind": "Tooltip",
         "detail": "text={connectionLabel(i18n, connection)} data-flx=\"user.linked-accounts-tab.connection-card.tooltip\"",
-        "flx": "user.linked-accounts-tab.connection-card.card-drag-handle"
+        "flx": "user.linked-accounts-tab.connection-card.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -4099,7 +4114,7 @@
         "line": 214,
         "kind": "Tooltip",
         "detail": "text={ connection.verified ? i18n._(THIS_CONNECTION_HAS_BEEN_VERIFIED_DESCRIPTOR) : i18n._(THIS_CONNECTION_HAS_NOT_BEEN_",
-        "flx": "user.linked-accounts-tab.connection-card.card-info"
+        "flx": "user.linked-accounts-tab.connection-card.card-name"
       },
       "status": "missing",
       "rust": {
@@ -4117,7 +4132,7 @@
         "line": 248,
         "kind": "Tooltip",
         "detail": "text={i18n._(EDIT_DESCRIPTOR)} data-flx=\"user.linked-accounts-tab.connection-card.tooltip--3\"",
-        "flx": "user.linked-accounts-tab.connection-card.card-status"
+        "flx": "user.linked-accounts-tab.connection-card.tooltip--3"
       },
       "status": "missing",
       "rust": {
@@ -4135,7 +4150,7 @@
         "line": 263,
         "kind": "Tooltip",
         "detail": "text={i18n._(REMOVE_DESCRIPTOR)} data-flx=\"user.linked-accounts-tab.connection-card.tooltip--4\"",
-        "flx": "user.linked-accounts-tab.connection-card.action-button.edit"
+        "flx": "user.linked-accounts-tab.connection-card.tooltip--4"
       },
       "status": "missing",
       "rust": {
@@ -4153,7 +4168,7 @@
         "line": 390,
         "kind": "Tooltip",
         "detail": "text={BLUESKY_PROVIDER_NAME} data-flx=\"user.linked-accounts-tab.tooltip\"",
-        "flx": "user.linked-accounts-tab.connections"
+        "flx": "user.linked-accounts-tab.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -4171,7 +4186,7 @@
         "line": 403,
         "kind": "Tooltip",
         "detail": "key={provider.id} text={provider.name} data-flx=\"user.linked-accounts-tab.tooltip\"",
-        "flx": "user.linked-accounts-tab.platform-icon-button.add-connection"
+        "flx": "user.linked-accounts-tab.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -4189,7 +4204,7 @@
         "line": 415,
         "kind": "Tooltip",
         "detail": "text={i18n._(DOMAIN_DESCRIPTOR)} data-flx=\"user.linked-accounts-tab.tooltip--2\"",
-        "flx": "user.linked-accounts-tab.platform-icon-button.add-connection"
+        "flx": "user.linked-accounts-tab.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -4225,7 +4240,7 @@
         "line": 133,
         "kind": "Tooltip",
         "detail": "text={accountGateReason(i18n, createGate)} data-flx=\"user.applications-tab.tooltip\"",
-        "flx": "user.applications-tab.settings-tab-content--4"
+        "flx": "user.applications-tab.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -4243,7 +4258,7 @@
         "line": 64,
         "kind": "Tooltip",
         "detail": "text={i18n._(I_AM_A_TOOLTIP_DESCRIPTOR)} data-flx=\"user.component-gallery-tab.overlays-tab.tooltip\"",
-        "flx": "user.component-gallery-tab.overlays-tab.settings-tab-section"
+        "flx": "user.component-gallery-tab.overlays-tab.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -4261,7 +4276,7 @@
         "line": 72,
         "kind": "Tooltip",
         "detail": "text={i18n._(TOP_TOOLTIP_DESCRIPTOR)} position=\"top\" data-flx=\"user.component-gallery-tab.overlays-tab.tooltip--2\"",
-        "flx": "user.component-gallery-tab.overlays-tab.tooltip"
+        "flx": "user.component-gallery-tab.overlays-tab.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -4279,7 +4294,7 @@
         "line": 81,
         "kind": "Tooltip",
         "detail": "text={i18n._(RIGHT_TOOLTIP_DESCRIPTOR)} position=\"right\" data-flx=\"user.component-gallery-tab.overlays-tab.tooltip--3\"",
-        "flx": "user.component-gallery-tab.overlays-tab.tooltip--2"
+        "flx": "user.component-gallery-tab.overlays-tab.tooltip--3"
       },
       "status": "missing",
       "rust": {
@@ -4297,7 +4312,7 @@
         "line": 90,
         "kind": "Tooltip",
         "detail": "text={i18n._(BOTTOM_TOOLTIP_DESCRIPTOR)} position=\"bottom\" data-flx=\"user.component-gallery-tab.overlays-tab.tooltip--4\"",
-        "flx": "user.component-gallery-tab.overlays-tab.tooltip--3"
+        "flx": "user.component-gallery-tab.overlays-tab.tooltip--4"
       },
       "status": "missing",
       "rust": {
@@ -4315,7 +4330,7 @@
         "line": 99,
         "kind": "Tooltip",
         "detail": "text={i18n._(LEFT_TOOLTIP_DESCRIPTOR)} position=\"left\" data-flx=\"user.component-gallery-tab.overlays-tab.tooltip--5\"",
-        "flx": "user.component-gallery-tab.overlays-tab.tooltip--4"
+        "flx": "user.component-gallery-tab.overlays-tab.tooltip--5"
       },
       "status": "missing",
       "rust": {
@@ -4333,7 +4348,7 @@
         "line": 522,
         "kind": "Tooltip",
         "detail": "text={i18n._(PREVIEW_SOUND_DESCRIPTOR)} data-flx=\"user.entrance-sound-section.tooltip\"",
-        "flx": "user.entrance-sound-section.sound-card"
+        "flx": "user.entrance-sound-section.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -4351,7 +4366,7 @@
         "line": 599,
         "kind": "Tooltip",
         "detail": "text={i18n._(PREVIEW_SOUND_DESCRIPTOR)} data-flx=\"user.entrance-sound-section.library-tooltip\"",
-        "flx": "user.entrance-sound-section.library-row"
+        "flx": "user.entrance-sound-section.sound-card-main"
       },
       "status": "missing",
       "rust": {
@@ -4369,7 +4384,7 @@
         "line": 628,
         "kind": "Tooltip",
         "detail": "text={i18n._(DELETE_FROM_LIBRARY_DESCRIPTOR)} data-flx=\"user.entrance-sound-section.library-delete-tooltip\"",
-        "flx": "user.entrance-sound-section.sound-duration"
+        "flx": "user.entrance-sound-section.library-delete-tooltip"
       },
       "status": "missing",
       "rust": {
@@ -4387,7 +4402,7 @@
         "line": 105,
         "kind": "Tooltip",
         "detail": "text={i18n._(CUSTOMIZE_YOUR_TAG_TO_YOUR_LIKING_WITH_DESCRIPTOR, { discriminatorLabel, premiumProductName: getPremiumProd",
-        "flx": "user.my-profile-tab.username-section.button.push"
+        "flx": "user.my-profile-tab.username-section.tooltip--3"
       },
       "status": "missing",
       "rust": {
@@ -4405,7 +4420,7 @@
         "line": 78,
         "kind": "Tooltip",
         "detail": "text={disabledReason} data-flx=\"user.my-profile-tab.username-section.tooltip\"",
-        "flx": "user.my-profile-tab.username-section.div"
+        "flx": "user.my-profile-tab.username-section.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -4477,7 +4492,7 @@
         "line": 284,
         "kind": "Tooltip",
         "detail": "text={RuntimeConfig.productName} data-flx=\"user.user-profile-shared.user-profile-membership-info.tooltip\"",
-        "flx": "user.user-profile-shared.user-profile-membership-info.membership-dates"
+        "flx": "user.user-profile-shared.user-profile-membership-info.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -4495,7 +4510,7 @@
         "line": 309,
         "kind": "Tooltip",
         "detail": "text={profile.guild.name} data-flx=\"user.user-profile-shared.user-profile-membership-info.tooltip--2\"",
-        "flx": "user.user-profile-shared.user-profile-membership-info.membership-date-text"
+        "flx": "user.user-profile-shared.user-profile-membership-info.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -4531,7 +4546,7 @@
         "line": 426,
         "kind": "Tooltip",
         "detail": "text={ connection.verified ? i18n._(THIS_CONNECTION_HAS_BEEN_VERIFIED_DESCRIPTOR) : i18n._(THIS_CONNECTION_HAS_NOT_BEEN_",
-        "flx": "user.user-profile-shared.connection-card.connection-card-name-row"
+        "flx": "user.user-profile-shared.connection-card.connection-card-name"
       },
       "status": "missing",
       "rust": {
@@ -4549,7 +4564,7 @@
         "line": 484,
         "kind": "Tooltip",
         "detail": "text={i18n._(OPEN_LINK_DESCRIPTOR)} data-flx=\"user.user-profile-shared.connection-card.tooltip--3\"",
-        "flx": "user.user-profile-shared.connection-card.connection-external-arrow"
+        "flx": "user.user-profile-shared.connection-card.tooltip--3"
       },
       "status": "missing",
       "rust": {
@@ -4585,7 +4600,7 @@
         "line": 302,
         "kind": "Tooltip",
         "detail": "text={i18n._(YOU_CAN_T_MESSAGE_YOURSELF_DESCRIPTOR)} maxWidth=\"xl\" data-flx=\"user.profile.profile-preview.tooltip\"",
-        "flx": "user.profile.profile-preview.user-profile-membership-info"
+        "flx": "user.profile.profile-preview.profile-card-footer"
       },
       "status": "missing",
       "rust": {
@@ -4603,7 +4618,7 @@
         "line": 279,
         "kind": "Tooltip",
         "detail": "text={cannotJoinReason} maxWidth=\"xl\" data-flx=\"user.profile.voice-activity-card.tooltip\"",
-        "flx": "user.profile.voice-activity-card.stream-preview-section"
+        "flx": "user.profile.voice-activity-card.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -4621,7 +4636,7 @@
         "line": 354,
         "kind": "Tooltip",
         "detail": "text={guild.name ?? ''} data-flx=\"user.profile.voice-activity-card.voice-activity-context.tooltip\"",
-        "flx": "user.profile.voice-activity-card.voice-activity-context.context-button.guild-navigate"
+        "flx": "user.profile.voice-activity-card.voice-activity-context.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -4639,7 +4654,7 @@
         "line": 395,
         "kind": "Tooltip",
         "detail": "text={displayName} data-flx=\"user.profile.voice-activity-card.voice-activity-context.tooltip--2\"",
-        "flx": "user.profile.voice-activity-card.voice-activity-context.context-button.dm-navigate"
+        "flx": "user.profile.voice-activity-card.voice-activity-context.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -4657,7 +4672,7 @@
         "line": 429,
         "kind": "Tooltip",
         "detail": "text={displayName} data-flx=\"user.profile.voice-activity-card.voice-activity-context.tooltip--3\"",
-        "flx": "user.profile.voice-activity-card.voice-activity-context.context-button.dm-navigate--2"
+        "flx": "user.profile.voice-activity-card.voice-activity-context.tooltip--3"
       },
       "status": "missing",
       "rust": {
@@ -4675,7 +4690,7 @@
         "line": 42,
         "kind": "Tooltip",
         "detail": "text={ userNote ? () =",
-        "flx": "user.profile.profile-card.profile-card-actions.note-button-container"
+        "flx": "user.profile.profile-card.profile-card-actions.focus-ring"
       },
       "status": "missing",
       "rust": {
@@ -4693,7 +4708,7 @@
         "line": 85,
         "kind": "Tooltip",
         "detail": "text={i18n._(COPY_USER_ID_DESCRIPTOR)} maxWidth=\"none\" data-flx=\"user.profile.profile-card.profile-card-actions.tooltip-",
-        "flx": "user.profile.profile-card.profile-card-actions.copy-id-button-container"
+        "flx": "user.profile.profile-card.profile-card-actions.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -4711,7 +4726,7 @@
         "line": 67,
         "kind": "Tooltip",
         "detail": "text={displayName} data-flx=\"user.profile.profile-card.profile-card-user-info.display-name-tooltip\"",
-        "flx": "user.profile.profile-card.profile-card-user-info.name-button.display-name-click"
+        "flx": "user.profile.profile-card.profile-card-user-info.display-name-tooltip"
       },
       "status": "missing",
       "rust": {
@@ -4729,7 +4744,7 @@
         "line": 337,
         "kind": "Tooltip",
         "detail": "text={participantsToggleLabel} data-flx=\"voice.voice-call-layout-content.focus-layout-node.tooltip\"",
-        "flx": "voice.voice-call-layout-content.focus-layout-node.focus-expanded-toggle-row"
+        "flx": "voice.voice-call-layout-content.focus-layout-node.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -4747,7 +4762,7 @@
         "line": 465,
         "kind": "Tooltip",
         "detail": "text={participantsToggleLabel} data-flx=\"voice.voice-call-layout-content.focus-layout-node.tooltip--2\"",
-        "flx": "voice.voice-call-layout-content.focus-layout-node.carousel-toggle-wrap"
+        "flx": "voice.voice-call-layout-content.focus-layout-node.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -4765,7 +4780,7 @@
         "line": 526,
         "kind": "Tooltip",
         "detail": "text={membersRowToggleLabel} data-flx=\"voice.voice-call-layout-content.focus-layout-node.members-toggle-tooltip\"",
-        "flx": "voice.voice-call-layout-content.focus-layout-node.members-toggle-wrap"
+        "flx": "voice.voice-call-layout-content.focus-layout-node.members-toggle-tooltip"
       },
       "status": "missing",
       "rust": {
@@ -4783,7 +4798,7 @@
         "line": 654,
         "kind": "Tooltip",
         "detail": "text={() =",
-        "flx": "voice.voice-control-bar.voice-control-bar-inner.container"
+        "flx": "voice.voice-control-bar.voice-control-bar-inner.button-container"
       },
       "status": "present",
       "rust": {
@@ -4803,7 +4818,7 @@
         "line": 697,
         "kind": "Tooltip",
         "detail": "text={inputSettingsLabel} data-flx=\"voice.voice-control-bar.voice-control-bar-inner.tooltip--2\"",
-        "flx": "voice.voice-control-bar.voice-control-bar-inner.icon"
+        "flx": "voice.voice-control-bar.voice-control-bar-inner.tooltip--2"
       },
       "status": "present",
       "rust": {
@@ -4823,7 +4838,7 @@
         "line": 720,
         "kind": "Tooltip",
         "detail": "text={() =",
-        "flx": "voice.voice-control-bar.voice-control-bar-inner.icon-small"
+        "flx": "voice.voice-control-bar.voice-control-bar-inner.button-container.output-settings"
       },
       "status": "present",
       "rust": {
@@ -4843,7 +4858,7 @@
         "line": 763,
         "kind": "Tooltip",
         "detail": "text={outputSettingsLabel} data-flx=\"voice.voice-control-bar.voice-control-bar-inner.tooltip.output-settings\"",
-        "flx": "voice.voice-control-bar.voice-control-bar-inner.icon--3"
+        "flx": "voice.voice-control-bar.voice-control-bar-inner.tooltip.output-settings"
       },
       "status": "present",
       "rust": {
@@ -4863,7 +4878,7 @@
         "line": 789,
         "kind": "Tooltip",
         "detail": "text={cameraControlLabel} data-flx=\"voice.voice-control-bar.voice-control-bar-inner.tooltip--4\"",
-        "flx": "voice.voice-control-bar.voice-control-bar-inner.icon-small.output-settings"
+        "flx": "voice.voice-control-bar.voice-control-bar-inner.tooltip--4"
       },
       "status": "present",
       "rust": {
@@ -4883,7 +4898,7 @@
         "line": 817,
         "kind": "Tooltip",
         "detail": "text={cameraSettingsLabel} data-flx=\"voice.voice-control-bar.voice-control-bar-inner.tooltip--5\"",
-        "flx": "voice.voice-control-bar.voice-control-bar-inner.icon--5"
+        "flx": "voice.voice-control-bar.voice-control-bar-inner.tooltip--5"
       },
       "status": "present",
       "rust": {
@@ -4903,7 +4918,7 @@
         "line": 840,
         "kind": "Tooltip",
         "detail": "text={screenShareControlLabel} data-flx=\"voice.voice-control-bar.voice-control-bar-inner.tooltip--6\"",
-        "flx": "voice.voice-control-bar.voice-control-bar-inner.icon-small--2"
+        "flx": "voice.voice-control-bar.voice-control-bar-inner.tooltip--6"
       },
       "status": "present",
       "rust": {
@@ -4923,7 +4938,7 @@
         "line": 865,
         "kind": "Tooltip",
         "detail": "text={screenShareSettingsLabel} data-flx=\"voice.voice-control-bar.voice-control-bar-inner.tooltip.screen-share-settings\"",
-        "flx": "voice.voice-control-bar.voice-control-bar-inner.button.undefined--4"
+        "flx": "voice.voice-control-bar.voice-control-bar-inner.tooltip.screen-share-settings"
       },
       "status": "present",
       "rust": {
@@ -4943,7 +4958,7 @@
         "line": 893,
         "kind": "Tooltip",
         "detail": "text={i18n._(MORE_OPTIONS_DESCRIPTOR)} data-flx=\"voice.voice-control-bar.voice-control-bar-inner.tooltip--7\"",
-        "flx": "voice.voice-control-bar.voice-control-bar-inner.icon-small.screen-share-settings"
+        "flx": "voice.voice-control-bar.voice-control-bar-inner.tooltip--7"
       },
       "status": "present",
       "rust": {
@@ -4963,7 +4978,7 @@
         "line": 919,
         "kind": "Tooltip",
         "detail": "text={disconnectLabel} data-flx=\"voice.voice-control-bar.voice-control-bar-inner.tooltip--8\"",
-        "flx": "voice.voice-control-bar.voice-control-bar-inner.icon--8"
+        "flx": "voice.voice-control-bar.voice-control-bar-inner.tooltip--8"
       },
       "status": "present",
       "rust": {
@@ -4983,7 +4998,7 @@
         "line": 937,
         "kind": "Tooltip",
         "detail": "text={i18n._(STOP_WATCHING_STREAM_DESCRIPTOR)} data-flx=\"voice.voice-control-bar.voice-control-bar-inner.tooltip--9\"",
-        "flx": "voice.voice-control-bar.voice-control-bar-inner.button.disconnect"
+        "flx": "voice.voice-control-bar.voice-control-bar-inner.tooltip--9"
       },
       "status": "present",
       "rust": {
@@ -5021,7 +5036,7 @@
         "line": 1310,
         "kind": "Tooltip",
         "detail": "text={groupCollapseTooltip} position=\"top\" data-flx=\"voice.voice-participant-tile.voice-participant-tile-inner.group-col",
-        "flx": "voice.voice-participant-tile.voice-participant-tile-inner.stream-audio-volume-control"
+        "flx": "voice.voice-participant-tile.voice-participant-tile-inner.group-collapse-tooltip"
       },
       "status": "missing",
       "rust": {
@@ -5039,7 +5054,7 @@
         "line": 1344,
         "kind": "Tooltip",
         "detail": "text={groupExpandTooltip} position=\"top\" data-flx=\"voice.voice-participant-tile.voice-participant-tile-inner.group-expan",
-        "flx": "voice.voice-participant-tile.voice-participant-tile-inner.group-expand-pill-sign"
+        "flx": "voice.voice-participant-tile.voice-participant-tile-inner.group-expand-tooltip"
       },
       "status": "missing",
       "rust": {
@@ -5057,13 +5072,15 @@
         "line": 1444,
         "kind": "Tooltip",
         "detail": "text={muteStatusLabel} position=\"top\" data-flx=\"voice.voice-participant-tile.voice-participant-tile-inner.tooltip--2\"",
-        "flx": "voice.voice-participant-tile.voice-participant-tile-inner.div--3"
+        "flx": "voice.voice-participant-tile.voice-participant-tile-inner.tooltip--2"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs:395"
+        ],
+        "reason": "flx 'voice.voice-participant-tile.voice-participant-tile-inner.tooltip--2' has tooltip in Rust"
       }
     },
     {
@@ -5075,13 +5092,15 @@
         "line": 1457,
         "kind": "Tooltip",
         "detail": "text={deafenStatusLabel} position=\"top\" data-flx=\"voice.voice-participant-tile.voice-participant-tile-inner.tooltip--3\"",
-        "flx": "voice.voice-participant-tile.voice-participant-tile-inner.participant-icon"
+        "flx": "voice.voice-participant-tile.voice-participant-tile-inner.tooltip--3"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs:416"
+        ],
+        "reason": "flx 'voice.voice-participant-tile.voice-participant-tile-inner.tooltip--3' has tooltip in Rust"
       }
     },
     {
@@ -5093,13 +5112,15 @@
         "line": 1469,
         "kind": "Tooltip",
         "detail": "text={voiceState?.is_mobile ? i18n._(MOBILE_DEVICE_DESCRIPTOR) : i18n._(DESKTOP_DEVICE_DESCRIPTOR)} position=\"top\" data-",
-        "flx": "voice.voice-participant-tile.voice-participant-tile-inner.tooltip--3"
+        "flx": "voice.voice-participant-tile.voice-participant-tile-inner.participant-icon--2"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs:424"
+        ],
+        "reason": "flx 'voice.voice-participant-tile.voice-participant-tile-inner.participant-icon--2' has tooltip in Rust"
       }
     },
     {
@@ -5111,13 +5132,15 @@
         "line": 1493,
         "kind": "Tooltip",
         "detail": "text={participantDisplayName as string} position=\"top\" data-flx=\"voice.voice-participant-tile.voice-participant-tile-inn",
-        "flx": "voice.voice-participant-tile.voice-participant-tile-inner.participant-icon-white--2"
+        "flx": "voice.voice-participant-tile.voice-participant-tile-inner.tooltip--5"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs:349"
+        ],
+        "reason": "flx 'voice.voice-participant-tile.voice-participant-tile-inner.tooltip--5' has tooltip in Rust"
       }
     },
     {
@@ -5129,13 +5152,15 @@
         "line": 1506,
         "kind": "Tooltip",
         "detail": "text={i18n._(CONNECTION_DESCRIPTOR, {connectionId})} position=\"top\" data-flx=\"voice.voice-participant-tile.voice-partici",
-        "flx": "voice.voice-participant-tile.voice-participant-tile-inner.participant-name-text"
+        "flx": "voice.voice-participant-tile.voice-participant-tile-inner.tooltip--6"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs:368"
+        ],
+        "reason": "flx 'voice.voice-participant-tile.voice-participant-tile-inner.tooltip--6' has tooltip in Rust"
       }
     },
     {
@@ -5201,7 +5226,7 @@
         "line": 65,
         "kind": "Tooltip",
         "detail": "text={() =",
-        "flx": "voice.compact-voice-call-view.compact-call-height-toggle-button.height-toggle-button-wrap"
+        "flx": "voice.compact-voice-call-view.compact-call-height-toggle-button.height-toggle-button-shell"
       },
       "status": "missing",
       "rust": {
@@ -5219,7 +5244,7 @@
         "line": 242,
         "kind": "Tooltip",
         "detail": "text={i18n._(REWIND_SECONDS_DESCRIPTOR, {defaultSeekAmount: DEFAULT_SEEK_AMOUNT})} position=\"top\" openOnMountHover={fals",
-        "flx": "voice.media-player.audio-player.controls"
+        "flx": "voice.media-player.audio-player.main-controls"
       },
       "status": "missing",
       "rust": {
@@ -5237,7 +5262,7 @@
         "line": 279,
         "kind": "Tooltip",
         "detail": "text={i18n._(FORWARD_SECONDS_DESCRIPTOR, {defaultSeekAmount: DEFAULT_SEEK_AMOUNT})} position=\"top\" openOnMountHover={fal",
-        "flx": "voice.media-player.audio-player.pause-icon"
+        "flx": "voice.media-player.audio-player.play-icon"
       },
       "status": "missing",
       "rust": {
@@ -5255,7 +5280,7 @@
         "line": 425,
         "kind": "Tooltip",
         "detail": "text={isFavorited ? i18n._(REMOVE_FROM_FAVORITES_DESCRIPTOR) : i18n._(ADD_TO_FAVORITES_DESCRIPTOR)} position=\"top\" openO",
-        "flx": "voice.media-player.inline-audio-player.controls-right"
+        "flx": "voice.media-player.inline-audio-player.media-playback-rate"
       },
       "status": "missing",
       "rust": {
@@ -5273,7 +5298,7 @@
         "line": 451,
         "kind": "Tooltip",
         "detail": "text={i18n._(DOWNLOAD_DESCRIPTOR)} position=\"top\" openOnMountHover={false} data-flx=\"voice.media-player.inline-audio-pla",
-        "flx": "voice.media-player.inline-audio-player.star-icon"
+        "flx": "voice.media-player.inline-audio-player.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -5291,7 +5316,7 @@
         "line": 65,
         "kind": "Tooltip",
         "detail": "text={label} position=\"top\" openOnMountHover={false} data-flx=\"voice.media-player.media-fullscreen-button.tooltip\"",
-        "flx": "voice.media-player.media-fullscreen-button.button.click"
+        "flx": "voice.media-player.media-fullscreen-button.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -5309,7 +5334,7 @@
         "line": 73,
         "kind": "Tooltip",
         "detail": "text={label} position=\"top\" openOnMountHover={false} data-flx=\"voice.media-player.media-pip-button.tooltip\"",
-        "flx": "voice.media-player.media-pip-button.button.click"
+        "flx": "voice.media-player.media-pip-button.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -5327,7 +5352,7 @@
         "line": 72,
         "kind": "Tooltip",
         "detail": "text={label} position=\"top\" openOnMountHover={false} data-flx=\"voice.media-player.media-play-button.tooltip\"",
-        "flx": "voice.media-player.media-play-button.button.click"
+        "flx": "voice.media-player.media-play-button.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -5345,7 +5370,7 @@
         "line": 87,
         "kind": "Tooltip",
         "detail": "text={i18n._(PLAYBACK_SPEED_2_DESCRIPTOR)} position=\"top\" openOnMountHover={false} data-flx=\"voice.media-player.media-pl",
-        "flx": "voice.media-player.media-playback-rate.button.click"
+        "flx": "voice.media-player.media-playback-rate.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -5363,7 +5388,7 @@
         "line": 428,
         "kind": "tooltip-prop",
         "detail": "{tooltip}",
-        "flx": "voice.media-player.media-progress-bar.tooltip-anchor"
+        "flx": "voice.media-player.media-progress-bar.slider-tooltip-portal"
       },
       "status": "missing",
       "rust": {
@@ -5381,7 +5406,7 @@
         "line": 275,
         "kind": "Tooltip",
         "detail": "text={muteLabel} position=\"top\" openOnMountHover={false} data-flx=\"voice.media-player.media-volume-control.tooltip\"",
-        "flx": "voice.media-player.media-volume-control.mute-button.mute-click"
+        "flx": "voice.media-player.media-volume-control.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -5399,7 +5424,7 @@
         "line": 864,
         "kind": "Tooltip",
         "detail": "text={cameraBlockedReason} data-flx=\"voice.camera-preview-modal.camera-preview-modal-content.tooltip\"",
-        "flx": "voice.camera-preview-modal.camera-preview-modal-content.camera-icon"
+        "flx": "voice.camera-preview-modal.camera-preview-modal-content.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -5453,7 +5478,7 @@
         "line": 229,
         "kind": "Tooltip",
         "detail": "text={screenShareLabel} data-flx=\"voice.voice-connection-status.local-participant-controls.tooltip--2\"",
-        "flx": "voice.voice-connection-status.local-participant-controls.media-icon"
+        "flx": "voice.voice-connection-status.local-participant-controls.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -5471,15 +5496,15 @@
         "line": 212,
         "kind": "Tooltip",
         "detail": "text={ currentLatency !== null ? i18n._(PING_MS_DESCRIPTOR, {currentLatency}) : i18n._(MEASURING_LATENCY_DESCRIPTOR) } d",
-        "flx": "voice.voice-connection-status.voice-connection-status-inner.voice-connection-container"
+        "flx": "voice.voice-connection-status.voice-connection-status-inner.status-row"
       },
       "status": "differs",
       "rust": {
         "status": "differs",
         "matches": [
-          "fluxer_client/app/src/ui/voice_panel.rs:119"
+          "fluxer_client/app/src/ui/voice_panel.rs:129"
         ],
-        "reason": "flx 'voice.voice-connection-status.voice-connection-status-inner.voice-connection-container' exists in Rust without tooltip call"
+        "reason": "flx 'voice.voice-connection-status.voice-connection-status-inner.status-row' exists in Rust without tooltip call"
       }
     },
     {
@@ -5491,7 +5516,7 @@
         "line": 270,
         "kind": "Tooltip",
         "detail": "text={disconnectLabel} data-flx=\"voice.voice-connection-status.voice-connection-status-inner.tooltip--2\"",
-        "flx": "voice.voice-connection-status.voice-connection-status-inner.audio-processing-button.open-noise-suppression-modal"
+        "flx": "voice.voice-connection-status.voice-connection-status-inner.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -5509,7 +5534,7 @@
         "line": 368,
         "kind": "Tooltip",
         "detail": "text={connectionId} position=\"top\" align=\"center\" data-flx=\"voice.voice-connection-status.voice-connection-status-inner.",
-        "flx": "voice.voice-connection-status.voice-connection-status-inner.connection-id-icon--2"
+        "flx": "voice.voice-connection-status.voice-connection-status-inner.tooltip--3"
       },
       "status": "missing",
       "rust": {
@@ -5527,7 +5552,7 @@
         "line": 446,
         "kind": "Tooltip",
         "detail": "text={retryLabel} data-flx=\"voice.voice-connection-status.failed-voice-connection-status.tooltip-retry\"",
-        "flx": "voice.voice-connection-status.failed-voice-connection-status.status-button"
+        "flx": "voice.voice-connection-status.failed-voice-connection-status.tooltip-retry"
       },
       "status": "missing",
       "rust": {
@@ -5545,7 +5570,7 @@
         "line": 469,
         "kind": "Tooltip",
         "detail": "text={dismissLabel} data-flx=\"voice.voice-connection-status.failed-voice-connection-status.tooltip-dismiss\"",
-        "flx": "voice.voice-connection-status.failed-voice-connection-status.retry-button"
+        "flx": "voice.voice-connection-status.failed-voice-connection-status.tooltip-dismiss"
       },
       "status": "missing",
       "rust": {
@@ -5563,7 +5588,7 @@
         "line": 387,
         "kind": "Tooltip",
         "detail": "text={connectionId} data-flx=\"voice.voice-connection-status.voice-details-popout.tooltip\"",
-        "flx": "voice.voice-connection-status.voice-details-popout.popout-stats-section"
+        "flx": "voice.voice-connection-status.voice-details-popout.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -5581,7 +5606,7 @@
         "line": 530,
         "kind": "Tooltip",
         "detail": "text={publisherTransportSummary} data-flx=\"voice.voice-connection-status.voice-details-popout.tooltip--2\"",
-        "flx": "voice.voice-connection-status.voice-details-popout.popout-stat-row--17"
+        "flx": "voice.voice-connection-status.voice-details-popout.tooltip--2"
       },
       "status": "missing",
       "rust": {
@@ -5599,7 +5624,7 @@
         "line": 549,
         "kind": "Tooltip",
         "detail": "text={subscriberTransportSummary} data-flx=\"voice.voice-connection-status.voice-details-popout.tooltip--3\"",
-        "flx": "voice.voice-connection-status.voice-details-popout.popout-stat-row--18"
+        "flx": "voice.voice-connection-status.voice-details-popout.tooltip--3"
       },
       "status": "missing",
       "rust": {
@@ -5617,7 +5642,7 @@
         "line": 62,
         "kind": "Tooltip",
         "detail": "text={addStreamTooltipText} data-flx=\"voice.voice-participant-tile.watch-stream-overlay.tooltip\"",
-        "flx": "voice.voice-participant-tile.watch-stream-overlay.watch-stream-button"
+        "flx": "voice.voice-participant-tile.watch-stream-overlay.tooltip"
       },
       "status": "missing",
       "rust": {
@@ -5978,7 +6003,7 @@
         "file": "fluxer_app/src/features/ui/action_menu/GroupDMContextMenu.tsx",
         "line": 142,
         "kind": "component_definition",
-        "flx": "ui.action-menu.group-dm-context-menu.menu-group"
+        "flx": "ui.action-menu.group-dm-context-menu.mute-dm-menu-item"
       },
       "status": "missing",
       "rust": {
@@ -6571,7 +6596,7 @@
         "line": 749,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "app.favorites-channel-list-content.channel-list-scroller--2"
+        "flx": "app.favorites-channel-list-content.navigation.context-menu"
       },
       "status": "differs",
       "rust": {
@@ -6591,7 +6616,7 @@
         "line": 62,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "app.favorites-guild-header.favorites-guild-header-popout"
+        "flx": "app.favorites-guild-header.favorites-guild-header-bottom-sheet"
       },
       "status": "missing",
       "rust": {
@@ -6665,7 +6690,7 @@
         "line": 150,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "app.guild-header.guild-header-popout"
+        "flx": "app.guild-header.guild-header-bottom-sheet"
       },
       "status": "missing",
       "rust": {
@@ -6683,7 +6708,7 @@
         "line": 102,
         "kind": "onContextMenu",
         "handler": "handleContextMenuWrapper",
-        "flx": "app.guild-header-shell.focus-ring"
+        "flx": "app.guild-header-shell.button.open-bottom-sheet"
       },
       "status": "missing",
       "rust": {
@@ -6755,7 +6780,7 @@
         "line": 448,
         "kind": "onContextMenu",
         "handler": "(event)",
-        "flx": "app.user-area.user-area-inner.focus-ring--3"
+        "flx": "app.user-area.user-area-inner.settings-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -6793,13 +6818,15 @@
         "line": 96,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "app.sidebar-nav.add-guild-button.tooltip-with-keybind"
+        "flx": "app.sidebar-nav.add-guild-button.icon-text"
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for AddGuildButton.onContextMenu"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/ui/guild_rail.rs:309"
+        ],
+        "reason": "flx 'app.sidebar-nav.add-guild-button.icon-text' exists in Rust without right-click/context-menu handler"
       }
     },
     {
@@ -6847,7 +6874,7 @@
         "line": 150,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "app.sidebar-nav.fluxer-button.focus-ring"
+        "flx": "app.sidebar-nav.fluxer-button.fluxer-button.select"
       },
       "status": "missing",
       "rust": {
@@ -6901,7 +6928,7 @@
         "line": 359,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "app.sidebar-nav.guild-list-dm-item.dm-list-item.focus-ring"
+        "flx": "app.sidebar-nav.guild-list-dm-item.dm-list-item.button.select"
       },
       "status": "missing",
       "rust": {
@@ -6955,7 +6982,7 @@
         "line": 68,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "app.sidebar-nav.help-button.tooltip-with-keybind"
+        "flx": "app.sidebar-nav.help-button.icon-text"
       },
       "status": "missing",
       "rust": {
@@ -6973,15 +7000,13 @@
         "line": 66,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "app.expiry-footnote.inline-footnote.text"
+        "flx": "app.expiry-footnote.focus-ring"
       },
-      "status": "present",
+      "status": "missing",
       "rust": {
-        "status": "present",
-        "matches": [
-          "fluxer_client/app/src/ui/message_row.rs:88"
-        ],
-        "reason": "matched data-flx 'app.expiry-footnote.inline-footnote.text' with right-click/context-menu handler"
+        "status": "missing",
+        "matches": [],
+        "reason": "no matching context menu for ExpiryFootnote.onContextMenu"
       }
     },
     {
@@ -7101,13 +7126,15 @@
         "line": 746,
         "kind": "onContextMenu",
         "handler": "handleUserContextMenu",
-        "flx": "channel.channel-header.focus-ring--4"
+        "flx": "channel.channel-header.desktop-button.open-user-profile"
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for ChannelHeader.onContextMenu"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:143"
+        ],
+        "reason": "flx 'channel.channel-header.desktop-button.open-user-profile' exists in Rust without right-click/context-menu handler"
       }
     },
     {
@@ -7119,7 +7146,7 @@
         "line": 788,
         "kind": "onContextMenu",
         "handler": "handleUserContextMenu",
-        "flx": "channel.channel-header.focus-ring--5"
+        "flx": "channel.channel-header.group-dm-header-trigger.open-edit-group"
       },
       "status": "missing",
       "rust": {
@@ -7137,7 +7164,7 @@
         "line": 850,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "channel.channel-header.channel-name--7"
+        "flx": "channel.channel-header.channel-info-container.context-menu"
       },
       "status": "missing",
       "rust": {
@@ -7195,7 +7222,7 @@
         "line": 70,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "channel.channel-stickers-area.sticker-preview"
+        "flx": "channel.channel-stickers-area.sticker-info"
       },
       "status": "missing",
       "rust": {
@@ -7213,7 +7240,7 @@
         "line": 426,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "channel.invite-embed.handle-context-menu.invite-embed-context-menu"
+        "flx": "channel.invite-embed.invite-wrapper.context-menu"
       },
       "status": "missing",
       "rust": {
@@ -7249,15 +7276,13 @@
         "line": 204,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "channel.member-list-item.focus-ring-wrapper"
+        "flx": "channel.member-list-item.button.context-menu"
       },
-      "status": "differs",
+      "status": "missing",
       "rust": {
-        "status": "differs",
-        "matches": [
-          "fluxer_client/app/src/ui/member_list.rs:370"
-        ],
-        "reason": "flx 'channel.member-list-item.focus-ring-wrapper' exists in Rust without right-click/context-menu handler"
+        "status": "missing",
+        "matches": [],
+        "reason": "no matching context menu for MemberListItem.onContextMenu"
       }
     },
     {
@@ -7269,7 +7294,7 @@
         "line": 537,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "channel.message-attachments.sticker-item.focus-ring.mobile"
+        "flx": "channel.message-attachments.sticker-item.sticker-wrapper.open-bottom-sheet"
       },
       "status": "missing",
       "rust": {
@@ -7287,7 +7312,7 @@
         "line": 584,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "channel.message-attachments.sticker-item.expression-info-popout"
+        "flx": "channel.message-attachments.sticker-item.sticker-wrapper.reveal-click"
       },
       "status": "missing",
       "rust": {
@@ -7397,7 +7422,7 @@
         "line": 256,
         "kind": "onContextMenu",
         "handler": "handleUserContextMenu",
-        "flx": "channel.direct-message.dm-welcome-section.welcome-section"
+        "flx": "channel.direct-message.dm-welcome-section.avatar-button.open-full-profile"
       },
       "status": "missing",
       "rust": {
@@ -7415,7 +7440,7 @@
         "line": 272,
         "kind": "onContextMenu",
         "handler": "handleUserContextMenu",
-        "flx": "channel.direct-message.dm-welcome-section.status-aware-avatar"
+        "flx": "channel.direct-message.dm-welcome-section.username-button.open-full-profile"
       },
       "status": "missing",
       "rust": {
@@ -7433,7 +7458,7 @@
         "line": 138,
         "kind": "onContextMenu",
         "handler": "onContextMenu",
-        "flx": "channel.direct-message.dm-list.clickable-item.focus-ring"
+        "flx": "channel.direct-message.dm-list.clickable-item.clickable-item.button"
       },
       "status": "missing",
       "rust": {
@@ -7469,7 +7494,7 @@
         "line": 620,
         "kind": "onContextMenu",
         "handler": "handlePersonalNotesContextMenu",
-        "flx": "channel.direct-message.dm-list.mention-badge"
+        "flx": "channel.direct-message.dm-list.clickable-item.navigate-to--2"
       },
       "status": "missing",
       "rust": {
@@ -7487,7 +7512,7 @@
         "line": 650,
         "kind": "onContextMenu",
         "handler": "handlePlutoniumContextMenu",
-        "flx": "channel.direct-message.dm-list.clickable-item-text--2"
+        "flx": "channel.direct-message.dm-list.clickable-item.open"
       },
       "status": "missing",
       "rust": {
@@ -7505,7 +7530,7 @@
         "line": 71,
         "kind": "onContextMenu",
         "handler": "handleGroupContextMenu",
-        "flx": "channel.direct-message.group-dm-welcome-section.handle-group-context-menu.group-dm-context-menu"
+        "flx": "channel.direct-message.group-dm-welcome-section.profile-section.group-context-menu.button"
       },
       "status": "missing",
       "rust": {
@@ -7523,7 +7548,7 @@
         "line": 230,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "channel.embeds.attachments.attachment-file.handle-context-menu.media-context-menu.file"
+        "flx": "channel.embeds.attachments.attachment-file.group.mouse-down"
       },
       "status": "missing",
       "rust": {
@@ -7667,13 +7692,16 @@
         "line": 206,
         "kind": "onContextMenu",
         "handler": "onContextMenu",
-        "flx": "channel.embeds.media.media-container.long-pressable.clear-text-selection"
+        "flx": "channel.embeds.media.media-container.group.clear-text-selection"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for MediaContainer.onContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/message_row.rs:373",
+          "fluxer_client/app/src/ui/message_row.rs:378"
+        ],
+        "reason": "matched data-flx 'channel.embeds.media.media-container.group.clear-text-selection' with right-click/context-menu handler"
       }
     },
     {
@@ -7703,7 +7731,7 @@
         "line": 167,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "channel.emoji-picker.emoji-renderer.render-button.focus-ring"
+        "flx": "channel.emoji-picker.emoji-renderer.render-button.option.click.button"
       },
       "status": "missing",
       "rust": {
@@ -7721,7 +7749,7 @@
         "line": 351,
         "kind": "onContextMenu",
         "handler": "handleUserContextMenu",
-        "flx": "channel.friends.friend-list-item.focus-ring"
+        "flx": "channel.friends.friend-list-item.friend-list-item.open-profile"
       },
       "status": "missing",
       "rust": {
@@ -7739,7 +7767,7 @@
         "line": 228,
         "kind": "onContextMenu",
         "handler": "(event)",
-        "flx": "channel.guild-members-page.handle-overflow-roles-click.menu-item"
+        "flx": "channel.guild-members-page.handle-overflow-roles-click.readonly-role-item.open-role-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -7775,7 +7803,7 @@
         "line": 394,
         "kind": "onContextMenu",
         "handler": "handleTopRoleContextMenu",
-        "flx": "channel.guild-members-page.member-table-row.roles-cell"
+        "flx": "channel.guild-members-page.member-table-row.role-pill.top-role-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -7829,7 +7857,7 @@
         "line": 72,
         "kind": "onContextMenu",
         "handler": "(event)",
-        "flx": "channel.guild-members-page.roles-filter-menu-content.checkbox-item"
+        "flx": "channel.guild-members-page.roles-filter-menu-content.role-filter-item.open-role-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -7847,7 +7875,7 @@
         "line": 69,
         "kind": "onContextMenu",
         "handler": "roleId",
-        "flx": "channel.channel-tabs.channel-permissions-tab.overwrite-icon"
+        "flx": "channel.channel-tabs.channel-permissions-tab.mobile-override-item.mobile-overwrite-select.button"
       },
       "status": "missing",
       "rust": {
@@ -7901,7 +7929,7 @@
         "line": 106,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "discovery.discovery.discovery-guild-card.handle-context-menu.discovery-guild-context-menu"
+        "flx": "discovery.discovery.discovery-guild-card.card.context-menu"
       },
       "status": "missing",
       "rust": {
@@ -7919,7 +7947,7 @@
         "line": 441,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "emoji.emojis.emoji-list-item.handle-context-menu.emoji-context-menu-items"
+        "flx": "emoji.emojis.emoji-list-item.card-wrapper.context-menu"
       },
       "status": "missing",
       "rust": {
@@ -7937,7 +7965,7 @@
         "line": 525,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "emoji.emojis.emoji-list-item.delete-icon"
+        "flx": "emoji.emojis.emoji-list-item.card-wrapper.context-menu--2"
       },
       "status": "missing",
       "rust": {
@@ -7973,7 +8001,7 @@
         "line": 280,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "forum.forum-post-card.card"
+        "flx": "forum.forum-post-card.card-media.open-viewer.button"
       },
       "status": "missing",
       "rust": {
@@ -8009,7 +8037,7 @@
         "line": 239,
         "kind": "onContextMenu",
         "handler": "(event)",
-        "flx": "guild.role-management.manage-roles-menu-content.checkbox-item"
+        "flx": "guild.role-management.manage-roles-menu-content.div.open-role-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -8027,7 +8055,7 @@
         "line": 82,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "guild.role-management.role-badge.role-indicator"
+        "flx": "guild.role-management.role-badge.role-badge.context-menu"
       },
       "status": "missing",
       "rust": {
@@ -8081,7 +8109,7 @@
         "line": 133,
         "kind": "onContextMenu",
         "handler": "(e)",
-        "flx": "guild.guild-tabs.user-list-item.member-item-wrapper"
+        "flx": "guild.guild-tabs.user-list-item.member-item.context-menu"
       },
       "status": "missing",
       "rust": {
@@ -8189,7 +8217,7 @@
         "line": 259,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "messaging.markdown.renderers.emoji-renderer.expression-info-card.default"
+        "flx": "messaging.markdown.renderers.emoji-renderer.button.open-bottom-sheet"
       },
       "status": "missing",
       "rust": {
@@ -8315,7 +8343,7 @@
         "line": 775,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "messaging.media-viewer-modal.media-viewer-modal-component.media-modal"
+        "flx": "messaging.media-viewer-modal.media-viewer-modal-component.media-context-menu-wrapper"
       },
       "status": "missing",
       "rust": {
@@ -8387,7 +8415,7 @@
         "line": 977,
         "kind": "onContextMenu",
         "handler": "handleBackgroundContextMenu",
-        "flx": "theme.background-image-gallery-modal.background-item.background-select--3"
+        "flx": "theme.background-image-gallery-modal.background-item.background-select--4"
       },
       "status": "missing",
       "rust": {
@@ -8405,7 +8433,7 @@
         "line": 39,
         "kind": "onContextMenu",
         "handler": "(event)",
-        "flx": "threads.message-thread-chip.focus-ring"
+        "flx": "threads.message-thread-chip.thread-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -8441,7 +8469,7 @@
         "line": 61,
         "kind": "onContextMenu",
         "handler": "(event)",
-        "flx": "threads.thread-browser.thread-browser-item.focus-ring"
+        "flx": "threads.thread-browser.thread-browser-item.thread-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -8459,7 +8487,7 @@
         "line": 118,
         "kind": "onContextMenu",
         "handler": "(event)",
-        "flx": "ui.action-menu.items.guild-member-menu-items.manage-roles-menu-item.menu-item"
+        "flx": "ui.action-menu.items.guild-member-menu-items.manage-roles-menu-item.group.open-role-context-menu--2"
       },
       "status": "missing",
       "rust": {
@@ -8477,7 +8505,7 @@
         "line": 91,
         "kind": "onContextMenu",
         "handler": "(event)",
-        "flx": "ui.action-menu.items.guild-member-menu-items.manage-roles-menu-item.checkbox-item"
+        "flx": "ui.action-menu.items.guild-member-menu-items.manage-roles-menu-item.role-container.open-role-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -8531,7 +8559,7 @@
         "line": 170,
         "kind": "onContextMenu",
         "handler": "openContextMenu",
-        "flx": "user.component-gallery-tab.overlays-tab.button.open-context-menu--2"
+        "flx": "user.component-gallery-tab.overlays-tab.demo-area.open-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -8621,7 +8649,7 @@
         "line": 300,
         "kind": "onContextMenu",
         "handler": "(event)",
-        "flx": "user.user-profile-modal.render-mutual-communities-groups-list.div"
+        "flx": "user.user-profile-modal.render-mutual-communities-groups-list.mutual-group-item.group-click"
       },
       "status": "missing",
       "rust": {
@@ -8639,7 +8667,7 @@
         "line": 317,
         "kind": "onContextMenu",
         "handler": "(event)",
-        "flx": "user.user-profile-modal.render-mutual-communities-groups-list.section-divider"
+        "flx": "user.user-profile-modal.render-mutual-communities-groups-list.mutual-guild-item.guild-click"
       },
       "status": "missing",
       "rust": {
@@ -8693,13 +8721,15 @@
         "line": 137,
         "kind": "onContextMenu",
         "handler": "onAvatarContextMenu",
-        "flx": "user.profile.profile-card.profile-card-banner.gif-indicator"
+        "flx": "user.profile.profile-card.profile-card-banner.avatar-button.avatar-click"
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for ProfileCardBanner.onContextMenu"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/ui/user_panel.rs:494"
+        ],
+        "reason": "flx 'user.profile.profile-card.profile-card-banner.avatar-button.avatar-click' exists in Rust without right-click/context-menu handler"
       }
     },
     {
@@ -8711,7 +8741,7 @@
         "line": 89,
         "kind": "onContextMenu",
         "handler": "onBannerContextMenu",
-        "flx": "user.profile.profile-card.profile-card-banner.header-section"
+        "flx": "user.profile.profile-card.profile-card-banner.banner-wrapper.banner-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -8729,7 +8759,7 @@
         "line": 288,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "voice.stream-spectators-popout.spectator-row.popout"
+        "flx": "voice.stream-spectators-popout.spectator-row.spectator-row.context-menu"
       },
       "status": "missing",
       "rust": {
@@ -8747,7 +8777,7 @@
         "line": 674,
         "kind": "onContextMenu",
         "handler": "handleMuteContextMenu",
-        "flx": "voice.voice-control-bar.voice-control-bar-inner.div"
+        "flx": "voice.voice-control-bar.voice-control-bar-inner.button.undefined"
       },
       "status": "present",
       "rust": {
@@ -8767,7 +8797,7 @@
         "line": 740,
         "kind": "onContextMenu",
         "handler": "handleDeafenContextMenu",
-        "flx": "voice.voice-control-bar.voice-control-bar-inner.div--2"
+        "flx": "voice.voice-control-bar.voice-control-bar-inner.button.undefined--2"
       },
       "status": "present",
       "rust": {
@@ -8787,7 +8817,7 @@
         "line": 795,
         "kind": "onContextMenu",
         "handler": "cameraDisabled",
-        "flx": "voice.voice-control-bar.voice-control-bar-inner.focus-ring--4"
+        "flx": "voice.voice-control-bar.voice-control-bar-inner.button.undefined--3"
       },
       "status": "present",
       "rust": {
@@ -8827,7 +8857,7 @@
         "line": 318,
         "kind": "onContextMenu",
         "handler": "handleContextMenu",
-        "flx": "voice.voice-participant-avatar-list.voice-participant-popout-row.popout"
+        "flx": "voice.voice-participant-avatar-list.voice-participant-popout-row.popout-row.context-menu"
       },
       "status": "missing",
       "rust": {
@@ -8899,7 +8929,7 @@
         "line": 321,
         "kind": "onContextMenu",
         "handler": "onContextMenu",
-        "flx": "voice.media-player.inline-audio-player.mobile-timestamp"
+        "flx": "voice.media-player.inline-audio-player.container.context-menu"
       },
       "status": "missing",
       "rust": {
@@ -8935,13 +8965,16 @@
         "line": 207,
         "kind": "onContextMenu",
         "handler": "cameraControlState.canOpenSettings",
-        "flx": "voice.voice-connection-status.local-participant-controls.focus-ring"
+        "flx": "voice.voice-connection-status.local-participant-controls.media-button.undefined"
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for LocalParticipantControls.onContextMenu"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_panel.rs:432",
+          "fluxer_client/app/src/ui/voice_panel.rs:471"
+        ],
+        "reason": "flx 'voice.voice-connection-status.local-participant-controls.media-button.undefined' exists in Rust without right-click/context-menu handler"
       }
     },
     {
@@ -8971,15 +9004,13 @@
         "line": 252,
         "kind": "onContextMenu",
         "handler": "handleVoiceConnectionStatusContextMenu",
-        "flx": "voice.voice-connection-status.voice-connection-status-inner.focus-ring-wrapper"
+        "flx": "voice.voice-connection-status.voice-connection-status-inner.status-button.voice-connection-status-context-menu"
       },
-      "status": "differs",
+      "status": "missing",
       "rust": {
-        "status": "differs",
-        "matches": [
-          "fluxer_client/app/src/ui/voice_panel.rs:145"
-        ],
-        "reason": "flx 'voice.voice-connection-status.voice-connection-status-inner.focus-ring-wrapper' exists in Rust without right-click/context-menu handler"
+        "status": "missing",
+        "matches": [],
+        "reason": "no matching context menu for VoiceConnectionStatusInner.onContextMenu"
       }
     },
     {
@@ -8991,13 +9022,15 @@
         "line": 307,
         "kind": "onContextMenu",
         "handler": "handleVoiceConnectionStatusContextMenu",
-        "flx": "voice.voice-connection-status.voice-connection-status-inner.focus-ring--2"
+        "flx": "voice.voice-connection-status.voice-connection-status-inner.channel-source-link.voice-connection-status-context-menu"
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for VoiceConnectionStatusInner.onContextMenu"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_panel.rs:248"
+        ],
+        "reason": "flx 'voice.voice-connection-status.voice-connection-status-inner.channel-source-link.voice-connection-status-context-menu' exists in Rust without right-click/context-menu handler"
       }
     },
     {
@@ -9059,7 +9092,7 @@
         "file": "fluxer_app/src/features/ui/action_menu/ContextMenu.tsx",
         "line": 240,
         "kind": "component_render",
-        "flx": "ui.action-menu.context-menu.root"
+        "flx": "ui.action-menu.context-menu.portal"
       },
       "status": "missing",
       "rust": {
@@ -9076,7 +9109,7 @@
         "file": "fluxer_app/src/features/ui/action_menu/ContextMenu.tsx",
         "line": 246,
         "kind": "component_render",
-        "flx": "ui.action-menu.context-menu.portal"
+        "flx": "ui.action-menu.context-menu.backdrop"
       },
       "status": "missing",
       "rust": {
@@ -9127,7 +9160,7 @@
         "file": "fluxer_app/src/features/ui/action_menu/ContextMenu.tsx",
         "line": 344,
         "kind": "component_render",
-        "flx": "ui.action-menu.context-menu.selectable-menu-item.checkbox-item"
+        "flx": "ui.action-menu.context-menu.selectable-menu-item.radio-group"
       },
       "status": "missing",
       "rust": {
@@ -9144,7 +9177,7 @@
         "file": "fluxer_app/src/features/ui/action_menu/ContextMenu.tsx",
         "line": 349,
         "kind": "component_render",
-        "flx": "ui.action-menu.context-menu.selectable-menu-item.checkbox-item"
+        "flx": "ui.action-menu.context-menu.selectable-menu-item.radio-group"
       },
       "status": "missing",
       "rust": {
@@ -9212,17 +9245,13 @@
         "file": "fluxer_app/src/features/ui/action_menu/ContextMenu.tsx",
         "line": 561,
         "kind": "component_render",
-        "flx": "ui.action-menu.context-menu.sub-menu.submenu-caret"
+        "flx": "ui.action-menu.context-menu.sub-menu.portal"
       },
-      "status": "present",
+      "status": "missing",
       "rust": {
-        "status": "present",
-        "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:1034",
-          "fluxer_client/app/src/ui/channel_popouts.rs:1917",
-          "fluxer_client/app/src/ui/channel_popouts.rs:821"
-        ],
-        "reason": "matched data-flx 'ui.action-menu.context-menu.sub-menu.submenu-caret' with right-click/context-menu handler"
+        "status": "missing",
+        "matches": [],
+        "reason": "no matching context menu for BaseContextMenu"
       }
     },
     {
@@ -9233,7 +9262,7 @@
         "file": "fluxer_app/src/features/ui/action_menu/ContextMenu.tsx",
         "line": 562,
         "kind": "component_render",
-        "flx": "ui.action-menu.context-menu.sub-menu.path"
+        "flx": "ui.action-menu.context-menu.sub-menu.portal"
       },
       "status": "missing",
       "rust": {
@@ -9305,7 +9334,7 @@
         "file": "fluxer_app/src/features/ui/action_menu/ContextMenu.tsx",
         "line": 657,
         "kind": "component_render",
-        "flx": "ui.action-menu.context-menu.checkbox-item.item"
+        "flx": "ui.action-menu.context-menu.checkbox-item.item-label"
       },
       "status": "missing",
       "rust": {
@@ -9393,13 +9422,15 @@
         "file": "fluxer_app/src/features/ui/action_menu/MessageContextMenu.tsx",
         "line": 541,
         "kind": "component_render",
-        "flx": "ui.action-menu.message-context-menu.render-reactions-header.menu-group"
+        "flx": "ui.action-menu.message-context-menu.render-reactions-header.aria-menu-section"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for BaseContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/channel_popouts.rs:738"
+        ],
+        "reason": "matched data-flx 'ui.action-menu.message-context-menu.render-reactions-header.aria-menu-section' with right-click/context-menu handler"
       }
     },
     {
@@ -9429,7 +9460,7 @@
         "file": "fluxer_app/src/features/app/components/layout/ChannelItem.tsx",
         "line": 450,
         "kind": "component_render",
-        "flx": "app.channel-item.handle-context-menu.category-context-menu"
+        "flx": "app.channel-item.handle-context-menu.channel-context-menu"
       },
       "status": "differs",
       "rust": {
@@ -9448,7 +9479,7 @@
         "file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
         "line": 431,
         "kind": "component_render",
-        "flx": "channel.channel-header.handle-context-menu.thread-context-menu"
+        "flx": "channel.channel-header.handle-context-menu.channel-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -9465,7 +9496,7 @@
         "file": "fluxer_app/src/features/messaging/components/markdown/renderers/MentionRenderer.tsx",
         "line": 113,
         "kind": "component_render",
-        "flx": "messaging.markdown.renderers.mention-renderer.thread-context-menu"
+        "flx": "messaging.markdown.renderers.mention-renderer.channel-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -9482,7 +9513,7 @@
         "file": "fluxer_app/src/features/search/utils/QuickSwitcherModalUtils.tsx",
         "line": 391,
         "kind": "component_render",
-        "flx": "search.quick-switcher-modal-utils.handle-context-menu.dm-context-menu"
+        "flx": "search.quick-switcher-modal-utils.handle-context-menu.channel-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -9518,7 +9549,7 @@
         "file": "fluxer_app/src/features/app/components/layout/sidebar_nav/GuildListDMItem.tsx",
         "line": 264,
         "kind": "component_render",
-        "flx": "app.sidebar-nav.guild-list-dm-item.handle-context-menu.group-dm-context-menu"
+        "flx": "app.sidebar-nav.guild-list-dm-item.handle-context-menu.dm-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -9535,7 +9566,7 @@
         "file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
         "line": 456,
         "kind": "component_render",
-        "flx": "channel.channel-header.handle-user-context-menu.group-dm-context-menu"
+        "flx": "channel.channel-header.handle-user-context-menu.dm-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -9552,7 +9583,7 @@
         "file": "fluxer_app/src/features/channel/components/direct_message/DMListItem.tsx",
         "line": 317,
         "kind": "component_render",
-        "flx": "channel.direct-message.dm-list-item.handle-context-menu.group-dm-context-menu"
+        "flx": "channel.direct-message.dm-list-item.handle-context-menu.dm-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -9745,7 +9776,7 @@
         "file": "fluxer_app/src/features/forum/components/ForumPostContextMenu.tsx",
         "line": 128,
         "kind": "component_render",
-        "flx": "forum.forum-post-context-menu.forum-post-menu-sheet.menu-bottom-sheet"
+        "flx": "forum.forum-post-context-menu.open-forum-post-context-menu.forum-post-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -9813,7 +9844,7 @@
         "file": "fluxer_app/src/features/channel/components/direct_message/GroupDMWelcomeSection.tsx",
         "line": 57,
         "kind": "component_render",
-        "flx": "channel.direct-message.group-dm-welcome-section.handle-add-friends.add-friends-to-group-modal"
+        "flx": "channel.direct-message.group-dm-welcome-section.handle-group-context-menu.group-dm-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -9915,7 +9946,7 @@
         "file": "fluxer_app/src/features/search/utils/QuickSwitcherModalUtils.tsx",
         "line": 404,
         "kind": "component_render",
-        "flx": "search.quick-switcher-modal-utils.handle-context-menu.channel-context-menu"
+        "flx": "search.quick-switcher-modal-utils.handle-context-menu.guild-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -10543,7 +10574,7 @@
         "file": "fluxer_app/src/features/ui/action_menu/RoleContextMenu.tsx",
         "line": 101,
         "kind": "component_render",
-        "flx": "ui.action-menu.role-context-menu.open-role-context-menu.role-context-menu"
+        "flx": "ui.action-menu.role-context-menu.open-role-context-menu-for-element.role-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -10679,7 +10710,7 @@
         "file": "fluxer_app/src/features/threads/components/MessageThreadChip.tsx",
         "line": 41,
         "kind": "component_render",
-        "flx": "threads.message-thread-chip.focus-ring"
+        "flx": "threads.message-thread-chip.thread-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -10713,7 +10744,7 @@
         "file": "fluxer_app/src/features/threads/components/ThreadBrowser.tsx",
         "line": 63,
         "kind": "component_render",
-        "flx": "threads.thread-browser.thread-browser-item.focus-ring"
+        "flx": "threads.thread-browser.thread-browser-item.thread-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -10764,7 +10795,7 @@
         "file": "fluxer_app/src/features/channel/components/channel_view/dm_channel_view/CallParticipantsRow.tsx",
         "line": 89,
         "kind": "component_render",
-        "flx": "channel.channel-view.dm-channel-view.handle-context-menu.voice-participant-context-menu"
+        "flx": "channel.channel-view.dm-channel-view.handle-context-menu.user-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -10815,7 +10846,7 @@
         "file": "fluxer_app/src/features/user/components/modals/user_profile_modal/ProfileBody.tsx",
         "line": 214,
         "kind": "component_render",
-        "flx": "user.user-profile-modal.handle-mutual-friend-context-menu.guild-member-context-menu"
+        "flx": "user.user-profile-modal.handle-mutual-friend-context-menu.user-context-menu"
       },
       "status": "missing",
       "rust": {
@@ -14513,6 +14544,16 @@
       "rust_matches": []
     },
     {
+      "id": "action:resize_drag:fluxer_app/src/features/user/components/modals/tabs/LinkedAccountsTab.tsx#drag-handle",
+      "item_id": "resize_drag:fluxer_app/src/features/user/components/modals/tabs/LinkedAccountsTab.tsx#drag-handle",
+      "category": "resize_drag",
+      "status": "missing",
+      "title": "[resize_drag/missing] drag-handle: no matching resize/drag handle in fluxer_client/app/src",
+      "official_file": "fluxer_app/src/features/user/components/modals/tabs/LinkedAccountsTab.tsx",
+      "official_line": 189,
+      "rust_matches": []
+    },
+    {
       "id": "action:resize_drag:fluxer_app/src/features/voice/components/IncomingCallUI.module.css#drag-handle",
       "item_id": "resize_drag:fluxer_app/src/features/voice/components/IncomingCallUI.module.css#drag-handle",
       "category": "resize_drag",
@@ -14706,13 +14747,11 @@
       "id": "action:tooltips:fluxer_app/src/features/app/components/layout/ChannelItemContent.tsx:L48:Tooltip:2",
       "item_id": "tooltips:fluxer_app/src/features/app/components/layout/ChannelItemContent.tsx:L48:Tooltip:2",
       "category": "tooltips",
-      "status": "differs",
-      "title": "[tooltips/differs] ChannelItemContent:Tooltip@L48: flx 'app.channel-item-content.category-name' exists in Rust without tooltip call",
+      "status": "missing",
+      "title": "[tooltips/missing] ChannelItemContent:Tooltip@L48: no matching tooltip in fluxer_client/app/src",
       "official_file": "fluxer_app/src/features/app/components/layout/ChannelItemContent.tsx",
       "official_line": 48,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/channel_list.rs:674"
-      ]
+      "rust_matches": []
     },
     {
       "id": "action:tooltips:fluxer_app/src/features/app/components/layout/ChannelItemContent.tsx:L52:Tooltip:3",
@@ -14775,7 +14814,7 @@
       "official_file": "fluxer_app/src/features/app/components/layout/UserArea.tsx",
       "official_line": 333,
       "rust_matches": [
-        "fluxer_client/app/src/ui/user_panel.rs:315"
+        "fluxer_client/app/src/ui/user_panel.rs:322"
       ]
     },
     {
@@ -14812,13 +14851,11 @@
       "id": "action:tooltips:fluxer_app/src/features/app/components/layout/VoiceStateIcons.tsx:L65:Tooltip:1",
       "item_id": "tooltips:fluxer_app/src/features/app/components/layout/VoiceStateIcons.tsx:L65:Tooltip:1",
       "category": "tooltips",
-      "status": "differs",
-      "title": "[tooltips/differs] VoiceStateIcons:Tooltip@L65: flx 'app.voice-state-icons.container' exists in Rust without tooltip call",
+      "status": "missing",
+      "title": "[tooltips/missing] VoiceStateIcons:Tooltip@L65: no matching tooltip in fluxer_client/app/src",
       "official_file": "fluxer_app/src/features/app/components/layout/VoiceStateIcons.tsx",
       "official_line": 65,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/channel_list.rs:1046"
-      ]
+      "rust_matches": []
     },
     {
       "id": "action:tooltips:fluxer_app/src/features/app/components/layout/VoiceStateIcons.tsx:L74:Tooltip:2",
@@ -15051,84 +15088,88 @@
       "rust_matches": []
     },
     {
-      "id": "action:tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L1093:Tooltip:8",
-      "item_id": "tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L1093:Tooltip:8",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] ChannelHeader:Tooltip@L1093: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
-      "official_line": 1093,
-      "rust_matches": []
-    },
-    {
       "id": "action:tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L650:Tooltip:1",
       "item_id": "tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L650:Tooltip:1",
       "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] ChannelHeader:Tooltip@L650: no matching tooltip in fluxer_client/app/src",
+      "status": "differs",
+      "title": "[tooltips/differs] ChannelHeader:Tooltip@L650: area 'channelheader' has tooltips in Rust, exact element unverified",
       "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
       "official_line": 650,
-      "rust_matches": []
+      "rust_matches": [
+        "fluxer_client/app/src/ui/header.rs"
+      ]
     },
     {
       "id": "action:tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L681:Tooltip:2",
       "item_id": "tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L681:Tooltip:2",
       "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] ChannelHeader:Tooltip@L681: no matching tooltip in fluxer_client/app/src",
+      "status": "differs",
+      "title": "[tooltips/differs] ChannelHeader:Tooltip@L681: area 'channelheader' has tooltips in Rust, exact element unverified",
       "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
       "official_line": 681,
-      "rust_matches": []
+      "rust_matches": [
+        "fluxer_client/app/src/ui/header.rs"
+      ]
     },
     {
       "id": "action:tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L704:Tooltip:3",
       "item_id": "tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L704:Tooltip:3",
       "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] ChannelHeader:Tooltip@L704: no matching tooltip in fluxer_client/app/src",
+      "status": "differs",
+      "title": "[tooltips/differs] ChannelHeader:Tooltip@L704: area 'channelheader' has tooltips in Rust, exact element unverified",
       "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
       "official_line": 704,
-      "rust_matches": []
+      "rust_matches": [
+        "fluxer_client/app/src/ui/header.rs"
+      ]
     },
     {
       "id": "action:tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L756:Tooltip:4",
       "item_id": "tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L756:Tooltip:4",
       "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] ChannelHeader:Tooltip@L756: no matching tooltip in fluxer_client/app/src",
+      "status": "differs",
+      "title": "[tooltips/differs] ChannelHeader:Tooltip@L756: flx 'channel.channel-header.dm-name-wrapper--2' exists in Rust without tooltip call",
       "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
       "official_line": 756,
-      "rust_matches": []
+      "rust_matches": [
+        "fluxer_client/app/src/ui/header.rs:159"
+      ]
     },
     {
       "id": "action:tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L804:Tooltip:5",
       "item_id": "tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L804:Tooltip:5",
       "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] ChannelHeader:Tooltip@L804: no matching tooltip in fluxer_client/app/src",
+      "status": "differs",
+      "title": "[tooltips/differs] ChannelHeader:Tooltip@L804: area 'channelheader' has tooltips in Rust, exact element unverified",
       "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
       "official_line": 804,
-      "rust_matches": []
+      "rust_matches": [
+        "fluxer_client/app/src/ui/header.rs"
+      ]
     },
     {
       "id": "action:tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L831:Tooltip:6",
       "item_id": "tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L831:Tooltip:6",
       "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] ChannelHeader:Tooltip@L831: no matching tooltip in fluxer_client/app/src",
+      "status": "differs",
+      "title": "[tooltips/differs] ChannelHeader:Tooltip@L831: area 'channelheader' has tooltips in Rust, exact element unverified",
       "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
       "official_line": 831,
-      "rust_matches": []
+      "rust_matches": [
+        "fluxer_client/app/src/ui/header.rs"
+      ]
     },
     {
       "id": "action:tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L861:Tooltip:7",
       "item_id": "tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L861:Tooltip:7",
       "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] ChannelHeader:Tooltip@L861: no matching tooltip in fluxer_client/app/src",
+      "status": "differs",
+      "title": "[tooltips/differs] ChannelHeader:Tooltip@L861: area 'channelheader' has tooltips in Rust, exact element unverified",
       "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
       "official_line": 861,
-      "rust_matches": []
+      "rust_matches": [
+        "fluxer_client/app/src/ui/header.rs"
+      ]
     },
     {
       "id": "action:tooltips:fluxer_app/src/features/channel/components/ChannelReplyBar.tsx:L163:Tooltip:1",
@@ -15241,6 +15282,16 @@
       "rust_matches": []
     },
     {
+      "id": "action:tooltips:fluxer_app/src/features/channel/components/TimestampWithTooltip.tsx:L51:Tooltip:1",
+      "item_id": "tooltips:fluxer_app/src/features/channel/components/TimestampWithTooltip.tsx:L51:Tooltip:1",
+      "category": "tooltips",
+      "status": "missing",
+      "title": "[tooltips/missing] TimestampWithTooltip:Tooltip@L51: no matching tooltip in fluxer_client/app/src",
+      "official_file": "fluxer_app/src/features/channel/components/TimestampWithTooltip.tsx",
+      "official_line": 51,
+      "rust_matches": []
+    },
+    {
       "id": "action:tooltips:fluxer_app/src/features/channel/components/UserMessage.tsx:L561:Tooltip:1",
       "item_id": "tooltips:fluxer_app/src/features/channel/components/UserMessage.tsx:L561:Tooltip:1",
       "category": "tooltips",
@@ -15275,22 +15326,12 @@
       "item_id": "tooltips:fluxer_app/src/features/channel/components/channel_header_components/ChannelHeaderIcon.tsx:L78:Tooltip:1",
       "category": "tooltips",
       "status": "differs",
-      "title": "[tooltips/differs] ChannelHeaderIcon:Tooltip@L78: flx 'channel.channel-header-components.channel-header-icon.button-icon' exists in Rust without tooltip call",
+      "title": "[tooltips/differs] ChannelHeaderIcon:Tooltip@L78: area 'channelheader' has tooltips in Rust, exact element unverified",
       "official_file": "fluxer_app/src/features/channel/components/channel_header_components/ChannelHeaderIcon.tsx",
       "official_line": 78,
       "rust_matches": [
-        "fluxer_client/app/src/ui/friends.rs:277"
+        "fluxer_client/app/src/ui/header.rs"
       ]
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/channel/components/channel_header_components/ChannelHeaderIcon.tsx:L90:Tooltip:2",
-      "item_id": "tooltips:fluxer_app/src/features/channel/components/channel_header_components/ChannelHeaderIcon.tsx:L90:Tooltip:2",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] ChannelHeaderIcon:Tooltip@L90: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/channel/components/channel_header_components/ChannelHeaderIcon.tsx",
-      "official_line": 90,
-      "rust_matches": []
     },
     {
       "id": "action:tooltips:fluxer_app/src/features/channel/components/channel_header_components/UpdaterIcon.tsx:L87:Tooltip:1",
@@ -15337,11 +15378,11 @@
       "item_id": "tooltips:fluxer_app/src/features/channel/components/direct_message/DirectMessageList.tsx:L691:Tooltip:1",
       "category": "tooltips",
       "status": "differs",
-      "title": "[tooltips/differs] DirectMessageList:Tooltip@L691: flx 'channel.direct-message.dm-list.dm-section-header-text' exists in Rust without tooltip call",
+      "title": "[tooltips/differs] DirectMessageList:Tooltip@L691: flx 'channel.direct-message.dm-list.dm-section-header-label' exists in Rust without tooltip call",
       "official_file": "fluxer_app/src/features/channel/components/direct_message/DirectMessageList.tsx",
       "official_line": 691,
       "rust_matches": [
-        "fluxer_client/app/src/ui/channel_list.rs:453"
+        "fluxer_client/app/src/ui/channel_list.rs:460"
       ]
     },
     {
@@ -15558,13 +15599,11 @@
       "id": "action:tooltips:fluxer_app/src/features/channel/components/message_search_bar/MessageSearchBar.tsx:L371:Tooltip:1",
       "item_id": "tooltips:fluxer_app/src/features/channel/components/message_search_bar/MessageSearchBar.tsx:L371:Tooltip:1",
       "category": "tooltips",
-      "status": "differs",
-      "title": "[tooltips/differs] MessageSearchBar:Tooltip@L371: flx 'channel.message-search-bar.message-search-bar.anchor' exists in Rust without tooltip call",
+      "status": "missing",
+      "title": "[tooltips/missing] MessageSearchBar:Tooltip@L371: no matching tooltip in fluxer_client/app/src",
       "official_file": "fluxer_app/src/features/channel/components/message_search_bar/MessageSearchBar.tsx",
       "official_line": 371,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/header.rs:396"
-      ]
+      "rust_matches": []
     },
     {
       "id": "action:tooltips:fluxer_app/src/features/channel/components/modals/channel_tabs/channel_permissions_tab/LayoutToggleButtons.tsx:L49:Tooltip:1",
@@ -16389,56 +16428,6 @@
       "rust_matches": []
     },
     {
-      "id": "action:tooltips:fluxer_app/src/features/user/components/modals/UserProfileModal.tsx:L584:Tooltip:3",
-      "item_id": "tooltips:fluxer_app/src/features/user/components/modals/UserProfileModal.tsx:L584:Tooltip:3",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] UserProfileModal:Tooltip@L584: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/user/components/modals/UserProfileModal.tsx",
-      "official_line": 584,
-      "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/user/components/modals/UserProfileModal.tsx:L610:Tooltip:4",
-      "item_id": "tooltips:fluxer_app/src/features/user/components/modals/UserProfileModal.tsx:L610:Tooltip:4",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] UserProfileModal:Tooltip@L610: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/user/components/modals/UserProfileModal.tsx",
-      "official_line": 610,
-      "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/user/components/modals/UserProfileModal.tsx:L636:Tooltip:5",
-      "item_id": "tooltips:fluxer_app/src/features/user/components/modals/UserProfileModal.tsx:L636:Tooltip:5",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] UserProfileModal:Tooltip@L636: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/user/components/modals/UserProfileModal.tsx",
-      "official_line": 636,
-      "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/user/components/modals/UserProfileModal.tsx:L662:Tooltip:6",
-      "item_id": "tooltips:fluxer_app/src/features/user/components/modals/UserProfileModal.tsx:L662:Tooltip:6",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] UserProfileModal:Tooltip@L662: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/user/components/modals/UserProfileModal.tsx",
-      "official_line": 662,
-      "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/user/components/modals/UserProfileModal.tsx:L691:Tooltip:7",
-      "item_id": "tooltips:fluxer_app/src/features/user/components/modals/UserProfileModal.tsx:L691:Tooltip:7",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] UserProfileModal:Tooltip@L691: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/user/components/modals/UserProfileModal.tsx",
-      "official_line": 691,
-      "rust_matches": []
-    },
-    {
       "id": "action:tooltips:fluxer_app/src/features/user/components/modals/tabs/AuthorizedAppsTab.tsx:L261:Tooltip:1",
       "item_id": "tooltips:fluxer_app/src/features/user/components/modals/tabs/AuthorizedAppsTab.tsx:L261:Tooltip:1",
       "category": "tooltips",
@@ -16492,13 +16481,11 @@
       "id": "action:tooltips:fluxer_app/src/features/user/components/modals/tabs/LanguageTab.tsx:L330:Tooltip:1",
       "item_id": "tooltips:fluxer_app/src/features/user/components/modals/tabs/LanguageTab.tsx:L330:Tooltip:1",
       "category": "tooltips",
-      "status": "differs",
-      "title": "[tooltips/differs] LanguageTab:Tooltip@L330: flx 'user.language-selector.render-language-content.language-details' exists in Rust without tooltip call",
+      "status": "missing",
+      "title": "[tooltips/missing] LanguageTab:Tooltip@L330: no matching tooltip in fluxer_client/app/src",
       "official_file": "fluxer_app/src/features/user/components/modals/tabs/LanguageTab.tsx",
       "official_line": 330,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/settings/language.rs:322"
-      ]
+      "rust_matches": []
     },
     {
       "id": "action:tooltips:fluxer_app/src/features/user/components/modals/tabs/LinkedAccountsTab.tsx:L197:Tooltip:1",
@@ -16921,56 +16908,6 @@
       "rust_matches": []
     },
     {
-      "id": "action:tooltips:fluxer_app/src/features/voice/components/VoiceParticipantTile.tsx:L1444:Tooltip:3",
-      "item_id": "tooltips:fluxer_app/src/features/voice/components/VoiceParticipantTile.tsx:L1444:Tooltip:3",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] VoiceParticipantTile:Tooltip@L1444: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceParticipantTile.tsx",
-      "official_line": 1444,
-      "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/voice/components/VoiceParticipantTile.tsx:L1457:Tooltip:4",
-      "item_id": "tooltips:fluxer_app/src/features/voice/components/VoiceParticipantTile.tsx:L1457:Tooltip:4",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] VoiceParticipantTile:Tooltip@L1457: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceParticipantTile.tsx",
-      "official_line": 1457,
-      "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/voice/components/VoiceParticipantTile.tsx:L1469:Tooltip:5",
-      "item_id": "tooltips:fluxer_app/src/features/voice/components/VoiceParticipantTile.tsx:L1469:Tooltip:5",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] VoiceParticipantTile:Tooltip@L1469: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceParticipantTile.tsx",
-      "official_line": 1469,
-      "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/voice/components/VoiceParticipantTile.tsx:L1493:Tooltip:6",
-      "item_id": "tooltips:fluxer_app/src/features/voice/components/VoiceParticipantTile.tsx:L1493:Tooltip:6",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] VoiceParticipantTile:Tooltip@L1493: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceParticipantTile.tsx",
-      "official_line": 1493,
-      "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/voice/components/VoiceParticipantTile.tsx:L1506:Tooltip:7",
-      "item_id": "tooltips:fluxer_app/src/features/voice/components/VoiceParticipantTile.tsx:L1506:Tooltip:7",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] VoiceParticipantTile:Tooltip@L1506: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceParticipantTile.tsx",
-      "official_line": 1506,
-      "rust_matches": []
-    },
-    {
       "id": "action:tooltips:fluxer_app/src/features/voice/components/bottomsheets/VoiceLobbyShared.tsx:L161:Tooltip:1",
       "item_id": "tooltips:fluxer_app/src/features/voice/components/bottomsheets/VoiceLobbyShared.tsx:L161:Tooltip:1",
       "category": "tooltips",
@@ -17155,11 +17092,11 @@
       "item_id": "tooltips:fluxer_app/src/features/voice/components/voice_connection_status/VoiceConnectionStatusInner.tsx:L212:Tooltip:1",
       "category": "tooltips",
       "status": "differs",
-      "title": "[tooltips/differs] VoiceConnectionStatusInner:Tooltip@L212: flx 'voice.voice-connection-status.voice-connection-status-inner.voice-connection-container' exists in Rust without tooltip call",
+      "title": "[tooltips/differs] VoiceConnectionStatusInner:Tooltip@L212: flx 'voice.voice-connection-status.voice-connection-status-inner.status-row' exists in Rust without tooltip call",
       "official_file": "fluxer_app/src/features/voice/components/voice_connection_status/VoiceConnectionStatusInner.tsx",
       "official_line": 212,
       "rust_matches": [
-        "fluxer_client/app/src/ui/voice_panel.rs:119"
+        "fluxer_client/app/src/ui/voice_panel.rs:129"
       ]
     },
     {
@@ -17834,11 +17771,13 @@
       "id": "action:context_menus:handler:fluxer_app/src/features/app/components/layout/sidebar_nav/AddGuildButton.tsx:L96",
       "item_id": "context_menus:handler:fluxer_app/src/features/app/components/layout/sidebar_nav/AddGuildButton.tsx:L96",
       "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] AddGuildButton.onContextMenu: no matching context menu for AddGuildButton.onContextMenu",
+      "status": "differs",
+      "title": "[context_menus/differs] AddGuildButton.onContextMenu: flx 'app.sidebar-nav.add-guild-button.icon-text' exists in Rust without right-click/context-menu handler",
       "official_file": "fluxer_app/src/features/app/components/layout/sidebar_nav/AddGuildButton.tsx",
       "official_line": 96,
-      "rust_matches": []
+      "rust_matches": [
+        "fluxer_client/app/src/ui/guild_rail.rs:309"
+      ]
     },
     {
       "id": "action:context_menus:handler:fluxer_app/src/features/app/components/layout/sidebar_nav/DownloadButton.tsx:L64",
@@ -17931,6 +17870,16 @@
       "rust_matches": []
     },
     {
+      "id": "action:context_menus:handler:fluxer_app/src/features/app/components/shared/ExpiryFootnote.tsx:L66",
+      "item_id": "context_menus:handler:fluxer_app/src/features/app/components/shared/ExpiryFootnote.tsx:L66",
+      "category": "context_menus",
+      "status": "missing",
+      "title": "[context_menus/missing] ExpiryFootnote.onContextMenu: no matching context menu for ExpiryFootnote.onContextMenu",
+      "official_file": "fluxer_app/src/features/app/components/shared/ExpiryFootnote.tsx",
+      "official_line": 66,
+      "rust_matches": []
+    },
+    {
       "id": "action:context_menus:handler:fluxer_app/src/features/app/components/shared/MessageReactionsContent.tsx:L170",
       "item_id": "context_menus:handler:fluxer_app/src/features/app/components/shared/MessageReactionsContent.tsx:L170",
       "category": "context_menus",
@@ -17994,11 +17943,13 @@
       "id": "action:context_menus:handler:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L746",
       "item_id": "context_menus:handler:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L746",
       "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] ChannelHeader.onContextMenu: no matching context menu for ChannelHeader.onContextMenu",
+      "status": "differs",
+      "title": "[context_menus/differs] ChannelHeader.onContextMenu: flx 'channel.channel-header.desktop-button.open-user-profile' exists in Rust without right-click/context-menu handler",
       "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
       "official_line": 746,
-      "rust_matches": []
+      "rust_matches": [
+        "fluxer_client/app/src/ui/header.rs:143"
+      ]
     },
     {
       "id": "action:context_menus:handler:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L788",
@@ -18064,13 +18015,11 @@
       "id": "action:context_menus:handler:fluxer_app/src/features/channel/components/MemberListItem.tsx:L204",
       "item_id": "context_menus:handler:fluxer_app/src/features/channel/components/MemberListItem.tsx:L204",
       "category": "context_menus",
-      "status": "differs",
-      "title": "[context_menus/differs] MemberListItem.onContextMenu: flx 'channel.member-list-item.focus-ring-wrapper' exists in Rust without right-click/context-menu handler",
+      "status": "missing",
+      "title": "[context_menus/missing] MemberListItem.onContextMenu: no matching context menu for MemberListItem.onContextMenu",
       "official_file": "fluxer_app/src/features/channel/components/MemberListItem.tsx",
       "official_line": 204,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/member_list.rs:370"
-      ]
+      "rust_matches": []
     },
     {
       "id": "action:context_menus:handler:fluxer_app/src/features/channel/components/MessageAttachments.tsx:L537",
@@ -18292,16 +18241,6 @@
       "title": "[context_menus/missing] MediaContainer.onContextMenu: no matching context menu for MediaContainer.onContextMenu",
       "official_file": "fluxer_app/src/features/channel/components/embeds/media/MediaContainer.tsx",
       "official_line": 189,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:handler:fluxer_app/src/features/channel/components/embeds/media/MediaContainer.tsx:L206",
-      "item_id": "context_menus:handler:fluxer_app/src/features/channel/components/embeds/media/MediaContainer.tsx:L206",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] MediaContainer.onContextMenu: no matching context menu for MediaContainer.onContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/embeds/media/MediaContainer.tsx",
-      "official_line": 206,
       "rust_matches": []
     },
     {
@@ -18868,11 +18807,13 @@
       "id": "action:context_menus:handler:fluxer_app/src/features/user/components/profile/profile_card/ProfileCardBanner.tsx:L137",
       "item_id": "context_menus:handler:fluxer_app/src/features/user/components/profile/profile_card/ProfileCardBanner.tsx:L137",
       "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] ProfileCardBanner.onContextMenu: no matching context menu for ProfileCardBanner.onContextMenu",
+      "status": "differs",
+      "title": "[context_menus/differs] ProfileCardBanner.onContextMenu: flx 'user.profile.profile-card.profile-card-banner.avatar-button.avatar-click' exists in Rust without right-click/context-menu handler",
       "official_file": "fluxer_app/src/features/user/components/profile/profile_card/ProfileCardBanner.tsx",
       "official_line": 137,
-      "rust_matches": []
+      "rust_matches": [
+        "fluxer_client/app/src/ui/user_panel.rs:494"
+      ]
     },
     {
       "id": "action:context_menus:handler:fluxer_app/src/features/user/components/profile/profile_card/ProfileCardBanner.tsx:L89",
@@ -18958,11 +18899,14 @@
       "id": "action:context_menus:handler:fluxer_app/src/features/voice/components/voice_connection_status/LocalParticipantControls.tsx:L207",
       "item_id": "context_menus:handler:fluxer_app/src/features/voice/components/voice_connection_status/LocalParticipantControls.tsx:L207",
       "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] LocalParticipantControls.onContextMenu: no matching context menu for LocalParticipantControls.onContextMenu",
+      "status": "differs",
+      "title": "[context_menus/differs] LocalParticipantControls.onContextMenu: flx 'voice.voice-connection-status.local-participant-controls.media-button.undefined' exists in Rust without right-click/context-menu handler",
       "official_file": "fluxer_app/src/features/voice/components/voice_connection_status/LocalParticipantControls.tsx",
       "official_line": 207,
-      "rust_matches": []
+      "rust_matches": [
+        "fluxer_client/app/src/ui/voice_panel.rs:432",
+        "fluxer_client/app/src/ui/voice_panel.rs:471"
+      ]
     },
     {
       "id": "action:context_menus:handler:fluxer_app/src/features/voice/components/voice_connection_status/LocalParticipantControls.tsx:L251",
@@ -18978,23 +18922,23 @@
       "id": "action:context_menus:handler:fluxer_app/src/features/voice/components/voice_connection_status/VoiceConnectionStatusInner.tsx:L252",
       "item_id": "context_menus:handler:fluxer_app/src/features/voice/components/voice_connection_status/VoiceConnectionStatusInner.tsx:L252",
       "category": "context_menus",
-      "status": "differs",
-      "title": "[context_menus/differs] VoiceConnectionStatusInner.onContextMenu: flx 'voice.voice-connection-status.voice-connection-status-inner.focus-ring-wrapper' exists in Rust without right-click/context-menu handler",
+      "status": "missing",
+      "title": "[context_menus/missing] VoiceConnectionStatusInner.onContextMenu: no matching context menu for VoiceConnectionStatusInner.onContextMenu",
       "official_file": "fluxer_app/src/features/voice/components/voice_connection_status/VoiceConnectionStatusInner.tsx",
       "official_line": 252,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/voice_panel.rs:145"
-      ]
+      "rust_matches": []
     },
     {
       "id": "action:context_menus:handler:fluxer_app/src/features/voice/components/voice_connection_status/VoiceConnectionStatusInner.tsx:L307",
       "item_id": "context_menus:handler:fluxer_app/src/features/voice/components/voice_connection_status/VoiceConnectionStatusInner.tsx:L307",
       "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] VoiceConnectionStatusInner.onContextMenu: no matching context menu for VoiceConnectionStatusInner.onContextMenu",
+      "status": "differs",
+      "title": "[context_menus/differs] VoiceConnectionStatusInner.onContextMenu: flx 'voice.voice-connection-status.voice-connection-status-inner.channel-source-link.voice-connection-status-context-menu' exists in Rust without right-click/context-menu handler",
       "official_file": "fluxer_app/src/features/voice/components/voice_connection_status/VoiceConnectionStatusInner.tsx",
       "official_line": 307,
-      "rust_matches": []
+      "rust_matches": [
+        "fluxer_client/app/src/ui/voice_panel.rs:248"
+      ]
     },
     {
       "id": "action:context_menus:render:BannedUserContextMenu:fluxer_app/src/features/guild/components/modals/guild_tabs/GuildBansTab.tsx:L156",
@@ -19117,6 +19061,16 @@
       "rust_matches": []
     },
     {
+      "id": "action:context_menus:render:BaseContextMenu:fluxer_app/src/features/ui/action_menu/ContextMenu.tsx:L561",
+      "item_id": "context_menus:render:BaseContextMenu:fluxer_app/src/features/ui/action_menu/ContextMenu.tsx:L561",
+      "category": "context_menus",
+      "status": "missing",
+      "title": "[context_menus/missing] BaseContextMenu: no matching context menu for BaseContextMenu",
+      "official_file": "fluxer_app/src/features/ui/action_menu/ContextMenu.tsx",
+      "official_line": 561,
+      "rust_matches": []
+    },
+    {
       "id": "action:context_menus:render:BaseContextMenu:fluxer_app/src/features/ui/action_menu/ContextMenu.tsx:L562",
       "item_id": "context_menus:render:BaseContextMenu:fluxer_app/src/features/ui/action_menu/ContextMenu.tsx:L562",
       "category": "context_menus",
@@ -19184,16 +19138,6 @@
       "title": "[context_menus/missing] BaseContextMenu: no matching context menu for BaseContextMenu",
       "official_file": "fluxer_app/src/features/ui/action_menu/MessageContextMenu.tsx",
       "official_line": 265,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:BaseContextMenu:fluxer_app/src/features/ui/action_menu/MessageContextMenu.tsx:L541",
-      "item_id": "context_menus:render:BaseContextMenu:fluxer_app/src/features/ui/action_menu/MessageContextMenu.tsx:L541",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] BaseContextMenu: no matching context menu for BaseContextMenu",
-      "official_file": "fluxer_app/src/features/ui/action_menu/MessageContextMenu.tsx",
-      "official_line": 541,
       "rust_matches": []
     },
     {

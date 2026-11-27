@@ -60,6 +60,7 @@ pub enum Overlay {
     Access(AccessModal),
     ForwardMessage(ForwardMessageModal),
     CreateThread(CreateThreadModal),
+    EditAttachment(crate::ui::attachments::tray::EditAttachmentModal),
     InviteMembers(InviteMembersModal),
     GuildNotifications(GuildNotificationsModal),
     GuildPrivacy(GuildPrivacyModal),

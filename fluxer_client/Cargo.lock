@@ -2066,6 +2066,7 @@ dependencies = [
  "fluxer_client_core",
  "fluxer_client_i18n",
  "fluxer_client_markdown",
+ "futures",
  "gpui-kit",
  "gpui-pre",
  "image",

@@ -4,8 +4,11 @@
 //! (default sections, general search, caps), `QuickSwitcherCandidateBuilder.ts`
 //! (sort weights), `SearchTextMatching.ts:30-47` (scores).
 //!
-//! Not ported: virtual guilds (Home/Favorites) and settings results,
-//! Unicode confusable matching, other-account results, forum/thread
+//! Home / Favorites (`VIRTUAL_GUILD`) and settings-tab results are listed
+//! only for a non-empty query (general search and `*`; settings only in
+//! general search), scored on the title alone like `scoreNavigationCandidates`.
+//! Not ported: settings subtabs, the DM-disabled runtime flag, Unicode
+//! confusable matching, other-account results, forum/thread
 //! channels, server-side member search. An empty search in a prefix mode
 //! lists that category by sort weight (score 0), up to [`MODE_LIMIT`]
 //! (assumed; TS source for that case not located).
@@ -108,20 +111,49 @@ pub enum SwitcherTarget {
     TextChannel { channel_id: Snowflake, guild_id: Option<Snowflake> },
     VoiceChannel { channel_id: Snowflake, guild_id: Option<Snowflake> },
     Guild { guild_id: Snowflake },
+    /// Virtual guild `home` (direct messages).
+    Home,
+    /// Virtual guild `favorites`.
+    Favorites,
+    /// A settings tab; `id` is one of [`SETTINGS_TABS`] (official tab type).
+    Settings { id: String },
 }
 
 impl SwitcherTarget {
     /// `type|id` dedupe key.
-    fn key(&self) -> (u8, Snowflake) {
+    fn key(&self) -> (u8, String) {
         match self {
-            Self::User { user_id, .. } => (0, *user_id),
-            Self::GroupDm { channel_id } => (1, *channel_id),
-            Self::TextChannel { channel_id, .. } => (2, *channel_id),
-            Self::VoiceChannel { channel_id, .. } => (3, *channel_id),
-            Self::Guild { guild_id } => (4, *guild_id),
+            Self::User { user_id, .. } => (0, user_id.to_string()),
+            Self::GroupDm { channel_id } => (1, channel_id.to_string()),
+            Self::TextChannel { channel_id, .. } => (2, channel_id.to_string()),
+            Self::VoiceChannel { channel_id, .. } => (3, channel_id.to_string()),
+            Self::Guild { guild_id } => (4, guild_id.to_string()),
+            Self::Home => (5, "home".to_owned()),
+            Self::Favorites => (5, "favorites".to_owned()),
+            Self::Settings { id } => (6, id.clone()),
         }
     }
 }
+
+/// Settings tabs the client implements: official tab type and label
+/// (`ALL_TABS_DESCRIPTORS` order, `QuickSwitcherCandidateBuilder.ts:352-370`).
+pub const SETTINGS_TABS: &[(&str, &str)] = &[
+    ("my_profile", "Profile"),
+    ("account_security", "Account"),
+    ("privacy_safety", "Privacy"),
+    ("linked_accounts", "Connections"),
+    ("appearance", "Appearance"),
+    ("themes", "Themes"),
+    ("notifications", "Notifications"),
+    ("chat_settings", "Chat"),
+    ("voice_video", "Voice & video"),
+    ("accessibility", "Accessibility"),
+    ("language", "Language"),
+    ("keybinds", "Keybinds"),
+    ("desktop_settings", "Windows app"),
+    ("advanced_settings", "Advanced"),
+    ("applications", "Applications"),
+];
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SwitcherResult {
@@ -368,6 +400,57 @@ fn guild_candidates(state: &ClientState, exclude: Option<Snowflake>) -> Vec<Cand
         .collect()
 }
 
+/// Home (always) and Favorites (only with favorites): `virtualGuildCandidates`.
+fn virtual_guild_candidates(ctx: &SwitcherContext, has_favorites: bool) -> Vec<Candidate> {
+    let weight = u64::try_from(ctx.now_ms).unwrap_or(0);
+    let mut out = vec![Candidate {
+        target: SwitcherTarget::Home,
+        title: "Home".to_owned(),
+        subtitle: Some("Direct messages".to_owned()),
+        search_values: vec!["Home".to_owned()],
+        sort_weight: weight,
+        is_channel_like: false,
+    }];
+    if has_favorites {
+        out.push(Candidate {
+            target: SwitcherTarget::Favorites,
+            title: "Favorites".to_owned(),
+            subtitle: None,
+            search_values: vec!["Favorites".to_owned()],
+            sort_weight: weight,
+            is_channel_like: false,
+        });
+    }
+    out
+}
+
+fn settings_candidates() -> Vec<Candidate> {
+    let tabs = SETTINGS_TABS
+        .iter()
+        .map(|(id, label)| Candidate {
+            target: SwitcherTarget::Settings { id: (*id).to_owned() },
+            title: (*label).to_owned(),
+            subtitle: None,
+            search_values: vec![(*label).to_owned()],
+            sort_weight: 0,
+            is_channel_like: false,
+        });
+    let sections = [
+        ("privacy_safety", "Sensitive content", "Privacy"),
+        ("notifications", "Text-to-speech notifications", "Notifications"),
+    ]
+    .into_iter()
+    .map(|(id, title, tab)| Candidate {
+        target: SwitcherTarget::Settings { id: id.to_owned() },
+        title: title.to_owned(),
+        subtitle: Some(tab.to_owned()),
+        search_values: vec![title.to_owned(), "settings".to_owned()],
+        sort_weight: 0,
+        is_channel_like: false,
+    });
+    tabs.chain(sections).collect()
+}
+
 fn rank(cands: Vec<Candidate>, search: &str, limit: usize) -> Vec<SwitcherResult> {
     let channel_query = search.replace(' ', "-");
     let mut ranked: Vec<SwitcherResult> = cands
@@ -420,13 +503,20 @@ fn compare_results(a: &SwitcherResult, b: &SwitcherResult) -> std::cmp::Ordering
 }
 
 /// Ranked results for a non-empty query without a prefix (`generateGeneralResults`).
-fn general_results(state: &ClientState, ctx: &SwitcherContext, search: &str) -> Vec<SwitcherResult> {
-    let run = |limit: usize| -> [Vec<SwitcherResult>; 4] {
+fn general_results(
+    state: &ClientState,
+    ctx: &SwitcherContext,
+    search: &str,
+    has_favorites: bool,
+) -> Vec<SwitcherResult> {
+    let run = |limit: usize| -> [Vec<SwitcherResult>; 6] {
         [
             rank(user_candidates(state, ctx, None), search, limit),
             rank(group_dm_candidates(state), search, limit),
             rank(guild_channel_candidates(state, false), search, limit),
             rank(guild_candidates(state, ctx.current_guild), search, limit),
+            rank(virtual_guild_candidates(ctx, has_favorites), search, limit),
+            rank(settings_candidates(), search, limit),
         ]
     };
     let mut categories = run(CATEGORY_LIMIT);
@@ -491,7 +581,10 @@ fn result_channel_id(r: &SwitcherResult) -> Option<Snowflake> {
         SwitcherTarget::GroupDm { channel_id }
         | SwitcherTarget::TextChannel { channel_id, .. }
         | SwitcherTarget::VoiceChannel { channel_id, .. } => Some(channel_id),
-        SwitcherTarget::Guild { .. } => None,
+        SwitcherTarget::Guild { .. }
+        | SwitcherTarget::Home
+        | SwitcherTarget::Favorites
+        | SwitcherTarget::Settings { .. } => None,
     }
 }
 
@@ -584,7 +677,20 @@ pub fn default_results(state: &ClientState, ctx: &SwitcherContext) -> Vec<Switch
 
 /// Everything for the modal: empty query -> default sections; prefix mode
 /// -> header plus up to [`MODE_LIMIT`] results; otherwise general search.
+///
+/// The client has no favorites store yet, so this lists no Favorites row
+/// (TODO(backlog)); use [`quick_switcher_results_with`] once it has one.
 pub fn quick_switcher_results(state: &ClientState, ctx: &SwitcherContext, query: &str) -> Vec<SwitcherItem> {
+    quick_switcher_results_with(state, ctx, query, false)
+}
+
+/// [`quick_switcher_results`] with `Favorites.hasAnyFavorites`.
+pub fn quick_switcher_results_with(
+    state: &ClientState,
+    ctx: &SwitcherContext,
+    query: &str,
+    has_favorites: bool,
+) -> Vec<SwitcherItem> {
     let parsed = parse_query(query);
     let results: Vec<SwitcherResult> = match parsed.mode {
         Some(mode) => {
@@ -595,14 +701,20 @@ pub fn quick_switcher_results(state: &ClientState, ctx: &SwitcherContext, query:
                 }
                 QueryMode::TextChannels => guild_channel_candidates(state, false),
                 QueryMode::VoiceChannels => guild_channel_candidates(state, true),
-                QueryMode::Guilds => guild_candidates(state, None),
+                QueryMode::Guilds => {
+                    let mut cands = guild_candidates(state, None);
+                    if !parsed.search.is_empty() {
+                        cands.extend(virtual_guild_candidates(ctx, has_favorites));
+                    }
+                    cands
+                }
             };
             let mut out = vec![SwitcherItem::Header(SwitcherHeader::Searching(mode))];
             out.extend(rank(cands, parsed.search, MODE_LIMIT).into_iter().map(SwitcherItem::Result));
             return out;
         }
         None if parsed.search.is_empty() => return default_results(state, ctx),
-        None => general_results(state, ctx, parsed.search),
+        None => general_results(state, ctx, parsed.search, has_favorites),
     };
     results.into_iter().map(SwitcherItem::Result).collect()
 }
@@ -764,5 +876,80 @@ mod tests {
         let items = quick_switcher_results(&s, &c, "");
         let n = results(&items).len();
         assert!(n >= 4 && !items.iter().any(|i| matches!(i, SwitcherItem::Header(SwitcherHeader::Mentions))));
+    }
+
+    fn targets(items: &[SwitcherItem], f: impl Fn(&SwitcherTarget) -> bool) -> usize {
+        results(items).iter().filter(|r| f(&r.target)).count()
+    }
+
+    #[test]
+    fn home_favorites_and_settings_need_a_non_empty_query() {
+        let s = fixture_state();
+        let virtual_or_settings =
+            |t: &SwitcherTarget| matches!(t, SwitcherTarget::Home | SwitcherTarget::Favorites | SwitcherTarget::Settings { .. });
+        let mut c = ctx();
+        c.recent_visits = vec![sf(DM), sf(GROUP_DM)];
+        for query in ["", "   "] {
+            assert_eq!(targets(&quick_switcher_results_with(&s, &c, query, true), virtual_or_settings), 0, "{query:?}");
+        }
+        // prefix mode with an empty search keeps the plain guild list
+        assert_eq!(targets(&quick_switcher_results_with(&s, &c, "*", true), virtual_or_settings), 0);
+
+        let home = quick_switcher_results(&s, &c, "home");
+        let row = results(&home).into_iter().find(|r| r.target == SwitcherTarget::Home).expect("Home row");
+        assert_eq!((row.title.as_str(), row.subtitle.as_deref(), row.score), ("Home", Some("Direct messages"), 10));
+    }
+
+    #[test]
+    fn favorites_row_requires_favorites() {
+        let s = fixture_state();
+        let c = ctx();
+        assert_eq!(targets(&quick_switcher_results_with(&s, &c, "favorites", false), |t| *t == SwitcherTarget::Favorites), 0);
+        assert_eq!(targets(&quick_switcher_results(&s, &c, "favorites"), |t| *t == SwitcherTarget::Favorites), 0);
+        let with = quick_switcher_results_with(&s, &c, "favorites", true);
+        assert_eq!(targets(&with, |t| *t == SwitcherTarget::Favorites), 1);
+        assert_eq!(targets(&with, |t| *t == SwitcherTarget::Home), 0, "Home does not match 'favorites'");
+    }
+
+    #[test]
+    fn navigation_rows_are_deduped_in_general_and_star_modes() {
+        let s = fixture_state();
+        let c = ctx();
+        for query in ["home", "*home", "fav", "*fav"] {
+            let items = quick_switcher_results_with(&s, &c, query, true);
+            let mut keys: Vec<_> = results(&items).iter().map(|r| r.target.key()).collect();
+            let n = keys.len();
+            keys.sort();
+            keys.dedup();
+            assert_eq!(keys.len(), n, "{query}: duplicate rows");
+        }
+        let star = quick_switcher_results_with(&s, &c, "*home", true);
+        assert!(matches!(star[0], SwitcherItem::Header(SwitcherHeader::Searching(QueryMode::Guilds))));
+        assert_eq!(targets(&star, |t| *t == SwitcherTarget::Home), 1);
+        assert_eq!(targets(&star, |t| matches!(t, SwitcherTarget::Settings { .. })), 0, "settings are general-search only");
+        let ids: BTreeSet<&str> = SETTINGS_TABS.iter().map(|(id, _)| *id).collect();
+        assert_eq!(ids.len(), SETTINGS_TABS.len(), "settings tab ids are unique");
+    }
+
+    #[test]
+    fn settings_results_map_to_tab_ids() {
+        let s = fixture_state();
+        let c = ctx();
+        let settings = |query: &str| -> Vec<String> {
+            results(&quick_switcher_results(&s, &c, query))
+                .iter()
+                .filter_map(|r| match &r.target {
+                    SwitcherTarget::Settings { id } => Some(id.clone()),
+                    _ => None,
+                })
+                .collect()
+        };
+        assert_eq!(settings("keybinds"), vec!["keybinds"]);
+        assert_eq!(settings("voice")[0], "voice_video");
+        assert_eq!(settings("privacy")[0], "privacy_safety");
+        assert!(settings("zzzzqq").is_empty());
+        let items = quick_switcher_results(&s, &c, "windows app");
+        let first = results(&items).into_iter().find(|r| matches!(r.target, SwitcherTarget::Settings { .. })).unwrap();
+        assert_eq!(first.target, SwitcherTarget::Settings { id: "desktop_settings".to_owned() });
     }
 }

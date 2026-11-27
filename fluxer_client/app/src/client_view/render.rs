@@ -63,6 +63,7 @@ impl ClientView {
             Overlay::Access(modal) => Some(ui::access::render(self, modal, theme, cx)),
             Overlay::ForwardMessage(modal) => Some(ui::forward_modal::render(self, modal, theme, cx)),
             Overlay::CreateThread(modal) => Some(ui::create_thread_modal::render(modal, theme, cx)),
+            Overlay::EditAttachment(modal) => Some(ui::attachments::tray::render_edit(modal, theme, cx)),
             Overlay::InviteMembers(modal) => Some(ui::invite_modal::render(self, modal, theme, cx)),
             Overlay::GuildNotifications(modal) => {
                 Some(ui::guild_settings_modals::render_notifications(self, modal, theme, cx))

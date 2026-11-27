@@ -331,6 +331,76 @@ fn quick_switcher_ranks_and_navigates(cx: &mut TestAppContext) {
     drop(rt);
 }
 
+fn composer_has_focus(view: &Entity<ClientView>, cx: &mut VisualTestContext) -> bool {
+    cx.update(|window, cx| {
+        let composer = view.read(cx).composer.clone();
+        composer.read(cx).focus_handle(cx).is_focused(window)
+    })
+}
+
+/// Home and settings rows appear only for a non-empty query, the Favorites
+/// row only with favorites (the client has none), `*` lists Home once and
+/// no settings; Enter opens Home or the settings tab, Esc just closes.
+#[gpui_kit::test]
+fn quick_switcher_home_and_settings_rows(cx: &mut TestAppContext) {
+    use crate::ui::settings::SettingsTab;
+
+    let rt = runtime();
+    let (backend, events) = backend(&rt);
+    let (view, cx) = open(cx, backend.clone(), events);
+    view.update(cx, |v, cx| v.select_place(Place::Guild(GUILD), cx));
+    draw(cx);
+
+    keys(cx, "ctrl-k");
+    let empty = switcher_titles(&view, cx);
+    for name in ["Home", "Favorites", "Keybinds"] {
+        assert!(!empty.iter().any(|t| t == name), "empty query lists no {name}");
+    }
+    typed(cx, "favorites");
+    assert!(!switcher_titles(&view, cx).iter().any(|t| t == "Favorites"), "no favorites, no row");
+
+    // Escape closes without navigating and returns focus to the composer.
+    keys(cx, "escape");
+    keys(cx, "ctrl-k");
+    typed(cx, "home");
+    assert!(switcher_titles(&view, cx).iter().any(|t| t == "Home"));
+    keys(cx, "escape");
+    assert!(!switcher_open(&view, cx));
+    assert_eq!(view.read_with(cx, |v, _| v.place), Place::Guild(GUILD));
+    assert!(composer_has_focus(&view, cx), "Esc keeps composer focus semantics");
+
+    // `*` mode: Home once, never settings.
+    keys(cx, "ctrl-k");
+    typed(cx, "*home");
+    assert_eq!(switcher_titles(&view, cx).iter().filter(|t| *t == "Home").count(), 1);
+    keys(cx, "escape");
+    keys(cx, "ctrl-k");
+    typed(cx, "*keybinds");
+    assert!(!switcher_titles(&view, cx).iter().any(|t| t == "Keybinds"));
+    keys(cx, "escape");
+
+    // Enter on Home selects the Home place and refocuses the composer.
+    keys(cx, "ctrl-k");
+    typed(cx, "home");
+    assert_eq!(switcher_titles(&view, cx).first().map(String::as_str), Some("Home"));
+    keys(cx, "enter");
+    assert!(!switcher_open(&view, cx));
+    assert_eq!(view.read_with(cx, |v, _| (v.place, v.favorites_selected)), (Place::Home, false));
+    assert!(composer_has_focus(&view, cx));
+
+    // Enter on a settings result opens that tab.
+    keys(cx, "ctrl-k");
+    typed(cx, "keybinds");
+    assert_eq!(switcher_titles(&view, cx).first().map(String::as_str), Some("Keybinds"));
+    keys(cx, "enter");
+    let tab = view.read_with(cx, |v, _| match &v.overlay {
+        Overlay::Settings(modal) => Some(modal.active_tab),
+        _ => None,
+    });
+    assert_eq!(tab, Some(SettingsTab::Keybinds));
+    drop(rt);
+}
+
 /// `@`, `#` and `:` open the popup from the text before the cursor; Tab and
 /// Enter pick, Down moves, Esc closes; mentions, channels and custom emoji
 /// are shown by name and sent in wire form.

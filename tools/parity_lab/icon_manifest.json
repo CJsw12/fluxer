@@ -63,7 +63,7 @@
   {
    "rust_icon": "EyeSlash",
    "file": "fluxer_client/app/src/ui/attachments/tray.rs",
-   "line": 85,
+   "line": 96,
    "rust_asset": "fluxer_client/app/assets/icons/eye-slash.svg",
    "kind": "phosphor",
    "phosphor": "fill/eye-slash-fill.svg",
@@ -78,7 +78,7 @@
   {
    "rust_icon": "Eye",
    "file": "fluxer_client/app/src/ui/attachments/tray.rs",
-   "line": 85,
+   "line": 96,
    "rust_asset": "fluxer_client/app/assets/icons/eye.svg",
    "kind": "phosphor",
    "phosphor": "fill/eye-fill.svg",
@@ -93,7 +93,7 @@
   {
    "rust_icon": "X",
    "file": "fluxer_client/app/src/ui/attachments/tray.rs",
-   "line": 91,
+   "line": 106,
    "rust_asset": "fluxer_client/app/assets/icons/x.svg",
    "kind": "phosphor",
    "phosphor": "bold/x-bold.svg",
@@ -829,7 +829,7 @@
   {
    "rust_icon": "X",
    "file": "fluxer_client/app/src/ui/overlay.rs",
-   "line": 227,
+   "line": 228,
    "rust_asset": "fluxer_client/app/assets/icons/x.svg",
    "kind": "phosphor",
    "phosphor": "bold/x-bold.svg",
@@ -3377,7 +3377,7 @@
   {
    "rust_icon": "LinkBold",
    "file": "fluxer_client/app/src/ui/overlay.rs",
-   "line": 125,
+   "line": 126,
    "rust_asset": "fluxer_client/app/assets/icons/link-bold.svg",
    "kind": "phosphor",
    "phosphor": "bold/link-bold.svg",
@@ -3587,7 +3587,7 @@
   {
    "rust_icon": "Star",
    "file": "fluxer_client/app/src/ui/media_context_menu.rs",
-   "line": 129,
+   "line": 135,
    "rust_asset": "fluxer_client/app/assets/icons/star.svg",
    "kind": "phosphor",
    "phosphor": "fill/star-fill.svg",
@@ -3602,7 +3602,7 @@
   {
    "rust_icon": "Copy",
    "file": "fluxer_client/app/src/ui/media_context_menu.rs",
-   "line": 130,
+   "line": 136,
    "rust_asset": "fluxer_client/app/assets/icons/copy.svg",
    "kind": "phosphor",
    "phosphor": "fill/copy-fill.svg",
@@ -3617,7 +3617,7 @@
   {
    "rust_icon": "LinkSimple",
    "file": "fluxer_client/app/src/ui/media_context_menu.rs",
-   "line": 132,
+   "line": 138,
    "rust_asset": "fluxer_client/app/assets/icons/link-simple.svg",
    "kind": "phosphor",
    "phosphor": "bold/link-simple-bold.svg",
@@ -3632,7 +3632,7 @@
   {
    "rust_icon": "ArrowSquareOut",
    "file": "fluxer_client/app/src/ui/media_context_menu.rs",
-   "line": 133,
+   "line": 139,
    "rust_asset": "fluxer_client/app/assets/icons/arrow-square-out.svg",
    "kind": "phosphor",
    "phosphor": "bold/arrow-square-out-bold.svg",
@@ -3647,7 +3647,7 @@
   {
    "rust_icon": "Image",
    "file": "fluxer_client/app/src/ui/media_context_menu.rs",
-   "line": 131,
+   "line": 137,
    "rust_asset": "fluxer_client/app/assets/icons/image.svg",
    "kind": "phosphor",
    "phosphor": "fill/image-square-fill.svg",
@@ -3831,6 +3831,36 @@
    "rust_asset": "fluxer_client/app/assets/icons/user-plus-fill.svg",
    "kind": "phosphor",
    "phosphor": "fill/user-plus-fill.svg",
+   "status": "unverified",
+   "official_component": null,
+   "official_icon": null,
+   "weight": null,
+   "size": null,
+   "source_file": null,
+   "reason": "new call site, not yet matched to official harvest"
+  },
+  {
+   "rust_icon": "PencilSimple",
+   "file": "fluxer_client/app/src/ui/attachments/tray.rs",
+   "line": 112,
+   "rust_asset": "fluxer_client/app/assets/icons/pencil-simple.svg",
+   "kind": "phosphor",
+   "phosphor": "fill/pencil-simple-fill.svg",
+   "status": "unverified",
+   "official_component": null,
+   "official_icon": null,
+   "weight": null,
+   "size": null,
+   "source_file": null,
+   "reason": "new call site, not yet matched to official harvest"
+  },
+  {
+   "rust_icon": "X",
+   "file": "fluxer_client/app/src/ui/attachments/tray.rs",
+   "line": 313,
+   "rust_asset": "fluxer_client/app/assets/icons/x.svg",
+   "kind": "phosphor",
+   "phosphor": "bold/x-bold.svg",
    "status": "unverified",
    "official_component": null,
    "official_icon": null,

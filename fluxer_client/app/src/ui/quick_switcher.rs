@@ -12,6 +12,7 @@ use crate::shortcuts::{SwitcherNext, SwitcherPrev};
 use crate::theme::Theme;
 use crate::ui::l10n;
 use crate::ui::overlay;
+use crate::ui::settings::SettingsTab;
 
 /// Key context of the modal (Ctrl+N / Ctrl+P bindings).
 pub const CONTEXT: &str = "QuickSwitcher";
@@ -94,7 +95,44 @@ fn glyph(target: &SwitcherTarget) -> &'static str {
         SwitcherTarget::TextChannel { .. } => "#",
         SwitcherTarget::VoiceChannel { .. } => "🔊",
         SwitcherTarget::Guild { .. } => "*",
+        SwitcherTarget::Home => "⌂",
+        SwitcherTarget::Favorites => "★",
+        SwitcherTarget::Settings { .. } => "⚙",
     }
+}
+
+/// Navigation rows carry English source strings; channels, people and
+/// communities are user data and stay as is.
+fn localized(target: &SwitcherTarget, text: &str) -> String {
+    match target {
+        SwitcherTarget::Home | SwitcherTarget::Favorites | SwitcherTarget::Settings { .. } => l10n::tr(text),
+        _ => text.to_owned(),
+    }
+}
+
+/// Every settings tab the client has; the switcher's tab ids are the
+/// official tab types, which the tab's deep link also carries.
+const SETTINGS_TABS: [SettingsTab; 15] = [
+    SettingsTab::Profile,
+    SettingsTab::Account,
+    SettingsTab::PrivacySafety,
+    SettingsTab::Connections,
+    SettingsTab::Appearance,
+    SettingsTab::Themes,
+    SettingsTab::Notifications,
+    SettingsTab::MessagesMedia,
+    SettingsTab::VoiceVideo,
+    SettingsTab::Accessibility,
+    SettingsTab::Language,
+    SettingsTab::Keybinds,
+    SettingsTab::WindowsApp,
+    SettingsTab::Advanced,
+    SettingsTab::Applications,
+];
+
+/// The settings tab for a [`SwitcherTarget::Settings`] id.
+pub fn settings_tab_for_id(id: &str) -> Option<SettingsTab> {
+    SETTINGS_TABS.into_iter().find(|tab| tab.deep_link_url().strip_prefix("fluxer://settings/user?tab=") == Some(id))
 }
 
 /// The modal: search box, then headers and results. Up/Down (and Ctrl+N /
@@ -125,9 +163,11 @@ pub fn render(sw: &QuickSwitcher, theme: &Theme, cx: &mut Context<ClientView>) -
                 .rounded(px(4.))
                 .when(sw.selected == Some(ix), |d| d.bg(theme.accent))
                 .child(div().w(px(20.)).flex_none().text_color(theme.muted_foreground).child(glyph(&r.target)))
-                .child(div().flex_1().min_w_0().truncate().child(r.title.clone()))
+                .child(div().flex_1().min_w_0().truncate().child(localized(&r.target, &r.title)))
                 .children(
-                    r.subtitle.clone().map(|s| div().text_xs().truncate().text_color(theme.muted_foreground).child(s)),
+                    r.subtitle
+                        .as_deref()
+                        .map(|s| div().text_xs().truncate().text_color(theme.muted_foreground).child(localized(&r.target, s))),
                 )
                 .on_mouse_move(cx.listener(move |this, _, _, cx| this.quick_switcher_hover(ix, cx)))
                 .on_click(cx.listener(move |this, _, window, cx| this.quick_switcher_accept(Some(ix), window, cx)))
@@ -171,7 +211,7 @@ pub fn render(sw: &QuickSwitcher, theme: &Theme, cx: &mut Context<ClientView>) -
 
 #[cfg(test)]
 mod tests {
-    use fluxer_client_core::search::switcher::SwitcherResult;
+    use fluxer_client_core::search::switcher::{SETTINGS_TABS as CORE_TABS, SwitcherResult};
     use fluxer_client_core::state::Snowflake;
 
     use super::*;
@@ -204,5 +244,19 @@ mod tests {
         let only_headers = vec![SwitcherItem::Header(SwitcherHeader::Mentions)];
         assert_eq!(first_selectable(&only_headers), None);
         assert_eq!(next_selectable(&only_headers, None, 1), None);
+    }
+
+    #[test]
+    fn settings_ids_map_to_existing_tabs() {
+        assert_eq!(CORE_TABS.len(), SETTINGS_TABS.len());
+        for (id, label) in CORE_TABS {
+            let tab = settings_tab_for_id(id).unwrap_or_else(|| panic!("no tab for {id}"));
+            assert_eq!(tab.label(), *label, "{id}");
+        }
+        assert_eq!(settings_tab_for_id("keybinds"), Some(SettingsTab::Keybinds));
+        assert_eq!(settings_tab_for_id("voice_video"), Some(SettingsTab::VoiceVideo));
+        assert_eq!(settings_tab_for_id("desktop_settings"), Some(SettingsTab::WindowsApp));
+        assert_eq!(settings_tab_for_id("privacy_safety"), Some(SettingsTab::PrivacySafety));
+        assert_eq!(settings_tab_for_id("nope"), None);
     }
 }

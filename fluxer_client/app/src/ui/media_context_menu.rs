@@ -1,10 +1,16 @@
 //! Shared media right-click context menu (`MediaContextMenu.tsx`,
 //! `MediaMenuData.tsx`). Non-T3 media actions only: favorites (backlog),
-//! copy media (backlog), download/save, copy link, open link.
+//! copy media (PNG/JPEG still images only), download/save, copy link, open link.
 
+use std::io::Cursor;
+use std::sync::Arc;
+
+use anyhow::{Context as _, Result, bail};
+use futures::AsyncReadExt as _;
 use gpui_kit::component::{Icon, Sizable as _};
+use gpui_kit::http_client::{AsyncBody, HttpClient, Request};
 use gpui_kit::{
-    Anchor, AnyElement, App, ClipboardItem, FontWeight, MouseButton, Pixels, Point, Role,
+    Anchor, AnyElement, App, ClipboardItem, FontWeight, Image, ImageFormat, MouseButton, Pixels, Point, Role,
     SharedString, Size, Window, anchored, div, prelude::*, px,
 };
 
@@ -161,7 +167,7 @@ pub fn execute_action(
 ) {
     match action {
         MediaMenuAction::AddToFavorites => handle_add_to_favorites(),
-        MediaMenuAction::CopyMedia => handle_copy_media(),
+        MediaMenuAction::CopyMedia => handle_copy_media(target, cx),
         MediaMenuAction::DownloadMedia => handle_download_media(view, target, window, cx),
         MediaMenuAction::CopyLink => handle_copy_link(target, cx),
         MediaMenuAction::OpenLink => handle_open_link(view, target, window, cx),
@@ -172,8 +178,136 @@ fn handle_add_to_favorites() {
     // TODO(backlog): wire favorite meme / GIF persistence once backend support lands.
 }
 
-fn handle_copy_media() {
-    // TODO(backlog): encode image bitmap / media file to clipboard once GPUI supports binary clipboard items.
+/// How `Copy media` is performed per [`MediaMenuKind`] (`copyMediaToClipboard`
+/// in `MediaMenuData.tsx`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CopyMediaMode {
+    /// Fetch the still image and put PNG data on the clipboard.
+    Image,
+    Unsupported,
+}
+
+pub fn copy_media_mode(kind: MediaMenuKind) -> CopyMediaMode {
+    match kind {
+        MediaMenuKind::Image => CopyMediaMode::Image,
+        // TODO(backlog): GIF/video/audio binary clipboard copy (`clipboardWriteFile`).
+        MediaMenuKind::Gif
+        | MediaMenuKind::Gifv
+        | MediaMenuKind::Video
+        | MediaMenuKind::Audio
+        | MediaMenuKind::File => CopyMediaMode::Unsupported,
+    }
+}
+
+/// Download cap; mirrors `ImageHttpClient`'s body limit (`http.rs`), which
+/// also enforces https-only and the redirect policy.
+const MAX_COPY_BYTES: usize = 32 * 1024 * 1024;
+const MAX_COPY_DIMENSION: u32 = 16_384;
+const MAX_COPY_DECODE_ALLOC: u64 = 256 * 1024 * 1024;
+
+/// URLs tried in order: proxy first, then the original (deduplicated, non-empty).
+pub fn copy_candidate_urls(target: &MediaContextMenuTarget) -> Vec<String> {
+    let mut urls: Vec<String> = Vec::new();
+    for url in [target.download_url(), target.url.as_ref()] {
+        if !url.trim().is_empty() && !urls.iter().any(|u| u == url) {
+            urls.push(url.to_owned());
+        }
+    }
+    urls
+}
+
+/// Validates `bytes` as a PNG or JPEG within decode limits and returns PNG
+/// bytes (PNG is passed through unchanged, JPEG is re-encoded). GIF, WebP and
+/// every other format are rejected.
+pub fn encode_clipboard_png(bytes: &[u8]) -> Result<Vec<u8>> {
+    let format = image::guess_format(bytes).context("unrecognized image format")?;
+    if !matches!(format, image::ImageFormat::Png | image::ImageFormat::Jpeg) {
+        bail!("only PNG and JPEG can be copied, got {format:?}");
+    }
+    let mut reader = image::ImageReader::with_format(Cursor::new(bytes), format);
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(MAX_COPY_DIMENSION);
+    limits.max_image_height = Some(MAX_COPY_DIMENSION);
+    limits.max_alloc = Some(MAX_COPY_DECODE_ALLOC);
+    reader.limits(limits);
+    let decoded = reader.decode().context("image decode failed")?;
+    if format == image::ImageFormat::Png {
+        return Ok(bytes.to_vec());
+    }
+    let mut out = Vec::new();
+    decoded
+        .write_to(&mut Cursor::new(&mut out), image::ImageFormat::Png)
+        .context("PNG encode failed")?;
+    Ok(out)
+}
+
+async fn fetch_limited(client: &Arc<dyn HttpClient>, url: &str) -> Result<Vec<u8>> {
+    let request = Request::get(url)
+        .body(AsyncBody::empty())
+        .context("invalid media URL")?;
+    let response = client.send(request).await?;
+    if !response.status().is_success() {
+        bail!("media request failed with status {}", response.status());
+    }
+    let mut body = Vec::new();
+    response
+        .into_body()
+        .take(MAX_COPY_BYTES as u64 + 1)
+        .read_to_end(&mut body)
+        .await?;
+    if body.len() > MAX_COPY_BYTES {
+        bail!("media is larger than {MAX_COPY_BYTES} bytes");
+    }
+    Ok(body)
+}
+
+/// Tries each URL until one downloads and converts to PNG.
+async fn fetch_png(client: Arc<dyn HttpClient>, urls: Vec<String>) -> Result<Vec<u8>> {
+    let mut last = anyhow::anyhow!("no media URL");
+    for url in urls {
+        match fetch_limited(&client, &url)
+            .await
+            .and_then(|body| encode_clipboard_png(&body))
+        {
+            Ok(png) => return Ok(png),
+            Err(err) => last = err,
+        }
+    }
+    Err(last)
+}
+
+/// Writes the converted image to the clipboard; on failure the clipboard is
+/// left unchanged.
+pub fn apply_copy_result(result: Result<Vec<u8>>, cx: &mut App) -> bool {
+    match result {
+        Ok(png) => {
+            cx.write_to_clipboard(ClipboardItem::new_image(&Image::from_bytes(ImageFormat::Png, png)));
+            true
+        }
+        Err(err) => {
+            tracing::warn!("copy image failed: {err:#}");
+            false
+        }
+    }
+}
+
+fn handle_copy_media(target: &MediaContextMenuTarget, cx: &mut App) {
+    match copy_media_mode(target.kind) {
+        CopyMediaMode::Unsupported => {}
+        CopyMediaMode::Image => {
+            let urls = copy_candidate_urls(target);
+            if urls.is_empty() {
+                return;
+            }
+            let client = cx.http_client();
+            cx.spawn(async move |cx| {
+                let executor = cx.background_executor().clone();
+                let result = executor.spawn(fetch_png(client, urls)).await;
+                let _ = cx.update(|cx| apply_copy_result(result, cx));
+            })
+            .detach();
+        }
+    }
 }
 
 fn handle_download_media(
@@ -224,10 +358,7 @@ pub fn render_menu_body(
             .bg(border_color)
             .flx("ui.action-menu.context-menu.separator")
     };
-    let mut body = div()
-        .flex()
-        .flex_col()
-        .flx("ui.action-menu.context-menu.menu-scroller");
+    let mut body = div().flex().flex_col().flx("ui.action-menu.context-menu.menu-scroller");
     for (gi, group) in menu_groups(target.kind).into_iter().enumerate() {
         if gi > 0 {
             body = body.child(separator());
@@ -332,7 +463,12 @@ pub fn render_floating(
         .absolute()
         .top_0()
         .left_0()
-        .child(anchored().position(gpui_kit::point(px(left), px(top))).anchor(Anchor::TopLeft).child(panel))
+        .child(
+            anchored()
+                .position(gpui_kit::point(px(left), px(top)))
+                .anchor(Anchor::TopLeft)
+                .child(panel),
+        )
         .into_any_element()
 }
 
@@ -369,11 +505,26 @@ mod tests {
 
     #[test]
     fn action_labels_match_media_kind() {
-        assert_eq!(action_label(MediaMenuAction::CopyMedia, MediaMenuKind::Image), "Copy image");
-        assert_eq!(action_label(MediaMenuAction::CopyMedia, MediaMenuKind::Gifv), "Copy GIF");
-        assert_eq!(action_label(MediaMenuAction::DownloadMedia, MediaMenuKind::Video), "Download video");
-        assert_eq!(action_label(MediaMenuAction::DownloadMedia, MediaMenuKind::File), "Download file");
-        assert_eq!(action_label(MediaMenuAction::OpenLink, MediaMenuKind::Audio), "Open audio link");
+        assert_eq!(
+            action_label(MediaMenuAction::CopyMedia, MediaMenuKind::Image),
+            "Copy image"
+        );
+        assert_eq!(
+            action_label(MediaMenuAction::CopyMedia, MediaMenuKind::Gifv),
+            "Copy GIF"
+        );
+        assert_eq!(
+            action_label(MediaMenuAction::DownloadMedia, MediaMenuKind::Video),
+            "Download video"
+        );
+        assert_eq!(
+            action_label(MediaMenuAction::DownloadMedia, MediaMenuKind::File),
+            "Download file"
+        );
+        assert_eq!(
+            action_label(MediaMenuAction::OpenLink, MediaMenuKind::Audio),
+            "Open audio link"
+        );
     }
 
     #[test]

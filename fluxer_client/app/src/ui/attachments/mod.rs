@@ -8,8 +8,11 @@
 //! `message.txt`; a `SPOILER_` file name starts out as a spoiler; a
 //! spoiler is sent as the `IS_SPOILER` flag with the file name unchanged
 //! (`CloudUpload.ts`). The ATTACH_FILES gate is the caller's
-//! (`ClientState::can_attach_files`). Not ported: alt text, reordering,
-//! the per-user `max_attachment_file_size` (25 MiB default is used).
+//! (`ClientState::can_attach_files`). Edit modal (`AttachmentEditModal.tsx`):
+//! filename, alt text (trimmed, empty is none, at most 4096; only for
+//! image/video files) and the spoiler switch; reordering moves one file
+//! before/after another (`ChannelAttachmentArea.tsx` `handleAttachmentDrop`).
+//! Not ported: the per-user `max_attachment_file_size` (25 MiB default).
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -28,6 +31,10 @@ pub mod tray;
 /// `MAX_MESSAGE_LENGTH_NON_PREMIUM`: longer pasted text becomes a file.
 pub const MAX_MESSAGE_LENGTH: usize = 2000;
 const SPOILER_PREFIX: &str = "SPOILER_";
+/// `MAX_ATTACHMENT_ALT_TEXT_LENGTH` (counted in chars, like the REST check).
+pub const MAX_ALT_TEXT_LENGTH: usize = 4096;
+/// The filename limit the REST layer accepts (`check_filename`).
+pub const MAX_FILENAME_LENGTH: usize = 255;
 
 /// How the tray previews a file.
 #[derive(Debug, Clone, PartialEq)]
@@ -56,17 +63,75 @@ pub struct PendingAttachment {
     pub id: u64,
     pub file: NewFile,
     pub spoiler: bool,
+    /// Trimmed alt text; never `Some("")`.
+    pub description: Option<String>,
+}
+
+/// Where a dragged file lands relative to the file under the pointer
+/// (`computeHorizontalDropPosition`: left half is `Before`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DropPosition {
+    Before,
+    After,
+}
+
+impl DropPosition {
+    /// `offset_x` is the pointer's x inside the target, `width` its width.
+    pub fn from_offset(offset_x: f32, width: f32) -> Self {
+        if offset_x < width / 2.0 { Self::Before } else { Self::After }
+    }
+}
+
+/// Trims alt text; empty after trimming is `None`; more than
+/// [`MAX_ALT_TEXT_LENGTH`] chars is cut (the web textarea stops typing).
+pub fn normalize_description(text: &str) -> Option<String> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(trimmed.chars().take(MAX_ALT_TEXT_LENGTH).collect())
+}
+
+/// Why an edit was refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EditError {
+    /// Empty, over [`MAX_FILENAME_LENGTH`], or with a control character, `/`, `\` or `"`.
+    BadFilename,
+    NotFound,
+}
+
+/// What the edit modal submits (`AttachmentEditModal` `onSubmit`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AttachmentEdit {
+    pub filename: String,
+    pub spoiler: bool,
+    pub description: String,
+}
+
+impl AttachmentEdit {
+    /// The modal's initial values.
+    pub fn from_pending(a: &PendingAttachment) -> Self {
+        Self { filename: a.file.name.clone(), spoiler: a.spoiler, description: a.description.clone().unwrap_or_default() }
+    }
 }
 
 impl PendingAttachment {
-    /// The upload part: the name as picked, with the spoiler flag when
-    /// marked as a spoiler (the web client never renames the file).
+    /// Alt text only exists for image and video files (`isAltTextSupported`).
+    pub fn alt_text_supported(&self) -> bool {
+        self.file.mime.as_deref().is_some_and(|m| {
+            let m = m.to_ascii_lowercase();
+            m.starts_with("image/") || m.starts_with("video/")
+        })
+    }
+
+    /// The upload part: the (possibly edited) name, the trimmed alt text
+    /// and the spoiler flag when marked as a spoiler.
     pub fn upload_file(&self) -> UploadFile {
         UploadFile {
             source: self.file.source.clone(),
             filename: self.file.name.clone(),
             content_type: self.file.mime.clone(),
-            description: None,
+            description: self.description.clone(),
             flags: if self.spoiler { ATTACHMENT_FLAG_SPOILER } else { 0 },
         }
     }
@@ -144,7 +209,7 @@ impl AttachmentTray {
         let list = self.by_channel.entry(channel_id).or_default();
         for file in new {
             let spoiler = file.name.starts_with(SPOILER_PREFIX);
-            list.push(PendingAttachment { id: self.next_id, file, spoiler });
+            list.push(PendingAttachment { id: self.next_id, file, spoiler, description: None });
             self.next_id += 1;
         }
         Ok(())
@@ -170,6 +235,51 @@ impl AttachmentTray {
             }
             None => false,
         }
+    }
+
+    /// Applies the edit modal: the filename, the spoiler flag and (for image
+    /// and video files only) the trimmed alt text. A bad filename changes nothing.
+    pub fn edit(&mut self, channel_id: Snowflake, id: u64, edit: &AttachmentEdit) -> Result<(), EditError> {
+        let item = self
+            .by_channel
+            .get_mut(&channel_id)
+            .and_then(|l| l.iter_mut().find(|a| a.id == id))
+            .ok_or(EditError::NotFound)?;
+        let name = &edit.filename;
+        if name.is_empty()
+            || name.chars().count() > MAX_FILENAME_LENGTH
+            || name.chars().any(|c| c.is_control() || matches!(c, '/' | '\\' | '"'))
+        {
+            return Err(EditError::BadFilename);
+        }
+        item.file.name.clone_from(name);
+        item.spoiler = edit.spoiler;
+        if item.alt_text_supported() {
+            item.description = normalize_description(&edit.description);
+        }
+        Ok(())
+    }
+
+    /// Moves `source` next to `target` (`handleAttachmentDrop`). Ids are
+    /// stable, so the list may change between drag start and drop. Returns
+    /// false (and changes nothing) for the same file or an unknown id.
+    pub fn reorder(&mut self, channel_id: Snowflake, source: u64, target: u64, position: DropPosition) -> bool {
+        if source == target {
+            return false;
+        }
+        let Some(list) = self.by_channel.get_mut(&channel_id) else { return false };
+        let (Some(old), Some(target_index)) =
+            (list.iter().position(|a| a.id == source), list.iter().position(|a| a.id == target))
+        else {
+            return false;
+        };
+        let mut new = if position == DropPosition::After { target_index + 1 } else { target_index };
+        if old < target_index && position == DropPosition::After {
+            new -= 1;
+        }
+        let moved = list.remove(old);
+        list.insert(new, moved);
+        true
     }
 
     /// Empties the channel's tray (Enter); [`PendingAttachment::upload_file`]

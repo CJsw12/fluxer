@@ -14,7 +14,7 @@ use crate::ui::autocomplete;
 use crate::ui::composer_text;
 use crate::ui::l10n;
 use crate::ui::overlay::Overlay;
-use crate::ui::quick_switcher::QuickSwitcher;
+use crate::ui::quick_switcher::{QuickSwitcher, settings_tab_for_id};
 use crate::ui::sidebar_menus::ReadScope;
 use crate::view_model::{Place, opens_message_pane};
 
@@ -465,14 +465,22 @@ impl ClientView {
         }
         let Some(target) = sw.selected_target().cloned() else { return };
         self.overlay = Overlay::None;
-        self.open_target(target, cx);
-        self.focus_composer(window, cx);
+        self.open_target(target, window, cx);
         cx.notify();
     }
 
-    /// Navigates to a switcher result. A person without a DM channel gets
-    /// one from `POST /users/@me/channels`; `UiEvent::DmOpened` opens it.
-    pub(crate) fn open_target(&mut self, target: SwitcherTarget, cx: &mut Context<Self>) {
+    /// Navigates to a switcher result and returns focus to the composer,
+    /// except for settings, whose modal keeps it. A person without a DM
+    /// channel gets one from `POST /users/@me/channels`; `UiEvent::DmOpened`
+    /// opens it.
+    pub(crate) fn open_target(&mut self, target: SwitcherTarget, window: &mut Window, cx: &mut Context<Self>) {
+        if let SwitcherTarget::Settings { id } = &target {
+            if let Some(tab) = settings_tab_for_id(id) {
+                self.open_settings(window, cx);
+                self.select_settings_tab(tab, cx);
+            }
+            return;
+        }
         match target {
             SwitcherTarget::User { dm_channel_id: Some(channel_id), .. } | SwitcherTarget::GroupDm { channel_id } => {
                 self.open_channel(None, channel_id, cx);
@@ -481,7 +489,11 @@ impl ClientView {
             SwitcherTarget::TextChannel { channel_id, guild_id }
             | SwitcherTarget::VoiceChannel { channel_id, guild_id } => self.open_channel(guild_id, channel_id, cx),
             SwitcherTarget::Guild { guild_id } => self.select_place(Place::Guild(guild_id), cx),
+            SwitcherTarget::Home => self.select_place(Place::Home, cx),
+            SwitcherTarget::Favorites => self.select_favorites(cx),
+            SwitcherTarget::Settings { .. } => {}
         }
+        self.focus_composer(window, cx);
     }
 }
 

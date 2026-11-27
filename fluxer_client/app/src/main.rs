@@ -88,6 +88,10 @@ mod tests_settings;
 mod tests_social;
 #[cfg(test)]
 mod tests_voice;
+#[cfg(test)]
+mod tests_attachments;
+#[cfg(test)]
+mod tests_media_menu;
 
 use std::cell::RefCell;
 use std::rc::Rc;

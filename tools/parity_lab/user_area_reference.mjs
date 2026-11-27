@@ -50,6 +50,14 @@ try {
 	console.log(JSON.stringify({dark, light, expiry}));
 } finally {
 	await cdp.eval(`document.documentElement.className = ${JSON.stringify(rootClass)}`);
+	// A failed run must not leave the popout open (Escape does not close it, and the
+	// next run's user-area click would toggle it shut instead). Same outside click as above.
+	const popoutOpen = `!!document.querySelector('[data-flx$="app.floating.user-area-popout.container"]')`;
+	if (await cdp.eval(popoutOpen).catch(() => false)) {
+		await click({x: 1000, y: 210}).catch(() => {});
+		await sleep(200);
+		if (await cdp.eval(popoutOpen).catch(() => false)) console.error('user-area popout still open after cleanup');
+	}
 	try {
 		await cdp.send('Emulation.clearDeviceMetricsOverride');
 	} finally {

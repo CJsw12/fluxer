@@ -126,91 +126,75 @@ pub(super) fn render_sidebar_tab(
 
     let mut out = vec![item_btn.into_any_element()];
 
-    if show_sections && has_sections {
-        if has_tree {
-            let mut sub_list = div()
-                .ml(px(21.))
-                .pl(px(6.))
-                .border_l_1()
-                .border_color(theme.border)
-                .flex()
-                .flex_col()
-                .gap(px(2.))
-                .flx("app.settings-modal-layout.settings-modal-sidebar-sub-items.sidebar-sub-items");
-            for &(sec_id, sec_label) in sections.iter() {
-                let is_active_sec = active_section == Some(sec_id);
-                let sub_sel = format!("settings-subitem-{sec_id}");
-                let sub_id = SharedString::from(format!("settings-subitem-{}-{sec_id}", tab.debug_selector()));
-                let label_el = div()
-                    .flex_1()
-                    .min_w_0()
-                    .h(px(18.))
-                    .line_height(px(18.))
-                    .truncate()
-                    .flx("app.settings-modal-layout.settings-modal-sidebar-sub-item.sidebar-sub-item-label")
-                    .child(l10n::tr(sec_label));
-                let row = div()
-                    .id(sub_id)
-                    .debug_selector(move || sub_sel.clone())
-                    .w_full()
-                    .h(px(30.))
-                    .flex_none()
-                    .px(px(10.))
-                    .rounded(px(6.))
-                    .border_1()
-                    .border_color(gpui_kit::transparent_black())
-                    .cursor_pointer()
-                    .flex()
-                    .items_center()
-                    .text_size(px(13.))
-                    .line_height(px(18.))
-                    .text_color(if is_active_sec { active_text } else { sub_idle_text })
-                    .font_weight(if is_active_sec {
-                        FontWeight::SEMIBOLD
-                    } else {
-                        FontWeight::MEDIUM
-                    })
-                    .bg(if is_active_sec {
-                        selected_bg
-                    } else {
-                        gpui_kit::transparent_black()
-                    })
-                    .when(!is_active_sec, |d| {
-                        d.hover(move |s| s.bg(hover_bg).text_color(active_text))
-                    })
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.select_settings_section(tab, sec_id, cx);
-                    }))
-                    .flx("app.settings-modal-layout.settings-modal-sidebar-sub-item.sidebar-sub-item.click.button")
-                    .child(label_el);
-                sub_list = sub_list.child(row);
-            }
-            let wrap = div()
-                .w_full()
-                .mt(px(3.))
-                .mb(px(4.))
-                .flx("app.settings-modal-layout.settings-modal-sidebar-sub-items.sidebar-sub-items-wrap")
-                .child(sub_list);
-            out.push(wrap.into_any_element());
+    if show_sections && has_sections && tab != SettingsTab::Profile {
+        // Collapsed tabs keep their rows inside zero-height wrappers like the
+        // official sidebar; only the selected tab's list is visible.
+        let mut sub_list = if has_tree {
+            div().ml(px(21.)).pl(px(6.)).border_l_1().border_color(theme.border)
         } else {
-            let sub_list = div()
-                .ml(px(21.))
-                .pl(px(6.))
-                .h(px(0.))
-                .overflow_hidden()
-                .opacity(0.)
-                .flex()
-                .flex_col()
-                .gap(px(2.))
-                .flx("app.settings-modal-layout.settings-modal-sidebar-sub-items.sidebar-sub-items");
-            let wrap = div()
-                .w_full()
-                .h(px(0.))
-                .overflow_hidden()
-                .flx("app.settings-modal-layout.settings-modal-sidebar-sub-items.sidebar-sub-items-wrap")
-                .child(sub_list);
-            out.push(wrap.into_any_element());
+            div().ml(px(21.)).pl(px(6.)).h(px(0.)).overflow_hidden().opacity(0.)
         }
+        .flex()
+        .flex_col()
+        .gap(px(2.))
+        .flx("app.settings-modal-layout.settings-modal-sidebar-sub-items.sidebar-sub-items");
+        for &(sec_id, sec_label) in sections.iter() {
+            let is_active_sec = active_section == Some(sec_id);
+            let sub_sel = format!("settings-subitem-{sec_id}");
+            let sub_id = SharedString::from(format!("settings-subitem-{}-{sec_id}", tab.debug_selector()));
+            let label_el = div()
+                .flex_1()
+                .min_w_0()
+                .h(px(18.))
+                .line_height(px(18.))
+                .truncate()
+                .flx("app.settings-modal-layout.settings-modal-sidebar-sub-item.sidebar-sub-item-label")
+                .child(l10n::tr(sec_label));
+            // Tagged before `.id(..)` so the probe can scope the row's children.
+            let row = div()
+                .debug_selector(move || sub_sel.clone())
+                .w_full()
+                .h(px(30.))
+                .flex_none()
+                .px(px(10.))
+                .rounded(px(6.))
+                .border_1()
+                .border_color(gpui_kit::transparent_black())
+                .cursor_pointer()
+                .flex()
+                .items_center()
+                .text_size(px(13.))
+                .line_height(px(18.))
+                .text_color(if is_active_sec { active_text } else { sub_idle_text })
+                .font_weight(if is_active_sec {
+                    FontWeight::SEMIBOLD
+                } else {
+                    FontWeight::MEDIUM
+                })
+                .bg(if is_active_sec {
+                    selected_bg
+                } else {
+                    gpui_kit::transparent_black()
+                })
+                .when(!is_active_sec, |d| {
+                    d.hover(move |s| s.bg(hover_bg).text_color(active_text))
+                })
+                .flx("app.settings-modal-layout.settings-modal-sidebar-sub-item.sidebar-sub-item.click.button")
+                .id(sub_id)
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.select_settings_section(tab, sec_id, cx);
+                }))
+                .child(label_el);
+            sub_list = sub_list.child(row);
+        }
+        let wrap = if has_tree {
+            div().w_full().mt(px(3.)).mb(px(4.))
+        } else {
+            div().w_full().h(px(0.)).overflow_hidden()
+        }
+        .flx("app.settings-modal-layout.settings-modal-sidebar-sub-items.sidebar-sub-items-wrap")
+        .child(sub_list);
+        out.push(wrap.into_any_element());
     }
 
     out

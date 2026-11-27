@@ -8,7 +8,8 @@
 
 Join key is (flx, occurrence index). A property is compared only when BOTH sides declare it:
 official = a CSS-module/inline rule sets it (rect is always a box metric); Rust = key present in
-the probe's style. Exit code 1 when the delta count exceeds --max (default: never fails).
+the probe's style. Rust parents come from the probe's `parent_flx`/`parent_idx` when they name
+the official parent; older dumps without those keys fall back to geometric containment. Exit code 1 when the delta count exceeds --max (default: never fails).
 `spec_delta(spec, rust_elements, scope=None)` is importable (replay.py).
 """
 
@@ -194,6 +195,20 @@ def _find_rust_parent(parent_flx: str | None, rect, by_flx):
     return None
 
 
+def _resolve_rust_parent(rs: dict, parent_flx: str | None, rect, by_flx):
+    """Exact flx ancestor from the probe (`parent_flx`/`parent_idx`) when it names the
+    same parent as the official DOM; otherwise the geometric fallback."""
+    name = rs.get("parent_flx")
+    if isinstance(name, str) and name and name == parent_flx:
+        cands = by_flx.get(name, [])
+        i = rs.get("parent_idx")
+        if isinstance(i, int) and not isinstance(i, bool) and 0 <= i < len(cands):
+            return cands[i]
+        if len(cands) == 1:
+            return cands[0]
+    return _find_rust_parent(parent_flx, rect, by_flx)
+
+
 def spec_delta(
     spec: dict,
     rust_elements: list[dict],
@@ -256,7 +271,7 @@ def spec_delta(
             for name, i in (("width", 2), ("height", 3)):
                 if abs(orect[i] - rrect[i]) > RECT_TOL:
                     add(name, num(orect[i]), num(rrect[i]), name)
-            par = _find_rust_parent(el.get("parent_flx"), rrect, rust_by_flx)
+            par = _resolve_rust_parent(rs, el.get("parent_flx"), rrect, rust_by_flx)
             if par is not None and el.get("rel"):
                 rel = (rrect[0] - par["rect"][0], rrect[1] - par["rect"][1])
                 for name, i in (("x-in-parent", 0), ("y-in-parent", 1)):

@@ -7,13 +7,17 @@
 //! Geometry is recorded from `canvas` prepaint callbacks (no app/view state is
 //! mutated and `cx.notify()` is never called while rendering).
 
+use std::any::Any;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
+use std::panic::Location;
 use std::sync::mpsc::Sender;
 use std::sync::{Mutex, OnceLock};
 
 use gpui_kit::{
     App, Bounds, IntoElement, KeyDownEvent, KeyUpEvent, Keystroke, Modifiers, MouseButton, MouseDownEvent,
     MouseMoveEvent, MouseUpEvent, OperatingSystem, ParentElement, Pixels, PlatformInput, Styled, Window,
-    AbsoluteLength, StyleRefinement, canvas, point, px, size,
+    AbsoluteLength, Div, StyleRefinement, canvas, point, px, size,
 };
 use serde_json::{Value, json};
 
@@ -36,6 +40,12 @@ pub struct Entry {
     pub src: Option<String>,
     /// Declared (non-hover) style, only the fields that are set.
     pub style: Option<Value>,
+    /// Prepaint scope of the tagged element itself (`Some` only for a `Div`,
+    /// whose prepaint hooks bracket its children). Not serialized.
+    pub scope: Option<u64>,
+    /// Open prepaint scopes around the element, outermost first, excluding its
+    /// own. Not serialized; resolved to `parent_flx`/`parent_idx` on inspect.
+    pub ancestors: Vec<u64>,
 }
 
 #[derive(Default)]
@@ -52,14 +62,66 @@ impl Registry {
 
 static REGISTRY: Mutex<Registry> = Mutex::new(Registry { building: Vec::new(), last: Vec::new() });
 
+thread_local! {
+    /// Prepaint scopes of tagged `Div`s currently being prepainted (GPUI
+    /// prepaint is a synchronous depth-first walk on the UI thread).
+    static SCOPES: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+    static NEXT_SCOPE: Cell<u64> = const { Cell::new(1) };
+    /// Largest child count seen per `.flx` call site; bounds the identity
+    /// prepaint order (every child index must be listed or it is skipped).
+    static CHILD_MAX: RefCell<HashMap<&'static Location<'static>, usize>> = RefCell::new(HashMap::new());
+}
+
 /// Finishes the previous frame (its entries become the inspectable snapshot).
 pub fn begin_frame() {
+    SCOPES.with(|s| s.borrow_mut().clear());
     if let Ok(mut reg) = REGISTRY.lock() {
         reg.begin_frame();
     }
 }
 
-fn record(flx: &str, bounds: Bounds<Pixels>, text: Option<&str>, src: &str, style: &Option<Value>) {
+/// Child-index bound for the identity prepaint order of a call site.
+fn order_len(site: &'static Location<'static>) -> usize {
+    CHILD_MAX.with(|m| m.borrow().get(site).map_or(4096, |&n| (n * 2).max(n + 256)))
+}
+
+/// Brackets a tagged `Div`'s children with a prepaint scope: the dynamic
+/// prepaint order (identity, run before the children) opens it and the
+/// children-prepainted listener (run after them) closes it. Layout, paint and
+/// rects are untouched. Other element types are left as is (`false`).
+fn install_scope<T: Any>(el: &mut T, site: &'static Location<'static>) -> bool {
+    let Some(div) = (el as &mut dyn Any).downcast_mut::<Div>() else {
+        return false;
+    };
+    let d = std::mem::replace(div, gpui_kit::div());
+    *div = d
+        .with_dynamic_prepaint_order(move |_, _| {
+            let id = NEXT_SCOPE.with(|n| {
+                let id = n.get();
+                n.set(id.wrapping_add(1));
+                id
+            });
+            SCOPES.with(|s| s.borrow_mut().push(id));
+            (0..order_len(site)).collect()
+        })
+        .on_children_prepainted(move |children, _, _| {
+            SCOPES.with(|s| {
+                s.borrow_mut().pop();
+            });
+            CHILD_MAX.with(|m| {
+                let mut m = m.borrow_mut();
+                let e = m.entry(site).or_insert(0);
+                *e = (*e).max(children.len());
+            });
+        });
+    true
+}
+
+fn record(flx: &str, bounds: Bounds<Pixels>, text: Option<&str>, src: &str, style: &Option<Value>, hooked: bool) {
+    let mut ancestors = SCOPES.with(|s| s.borrow().clone());
+    // A hooked element's canvas is its direct child, so the innermost open
+    // scope is its own.
+    let scope = if hooked { ancestors.pop() } else { None };
     if let Ok(mut reg) = REGISTRY.lock() {
         reg.building.push(Entry {
             flx: flx.to_owned(),
@@ -70,6 +132,8 @@ fn record(flx: &str, bounds: Bounds<Pixels>, text: Option<&str>, src: &str, styl
             text: text.map(str::to_owned),
             src: Some(src.to_owned()),
             style: style.clone(),
+            scope,
+            ancestors,
         });
     }
 }
@@ -137,7 +201,7 @@ fn border_px(style: &StyleRefinement) -> [f32; 4] {
 /// Tags an element with an official `data-flx` id. Every method does nothing
 /// unless the probe is enabled, so Location capture (free, compile-time
 /// constant), serialization and allocation only happen with the probe on.
-pub trait FlxExt: ParentElement + Styled + Sized {
+pub trait FlxExt: ParentElement + Styled + Sized + 'static {
     /// Records the color of a border supplied by a custom paint layer.
     #[track_caller]
     fn flx_painted_border(mut self, id: &'static str, color: gpui_kit::Hsla) -> Self {
@@ -156,8 +220,9 @@ pub trait FlxExt: ParentElement + Styled + Sized {
         let src = format_src(loc.file(), loc.line());
         let [bt, br, bb, bl] = border_px(self.style());
         let style = style_json(self.style());
+        let hooked = install_scope(&mut self, loc);
         self.child(
-            canvas(move |bounds, _, _| record(id, bounds, None, &src, &style), |_, (), _, _| {})
+            canvas(move |bounds, _, _| record(id, bounds, None, &src, &style, hooked), |_, (), _, _| {})
                 .absolute()
                 .top(px(-bt))
                 .right(px(-br))
@@ -176,8 +241,9 @@ pub trait FlxExt: ParentElement + Styled + Sized {
         let [bt, br, bb, bl] = border_px(self.style());
         let style = style_json(self.style());
         let text: String = text.into();
+        let hooked = install_scope(&mut self, loc);
         self.child(
-            canvas(move |bounds, _, _| record(id, bounds, Some(&text), &src, &style), |_, (), _, _| {})
+            canvas(move |bounds, _, _| record(id, bounds, Some(&text), &src, &style, hooked), |_, (), _, _| {})
                 .absolute()
                 .top(px(-bt))
                 .right(px(-br))
@@ -187,10 +253,57 @@ pub trait FlxExt: ParentElement + Styled + Sized {
     }
 }
 
-impl<T: ParentElement + Styled + Sized> FlxExt for T {}
+impl<T: ParentElement + Styled + Sized + 'static> FlxExt for T {}
 
-fn entry_json(e: Entry) -> Value {
-    json!({ "flx": e.flx, "rect": [e.x, e.y, e.w, e.h], "text": e.text, "src": e.src, "style": e.style })
+fn entry_json(e: Entry, parent: Option<(String, usize)>) -> Value {
+    let (parent_flx, parent_idx) = parent.map_or((None, None), |(f, i)| (Some(f), Some(i)));
+    json!({
+        "flx": e.flx, "rect": [e.x, e.y, e.w, e.h], "text": e.text, "src": e.src, "style": e.style,
+        "parent_flx": parent_flx, "parent_idx": parent_idx,
+    })
+}
+
+/// Nearest tagged ancestor `(flx, occurrence among that flx)` of every entry,
+/// like the official `parentElement.closest('[data-flx]')`. `None` when there
+/// is none or it is ambiguous: an element tagged without a scope (not a `Div`,
+/// e.g. after `.id(..)`) inside a scope on the chain may itself be the nearest
+/// ancestor, so such chains are not resolved.
+fn resolve_parents(entries: &[Entry]) -> Vec<Option<(String, usize)>> {
+    let mut occurrence = Vec::with_capacity(entries.len());
+    let mut seen: HashMap<&str, usize> = HashMap::new();
+    let mut by_scope: HashMap<u64, usize> = HashMap::new();
+    let mut unscoped_in: HashMap<u64, usize> = HashMap::new();
+    for (i, e) in entries.iter().enumerate() {
+        let n = seen.entry(e.flx.as_str()).or_insert(0);
+        occurrence.push(*n);
+        *n += 1;
+        match e.scope {
+            // The last tag recorded for a scope stands for it.
+            Some(s) => {
+                by_scope.insert(s, i);
+            }
+            None => {
+                if let Some(&top) = e.ancestors.last() {
+                    *unscoped_in.entry(top).or_insert(0) += 1;
+                }
+            }
+        }
+    }
+    entries
+        .iter()
+        .map(|e| {
+            for (depth, s) in e.ancestors.iter().enumerate().rev() {
+                let own = usize::from(e.scope.is_none() && depth + 1 == e.ancestors.len());
+                if unscoped_in.get(s).copied().unwrap_or(0) > own {
+                    return None;
+                }
+                if let Some(&p) = by_scope.get(s) {
+                    return Some((entries[p].flx.clone(), occurrence[p]));
+                }
+            }
+            None
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -283,10 +396,9 @@ fn error_reply(msg: &str) -> String {
 pub fn execute(req: ProbeRequest, window: &mut Window, cx: &mut App, reply: Sender<String>) {
     match req {
         ProbeRequest::Inspect => {
-            let elements: Vec<Value> = snapshot()
-                .into_iter()
-                .map(entry_json)
-                .collect();
+            let entries = snapshot();
+            let parents = resolve_parents(&entries);
+            let elements: Vec<Value> = entries.into_iter().zip(parents).map(|(e, p)| entry_json(e, p)).collect();
             let a11y = window
                 .debug_a11y_tree_json()
                 .and_then(|s| serde_json::from_str::<Value>(&s).ok())
@@ -494,7 +606,57 @@ mod tests {
     use super::*;
 
     fn entry(flx: &str) -> Entry {
-        Entry { flx: flx.to_owned(), x: 1.0, y: 2.0, w: 3.0, h: 4.0, text: None, src: None, style: None }
+        Entry {
+            flx: flx.to_owned(),
+            x: 1.0,
+            y: 2.0,
+            w: 3.0,
+            h: 4.0,
+            text: None,
+            src: None,
+            style: None,
+            scope: None,
+            ancestors: Vec::new(),
+        }
+    }
+
+    fn scoped(flx: &str, scope: Option<u64>, ancestors: &[u64]) -> Entry {
+        Entry { scope, ancestors: ancestors.to_vec(), ..entry(flx) }
+    }
+
+    #[test]
+    fn parents_resolve_nearest_tagged_scope() {
+        // wrap(1) > list(2) > [row(3) > label, row(4) > label]
+        let es = vec![
+            scoped("wrap", Some(1), &[]),
+            scoped("list", Some(2), &[1]),
+            scoped("row", Some(3), &[1, 2]),
+            scoped("label", Some(5), &[1, 2, 3]),
+            scoped("row", Some(4), &[1, 2]),
+            scoped("label", Some(6), &[1, 2, 4]),
+        ];
+        let p = resolve_parents(&es);
+        assert_eq!(p[0], None);
+        assert_eq!(p[1], Some(("wrap".to_owned(), 0)));
+        assert_eq!(p[2], Some(("list".to_owned(), 0)));
+        assert_eq!(p[3], Some(("row".to_owned(), 0)));
+        assert_eq!(p[4], Some(("list".to_owned(), 0)));
+        assert_eq!(p[5], Some(("row".to_owned(), 1)));
+    }
+
+    #[test]
+    fn unscoped_tag_on_chain_is_ambiguous() {
+        // `btn` has no scope (tagged after `.id(..)`): its descendants cannot
+        // tell it apart from `list`, so they stay unresolved; `btn` itself
+        // still resolves to `list`.
+        let es = vec![
+            scoped("list", Some(2), &[]),
+            scoped("btn", None, &[2]),
+            scoped("label", Some(7), &[2]),
+        ];
+        let p = resolve_parents(&es);
+        assert_eq!(p[1], Some(("list".to_owned(), 0)));
+        assert_eq!(p[2], None);
     }
 
     #[test]
@@ -529,13 +691,17 @@ mod tests {
             style: Some(json!({ "gap": { "width": { "Definite": 2.0 } } })),
             ..entry("a.b")
         };
-        let v = entry_json(e);
+        let v = entry_json(e, None);
         eprintln!("entry = {v}");
         assert_eq!(v["flx"], "a.b");
         assert_eq!(v["rect"], json!([1.0, 2.0, 3.0, 4.0]));
         assert_eq!(v["src"], "fluxer_client/app/src/ui/x.rs:123");
         assert!(v["style"]["gap"].is_object());
         assert!(v["text"].is_null());
+        assert!(v["parent_flx"].is_null() && v["parent_idx"].is_null());
+        let v = entry_json(entry("a.c"), Some(("a.b".to_owned(), 2)));
+        assert_eq!(v["parent_flx"], "a.b");
+        assert_eq!(v["parent_idx"], 2);
     }
 
     #[test]

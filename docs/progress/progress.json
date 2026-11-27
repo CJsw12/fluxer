@@ -1,10 +1,10 @@
 {
-  "updated": "2026-11-27",
+  "updated": "2026-11-28",
   "m9_1": {
-    "batch": 14,
+    "batch": 15,
     "status": "verified",
     "interactions": {"total": 770, "present": 288, "missing": 457, "differs": 25},
-    "tests_passed": 431,
+    "tests_passed": 433,
     "ratchet_scenes_passed": 22,
     "ratchet_scenes_total": 22,
     "verified": true

@@ -1054,7 +1054,7 @@
   {
    "rust_icon": "PencilBold",
    "file": "fluxer_client/app/src/ui/settings/sidebar.rs",
-   "line": 529,
+   "line": 513,
    "rust_asset": "fluxer_client/app/assets/icons/pencil-bold.svg",
    "kind": "phosphor",
    "phosphor": "bold/pencil-bold.svg",
@@ -2762,7 +2762,7 @@
   {
    "rust_icon": "Users",
    "file": "fluxer_client/app/src/ui/settings/sidebar.rs",
-   "line": 362,
+   "line": 346,
    "rust_asset": "fluxer_client/app/assets/icons/users.svg",
    "kind": "phosphor",
    "phosphor": "fill/users-fill.svg",
@@ -2957,7 +2957,7 @@
   {
    "rust_icon": "MagnifyingGlass",
    "file": "fluxer_client/app/src/ui/settings/sidebar.rs",
-   "line": 482,
+   "line": 466,
    "rust_asset": "fluxer_client/app/assets/icons/magnifying-glass.svg",
    "kind": "phosphor",
    "phosphor": "bold/magnifying-glass-bold.svg",
@@ -3542,7 +3542,7 @@
   {
    "rust_icon": "SignOutFill",
    "file": "fluxer_client/app/src/ui/settings/sidebar.rs",
-   "line": 411,
+   "line": 395,
    "rust_asset": "fluxer_client/app/assets/icons/sign-out-fill.svg",
    "kind": "phosphor",
    "phosphor": "fill/sign-out-fill.svg",

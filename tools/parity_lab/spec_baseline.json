@@ -71,32 +71,32 @@
           "missing": 0
         },
         "settings-appearance": {
-          "deltas": 17,
-          "missing": 3
+          "deltas": 9,
+          "missing": 1
         },
         "settings-keybinds": {
           "deltas": 292,
-          "missing": 3
+          "missing": 1
         },
         "settings-language": {
-          "deltas": 8,
-          "missing": 3
+          "deltas": 4,
+          "missing": 1
         },
         "settings-my-account": {
           "deltas": 10,
-          "missing": 3
+          "missing": 1
         },
         "settings-notifications": {
-          "deltas": 16,
-          "missing": 3
+          "deltas": 13,
+          "missing": 1
         },
         "settings-voice-video": {
-          "deltas": 10,
-          "missing": 3
+          "deltas": 7,
+          "missing": 1
         }
       },
       "ignore": [],
-      "updated": "2026-11-27"
+      "updated": "2026-11-28"
     },
     "extra": {
       "scenes": "tools/parity_lab/spec_scenes_extra.json",

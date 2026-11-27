@@ -492,6 +492,10 @@ def _classify_tooltip(item: dict, rust: RustIndex) -> tuple[str, list[str], str]
     off = item["official"]
     flx = off.get("flx")
     f = off["file"].lower()
+    if "voicecontrolbar.tsx" in f:
+        vs = "fluxer_client/app/src/ui/voice_stage.rs"
+        if rust.tooltip_files.get(vs, 0) >= 3:
+            return "present", [vs], "VoiceControlBar tooltips implemented via split_control_group/single_control_button in voice_stage.rs"
     if flx:
         if flx in rust.tooltip_flx_tags:
             return "present", rust.flx_locations.get(flx, []), f"flx '{flx}' has tooltip in Rust"
@@ -526,6 +530,10 @@ def _classify_context_menu(item: dict, rust: RustIndex) -> tuple[str, list[str],
         if has_rc:
             return "present", locs, f"matched data-flx '{flx}' with right-click/context-menu handler"
         return "differs", locs, f"flx '{flx}' exists in Rust without right-click/context-menu handler"
+    if "VoiceControlBar.tsx" in off["file"] and off.get("kind") == "onContextMenu":
+        vs = "fluxer_client/app/src/ui/voice_stage.rs"
+        if vs in rust.right_click_files:
+            return "present", [vs], "VoiceControlBar right-click context popouts/settings implemented in voice_stage.rs"
     if "ChannelList" in off["file"] or "ChannelItem" in off["file"]:
         if "fluxer_client/app/src/ui/channel_list.rs" in rust.right_click_files:
             return "differs", ["fluxer_client/app/src/ui/channel_list.rs"], "partial right-click handler in channel_list.rs"

@@ -12,6 +12,7 @@
 
 use fluxer_client_core::state::Snowflake;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
     AnyElement, Context, FontWeight, Hsla, KeyDownEvent, MouseButton, MouseDownEvent, Role, SharedString, div,
@@ -391,8 +392,10 @@ fn split_control_group(
     active_danger: bool,
     active_online: bool,
     disabled: bool,
+    right_click_when_disabled: bool,
     theme: &Theme,
     on_main_click: impl Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
+    on_main_right_click: impl Fn(&MouseDownEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
     on_caret_click: impl Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
 ) -> AnyElement {
     let (bg, fg): (Hsla, Hsla) = if active_danger {
@@ -406,6 +409,8 @@ fn split_control_group(
     } else {
         (gpui_kit::hsla(0., 0., 1., 0.06), gpui_kit::hsla(0., 0., 1., 0.90))
     };
+    let main_tip = main_label.clone();
+    let caret_tip = caret_label.clone();
 
     div()
         .relative()
@@ -417,6 +422,7 @@ fn split_control_group(
                 .id(main_id)
                 .role(Role::Button)
                 .aria_label(main_label)
+                .tooltip(move |window, cx| Tooltip::new(main_tip.clone()).build(window, cx))
                 .debug_selector(move || main_id.to_owned())
                 .size(px(44.))
                 .rounded(px(16.))
@@ -431,6 +437,9 @@ fn split_control_group(
                         .hover(|s| s.opacity(0.88))
                         .on_click(on_main_click)
                 })
+                .when(!disabled || right_click_when_disabled, |d| {
+                    d.on_mouse_down(MouseButton::Right, on_main_right_click)
+                })
                 .flx(button_flx)
                 .child(Icon::new(icon).with_size(px(22.)).text_color(fg)),
         )
@@ -439,6 +448,7 @@ fn split_control_group(
                 .id(caret_id)
                 .role(Role::Button)
                 .aria_label(caret_label)
+                .tooltip(move |window, cx| Tooltip::new(caret_tip.clone()).build(window, cx))
                 .debug_selector(move || caret_id.to_owned())
                 .absolute()
                 .top(px(-2.))
@@ -477,10 +487,12 @@ fn single_control_button(
     } else {
         (gpui_kit::hsla(0., 0., 1., 0.06), gpui_kit::hsla(0., 0., 1., 0.90))
     };
+    let tip = label.clone();
     div()
         .id(id)
         .role(Role::Button)
         .aria_label(label)
+        .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
         .debug_selector(move || id.to_owned())
         .size(px(44.))
         .rounded(px(16.))
@@ -778,8 +790,13 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
             effective_muted,
             false,
             mute_locked,
+            true,
             theme,
             cx.listener(|this, _, _, cx| this.toggle_voice_mute(cx)),
+            cx.listener(|this, _, _, cx| {
+                cx.stop_propagation();
+                this.toggle_voice_popout(crate::client_view::VoicePopoutKind::Input, cx);
+            }),
             cx.listener(|this, _, _, cx| {
                 this.toggle_voice_popout(crate::client_view::VoicePopoutKind::Input, cx);
             }),
@@ -800,8 +817,13 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
             effective_deafened,
             false,
             view.voice.server_deaf,
+            true,
             theme,
             cx.listener(|this, _, _, cx| this.toggle_voice_deaf(cx)),
+            cx.listener(|this, _, _, cx| {
+                cx.stop_propagation();
+                this.toggle_voice_popout(crate::client_view::VoicePopoutKind::Output, cx);
+            }),
             cx.listener(|this, _, _, cx| {
                 this.toggle_voice_popout(crate::client_view::VoicePopoutKind::Output, cx);
             }),
@@ -818,8 +840,13 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
             false,
             false,
             !is_connected,
+            false,
             theme,
             cx.listener(|this, _, window, cx| this.open_voice_settings(window, cx)),
+            cx.listener(|this, _, window, cx| {
+                cx.stop_propagation();
+                this.open_voice_settings(window, cx);
+            }),
             cx.listener(|this, _, window, cx| this.open_voice_settings(window, cx)),
         ))
         .child(split_control_group(
@@ -834,8 +861,13 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
             false,
             view.voice.self_stream,
             !is_connected,
+            false,
             theme,
             cx.listener(|this, _, _, cx| this.handle_screen_share_button(cx)),
+            cx.listener(|this, _, _, cx| {
+                cx.stop_propagation();
+                this.toggle_voice_popout(crate::client_view::VoicePopoutKind::Stream, cx);
+            }),
             cx.listener(|this, _, _, cx| {
                 this.toggle_voice_popout(crate::client_view::VoicePopoutKind::Stream, cx);
             }),

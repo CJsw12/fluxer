@@ -752,6 +752,76 @@ fn voice_stage_lifecycle_tiles_screen_share_controls_and_back_to_chat(cx: &mut T
 }
 
 #[gpui_kit::test]
+fn voice_control_bar_tooltips_and_right_click_context_menus(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, rx) = Backend::new(rt.handle().clone(), offline_rest(), None);
+    backend.state().apply(&voice_ready());
+    let (view, vcx) = open_client(cx, backend.clone(), rx);
+    let _room = connect_voice_in_view(&rt, &backend, &view, vcx);
+
+    // All primary and caret control buttons render with bounds.
+    for id in [
+        "voice-stage-mute-btn",
+        "voice-stage-input-settings-btn",
+        "voice-stage-deaf-btn",
+        "voice-stage-output-settings-btn",
+        "voice-stage-camera-btn",
+        "voice-stage-camera-settings-btn",
+        "voice-stage-share-btn",
+        "voice-stage-share-settings-btn",
+        "voice-stage-more-btn",
+        "voice-stage-disconnect-btn",
+    ] {
+        assert!(vcx.debug_bounds(id).is_some(), "missing voice control button {id}");
+    }
+
+    // 1. Right-click mute opens Input popout (even when server_mute locks left-click).
+    view.update(vcx, |v, cx| {
+        v.voice.server_mute = true;
+        cx.notify();
+    });
+    draw(vcx);
+    let mute_pos = vcx.debug_bounds("voice-stage-mute-btn").unwrap().center();
+    vcx.simulate_mouse_down(mute_pos, gpui_kit::MouseButton::Right, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert_eq!(v.voice_popout, Some(crate::client_view::VoicePopoutKind::Input));
+    });
+    assert!(vcx.debug_bounds("voice-control-popout").is_some());
+
+    // 2. Right-click deafen opens Output popout.
+    let deaf_pos = vcx.debug_bounds("voice-stage-deaf-btn").unwrap().center();
+    vcx.simulate_mouse_down(deaf_pos, gpui_kit::MouseButton::Right, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert_eq!(v.voice_popout, Some(crate::client_view::VoicePopoutKind::Output));
+    });
+    assert!(vcx.debug_bounds("voice-control-popout").is_some());
+
+    // 3. Right-click screen share opens Stream popout.
+    let share_pos = vcx.debug_bounds("voice-stage-share-btn").unwrap().center();
+    vcx.simulate_mouse_down(share_pos, gpui_kit::MouseButton::Right, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert_eq!(v.voice_popout, Some(crate::client_view::VoicePopoutKind::Stream));
+    });
+    assert!(vcx.debug_bounds("voice-control-popout").is_some());
+
+    // 4. Right-click camera opens Voice & Video settings overlay.
+    let cam_pos = vcx.debug_bounds("voice-stage-camera-btn").unwrap().center();
+    vcx.simulate_mouse_down(cam_pos, gpui_kit::MouseButton::Right, gpui_kit::Modifiers::default());
+    vcx.run_until_parked();
+    draw(vcx);
+    view.read_with(vcx, |v, _| {
+        assert_eq!(v.voice_popout, None);
+        assert!(matches!(v.overlay, crate::ui::overlay::Overlay::Settings(_)));
+    });
+}
+
+#[gpui_kit::test]
 fn local_voice_state_machine_prevents_speaker_only_deafen_and_restores_mute(cx: &mut TestAppContext) {
     let rt = runtime();
     let (backend, rx) = Backend::new(rt.handle().clone(), offline_rest(), None);

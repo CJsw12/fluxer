@@ -40,6 +40,7 @@ pub(super) fn render_keybind_chip_list(
                     .flex()
                     .items_center()
                     .justify_center()
+                    .whitespace_nowrap()
                     .text_size(px(12.))
                     .line_height(px(18.))
                     .font_weight(FontWeight::MEDIUM)

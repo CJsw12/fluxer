@@ -15,7 +15,7 @@
 - 도구 소스코드(`tools/parity_lab/*.py`, `*.mjs`)는 읽지 않는다. 사용법은 `--help`로 본다.
 
 ## 빌드·실기
-- `cargo check`/`cargo test`는 루트에서 `--manifest-path fluxer_client/Cargo.toml -p fluxer_client_app -j 4`를 쓴다(`CARGO_TARGET_DIR=<repo>/target/fc-root`, `jobs=4`). 병렬 `swarm`·Codex 서브에이전트는 `check_colors.py`·`check_icons.py`만 돌리고, 배치 워커가 통합 빌드와 테스트를 맡는다.
+- `cargo check`/`cargo test`는 `fluxer_client/`로 이동해 `-p fluxer_client_app -j 4`로 실행한다(`CARGO_TARGET_DIR=<repo>/target/fc-root`, `jobs=4`). 루트에서 `--manifest-path`로 돌리면 `fluxer_client/.cargo` 설정이 빠져 전체 재빌드·게이트 시간 초과가 난다. 병렬 `swarm`·Codex 서브에이전트는 `check_colors.py`·`check_icons.py`만 돌리고, 배치 워커가 통합 빌드와 테스트를 맡는다.
 - 수정 후 실기 재측정이 필요하면 `python -I tools/parity_lab/cycle.py --skip-tests`로 한다. 클라이언트는 `cycle.py`·`env.py`가 띄우므로 직접 실행 파일을 띄우지 않는다.
 - 기존 UI 행 수·칩 인덱스·표시용 콤보(`default_shortcut_rows` 등)는 명시적 요청 없이 바꾸지 않고, 수정으로 대상 장면의 `deltas`/`missing`이 늘면 즉시 원복한다.
 - `flx` 태그·구조를 바꾼 뒤 `verify_all` 전에 `cycle.py --skip-tests` + `spec_delta.py <S.json> --live --scope <flx>`로 해당 장면 deltas가 늘지 않았는지 먼저 확인한다. 늘면 공식 rect·부모 구조·스크롤 위치를 맞추거나 그 묶음만 되돌린다.

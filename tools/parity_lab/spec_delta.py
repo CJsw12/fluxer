@@ -533,13 +533,13 @@ def run_scenes(argv: list[str]) -> int:
 
     def reset() -> None:
         rp.deep_link(BASE_LINK)
-        time.sleep(0.6)
+        rp.inspect_until(rp.markdown_ready, 1.0)
         rp.send("probe_key", keystroke="escape")
-        time.sleep(0.4)
 
     rows = []
     for sc in scenes:
         slug, expect = sc["slug"], sc.get("rust_expect_flx", sc.get("expect_flx"))
+        ready_any = set(sc.get("rust_ready_any_flx", ()))
         row = {"scene": slug, "joined": 0, "deltas": 0, "missing": 0, "status": "ok", "error": None, "top": []}
         spec_file = spec_dir / f"{slug}.spec.json"
         try:
@@ -549,15 +549,16 @@ def run_scenes(argv: list[str]) -> int:
             reset()
             for act in sc.get("rust", []):
                 _exec_rust_action(rp, act, time)
-                time.sleep(0.3)
-            elements: list[dict] = []
-            for _ in range(20):
-                elements = inspect()
-                if not expect or expect in _flx_set(elements):
-                    break
-                time.sleep(0.25)
-            else:
-                raise RuntimeError(f"expect_flx not shown in Rust: {expect}")
+                if "link" in act:
+                    time.sleep(0.3)  # Deep links acknowledge receipt before dispatch.
+            def scene_ready(data: dict) -> bool:
+                tags = _flx_set(data["elements"])
+                return (not expect or expect in tags) and (not ready_any or bool(tags & ready_any))
+
+            frame = rp.inspect_until(scene_ready, 5.0)
+            elements = frame["elements"]
+            if not scene_ready(frame):
+                raise RuntimeError(f"scene not ready in Rust: expect_flx={expect}, any of {sorted(ready_any)}")
             res = spec_delta(spec, elements, sc.get("scope"), include_extended="--extended-styles" in argv)
             row.update(joined=res["joined"], deltas=res["delta_count"], missing=len(res["missing_in_rust"]))
             row["top"] = [delta_line(d) for d in res["deltas"][:3]]
@@ -569,18 +570,17 @@ def run_scenes(argv: list[str]) -> int:
             for act in sc.get("rust_restore", []):
                 try:
                     _exec_rust_action(rp, act, time)
-                    time.sleep(0.3)
+                    if "link" in act:
+                        time.sleep(0.3)
                 except Exception:  # noqa: BLE001
                     pass
             try:
                 rp.send("probe_key", keystroke="escape")
-                time.sleep(0.3)
                 # Escape does not close every Rust layer (user-area popout): toggle the trigger instead.
                 first = next((a for a in sc.get("rust", []) if "click" in a), None)
                 if expect and first and expect in _flx_set(inspect()):
                     row["escape_closes"] = False
                     rp.send("probe_click", flx=first["click"], **({"index": first["index"]} if "index" in first else {}))
-                    time.sleep(0.4)
             except Exception:  # noqa: BLE001
                 pass
         rows.append(row)

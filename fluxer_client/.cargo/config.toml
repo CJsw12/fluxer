@@ -1,8 +1,7 @@
-# Faster dev builds for the GPUI client: bundled LLD linker and less debug info for dependencies.
+# Use the Rust toolchain's bundled LLD. Parity scripts fall back to MSVC link.exe
+# for toolchains that omit it.
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld.exe"
-
-
 # Several agents build at once; cap per-build parallelism so the desktop stays responsive.
 [build]
 jobs = 4

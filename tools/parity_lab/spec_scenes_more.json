@@ -73,6 +73,10 @@
   ],
   "expect_flx": "discovery.discovery.discovery-page.container",
   "rust_expect_flx": "discovery.discovery.discovery-page.container",
+  "rust_ready_any_flx": [
+   "discovery.discovery.discovery-page.virtual-grid",
+   "discovery.discovery.discovery-empty-state.container"
+  ],
   "scope": [
    "discovery.",
    "app.discovery-"

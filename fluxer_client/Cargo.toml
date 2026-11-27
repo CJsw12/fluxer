@@ -20,6 +20,13 @@ strip = "symbols"
 [profile.release.package.fluxer_client_app]
 codegen-units = 16
 
+[profile.parity]
+inherits = "release"
+lto = "off"
+opt-level = 2
+codegen-units = 16
+incremental = true
+
 # Dependencies (gpui, gpui-kit, tokio...) need no debuginfo; this shrinks link time and target size.
 [profile.dev]
 debug = "line-tables-only"

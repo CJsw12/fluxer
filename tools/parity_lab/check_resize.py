@@ -70,8 +70,8 @@ def rect_of(inspect_data: dict, flx: str, index: int = 0) -> list[int] | None:
     return None
 
 
-def inspect_settled(delay: float = 0.25) -> dict:
-    time.sleep(delay)
+def inspect_settled() -> dict:
+    # Drag, click and key IPC calls acknowledge on the next frame.
     return rp.send("probe_inspect")
 
 
@@ -108,7 +108,7 @@ def main(argv: list[str]) -> int:
     try:
         rp.send("probe_resize", w=1280.0, h=800.0)
         rp.deep_link(f"fluxer://channels/{GUILD}/{CHANNEL}")
-        time.sleep(1.5)
+        rp.inspect_until(rp.markdown_ready, 1.5)
         for _ in range(2):
             rp.send("probe_key", keystroke="escape")
 
@@ -140,21 +140,20 @@ def main(argv: list[str]) -> int:
 
         rp.send("probe_click", flx=SB_HANDLE)
         rp.send("probe_key", keystroke="right")
-        check_eq(checks, "sidebar.key.right", (rect_of(inspect_settled(0.15), SB_NAV) or [0, 0, 0, 0])[2], sb_spec["keyboard"]["after_arrow_right"])
+        check_eq(checks, "sidebar.key.right", (rect_of(inspect_settled(), SB_NAV) or [0, 0, 0, 0])[2], sb_spec["keyboard"]["after_arrow_right"])
         rp.send("probe_key", keystroke="shift-right")
-        check_eq(checks, "sidebar.key.shift_right", (rect_of(inspect_settled(0.15), SB_NAV) or [0, 0, 0, 0])[2], sb_spec["keyboard"]["after_shift_arrow_right"])
+        check_eq(checks, "sidebar.key.shift_right", (rect_of(inspect_settled(), SB_NAV) or [0, 0, 0, 0])[2], sb_spec["keyboard"]["after_shift_arrow_right"])
         rp.send("probe_key", keystroke="home")
-        check_eq(checks, "sidebar.key.home", (rect_of(inspect_settled(0.15), SB_NAV) or [0, 0, 0, 0])[2], sb_spec["keyboard"]["after_home"])
+        check_eq(checks, "sidebar.key.home", (rect_of(inspect_settled(), SB_NAV) or [0, 0, 0, 0])[2], sb_spec["keyboard"]["after_home"])
         rp.send("probe_key", keystroke="end")
-        check_eq(checks, "sidebar.key.end", (rect_of(inspect_settled(0.15), SB_NAV) or [0, 0, 0, 0])[2], sb_spec["keyboard"]["after_end"])
+        check_eq(checks, "sidebar.key.end", (rect_of(inspect_settled(), SB_NAV) or [0, 0, 0, 0])[2], sb_spec["keyboard"]["after_end"])
         rp.send("probe_key", keystroke="enter")
-        check_eq(checks, "sidebar.key.enter_reset", (rect_of(inspect_settled(0.15), SB_NAV) or [0, 0, 0, 0])[2], sb_spec["keyboard"]["after_enter_reset"])
+        check_eq(checks, "sidebar.key.enter_reset", (rect_of(inspect_settled(), SB_NAV) or [0, 0, 0, 0])[2], sb_spec["keyboard"]["after_enter_reset"])
 
         # 2. Emoji picker resize
         print("=== Emoji Picker Resize ===")
         rp.deep_link("fluxer://scene/emoji-picker")
-        time.sleep(0.6)
-        ep0 = inspect_settled()
+        ep0 = rp.inspect_until(lambda d: rect_of(d, EMOJI_HANDLE, 1) is not None, 0.85)
         ep_spec = spec["expression_picker"]
         check_eq(checks, "emoji.default.rect", rect_of(ep0, EMOJI_PANEL), ep_spec["default_container"]["rect"], tol=4)
         left_rect = rect_of(ep0, EMOJI_HANDLE, index=1)
@@ -182,8 +181,9 @@ def main(argv: list[str]) -> int:
         time.sleep(0.3)
         rp.deep_link(f"fluxer://scene/voice-split/{GUILD}/{VOICE_CHANNEL}")
         joined_voice = True
-        time.sleep(4.5)
-        vc0 = inspect_settled()
+        vc0 = rp.inspect_until(
+            lambda d: rect_of(d, VOICE_SECTION) is not None and rect_of(d, VOICE_HANDLE) is not None, 4.75,
+        )
         vc_spec = spec["voice_compact"]
         check_eq(checks, "voice_split.default.h", (rect_of(vc0, VOICE_SECTION) or [0, 0, 0, 0])[3], vc_spec["default_section"]["rect"][3], tol=4)
 
@@ -195,7 +195,7 @@ def main(argv: list[str]) -> int:
 
             rp.send("probe_click", flx=VOICE_HANDLE)
             rp.send("probe_key", keystroke="up")
-            vc_up = inspect_settled(0.2)
+            vc_up = inspect_settled()
             check_eq(checks, "voice_split.key.up.h", (rect_of(vc_up, VOICE_SECTION) or [0, 0, 0, 0])[3], vc_spec["keyboard"]["after_arrow_up"], tol=4)
 
             rp.send("probe_drag", flx=VOICE_HANDLE, to_x=float(vh_rect[0] + vh_rect[2] / 2), to_y=120.0, steps=8)

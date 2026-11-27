@@ -172,7 +172,7 @@ def main(argv: list[str]) -> int:
     try:
         rp.send("probe_resize", w=1280.0, h=800.0)
         rp.deep_link(f"fluxer://channels/{GUILD}/{CHANNEL}")
-        time.sleep(1.5)
+        rp.inspect_until(rp.markdown_ready, 1.5)
         for _ in range(2):
             rp.send("probe_key", keystroke="escape")
         rp.send("probe_hover", x=1240.0, y=760.0)

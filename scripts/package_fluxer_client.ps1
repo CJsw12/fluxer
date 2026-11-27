@@ -13,27 +13,43 @@
 
 [CmdletBinding()]
 param(
-    [switch]$IncludeVoiceWorker
+    [switch]$IncludeVoiceWorker,
+    [switch]$Fast
 )
 
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $clientDir = Join-Path $repoRoot 'fluxer_client'
-$exePath = Join-Path $clientDir 'target\fc-release\release\fluxer_client.exe'
 $distDir = Join-Path $repoRoot 'dist\fluxer_client'
 
 $previousTargetDir = $env:CARGO_TARGET_DIR
-$env:CARGO_TARGET_DIR = 'target/fc-release'
+$parityLinkerVar = 'CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER'
+$previousLinker = [Environment]::GetEnvironmentVariable($parityLinkerVar)
+$buildProfile = 'release'
+$buildTargetDir = Join-Path $clientDir 'target\fc-release'
+if ($Fast) {
+    $buildProfile = 'parity'
+    $buildTargetDir = Join-Path $repoRoot 'target\fc-root'
+}
+$exePath = Join-Path $buildTargetDir "$buildProfile\fluxer_client.exe"
+$env:CARGO_TARGET_DIR = $buildTargetDir
 Push-Location $clientDir
 try {
-    & cargo build --release -p fluxer_client_app --bin fluxer_client --jobs 4
+    if (!$previousLinker -and !(Get-Command rust-lld.exe -ErrorAction SilentlyContinue)) {
+        $rustLibDir = & rustc --print target-libdir --target x86_64-pc-windows-msvc
+        if ($LASTEXITCODE -eq 0 -and !(Test-Path -LiteralPath (Join-Path $rustLibDir '..\bin\rust-lld.exe'))) {
+            [Environment]::SetEnvironmentVariable($parityLinkerVar, 'link.exe')
+        }
+    }
+    & cargo build --profile $buildProfile -p fluxer_client_app --bin fluxer_client --jobs 4
     if ($LASTEXITCODE -ne 0) {
         throw "cargo build failed with exit code $LASTEXITCODE"
     }
 }
 finally {
     Pop-Location
+    [Environment]::SetEnvironmentVariable($parityLinkerVar, $previousLinker)
     if ($null -eq $previousTargetDir) {
         Remove-Item Env:CARGO_TARGET_DIR -ErrorAction SilentlyContinue
     }
@@ -48,6 +64,11 @@ if (-not (Test-Path -LiteralPath $exePath -PathType Leaf)) {
 
 New-Item -ItemType Directory -Force -Path $distDir | Out-Null
 $distExe = Join-Path $distDir 'fluxer_client.exe'
+# A direct package can replace a binary previously recorded by cycle.py.
+$buildStamp = Join-Path $distDir 'BUILD_STAMP.json'
+if (Test-Path -LiteralPath $buildStamp) {
+    Remove-Item -LiteralPath $buildStamp
+}
 Copy-Item -LiteralPath $exePath -Destination $distExe -Force
 
 $versionInfo = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($distExe)

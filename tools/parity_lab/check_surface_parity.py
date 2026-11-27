@@ -114,7 +114,7 @@ def main(argv: list[str]) -> int:
     try:
         rp.send("probe_resize", w=1280.0, h=800.0)
         rp.deep_link(f"fluxer://channels/{GUILD}/{CHANNEL}")
-        time.sleep(1.5)
+        rp.inspect_until(rp.markdown_ready, 1.5)
         for _ in range(2):
             rp.send("probe_key", keystroke="escape")
         rp.send("probe_hover", x=1240.0, y=760.0)
@@ -184,8 +184,7 @@ def main(argv: list[str]) -> int:
             ("composer.emojis_tab", FLX_EMOJI_BTN, FLX_EMOJI_BODY, "rust_expression_emojis.png"),
         ]:
             rp.send("probe_click", flx=btn_flx)
-            time.sleep(0.45)
-            d = rp.send("probe_inspect")
+            d = rp.inspect_until(lambda frame: bool(find_flx(frame, expected_body)), 0.45)
             rp.screenshot(out / img_name)
             tabs = [e.get("text") for e in find_flx(d, FLX_TAB)]
             body_present = bool(find_flx(d, expected_body))
@@ -194,15 +193,13 @@ def main(argv: list[str]) -> int:
 
         # Repeat click on Emojis toggles popout closed
         rp.send("probe_click", flx=FLX_EMOJI_BTN)
-        time.sleep(0.3)
-        d_closed = rp.send("probe_inspect")
+        d_closed = rp.inspect_until(lambda frame: not find_flx(frame, FLX_PICKER), 0.3)
         record(checks, "composer.repeat_click_closes", not find_flx(d_closed, FLX_PICKER), {"picker_present": bool(find_flx(d_closed, FLX_PICKER))})
 
         # 4. Settings surface contrast & structure
         print("=== Settings Modal Sanity ===")
         rp.send("probe_click", flx=FLX_SETTINGS_BTN)
-        time.sleep(0.5)
-        ds = rp.send("probe_inspect")
+        ds = rp.inspect_until(lambda frame: bool(find_flx(frame, FLX_SETTINGS_SIDEBAR)), 0.5)
         spng = rp.screenshot(out / "rust_settings_surface.png")
         mhit = find_flx(ds, FLX_SETTINGS_MODAL)
         shit = find_flx(ds, FLX_SETTINGS_SIDEBAR)

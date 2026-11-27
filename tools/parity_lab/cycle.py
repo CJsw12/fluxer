@@ -1,6 +1,6 @@
 """One-command dev loop: test -> build -> relaunch (probe on) -> wait Online -> optional scene check.
 
-    python -I tools/parity_lab/cycle.py [--release] [--worker] [--skip-tests] [--force]
+    python -I tools/parity_lab/cycle.py [--release [--fast]] [--worker] [--skip-tests] [--force]
         [--check OFFICIAL.dom.json OFFICIAL.png fluxer://... OUT_DIR]
     python -I tools/parity_lab/cycle.py --selftest
     python -I tools/parity_lab/cycle.py --help
@@ -10,7 +10,8 @@ Default builds the fast incremental debug binary (target/fc-root/debug/fluxer_cl
 voice_worker next to it, so voice/screen-share scenes need --release. The client runs detached
 with FLUXER_PARITY_PROBE=1 and the test profile from env PARITY_PROFILE (LOCALAPPDATA override).
 
---release skips test/build/package when dist/fluxer_client/BUILD_STAMP.json matches the current
+--release --fast uses the incremental parity profile and runs tests on every invocation.
+Plain --release skips test/build/package when dist/fluxer_client/BUILD_STAMP.json matches the current
 git state (HEAD + dirty/untracked tree) and dist/fluxer_client/fluxer_client.exe exists; --force
 rebuilds anyway. --selftest only exercises argparse and the stamp match logic.
 """
@@ -22,6 +23,7 @@ import hashlib
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -42,12 +44,16 @@ STAMP = DIST / "BUILD_STAMP.json"
 STAMP_SKIP_LINE = "cycle: dist matches HEAD (stamp), skipping build/package"
 
 
-def run(cmd: list[str], cwd: Path = REPO, env: dict | None = None, tail: int = 6) -> int:
-    t = time.time()
-    r = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
+def run(cmd: list[str], cwd: Path = REPO, env: dict | None = None, tail: int = 6, timeout: int = 900) -> int:
+    t = time.monotonic()
+    try:
+        r = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
+    except subprocess.TimeoutExpired:
+        print(f"cycle: {cmd[0]} timed out after {timeout}s")
+        return 124
     lines = [l for l in (r.stdout + r.stderr).splitlines() if l.strip()]
     keep = [l for l in lines if any(k in l for k in ("test result", "FAILED", "panicked", "error", "warning: unused", "SHA256"))]
-    print(f"[{time.time() - t:5.0f}s] {' '.join(cmd[:4])} -> {r.returncode}")
+    print(f"[{time.monotonic() - t:5.1f}s] {' '.join(cmd[:4])} -> {r.returncode}")
     for l in (keep or lines)[-tail:]:
         print("   ", l[:200])
     return r.returncode
@@ -63,6 +69,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         ),
     )
     p.add_argument("--release", action="store_true", help="package dist/ instead of an incremental debug build")
+    p.add_argument("--fast", action="store_true", help="with --release: package the incremental parity profile")
     p.add_argument("--worker", action="store_true", help="include fluxer_voice_worker in the release package")
     p.add_argument("--skip-tests", action="store_true", help="skip cargo test before building")
     p.add_argument("--force", action="store_true", help="rebuild even when the release build stamp matches")
@@ -74,7 +81,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         metavar=("DOM_JSON", "PNG", "DEEPLINK", "OUT_DIR"),
         help="after relaunch, run check_scene.py with these four arguments",
     )
-    return p.parse_args(argv)
+    opts = p.parse_args(argv)
+    if opts.fast and not opts.release:
+        p.error("--fast requires --release")
+    return opts
 
 
 def _git(*args: str) -> bytes:
@@ -140,28 +150,39 @@ def stamp_matches(stamp: dict | None, current: dict, worker: bool = False) -> bo
 
 def run_cycle(opts: argparse.Namespace) -> int:
     env = dict(os.environ, CARGO_TARGET_DIR=str(TARGET))
+    linker_var = "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER"
+    if sys.platform == "win32" and not env.get(linker_var) and not shutil.which("rust-lld.exe"):
+        target_lib = subprocess.run(
+            ["rustc", "--print", "target-libdir", "--target", "x86_64-pc-windows-msvc"],
+            cwd=REPO / "fluxer_client", capture_output=True, text=True, timeout=10,
+        )
+        if target_lib.returncode == 0 and not (Path(target_lib.stdout.strip()).parent / "bin" / "rust-lld.exe").is_file():
+            env[linker_var] = "link.exe"
     do_build = True
     # Snapshot the source state before building so the stamp describes the
     # sources the binary was built from, even if files change mid-build.
-    state = current_state() if opts.release else {}
-    if opts.release and not opts.force and DIST_EXE.is_file():
+    state = current_state() if opts.release and not opts.fast else {}
+    if opts.release and not opts.fast and not opts.force and DIST_EXE.is_file():
         if stamp_matches(read_stamp(), state, opts.worker):
             do_build = False
             print(STAMP_SKIP_LINE)
     if do_build and not opts.skip_tests:
-        if run(["cargo", "test", "-p", "fluxer_client_app", "-j", "4", "--", "--test-threads=2"], REPO / "fluxer_client", env):
+        if run(["cargo", "test", "-p", "fluxer_client_app", "-j", "4", "--", "--test-threads=2"], REPO / "fluxer_client", env, timeout=300):
             return 1
     for im in ("fluxer_client.exe", "fluxer_voice_worker.exe"):
         subprocess.run(["taskkill", "/F", "/IM", im], capture_output=True)
     if do_build:
         if opts.release:
             args = [str(PWSH), "-NoProfile", "-File", "scripts/package_fluxer_client.ps1"] + (["-IncludeVoiceWorker"] if opts.worker else [])
-            if run(args):
+            if opts.fast:
+                args.append("-Fast")
+            if run(args, env=env):
                 return 1
-            try:
-                write_stamp(state, opts.worker)
-            except OSError as e:
-                print(f"cycle: could not write build stamp: {e}")
+            if not opts.fast:
+                try:
+                    write_stamp(state, opts.worker)
+                except OSError as e:
+                    print(f"cycle: could not write build stamp: {e}")
             exe = DIST_EXE
         else:
             if run(["cargo", "build", "-p", "fluxer_client_app", "-j", "4"], REPO / "fluxer_client", env):
@@ -170,12 +191,14 @@ def run_cycle(opts: argparse.Namespace) -> int:
     else:
         exe = DIST_EXE
     restart = [sys.executable, "-I", str(REPO / "tools" / "parity_lab" / "env.py"), "restart-client"] + ([] if opts.release else ["--dev"])
+    t = time.monotonic()
     try:
         r = subprocess.run(restart, capture_output=True, text=True, encoding="utf-8", errors="replace",
                            timeout=RESTART_TIMEOUT, cwd=str(REPO), stdin=subprocess.DEVNULL)
         code, out = r.returncode, (r.stdout or "") + (r.stderr or "")
     except subprocess.TimeoutExpired:
         code, out = 124, "env.py restart-client timed out"
+    print(f"[{time.monotonic() - t:5.1f}s] env.py restart-client -> {code}")
     print(chr(10).join(out.splitlines()[-6:]))
     if code != 0:
         print("client: NOT online (check tunnel)")
@@ -221,8 +244,9 @@ def selftest() -> int:
     check("unknown flag reports error", "unrecognized arguments" in err)
     check("--selftest parses", parse_args(["--selftest"]).selftest)
 
-    opts = parse_args(["--release", "--worker", "--skip-tests", "--force"])
-    check("flags parse", opts.release and opts.worker and opts.skip_tests and opts.force)
+    opts = parse_args(["--release", "--fast", "--worker", "--skip-tests", "--force"])
+    check("flags parse", opts.release and opts.fast and opts.worker and opts.skip_tests and opts.force)
+    check("fast requires release", drive(["--fast"])[0] == 2)
     check("--check parses four args", parse_args(["--check", "a.json", "a.png", "fluxer://x", "out"]).check == ["a.json", "a.png", "fluxer://x", "out"])
     check("--check defaults to None", parse_args([]).check is None)
 

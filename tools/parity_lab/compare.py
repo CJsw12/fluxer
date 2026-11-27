@@ -194,6 +194,23 @@ def sample_visual_anomalies(
     cw, ch = min(a.width, b.width), min(a.height, b.height)
     a_c, b_c = a.crop((0, 0, cw, ch)), b.crop((0, 0, cw, ch))
     full_diff = ImageChops.difference(a_c, b_c)
+    try:
+        import numpy as np  # noqa: PLC0415
+    except ImportError:
+        rgb_sums = None
+    else:
+        rgb_sums = np.asarray(full_diff).sum(axis=2, dtype=np.uint16)
+
+    def p95(box: tuple[int, int, int, int]) -> float:
+        if rgb_sums is None:
+            crop = full_diff.crop(box)
+            pixels = sorted(sum(rgb) for rgb in (crop.get_flattened_data() if hasattr(crop, "get_flattened_data") else crop.getdata()))
+            return round(pixels[int(0.95 * (len(pixels) - 1))] / 3.0, 1)
+        x0, y0, x1, y1 = box
+        values = rgb_sums[y0:y1, x0:x1].flatten()
+        rank = int(0.95 * (values.size - 1))
+        values.partition(rank)
+        return round(int(values[rank]) / 3.0, 1)
 
     flagged = []
     for row in report["rows"]:
@@ -204,9 +221,7 @@ def sample_visual_anomalies(
         x1, y1 = min(cw, x + w), min(ch, y + h)
         if x1 - x0 < 4 or y1 - y0 < 4:
             continue
-        crop = full_diff.crop((x0, y0, x1, y1))
-        pxs = sorted(sum(rgb) / 3.0 for rgb in (crop.get_flattened_data() if hasattr(crop, "get_flattened_data") else crop.getdata()))
-        edge_p95 = round(pxs[int(0.95 * (len(pxs) - 1))], 1)
+        edge_p95 = p95((x0, y0, x1, y1))
         row["edge_p95"] = edge_p95
         if (x1 - x0) >= 48 and (y1 - y0) >= 48:
             patches = [
@@ -215,11 +230,7 @@ def sample_visual_anomalies(
                 (x0, max(y0, y1 - 16), min(x1, x0 + 16), y1),
                 (max(x0, x1 - 16), max(y0, y1 - 16), x1, y1),
             ]
-            c_vals = []
-            for pbox in patches:
-                pc = full_diff.crop(pbox)
-                ppx = sorted(sum(rgb) / 3.0 for rgb in (pc.get_flattened_data() if hasattr(pc, "get_flattened_data") else pc.getdata()))
-                c_vals.append(round(ppx[int(0.95 * (len(ppx) - 1))], 1))
+            c_vals = [p95(patch) for patch in patches]
             row["corner_tl_p95"] = c_vals[0]
             row["corner_max_p95"] = max(c_vals)
         if edge_p95 > 24.0:

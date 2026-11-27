@@ -21,6 +21,8 @@ import json
 import os
 import socket
 import sys
+import time
+from collections.abc import Callable
 from pathlib import Path
 
 DEFAULT_IPC = Path(os.environ.get("APPDATA", "")) / "fluxer_client" / "instance.ipc"
@@ -51,6 +53,24 @@ def send(action: str, ipc_path: Path = DEFAULT_IPC, timeout: float = 8.0, **fiel
 
 def deep_link(url: str, ipc_path: Path = DEFAULT_IPC) -> dict:
     return send("deep_link", ipc_path, url=url)
+
+
+def inspect_until(ready: Callable[[dict], bool], timeout: float) -> dict:
+    """Return the first ready frame, or the last observed frame at the deadline."""
+    deadline = time.monotonic() + timeout
+    while True:
+        data = send("probe_inspect")
+        remaining = deadline - time.monotonic()
+        if (data.get("ok") and ready(data)) or remaining <= 0:
+            return data
+        time.sleep(min(0.075, remaining))
+
+
+def markdown_ready(data: dict) -> bool:
+    return any(
+        e["flx"].startswith("channel.channel-header.channel-name") and e.get("text") == "markdown"
+        for e in data.get("elements", [])
+    )
 
 
 def pid(ipc_path: Path = DEFAULT_IPC) -> int:

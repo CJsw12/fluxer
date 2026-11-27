@@ -5,7 +5,7 @@
         [--base REF] [--out DIR] [--only step,step] [--no-heal]
 
 Steps, in order:
-  build    only with --build: cycle.py --release [--worker] [--skip-tests] (tests + SHA256)
+  build    only with --build: cycle.py --release --fast [--worker] [--skip-tests] (tests + SHA256)
   precheck Rust Online, member list "Online ... 2", Rust mic on, official CDP mic/speaker on
            (on FAIL: env.py heal once, 240 s, OUT/heal.log, then precheck again)
   icons    check_icons.py (errors -> FAIL, moved -> WARN)
@@ -35,6 +35,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -44,7 +45,7 @@ REPO = HERE.parents[1]
 PRECHECK_GUILD = "1572284491404148736"
 PRECHECK_CHANNEL = "1572284491404148743"
 PRECHECK_POLL_TIMEOUT_S = 18.0
-PRECHECK_POLL_INTERVAL_S = 1.5
+PRECHECK_POLL_INTERVAL_S = 0.35
 ORCA_WAKE_TIMEOUT_S = 10
 STEPS = ("build", "precheck", "icons", "colors", "ratchet", "resize", "surface", "state")
 LIVE_STEPS = ("ratchet", "resize", "surface", "state")
@@ -308,7 +309,7 @@ def parse_matrix_report(path: Path) -> tuple[dict | None, list[str]]:
 def step_build(args: argparse.Namespace, out_dir: Path) -> Result:
     if not args.build:
         return Result("SKIP", "not requested (pass --build)")
-    cmd = [sys.executable, "-I", str(HERE / "cycle.py"), "--release"]
+    cmd = [sys.executable, "-I", str(HERE / "cycle.py"), "--release", "--fast"]
     if args.worker:
         cmd.append("--worker")
     if args.skip_tests:
@@ -326,6 +327,8 @@ def step_build(args: argparse.Namespace, out_dir: Path) -> Result:
         return Result("FAIL", clip(f"timeout after {TIMEOUTS['build']}s, {detail}"), log)
     if code != 0:
         return Result("FAIL", clip(f"exit {code}, {detail} ({first_error(text)})"), log)
+    if (not args.skip_tests and (not passed or failed)) or not sha:
+        return Result("FAIL", detail, log)
     return Result("PASS", detail, log)
 
 
@@ -400,12 +403,11 @@ def _poll_rust_precheck(
             break
 
         if elements and status == "Online":
-            if not inspect.get("a11y") or (not mic_ok and not woke_a11y):
+            if not mic_ok and not woke_a11y:
                 try:
-                    wake_a11y_fn()
+                    woke_a11y = wake_a11y_fn() is not False
                 except Exception:  # noqa: BLE001
                     pass
-                woke_a11y = True
             if not header and not deep_linked:
                 try:
                     deep_link_fn(f"fluxer://channels/{PRECHECK_GUILD}/{PRECHECK_CHANNEL}")
@@ -477,7 +479,7 @@ def _precheck_once(args: argparse.Namespace, out_dir: Path) -> Result:
     import rust_probe  # noqa: PLC0415  (module reads the IPC file only when called)
 
     inspect, fails, attempts = _poll_rust_precheck(
-        lambda: rust_probe.send("probe_inspect"),
+        lambda: rust_probe.send("probe_inspect", timeout=2.0),
         lambda: wake_a11y_for_precheck(rust_probe.wake_a11y),
         rust_probe.deep_link,
         lambda: rust_probe.send("probe_key", keystroke="escape"),
@@ -558,10 +560,12 @@ def step_precheck(args: argparse.Namespace, out_dir: Path) -> Result:
         return result
     code, timed_out, _ = run_heal(out_dir)
     status = "heal timeout" if timed_out else f"heal exit={code}"
+    first_attempt = result.log.read_text(encoding="utf-8") if result.log else ""
     retry = _precheck_once(args, out_dir)
     note = f"[verify_all] {status}; precheck after heal: {retry.status}\n"
     if retry.log and retry.log.is_file():
         with retry.log.open("a", encoding="utf-8", errors="replace") as handle:
+            handle.write("[verify_all] precheck before heal:\n" + first_attempt)
             handle.write(note)
     if retry.status == "PASS":
         retry.detail = clip(f"{retry.detail} (healed; {status})")
@@ -1006,7 +1010,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  python -I tools/parity_lab/verify_all.py --selftest"
         ),
     )
-    p.add_argument("--build", action="store_true", help="also run cycle.py --release (tests + package)")
+    p.add_argument("--build", action="store_true", help="also run cycle.py --release --fast (tests + parity package)")
     p.add_argument("--worker", action="store_true", help="with --build: pass --worker to cycle.py")
     p.add_argument("--skip-tests", action="store_true", help="with --build: pass --skip-tests to cycle.py")
     p.add_argument("--base", default="HEAD", metavar="REF", help="git ref for check_colors.py (default: HEAD)")
@@ -1058,8 +1062,36 @@ def main(argv: list[str] | None = None) -> int:
         out_dir = REPO / out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    started = time.monotonic()
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        static = {
+            name: executor.submit(timed_step, name, args, out_dir)
+            for name in ("icons", "colors") if "build" in steps and name in steps
+        }
+        results, durations = run_steps(args, steps, out_dir, static)
+    rows = [
+        {"name": name, "status": result.status, "sec": round(durations.get(name, 0), 3)}
+        for name, result in results.items()
+    ]
+    longest = max(rows, key=lambda row: row["sec"])
+    summary = {"total_sec": round(time.monotonic() - started, 3), "longest_step": longest["name"], "steps": rows}
+    (out_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    return print_table(results)
+
+
+def timed_step(name: str, args: argparse.Namespace, out_dir: Path) -> tuple[Result, float]:
+    started = time.monotonic()
+    result = STEP_FUNCS[name](args, out_dir)
+    return result, time.monotonic() - started
+
+
+def run_steps(
+    args: argparse.Namespace, steps: list[str], out_dir: Path, static: dict[str, Future[tuple[Result, float]]],
+) -> tuple[dict[str, Result], dict[str, float]]:
     results: dict[str, Result] = {}
+    durations: dict[str, float] = {}
     broker_decision = any(n in BROKER_GATE_STEPS for n in steps) and use_broker()
+    broker_rows = {}
     gate_failure = ""
     for name in STEPS:
         if name not in steps:
@@ -1070,28 +1102,42 @@ def main(argv: list[str] | None = None) -> int:
         if skip_reason is not None:
             results[name] = Result("SKIP", skip_reason)
             continue
-        started = time.time()
+        started = time.monotonic()
         via_broker = False
         if name in BROKER_GATE_STEPS and broker_decision:
-            if not BROKER_LOGS:
+            if not BROKER_LOGS and not gate_failure:
                 names = [n for n in BROKER_GATE_STEPS if n in steps]
+                summary_file = out_dir / "summary.json"
+                summary_file.unlink(missing_ok=True)
                 code, tail = run_gate_via_broker(names, out_dir)
                 if code in (2, 3, 4):
                     gate_failure = tail
-                else:
+                elif summary_file.is_file():
+                    broker_rows = {row["name"]: row for row in json.loads(summary_file.read_text(encoding="utf-8"))["steps"]}
                     for n in names:
                         BROKER_LOGS[n] = code
+                else:
+                    gate_failure = "no verification summary from broker"
             via_broker = True
             if gate_failure:
                 results[name] = Result("FAIL", clip(f"broker: {gate_failure}"))
+                durations[name] = time.monotonic() - started
                 continue
-        results[name] = STEP_FUNCS[name](args, out_dir)
+        results[name], durations[name] = static[name].result() if name in static else timed_step(name, args, out_dir)
         if via_broker:
+            row = broker_rows[name]
+            durations[name] = row["sec"]
+            if results[name].status == "PASS" and row["status"] != "PASS":
+                results[name] = Result("FAIL", f"broker reported {row['status']}", results[name].log)
             results[name].detail += " (via broker)"
-        results[name].detail = f"{results[name].detail} [{time.time() - started:.0f}s]" if results[name].status != "SKIP" else results[name].detail
+        if results[name].status != "SKIP":
+            results[name].detail += f" [{durations[name]:.0f}s]"
+    BROKER_LOGS.clear()
     if not args.no_restore_client and (args.build or any(n in LIVE_STEPS for n in steps)):
+        started = time.monotonic()
         results["client"] = restore_client()
-    return print_table(results)
+        durations["client"] = time.monotonic() - started
+    return results, durations
 
 
 if __name__ == "__main__":

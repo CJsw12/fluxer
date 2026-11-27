@@ -636,12 +636,13 @@ def generate_batch_brief(
 {friction_block}
 
 ## 내부 위임 원칙
-- 화면 수치 맞추기·구현 위임은 `swarm`에 `gemini-4-hydrogen-medium`을 지정해 맡기십시오.
 - T0 탐색·로그 요약은 DeepSeek(`opencode run -m deepseek/deepseek-flash`)을 허용합니다.
+- T1 화면 수치 맞추기·단순 구현 위임은 `swarm`에 `gemini-4-hydrogen-medium`을 지정해 맡기십시오.
+- **T3 고위험(삭제·밴·권한·인증·저장 형식):** 비T3 백로그를 우선 소진하되, T3 항목에 도달하면 멈추지 말고 `swarm`에 `gemini-4-neon-high`로 구현한 뒤 **다른 계열 독립 검토**(`codex exec -m gpt-6.2-sol -s read-only`)를 거쳐 치명적 지적이 없을 때만 반영하십시오. 실기 테스트 서버에서 실제 삭제·밴·길드 탈퇴는 실행하지 않고 확인 모달·단위 테스트(롤백 포함)까지만 검증합니다.
 - **중첩 Orca 워커(`orca orchestration worker-start`) 호출은 금지합니다.**
 
 ## 멈춤 조건 (해당 시 즉시 작업 중단 후 아래 결과 JSON에 사유 기록)
-- T3(인증·권한·데이터 삭제·저장 형식) 도달 → `status: "stop_t3"`
+- T3 교차 검토 불가(예: Codex 한도 소진 또는 해소 불가 보안·데이터 손실 위험) → `status: "stop_t3"`
 - 동일 게이트 2회 연속 실패 → `status: "stop_gate_failed"`
 - 백로그 소진 → `status: "stop_backlog_empty"`
 - 외부 승인·해결 불가 차단 → `status: "stop_blocked"`
@@ -864,6 +865,27 @@ def _is_nonfatal_progress_notice(msg: dict[str, Any]) -> bool:
     return subject == "worker has made no progress" or "nothing was stopped" in body
 
 
+TRANSIENT_QUOTA_MARKERS = (
+    "quota",
+    "rate limit",
+    "rate_limit",
+    "429",
+    "resource_exhausted",
+    "capacity",
+    "overloaded",
+    "temporarily unavailable",
+    "too many requests",
+    "connection reset",
+    "timed out",
+)
+
+
+def _is_transient_or_quota_error(exc: Exception) -> bool:
+    """Return True for quota/rate-limit/transient errors that should be retried after backoff."""
+    text = str(exc).lower()
+    return any(marker in text for marker in TRANSIENT_QUOTA_MARKERS)
+
+
 def recover_state(state_path: Path) -> int:
     """Inspect and clear residual active_dispatch so the runner can resume."""
     state = load_state(state_path)
@@ -894,6 +916,7 @@ def run_batches(
     operations_path: Path = DEFAULT_OPERATIONS_PATH,
     runner_dir: Path = DEFAULT_RUNNER_DIR,
     retro_path: Path | None = DEFAULT_RETRO_PATH,
+    sleep_fn: Callable[[float], None] = time.sleep,
 ) -> int:
     """Execute --recover, --dry-run, or live batch loop."""
     adapter = sys_adapter or SystemAdapter()
@@ -947,7 +970,10 @@ def run_batches(
             print(f"[dry-run] 예상 결과 JSON 경로: {result_path}")
             return EXIT_OK
 
-        max_batches = 1 if args.smoke_only else max(1, int(args.max_batches))
+        raw_max_batches = int(args.max_batches)
+        max_batches: int | None = 1 if args.smoke_only else (None if raw_max_batches <= 0 else raw_max_batches)
+        max_quota_retries = max(0, int(getattr(args, "max_retries", 6)))
+        quota_wait_sec = max(1, int(getattr(args, "retry_quota_wait_sec", 300)))
         env_handle = os.environ.get("ORCA_TERMINAL_HANDLE", "").strip()
         created_handle = False
         terminal_handle = env_handle
@@ -957,7 +983,9 @@ def run_batches(
                 terminal_handle = adapter.create_terminal()
                 created_handle = True
 
-            for _ in range(max_batches):
+            batches_done = 0
+            transient_retries = 0
+            while max_batches is None or batches_done < max_batches:
                 snapshot = adapter.git_snapshot()
                 gate_failures = check_pre_batch_gate(
                     state=state,
@@ -1001,82 +1029,100 @@ def run_batches(
                 }
                 save_state_atomic(state_path, state)
 
-                dispatch = adapter.worker_start(
-                    from_handle=terminal_handle,
-                    model=args.model,
-                    effort=args.effort,
-                    task_title=task_title,
-                    spec_file=brief_path,
-                )
-                run_id = dispatch["runId"]
-                state["active_dispatch"]["dispatchId"] = dispatch["dispatchId"]
-                state["active_dispatch"]["taskId"] = dispatch["taskId"]
-                state["active_dispatch"]["runId"] = run_id
-                save_state_atomic(state_path, state)
-
-                deadline = time.monotonic() + max(1, int(args.timeout_sec))
-                worker_done_msg: dict[str, Any] | None = None
-                while worker_done_msg is None:
-                    remaining_sec = deadline - time.monotonic()
-                    if remaining_sec <= 0:
-                        raise RunnerError(
-                            f"배치 gen={generation} 대기 시간 초과 ({args.timeout_sec}s, runId={run_id}).",
-                            EXIT_ERROR,
-                        )
-                    timeout_ms = max(1000, int(remaining_sec * 1000))
-                    messages, delivery_id = adapter.check_wait(
-                        terminal_handle=terminal_handle,
-                        run_id=run_id,
-                        timeout_ms=timeout_ms,
+                try:
+                    dispatch = adapter.worker_start(
+                        from_handle=terminal_handle,
+                        model=args.model,
+                        effort=args.effort,
+                        task_title=task_title,
+                        spec_file=brief_path,
                     )
-                    if not messages:
-                        raise RunnerError(
-                            f"배치 gen={generation} 대기 중 메시지가 비어 있습니다 (runId={run_id}).",
-                            EXIT_ERROR,
-                        )
-                    ask_question: str | None = None
-                    unexpected_msg: dict[str, Any] | None = None
-                    ignored_notices: list[str] = []
-                    for msg in messages:
-                        msg_type = msg.get("type")
-                        if msg_type == "ask":
-                            ask_question = (msg.get("body") or msg.get("subject") or "").strip()
-                            break
-                        if msg_type == "worker_done":
-                            worker_done_msg = msg
-                            break
-                        if _is_nonfatal_progress_notice(msg):
-                            ignored_notices.append(str(msg.get("subject") or msg.get("id") or "no-progress"))
-                            continue
-                        unexpected_msg = msg
-                        break
-                    if delivery_id:
-                        adapter.ack_message(
+                    run_id = dispatch["runId"]
+                    state["active_dispatch"]["dispatchId"] = dispatch["dispatchId"]
+                    state["active_dispatch"]["taskId"] = dispatch["taskId"]
+                    state["active_dispatch"]["runId"] = run_id
+                    save_state_atomic(state_path, state)
+
+                    deadline = time.monotonic() + max(1, int(args.timeout_sec))
+                    worker_done_msg: dict[str, Any] | None = None
+                    while worker_done_msg is None:
+                        remaining_sec = deadline - time.monotonic()
+                        if remaining_sec <= 0:
+                            raise RunnerError(
+                                f"배치 gen={generation} 대기 시간 초과 ({args.timeout_sec}s, runId={run_id}).",
+                                EXIT_ERROR,
+                            )
+                        timeout_ms = max(1000, int(remaining_sec * 1000))
+                        messages, delivery_id = adapter.check_wait(
                             terminal_handle=terminal_handle,
                             run_id=run_id,
-                            msg_id=delivery_id,
+                            timeout_ms=timeout_ms,
                         )
-                    for notice in ignored_notices:
-                        print(f"[batch gen={generation}] [warn] Orca 무진전 알림 무시 후 계속 대기: {notice}")
-                    if ask_question is not None:
+                        if not messages:
+                            raise RunnerError(
+                                f"배치 gen={generation} 대기 중 메시지가 비어 있습니다 (runId={run_id}).",
+                                EXIT_ERROR,
+                            )
+                        ask_question: str | None = None
+                        unexpected_msg: dict[str, Any] | None = None
+                        ignored_notices: list[str] = []
+                        for msg in messages:
+                            msg_type = msg.get("type")
+                            if msg_type == "ask":
+                                ask_question = (msg.get("body") or msg.get("subject") or "").strip()
+                                break
+                            if msg_type == "worker_done":
+                                worker_done_msg = msg
+                                break
+                            if _is_nonfatal_progress_notice(msg):
+                                ignored_notices.append(str(msg.get("subject") or msg.get("id") or "no-progress"))
+                                continue
+                            unexpected_msg = msg
+                            break
+                        if delivery_id:
+                            adapter.ack_message(
+                                terminal_handle=terminal_handle,
+                                run_id=run_id,
+                                msg_id=delivery_id,
+                            )
+                        for notice in ignored_notices:
+                            print(f"[batch gen={generation}] [warn] Orca 무진전 알림 무시 후 계속 대기: {notice}")
+                        if ask_question is not None:
+                            raise RunnerError(
+                                f"코디네이터가 질문을 보냈습니다 (안전 정지, 추측 응답 금지):\n{ask_question}",
+                                EXIT_STOPPED,
+                            )
+                        if unexpected_msg is not None:
+                            raise RunnerError(
+                                f"예상하지 못한 메시지 유형 수신 ({unexpected_msg.get('type')}): {unexpected_msg.get('subject')}",
+                                EXIT_ERROR,
+                            )
+
+                    payload = worker_done_msg.get("payload") or {}
+                    outcome = payload.get("outcome")
+                    if outcome != "succeeded":
                         raise RunnerError(
-                            f"코디네이터가 질문을 보냈습니다 (안전 정지, 추측 응답 금지):\n{ask_question}",
-                            EXIT_STOPPED,
-                        )
-                    if unexpected_msg is not None:
-                        raise RunnerError(
-                            f"예상하지 못한 메시지 유형 수신 ({unexpected_msg.get('type')}): {unexpected_msg.get('subject')}",
+                            f"배치 gen={generation} worker_done outcome={outcome!r}: "
+                            f"{worker_done_msg.get('body')}",
                             EXIT_ERROR,
                         )
+                except RunnerError as exc:
+                    if _is_transient_or_quota_error(exc) and transient_retries < max_quota_retries:
+                        transient_retries += 1
+                        state["active_dispatch"] = None
+                        state["generation"] = generation - 1
+                        save_state_atomic(state_path, state)
+                        print(
+                            f"[batch gen={generation}] [warn] 일시적/쿼터 오류 감지 — "
+                            f"{quota_wait_sec}s 대기 후 재시도 ({transient_retries}/{max_quota_retries}): {exc}",
+                            file=sys.stderr,
+                        )
+                        sleep_fn(quota_wait_sec)
+                        continue
+                    raise
 
-                payload = worker_done_msg.get("payload") or {}
-                outcome = payload.get("outcome")
-                if outcome != "succeeded":
-                    raise RunnerError(
-                        f"배치 gen={generation} worker_done outcome={outcome!r}: "
-                        f"{worker_done_msg.get('body')}",
-                        EXIT_ERROR,
-                    )
+                transient_retries = 0
+                batches_done += 1
 
                 batch_result = load_batch_result(result_path)
                 post_snapshot = adapter.git_snapshot()
@@ -1569,6 +1615,91 @@ class CoordinatorRunnerSelfTests(unittest.TestCase):
             self.assertIn("1 / 1 / 1 / 0", retro_text)
             self.assertIn("friction from gen 1", retro_text)
 
+    def test_13_unlimited_max_batches_zero_runs_until_stop_backlog_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            runner_dir = tmp / "runner"
+            briefs: list[str] = []
+
+            def _on_start(gen: int, spec_file: Path) -> None:
+                briefs.append(spec_file.read_text(encoding="utf-8"))
+                res_file = runner_dir / f"batch_result_gen_{gen}.json"
+                res_file.parent.mkdir(parents=True, exist_ok=True)
+                res_file.write_text(
+                    json.dumps(
+                        {
+                            "status": "stop_backlog_empty" if gen == 3 else "continue",
+                            "summary": f"gen {gen} done",
+                            "next_task": None,
+                            "failed_gate": None,
+                            "failed_feature": None,
+                            "friction": None,
+                            "decisions": [],
+                        },
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+
+            adapter = _FakeAdapter(
+                head_seq=["h0", "h1", "h1", "h2", "h2", "h3"],
+                on_worker_start=_on_start,
+            )
+            args = _make_args(tmp, max_batches=0)
+            rc = run_batches(args, sys_adapter=adapter, runner_dir=runner_dir)
+            self.assertEqual(rc, EXIT_STOPPED)
+            self.assertEqual(len(briefs), 3)
+            self.assertIn("gemini-4-neon-high", briefs[0])
+            self.assertIn("codex exec -m gpt-6.2-sol -s read-only", briefs[0])
+
+    def test_14_quota_error_retries_with_backoff_then_succeeds(self) -> None:
+        class _QuotaOnceAdapter(_FakeAdapter):
+            def __init__(self, runner_dir: Path) -> None:
+                super().__init__(head_seq=["h0", "h1"])
+                self._runner_dir = runner_dir
+                self._attempts = 0
+
+            def worker_start(self, **kwargs: Any) -> dict[str, Any]:
+                self._attempts += 1
+                if self._attempts == 1:
+                    raise RunnerError("429 RESOURCE_EXHAUSTED: quota exceeded", EXIT_ERROR)
+                res_file = self._runner_dir / "batch_result_gen_1.json"
+                res_file.parent.mkdir(parents=True, exist_ok=True)
+                res_file.write_text(
+                    json.dumps(
+                        {
+                            "status": "done",
+                            "summary": "succeeded after quota retry",
+                            "next_task": None,
+                            "failed_gate": None,
+                            "failed_feature": None,
+                            "friction": None,
+                            "decisions": [],
+                        },
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+                return super().worker_start(**kwargs)
+
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            runner_dir = tmp / "runner"
+            sleeps: list[float] = []
+            adapter = _QuotaOnceAdapter(runner_dir)
+            args = _make_args(tmp, max_batches=1)
+            args.max_retries = 3
+            args.retry_quota_wait_sec = 42
+            rc = run_batches(
+                args,
+                sys_adapter=adapter,
+                runner_dir=runner_dir,
+                sleep_fn=sleeps.append,
+            )
+            self.assertEqual(rc, EXIT_OK)
+            self.assertEqual(adapter._attempts, 2)
+            self.assertEqual(sleeps, [42])
+
 
 def run_selftest() -> int:
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(CoordinatorRunnerSelfTests)
@@ -1580,10 +1711,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="External stateless batch runner for Fluxer parity coordinator."
     )
-    parser.add_argument("--max-batches", type=int, default=3, help="최대 연속 배치 수 (기본: 3)")
+    parser.add_argument("--max-batches", type=int, default=3, help="최대 연속 배치 수 (0=무제한, 기본: 3)")
     parser.add_argument("--model", default="gemini-4-neon", help="코디네이터 모델 (기본: gemini-4-neon)")
     parser.add_argument("--effort", default="medium", help="추론 강도 (medium|high, 기본: medium)")
     parser.add_argument("--timeout-sec", type=int, default=3600, help="배치 1회 타임아웃(초) (기본: 3600)")
+    parser.add_argument("--max-retries", type=int, default=6, help="쿼터/일시적 오류 최대 재시도 횟수 (기본: 6)")
+    parser.add_argument("--retry-quota-wait-sec", type=int, default=300, help="쿼터/일시적 오류 재시도 대기 시간(초, 기본: 300)")
     parser.add_argument("--state-path", default=str(DEFAULT_STATE_PATH), help="원장 JSON 경로")
     parser.add_argument("--lock-path", default=str(DEFAULT_LOCK_PATH), help="배타적 락 파일 경로")
     parser.add_argument("--dry-run", action="store_true", help="Pre-Batch Gate 검사 및 브리프 생성만 수행")

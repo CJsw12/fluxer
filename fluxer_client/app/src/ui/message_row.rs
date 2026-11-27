@@ -104,6 +104,9 @@ pub(crate) fn markdown_style(theme: &Theme) -> MarkdownStyle {
         spoiler_hidden,
         code_background: theme.code_block_bg,
         code_border: theme.code_block_border,
+        inline_code_background: theme.inline_code_bg,
+        code_foreground: theme.text_code,
+        code_highlight: theme.code_highlight.clone(),
         quote_text: theme.muted_foreground,
         list_marker: theme.text_chat,
         ..default_style
@@ -871,9 +874,20 @@ mod tests {
         assert_eq!(rgb(style.code_background), (0x21, 0x1F, 0x26));
         assert_ne!(rgb(style.code_background), rgb(dark.background));
         assert_eq!(style.code_border, dark.code_block_border);
-        // Light uses `--code-block-bg` from the generated light tokens (not yet measured live).
+        assert_eq!(rgb(style.inline_code_background), (0x24, 0x21, 0x29));
+        assert_eq!(rgb(style.code_foreground), (0xE8, 0xE2, 0xE8));
+        assert_eq!(
+            style.code_highlight.style("string").and_then(|style| style.color).map(rgb),
+            Some((0xA5, 0xD6, 0xFF))
+        );
         let light = Theme::preview(ThemeKind::Light);
-        assert_eq!(rgb(markdown_style(&light).code_background), (0xF9, 0xF9, 0xFA));
+        let style = markdown_style(&light);
+        assert_eq!(rgb(style.code_background), (0xF9, 0xF9, 0xFA));
+        assert_eq!(rgb(style.inline_code_background), (0xDB, 0xDB, 0xDF));
+        assert_eq!(
+            style.code_highlight.style("string").and_then(|style| style.color).map(rgb),
+            Some((0x0A, 0x30, 0x69))
+        );
     }
 
     const CONTENT: &str = "hey <@200> in <#11>\n||secret|| end\n```rs\nfn main() {}\n```";

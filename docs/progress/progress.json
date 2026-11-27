@@ -119,12 +119,14 @@
         {
           "name": "마크다운 렌더",
           "status": "done",
-          "verified": true
+          "verified": true,
+          "notes": "Gen 19에서 인라인 코드에 다크·라이트 코드 토큰과 테두리를 적용했다. 취소선 불투명도는 TextView 공개 API에서 지원되면 맞춘다."
         },
         {
           "name": "코드 블록 강조",
           "status": "done",
-          "verified": true
+          "verified": true,
+          "notes": "Gen 19에서 문자열·함수·키워드 등의 GitHub 팔레트를 기존 Syntect 경로에 연결했다. Rust 매크로의 독립 색상은 Syntect 어댑터가 매크로 범위를 전달하면 맞춘다."
         },
         {
           "name": "멘션 pill·시스템 메시지",

@@ -3782,7 +3782,7 @@
   {
    "rust_icon": "DownloadSimple",
    "file": "fluxer_client/app/src/ui/message_row.rs",
-   "line": 432,
+   "line": 435,
    "rust_asset": "fluxer_client/app/assets/icons/download-simple.svg",
    "kind": "phosphor",
    "phosphor": "bold/download-simple-bold.svg",
@@ -3797,7 +3797,7 @@
   {
    "rust_icon": "Star",
    "file": "fluxer_client/app/src/ui/message_row.rs",
-   "line": 452,
+   "line": 455,
    "rust_asset": "fluxer_client/app/assets/icons/star.svg",
    "kind": "phosphor",
    "phosphor": "fill/star-fill.svg",

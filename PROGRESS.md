@@ -11,6 +11,7 @@
 
 ## 현재 상태 (2026-11-26)
 
+- **Gen 19 (2026-11-28):** 마크다운 인라인 코드에 다크·라이트 테마 토큰과 외곽선을 적용하고, 코드 블록에 GitHub 구문 강조 팔레트를 연결했다. 취소선 색과 Rust 매크로 개별 색상은 TextView와 Syntect 어댑터의 공개 범위에 제한이 있다.
 - **Baseline:** 브랜치 `desktop-rs`(작업), `main` = `upstream/main`(`3608a387c`). 주력은 `fluxer_client/`(Rust GPUI + gpui-kit). 음성·화면 공유는 헬퍼 `fluxer_client/voice_worker`(LiveKit, 정적 CRT). `fluxer_desktop_rs/`는 WebView2 전환기 셸.
 - **Done(2026-11-26, Feature 1~10):**
   - `76723c648`: 설정 탭(Windows app 분리·Connections·Applications 조회·Privacy 보강·사이드바 `.flx()`, `750 tests`, `210 icon sites`).

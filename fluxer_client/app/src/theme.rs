@@ -10,10 +10,56 @@
 //! `system` (`packages/constants/src/UserConstants.ts`). Here `Darker` is the
 //! official `dark_legacy` palette and `Black` is the official `coal` palette.
 
+use std::sync::{Arc, OnceLock};
+
+use gpui_kit::component::highlighter::{HighlightTheme, SyntaxColors};
 use gpui_kit::component::{Theme as KitTheme, ThemeMode};
 use gpui_kit::{App, Global, Hsla, Window, WindowAppearance, hsla, rgb};
 
 use crate::theme_tokens_generated as generated_tokens;
+
+fn code_highlight(light: bool) -> &'static Arc<HighlightTheme> {
+    static LIGHT: OnceLock<Arc<HighlightTheme>> = OnceLock::new();
+    static DARK: OnceLock<Arc<HighlightTheme>> = OnceLock::new();
+    let cache = if light { &LIGHT } else { &DARK };
+    cache.get_or_init(|| {
+        // Arborium's GitHub light and dark palette, mapped to Syntect's semantic groups.
+        let (keyword, function, string, constant, type_, punctuation) = if light {
+            ("#cf222e", "#8250df", "#0a3069", "#0550ae", "#953800", "#1f2328")
+        } else {
+            ("#ff7b72", "#d2a8ff", "#a5d6ff", "#79c0ff", "#ffa657", "#e6edf3")
+        };
+        let mut theme = if light {
+            HighlightTheme::default_light()
+        } else {
+            HighlightTheme::default_dark()
+        };
+        match serde_json::from_value::<SyntaxColors>(serde_json::json!({
+            "keyword": {"color": keyword},
+            "function": {"color": function},
+            "string": {"color": string},
+            "string.escape": {"color": constant},
+            "constant": {"color": constant},
+            "number": {"color": constant},
+            "type": {"color": type_},
+            "punctuation": {"color": punctuation}
+        })) {
+            Ok(palette) => {
+                let syntax = &mut Arc::make_mut(&mut theme).style.syntax;
+                syntax.keyword = palette.keyword;
+                syntax.function = palette.function;
+                syntax.string = palette.string;
+                syntax.string_escape = palette.string_escape;
+                syntax.constant = palette.constant;
+                syntax.number = palette.number;
+                syntax.type_ = palette.type_;
+                syntax.punctuation = palette.punctuation;
+            }
+            Err(error) => tracing::warn!(%error, "Could not load Markdown code highlighting colors"),
+        }
+        theme
+    })
+}
 
 /// Converts a packed `0xRRGGBBAA` color from `theme_tokens_generated` into GPUI `Hsla`.
 fn rgba_u32(v: u32) -> Hsla {
@@ -263,6 +309,9 @@ pub struct Theme {
     pub code_block_bg: Hsla,
     /// `--code-block-border`.
     pub code_block_border: Hsla,
+    pub inline_code_bg: Hsla,
+    pub text_code: Hsla,
+    pub code_highlight: &'static Arc<HighlightTheme>,
     /// `--settings-danger-text`: status danger 78% mixed with text primary 22%.
     pub settings_danger_text: Hsla,
     /// User panel status dot.
@@ -712,6 +761,9 @@ impl Theme {
             // Darker/Black have no generated tokens: keep the panel a step off the chat background.
             code_block_bg: mix_srgb(primary_color, 0.92, hsla(0., 0., 0.05, 1.)),
             code_block_border: hsla(0., 0., 0.5, 0.2),
+            inline_code_bg: mix_srgb(primary_color, 0.88, secondary.color()),
+            text_code: text_primary.color(),
+            code_highlight: code_highlight(light),
             settings_danger_text: STATUS_DANGER.color(),
             status_online: p.online.color(),
             status_connecting: p.idle.color(),
@@ -760,6 +812,8 @@ impl Theme {
                 theme.mention_fg = rgba_u32(t::MARKUP_MENTION_TEXT_RGBA);
                 theme.code_block_bg = rgba_u32(t::CODE_BLOCK_BG_RGBA);
                 theme.code_block_border = rgba_u32(t::CODE_BLOCK_BORDER_RGBA);
+                theme.inline_code_bg = rgba_u32(t::BG_CODE_RGBA);
+                theme.text_code = rgba_u32(t::TEXT_CODE_RGBA);
                 theme.status_online = rgba_u32(t::STATUS_ONLINE_RGBA);
                 theme.status_connecting = rgba_u32(t::STATUS_IDLE_RGBA);
                 theme.status_idle = rgba_u32(t::STATUS_IDLE_RGBA);

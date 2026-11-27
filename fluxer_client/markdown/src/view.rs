@@ -9,6 +9,7 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use gpui_kit::component::highlighter::HighlightTheme;
 use gpui_kit::component::text::{
     InlineElement, InlineRenderContext, MarkdownExtensions, MarkdownNode, MarkdownParseContext, MarkdownPlugin,
     TextView, TextViewStyle, markdown_ast,
@@ -46,7 +47,7 @@ impl SpoilerReveals {
 }
 
 /// Colors of the Fluxer-specific inline elements.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct MarkdownStyle {
     pub mention_background: Hsla,
     pub mention_foreground: Hsla,
@@ -60,6 +61,9 @@ pub struct MarkdownStyle {
     pub code_background: Hsla,
     /// `--code-block-border`.
     pub code_border: Hsla,
+    pub inline_code_background: Hsla,
+    pub code_foreground: Hsla,
+    pub code_highlight: Arc<HighlightTheme>,
     /// `--interactive-muted`, the blockquote bar.
     pub quote_bar: Hsla,
     /// `--text-chat-muted`, blockquote text.
@@ -80,6 +84,9 @@ impl Default for MarkdownStyle {
             subtext: hsla(220. / 360., 0.05, 0.6, 1.),
             code_background: hsla(270. / 360., 0.10, 0.135, 1.),
             code_border: hsla(250. / 360., 0.08, 0.20, 1.),
+            inline_code_background: hsla(270. / 360., 0.10, 0.145, 1.),
+            code_foreground: hsla(270. / 360., 0.10, 0.90, 1.),
+            code_highlight: HighlightTheme::default_light(),
             quote_bar: hsla(232. / 360., 0.12, 0.46, 1.),
             quote_text: hsla(265. / 360., 0.08, 0.80, 1.),
             list_marker: hsla(260. / 360., 0.12, 0.94, 1.),
@@ -160,7 +167,7 @@ impl RenderOnce for MessageMarkdown {
         let plugin = ObjectPlugin {
             objects: Arc::new(lowered.objects),
             reveals,
-            style: self.style,
+            style: self.style.clone(),
             jumbo: self.document.jumbo,
             on_mention_click: self.on_mention_click,
         };
@@ -168,11 +175,21 @@ impl RenderOnce for MessageMarkdown {
         let subtext = self.style.subtext;
         let on_link_click = self.on_link_click;
         let block_style = self.style;
+        let text_style = text_view_style(&block_style);
+        // shortcut: a layout border adds vertical insets, switch to an inset shadow when TextView supports it.
+        let inline_code = StyleRefinement::default()
+            .text_color(block_style.code_foreground)
+            .bg(block_style.inline_code_background)
+            .rounded(px(4.))
+            .border_1()
+            .border_color(block_style.code_border)
+            .px(px(2.4));
         div().id(self.id).flex().flex_col().min_w_0().children(lowered.segments.into_iter().enumerate().map(
             move |(i, segment)| {
                 let mut view = TextView::markdown(ElementId::named_usize("fluxer-md-segment", i), segment.source)
                     .markdown_extensions(extensions.clone())
-                    .style(text_view_style(&block_style))
+                    .style(text_style.clone())
+                    .inline_code_style(inline_code.clone())
                     .blockquote_style(blockquote_refinement(&block_style))
                     .list_style(StyleRefinement::default().text_color(block_style.list_marker))
                     // Official code blocks show no language label; an
@@ -202,9 +219,10 @@ fn text_view_style(style: &MarkdownStyle) -> TextViewStyle {
         .rounded(px(6.))
         .bg(style.code_background)
         .border_color(style.code_border)
+        .text_color(style.code_foreground)
         .text_size(px(12.))
         .line_height(px(16.));
-    TextViewStyle::default().code_block(code_block).heading_font_size(|level, _| {
+    let mut text_style = TextViewStyle::default().code_block(code_block).heading_font_size(|level, _| {
         px(match level {
             1 => 22.,
             2 => 20.,
@@ -213,7 +231,9 @@ fn text_view_style(style: &MarkdownStyle) -> TextViewStyle {
             5 => 15.,
             _ => 14.,
         })
-    })
+    });
+    text_style.highlight_theme = style.code_highlight.clone();
+    text_style
 }
 
 /// `.blockquoteDivider` (4px bar, 12px gap) and `.blockquoteContent` (4px

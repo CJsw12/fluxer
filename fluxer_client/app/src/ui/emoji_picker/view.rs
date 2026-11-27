@@ -136,8 +136,8 @@ pub fn render(
 
     let tone_button = div()
         .id("emoji-tone-toggle")
-        .w(px(32.))
-        .h(px(32.))
+        .w(px(24.))
+        .h(px(24.))
         .flex()
         .items_center()
         .justify_center()
@@ -370,21 +370,24 @@ pub fn render(
     let tab_active_bg: gpui_kit::Hsla = if dark { rgba(0xffffff1a).into() } else { theme.accent };
     let tab_hover_bg: gpui_kit::Hsla = if dark { rgba(0xffffff12).into() } else { theme.hover_bg };
 
-    let tab_bar = (picker.target == PickerTarget::Composer).then(|| {
+    let is_composer = picker.target == PickerTarget::Composer;
+    // Non-composer pickers have no header, so the search row stays inside the Emojis body.
+    let (tab_bar, inline_search) = if is_composer {
         let tabs = [
             (ExpressionTab::Media, "Media"),
             (ExpressionTab::Stickers, "Stickers"),
             (ExpressionTab::Emojis, "Emojis"),
         ];
-        div()
-            .flex_none()
-            .h(px(40.))
-            .pt(px(12.))
-            .px_3()
+        let tab_list = div()
             .flex()
             .flex_row()
             .items_start()
             .gap(px(8.))
+            // Official tab-list measures 193.56px; GPUI text is ~1.4px wider in total,
+            // so pin the list width and keep the tabs from shrinking or wrapping.
+            .w(px(193.56))
+            .flex_none()
+            .flx("expressions.expression-picker-popout.tab-list")
             .children(tabs.into_iter().map(|(tab, label)| {
                 let active = picker.active_tab == tab;
                 let text = l10n::tr(label);
@@ -393,6 +396,8 @@ pub fn render(
                     .debug_selector(move || format!("expression-tab-{label}"))
                     .role(Role::Button)
                     .aria_selected(active)
+                    .flex_none()
+                    .whitespace_nowrap()
                     .px_2()
                     .py_1()
                     .rounded(px(6.))
@@ -406,8 +411,51 @@ pub fn render(
                     .flx_text("expressions.expression-picker-popout.tab.button", text.clone())
                     .child(text)
                     .on_click(cx.listener(move |this, _, window, cx| this.expression_picker_select_tab(tab, window, cx)))
-            }))
-    });
+            }));
+        let portal = div()
+            .w_full()
+            .h(px(44.))
+            .flex_none()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_2()
+            .flx("expressions.expression-picker-popout.header-portal")
+            .child(div().flex_1().child(Input::new(&picker.input)))
+            .when(picker.active_tab == ExpressionTab::Emojis, |d| d.child(tone_button));
+        let header = div()
+            .flex_none()
+            .w_full()
+            .h(px(109.))
+            .p(px(12.))
+            .flex()
+            .flex_col()
+            .gap(px(12.))
+            .flx("expressions.expression-picker-popout.header")
+            .child(
+                div()
+                    .w_full()
+                    .h(px(28.))
+                    .flex_none()
+                    .flex()
+                    .flex_row()
+                    .flx("expressions.expression-picker-popout.nav")
+                    .child(tab_list),
+            )
+            .child(portal);
+        (Some(header), None)
+    } else {
+        let row = div()
+            .flex_none()
+            .flex()
+            .flex_row()
+            .items_center()
+            .gap_2()
+            .p_2()
+            .child(div().flex_1().child(Input::new(&picker.input)))
+            .child(tone_button);
+        (None, Some(row))
+    };
 
     let body: AnyElement = match picker.active_tab {
         ExpressionTab::Emojis => div()
@@ -416,17 +464,7 @@ pub fn render(
             .flex()
             .flex_col()
             .flx("expressions.emoji-picker.container")
-            .child(
-                div()
-                    .flex_none()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap_2()
-                    .p_2()
-                    .child(div().flex_1().child(Input::new(&picker.input)))
-                    .child(tone_button),
-            )
+            .children(inline_search)
             .children(tone_strip)
             .child(
                 div()
@@ -460,7 +498,6 @@ pub fn render(
                 .min_h_0()
                 .flex()
                 .flex_col()
-                .child(div().flex_none().p_2().border_b_1().border_color(theme.border).child(Input::new(&picker.input)))
                 .child(
                     div()
                         .flex_1()
@@ -499,7 +536,6 @@ pub fn render(
                 .min_h_0()
                 .flex()
                 .flex_col()
-                .child(div().flex_none().p_2().child(Input::new(&picker.input)))
                 .child(
                     div()
                         .flex_none()
@@ -622,7 +658,15 @@ pub fn render(
             this.close_overlay(window, cx);
         }))
         .children(tab_bar)
-        .child(body)
+        .child(
+            div()
+                .flex_1()
+                .min_h_0()
+                .flex()
+                .flex_col()
+                .flx("expressions.expression-picker-popout.content")
+                .child(body),
+        )
         .child(top_handle)
         .child(left_handle)
         .child(corner_handle);

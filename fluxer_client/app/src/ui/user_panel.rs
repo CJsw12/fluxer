@@ -515,6 +515,9 @@ pub fn render_popout(view: &ClientView, theme: &Theme, viewport: Size<Pixels>, c
         .rounded_t(px(3.5))
         .overflow_hidden()
         .bg(banner_color)
+        .flx("user.profile.profile-card.profile-card-banner.banner-wrapper.banner-context-menu")
+        .flx("user.profile.profile-card.profile-card-banner.banner-mask")
+        .flx("user.profile.profile-card.profile-card-banner.foreign-object")
         .flx("user.profile.profile-card.profile-card-banner.banner")
         .children(
             card.banner_url
@@ -561,8 +564,17 @@ pub fn render_popout(view: &ClientView, theme: &Theme, viewport: Size<Pixels>, c
                 .child(super::status_indicator::themed(status, 18., theme)),
         );
 
+    let header = div()
+        .relative()
+        .w_full()
+        .h(px(140.))
+        .flex_none()
+        .flx("user.profile.profile-card.profile-card-banner.header-section")
+        .child(banner)
+        .child(avatar);
+
     let content = div()
-        .mt(px(39.))
+        .mt(px(4.))
         .h(px(76.))
         .flex_none()
         .px(px(16.))
@@ -576,21 +588,30 @@ pub fn render_popout(view: &ClientView, theme: &Theme, viewport: Size<Pixels>, c
                 .h(px(44.))
                 .flex()
                 .flex_col()
+                .flx("user.profile.profile-card.profile-card-user-info.user-info-container")
                 .child(
                     div()
-                        .id("user-area-popout-display-name")
                         .h(px(24.))
-                        .text_size(px(20.))
-                        .line_height(px(24.))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(primary)
-                        .truncate()
-                        .cursor_pointer()
-                        .on_click(cx.listener(move |this, ev: &gpui_kit::ClickEvent, window, cx| {
-                            this.user_area_popout_open = false;
-                            this.open_profile(uid, None, ev.position(), window, cx);
-                        }))
-                        .child(SharedString::from(card.display_name.clone())),
+                        .flex()
+                        .flex_row()
+                        .flx("user.profile.profile-card.profile-card-user-info.name-row")
+                        .child(
+                            div()
+                                .id("user-area-popout-display-name")
+                                .h(px(24.))
+                                .max_w_full()
+                                .text_size(px(20.))
+                                .line_height(px(24.))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(primary)
+                                .truncate()
+                                .cursor_pointer()
+                                .on_click(cx.listener(move |this, ev: &gpui_kit::ClickEvent, window, cx| {
+                                    this.user_area_popout_open = false;
+                                    this.open_profile(uid, None, ev.position(), window, cx);
+                                }))
+                                .child(SharedString::from(card.display_name.clone())),
+                        ),
                 )
                 .child(
                     div()
@@ -601,7 +622,20 @@ pub fn render_popout(view: &ClientView, theme: &Theme, viewport: Size<Pixels>, c
                         .flex_row()
                         .items_center()
                         .gap(px(4.))
-                        .child(div().text_size(px(14.)).line_height(px(18.)).text_color(secondary).child(username))
+                        .flx("user.profile.profile-card.profile-card-user-info.username-row")
+                        .child(
+                            div()
+                                .id("user-area-popout-username")
+                                .text_size(px(14.))
+                                .line_height(px(18.))
+                                .text_color(secondary)
+                                .cursor_pointer()
+                                .on_click(cx.listener(move |this, ev: &gpui_kit::ClickEvent, window, cx| {
+                                    this.user_area_popout_open = false;
+                                    this.open_profile(uid, None, ev.position(), window, cx);
+                                }))
+                                .child(username),
+                        )
                         .child(
                             div()
                                 .id("user-area-copy-username")
@@ -681,6 +715,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, viewport: Size<Pixels>, c
             .font_weight(FontWeight::MEDIUM)
             .text_color(primary)
             .flx("app.floating.user-area-popout.action-button.action-label")
+            .flx("app.floating.user-area-popout.action-button.action-content")
             .child(text)
     };
     let chevron = |color: Hsla| {
@@ -692,7 +727,16 @@ pub fn render_popout(view: &ClientView, theme: &Theme, viewport: Size<Pixels>, c
     };
     let divider = |id: &'static str| div().mx(px(12.)).h(px(1.)).flex_none().bg(theme.background_modifier_accent).flx(id);
     let icon_box =
-        |child: AnyElement| div().size(px(22.)).flex_none().flex().items_center().justify_center().child(child);
+        |child: AnyElement| {
+            div()
+                .size(px(22.))
+                .flex_none()
+                .flex()
+                .items_center()
+                .justify_center()
+                .flx("app.floating.user-area-popout.action-button.action-icon")
+                .child(child)
+        };
 
     let action_group = div()
         .w_full()
@@ -824,13 +868,14 @@ pub fn render_popout(view: &ClientView, theme: &Theme, viewport: Size<Pixels>, c
         .border_2()
         .border_color(banner_color)
         .flx("app.floating.user-area-popout.container")
+        .flx("user.profile.profile-card.profile-card-layout.div")
+        .flx("user.profile.profile-card.profile-card-layout.profile-card")
         .bg(theme.background)
         .shadow(popover_shadow(theme))
         .overflow_hidden()
-        .child(banner)
+        .child(header)
         .child(content)
-        .child(footer)
-        .child(avatar);
+        .child(footer);
 
     let status_menu = matches!(submenu, Some(UserAreaSubmenu::Status | UserAreaSubmenu::Expiry(_))).then(|| {
         let items = [

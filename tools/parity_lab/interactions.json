@@ -14,8 +14,8 @@
   "summary": {
     "total": {
       "total": 770,
-      "present": 286,
-      "missing": 459,
+      "present": 288,
+      "missing": 457,
       "differs": 25
     },
     "by_category": {
@@ -27,8 +27,8 @@
       },
       "tooltips": {
         "total": 280,
-        "present": 68,
-        "missing": 208,
+        "present": 70,
+        "missing": 206,
         "differs": 4
       },
       "context_menus": {
@@ -734,7 +734,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/user_panel.rs:619"
+          "fluxer_client/app/src/ui/user_panel.rs:653"
         ],
         "reason": "flx 'app.floating.user-area-popout.tooltip' has tooltip in Rust"
       }
@@ -2223,11 +2223,13 @@
         "detail": "text={i18n._(DOWNLOAD_DESCRIPTOR)} position=\"top\" data-flx=\"channel.embeds.media.media-container.tooltip--2\"",
         "flx": "channel.embeds.media.media-container.tooltip--2"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/message_row.rs:420"
+        ],
+        "reason": "flx 'channel.embeds.media.media-container.tooltip--2' has tooltip in Rust"
       }
     },
     {
@@ -2241,11 +2243,13 @@
         "detail": "text={isFavorited ? i18n._(REMOVE_FROM_FAVORITES_DESCRIPTOR) : i18n._(ADD_TO_FAVORITES_DESCRIPTOR)} position=\"top\" data-",
         "flx": "channel.embeds.media.media-container.tooltip--3"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/message_row.rs:443"
+        ],
+        "reason": "flx 'channel.embeds.media.media-container.tooltip--3' has tooltip in Rust"
       }
     },
     {
@@ -3276,7 +3280,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:2011"
+          "fluxer_client/app/src/ui/channel_popouts.rs:2048"
         ],
         "reason": "flx 'messaging.inbox-popout.render-tab-button.tooltip' has tooltip in Rust"
       }
@@ -3296,7 +3300,7 @@
       "rust": {
         "status": "differs",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:2061"
+          "fluxer_client/app/src/ui/channel_popouts.rs:2098"
         ],
         "reason": "flx 'messaging.inbox-popout.sidebar-footer-actions--2' exists in Rust without tooltip call"
       }
@@ -5993,7 +5997,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/guild_rail.rs:169"
+          "fluxer_client/app/src/ui/sidebar_menus.rs:3"
         ],
         "reason": "Rust implements FavoritesGuildContextMenu"
       }
@@ -6012,7 +6016,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/guild_rail.rs:108"
+          "fluxer_client/app/src/ui/sidebar_menus.rs:2"
         ],
         "reason": "Rust implements FluxerButtonContextMenu"
       }
@@ -6031,7 +6035,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/guild_rail.rs:108"
+          "fluxer_client/app/src/ui/sidebar_menus.rs:2"
         ],
         "reason": "Rust implements FluxerButtonContextMenu"
       }
@@ -6315,7 +6319,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:890",
+          "fluxer_client/app/src/ui/channel_popouts.rs:909",
           "fluxer_client/app/src/ui/message_actions.rs:210",
           "fluxer_client/app/src/ui/message_actions.rs:3"
         ],
@@ -6336,7 +6340,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:890",
+          "fluxer_client/app/src/ui/channel_popouts.rs:909",
           "fluxer_client/app/src/ui/message_actions.rs:210",
           "fluxer_client/app/src/ui/message_actions.rs:3"
         ],
@@ -6410,7 +6414,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/user_panel.rs:397"
+          "fluxer_client/app/src/ui/sidebar_menus.rs:3"
         ],
         "reason": "Rust implements SettingsContextMenu"
       }
@@ -6429,7 +6433,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/user_panel.rs:397"
+          "fluxer_client/app/src/ui/sidebar_menus.rs:3"
         ],
         "reason": "Rust implements SettingsContextMenu"
       }
@@ -7322,7 +7326,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:890",
+          "fluxer_client/app/src/ui/channel_popouts.rs:909",
           "fluxer_client/app/src/ui/message_actions.rs:210",
           "fluxer_client/app/src/ui/message_actions.rs:3"
         ],
@@ -7816,8 +7820,8 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/message_row.rs:373",
-          "fluxer_client/app/src/ui/message_row.rs:378"
+          "fluxer_client/app/src/ui/message_row.rs:383",
+          "fluxer_client/app/src/ui/message_row.rs:388"
         ],
         "reason": "matched data-flx 'channel.embeds.media.media-container.group.clear-text-selection' with right-click/context-menu handler"
       }
@@ -8849,7 +8853,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/user_panel.rs:534"
+          "fluxer_client/app/src/ui/user_panel.rs:537"
         ],
         "reason": "matched data-flx 'user.profile.profile-card.profile-card-banner.avatar-button.avatar-click' with right-click/context-menu handler"
       }
@@ -8869,7 +8873,8 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/profile_popout.rs:280"
+          "fluxer_client/app/src/ui/profile_popout.rs:280",
+          "fluxer_client/app/src/ui/user_panel.rs:518"
         ],
         "reason": "matched data-flx 'user.profile.profile-card.profile-card-banner.banner-wrapper.banner-context-menu' with right-click/context-menu handler"
       }
@@ -9428,8 +9433,8 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:1189",
-          "fluxer_client/app/src/ui/channel_popouts.rs:902",
+          "fluxer_client/app/src/ui/channel_popouts.rs:1208",
+          "fluxer_client/app/src/ui/channel_popouts.rs:921",
           "fluxer_client/app/src/ui/media_context_menu.rs:225"
         ],
         "reason": "matched data-flx 'ui.action-menu.context-menu.separator' with right-click/context-menu handler"
@@ -9483,7 +9488,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:909",
+          "fluxer_client/app/src/ui/channel_popouts.rs:928",
           "fluxer_client/app/src/ui/media_context_menu.rs:238"
         ],
         "reason": "matched data-flx 'ui.action-menu.context-menu.menu-group.group' with right-click/context-menu handler"
@@ -9554,7 +9559,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:922"
+          "fluxer_client/app/src/ui/channel_popouts.rs:941"
         ],
         "reason": "matched data-flx 'ui.action-menu.message-context-menu.render-reactions-header.aria-menu-section' with right-click/context-menu handler"
       }
@@ -9875,7 +9880,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/guild_rail.rs:169"
+          "fluxer_client/app/src/ui/sidebar_menus.rs:3"
         ],
         "reason": "Rust implements FavoritesGuildContextMenu"
       }
@@ -9894,7 +9899,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/guild_rail.rs:169"
+          "fluxer_client/app/src/ui/sidebar_menus.rs:3"
         ],
         "reason": "Rust implements FavoritesGuildContextMenu"
       }
@@ -9913,7 +9918,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/guild_rail.rs:108"
+          "fluxer_client/app/src/ui/sidebar_menus.rs:2"
         ],
         "reason": "Rust implements FluxerButtonContextMenu"
       }
@@ -10563,7 +10568,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:890",
+          "fluxer_client/app/src/ui/channel_popouts.rs:909",
           "fluxer_client/app/src/ui/message_actions.rs:210",
           "fluxer_client/app/src/ui/message_actions.rs:3"
         ],
@@ -10584,7 +10589,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:890",
+          "fluxer_client/app/src/ui/channel_popouts.rs:909",
           "fluxer_client/app/src/ui/message_actions.rs:210",
           "fluxer_client/app/src/ui/message_actions.rs:3"
         ],
@@ -10605,7 +10610,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:890",
+          "fluxer_client/app/src/ui/channel_popouts.rs:909",
           "fluxer_client/app/src/ui/message_actions.rs:210",
           "fluxer_client/app/src/ui/message_actions.rs:3"
         ],
@@ -10626,7 +10631,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:890",
+          "fluxer_client/app/src/ui/channel_popouts.rs:909",
           "fluxer_client/app/src/ui/message_actions.rs:210",
           "fluxer_client/app/src/ui/message_actions.rs:3"
         ],
@@ -10647,7 +10652,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:890",
+          "fluxer_client/app/src/ui/channel_popouts.rs:909",
           "fluxer_client/app/src/ui/message_actions.rs:210",
           "fluxer_client/app/src/ui/message_actions.rs:3"
         ],
@@ -10668,7 +10673,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:890",
+          "fluxer_client/app/src/ui/channel_popouts.rs:909",
           "fluxer_client/app/src/ui/message_actions.rs:210",
           "fluxer_client/app/src/ui/message_actions.rs:3"
         ],
@@ -10793,7 +10798,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/user_panel.rs:397"
+          "fluxer_client/app/src/ui/sidebar_menus.rs:3"
         ],
         "reason": "Rust implements SettingsContextMenu"
       }
@@ -15342,26 +15347,6 @@
       "rust_matches": []
     },
     {
-      "id": "action:tooltips:fluxer_app/src/features/channel/components/embeds/media/MediaContainer.tsx:L128:Tooltip:2",
-      "item_id": "tooltips:fluxer_app/src/features/channel/components/embeds/media/MediaContainer.tsx:L128:Tooltip:2",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] MediaContainer:Tooltip@L128: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/channel/components/embeds/media/MediaContainer.tsx",
-      "official_line": 128,
-      "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/channel/components/embeds/media/MediaContainer.tsx:L152:Tooltip:3",
-      "item_id": "tooltips:fluxer_app/src/features/channel/components/embeds/media/MediaContainer.tsx:L152:Tooltip:3",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] MediaContainer:Tooltip@L152: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/channel/components/embeds/media/MediaContainer.tsx",
-      "official_line": 152,
-      "rust_matches": []
-    },
-    {
       "id": "action:tooltips:fluxer_app/src/features/channel/components/emoji_picker/EmojiPickerCategoryList.tsx:L112:Tooltip:1",
       "item_id": "tooltips:fluxer_app/src/features/channel/components/emoji_picker/EmojiPickerCategoryList.tsx:L112:Tooltip:1",
       "category": "tooltips",
@@ -15920,7 +15905,7 @@
       "official_file": "fluxer_app/src/features/messaging/components/popouts/InboxPopout.tsx",
       "official_line": 279,
       "rust_matches": [
-        "fluxer_client/app/src/ui/channel_popouts.rs:2061"
+        "fluxer_client/app/src/ui/channel_popouts.rs:2098"
       ]
     },
     {

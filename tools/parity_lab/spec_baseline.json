@@ -28,7 +28,7 @@
         },
         "emoji-picker": {
           "deltas": 0,
-          "missing": 5
+          "missing": 0
         },
         "inbox": {
           "deltas": 1,
@@ -48,7 +48,7 @@
         },
         "user-area-popout": {
           "deltas": 2,
-          "missing": 17
+          "missing": 6
         }
       },
       "ignore": [],
@@ -60,7 +60,7 @@
       "max": {
         "dm-conversation": {
           "deltas": 26,
-          "missing": 22
+          "missing": 18
         },
         "dm-home": {
           "deltas": 5,

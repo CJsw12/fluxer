@@ -7,6 +7,8 @@ use std::sync::Arc;
 use fluxer_client_core::state::{MessageState, Snowflake};
 use fluxer_client_markdown::{MarkdownStyle, MessageMarkdown, SpoilerReveals};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::tooltip::Tooltip;
+use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
     AnyElement, App, Entity, FontWeight, Global, Hsla, ObjectFit, SharedString,
     StyledImage as _, WeakEntity, div, img, prelude::*, px, rgb,
@@ -14,6 +16,7 @@ use gpui_kit::{
 
 use crate::client_view::ClientView;
 use crate::parity_probe::FlxExt as _;
+use crate::icons::AppIcon;
 use crate::theme::Theme;
 use crate::ui::avatar::{AvatarSpec, render_clickable_avatar_tagged};
 use crate::ui::media_context_menu::{MediaContextMenuTarget, MediaMenuKind};
@@ -344,6 +347,7 @@ pub fn render(
             let url = image.url.clone();
             let view_img = view.clone();
             let view_rclick = view.clone();
+            let tile_group = SharedString::from(format!("attachment-tile-{}-{ix}", row.id.0));
             let media_target = MediaContextMenuTarget::new(
                 if image.animated { MediaMenuKind::Gif } else { MediaMenuKind::Image },
                 image.url.clone(),
@@ -359,8 +363,14 @@ pub fn render(
                 .with_fallback(move || div().text_xs().text_color(muted_fg).child(url.clone()).into_any_element());
             let mut badge_bg: Hsla = rgb(0x000000).into();
             badge_bg.a = 0.6;
+            let download_target = media_target.clone();
+            let download_tip = if image.animated { l10n::tr("Download GIF") } else { l10n::tr("Download image") };
+            let favorite_tip = l10n::tr("Add to favorites");
+            let view_download = view.clone();
+            let toolbar_icon = theme.text_secondary;
             let tile = div()
                 .id(SharedString::from(format!("attachment-open-{}-{ix}", row.id.0)))
+                .group(tile_group.clone())
                 .debug_selector(move || format!("attachment-open-{}-{ix}", row.id.0))
                 .relative()
                 .w(px(tile_w))
@@ -402,6 +412,69 @@ pub fn render(
                         })
                         .child(thumb),
                 )
+                .when(image_count == 2, |d| {
+                    // Official hover media toolbar (download, favorite); shown on tile hover.
+                    let download_btn = div()
+                        .id(SharedString::from(format!("attachment-download-{}-{ix}", row.id.0)))
+                        .flx("channel.embeds.media.media-container.button.download-click")
+                        .flx("channel.embeds.media.media-container.tooltip--2")
+                        .size(px(28.))
+                        .rounded(px(6.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .cursor_pointer()
+                        .tooltip(move |window, cx| Tooltip::new(download_tip.clone()).build(window, cx))
+                        .on_click(move |_, window, cx| {
+                            cx.stop_propagation();
+                            let url = download_target.download_url().to_owned();
+                            if !url.is_empty() {
+                                let _ = view_download.update(cx, |v, cx| v.open_external_url(&url, window, cx));
+                            }
+                        })
+                        .child(
+                            div()
+                                .flx("channel.embeds.media.media-container.download-simple-icon")
+                                .child(Icon::new(AppIcon::DownloadSimple).with_size(px(18.)).text_color(toolbar_icon)),
+                        );
+                    let favorite_btn = div()
+                        .id(SharedString::from(format!("attachment-favorite-{}-{ix}", row.id.0)))
+                        .flx("channel.embeds.media.media-container.button.favorite-click")
+                        .flx("channel.embeds.media.media-container.tooltip--3")
+                        .size(px(28.))
+                        .rounded(px(6.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .cursor_pointer()
+                        .tooltip(move |window, cx| Tooltip::new(favorite_tip.clone()).build(window, cx))
+                        .on_click(move |_, _, cx| {
+                            // TODO(backlog): favorite media
+                            cx.stop_propagation();
+                        })
+                        .child(
+                            div()
+                                .flx("channel.embeds.media.media-container.star-icon")
+                                .child(Icon::new(AppIcon::Star).with_size(px(18.)).text_color(toolbar_icon)),
+                        );
+                    d.child(
+                        div()
+                            .absolute()
+                            .top(px(8.))
+                            .right(px(8.))
+                            .w(px(66.))
+                            .h(px(36.))
+                            .px(px(4.))
+                            .gap(px(2.))
+                            .flex()
+                            .items_center()
+                            .justify_end()
+                            .opacity(0.)
+                            .group_hover(tile_group.clone(), |s| s.opacity(1.))
+                            .child(download_btn)
+                            .child(favorite_btn),
+                    )
+                })
                 .when(image.animated, |d| {
                     d.child(
                         div()

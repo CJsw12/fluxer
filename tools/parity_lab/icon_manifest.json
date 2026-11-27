@@ -1247,7 +1247,7 @@
   {
    "rust_icon": "Copy",
    "file": "fluxer_client/app/src/ui/user_panel.rs",
-   "line": 629,
+   "line": 663,
    "rust_asset": "fluxer_client/app/assets/icons/copy.svg",
    "kind": "phosphor",
    "phosphor": "fill/copy-fill.svg",
@@ -1262,7 +1262,7 @@
   {
    "rust_icon": "CaretRight",
    "file": "fluxer_client/app/src/ui/user_panel.rs",
-   "line": 691,
+   "line": 726,
    "rust_asset": "fluxer_client/app/assets/icons/caret-right.svg",
    "kind": "phosphor",
    "phosphor": "bold/caret-right-bold.svg",
@@ -1277,7 +1277,7 @@
   {
    "rust_icon": "UsersThree",
    "file": "fluxer_client/app/src/ui/user_panel.rs",
-   "line": 728,
+   "line": 772,
    "rust_asset": "fluxer_client/app/assets/icons/users-three.svg",
    "kind": "phosphor",
    "phosphor": "bold/users-three-bold.svg",
@@ -1292,7 +1292,7 @@
   {
    "rust_icon": "IdentificationBadge",
    "file": "fluxer_client/app/src/ui/user_panel.rs",
-   "line": 747,
+   "line": 791,
    "rust_asset": "fluxer_client/app/assets/icons/identification-badge.svg",
    "kind": "phosphor",
    "phosphor": "bold/identification-badge-bold.svg",
@@ -1307,7 +1307,7 @@
   {
    "rust_icon": "CaretRight",
    "file": "fluxer_client/app/src/ui/user_panel.rs",
-   "line": 909,
+   "line": 954,
    "rust_asset": "fluxer_client/app/assets/icons/caret-right.svg",
    "kind": "phosphor",
    "phosphor": "bold/caret-right-bold.svg",
@@ -1322,7 +1322,7 @@
   {
    "rust_icon": "Check",
    "file": "fluxer_client/app/src/ui/user_panel.rs",
-   "line": 1062,
+   "line": 1107,
    "rust_asset": "fluxer_client/app/assets/icons/check.svg",
    "kind": "phosphor",
    "phosphor": "bold/check-bold.svg",
@@ -1337,7 +1337,7 @@
   {
    "rust_icon": "Gear",
    "file": "fluxer_client/app/src/ui/user_panel.rs",
-   "line": 1085,
+   "line": 1130,
    "rust_asset": "fluxer_client/app/assets/icons/gear.svg",
    "kind": "phosphor",
    "phosphor": "fill/gear-fill.svg",
@@ -1832,7 +1832,7 @@
   {
    "rust_icon": "Sticker",
    "file": "fluxer_client/app/src/ui/emoji_picker/view.rs",
-   "line": 474,
+   "line": 511,
    "rust_asset": "fluxer_client/app/assets/icons/sticker.svg",
    "kind": "phosphor",
    "phosphor": "fill/sticker-fill.svg",
@@ -1892,7 +1892,7 @@
   {
    "rust_icon": "SmileyRegular",
    "file": "fluxer_client/app/src/ui/user_panel.rs",
-   "line": 648,
+   "line": 682,
    "rust_asset": "fluxer_client/app/assets/icons/smiley-regular.svg",
    "kind": "phosphor",
    "phosphor": "regular/smiley.svg",
@@ -1907,7 +1907,7 @@
   {
    "rust_icon": "PencilBold",
    "file": "fluxer_client/app/src/ui/user_panel.rs",
-   "line": 784,
+   "line": 828,
    "rust_asset": "fluxer_client/app/assets/icons/pencil-bold.svg",
    "kind": "phosphor",
    "phosphor": "bold/pencil-bold.svg",
@@ -3317,7 +3317,7 @@
   {
    "rust_icon": "SmileySadFill",
    "file": "fluxer_client/app/src/ui/emoji_picker/view.rs",
-   "line": 546,
+   "line": 582,
    "rust_asset": "fluxer_client/app/assets/icons/smiley-sad-fill.svg",
    "kind": "phosphor",
    "phosphor": "fill/smiley-sad-fill.svg",
@@ -3771,6 +3771,36 @@
    "rust_asset": "fluxer_client/app/assets/icons/caret-down.svg",
    "kind": "phosphor",
    "phosphor": "bold/caret-down-bold.svg",
+   "status": "unverified",
+   "official_component": null,
+   "official_icon": null,
+   "weight": null,
+   "size": null,
+   "source_file": null,
+   "reason": "new call site, not yet matched to official harvest"
+  },
+  {
+   "rust_icon": "DownloadSimple",
+   "file": "fluxer_client/app/src/ui/message_row.rs",
+   "line": 438,
+   "rust_asset": "fluxer_client/app/assets/icons/download-simple.svg",
+   "kind": "phosphor",
+   "phosphor": "bold/download-simple-bold.svg",
+   "status": "unverified",
+   "official_component": null,
+   "official_icon": null,
+   "weight": null,
+   "size": null,
+   "source_file": null,
+   "reason": "new call site, not yet matched to official harvest"
+  },
+  {
+   "rust_icon": "Star",
+   "file": "fluxer_client/app/src/ui/message_row.rs",
+   "line": 458,
+   "rust_asset": "fluxer_client/app/assets/icons/star.svg",
+   "kind": "phosphor",
+   "phosphor": "fill/star-fill.svg",
    "status": "unverified",
    "official_component": null,
    "official_icon": null,

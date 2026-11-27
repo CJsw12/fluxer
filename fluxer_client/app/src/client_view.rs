@@ -945,14 +945,14 @@ impl Render for ClientView {
             )
             .child(
                 // The layout sits inside the 1px frame border at the top and bottom
-                // for channel/DM views (explore/voice-stage manage their own).
+                // for channel/DM/explore views (voice-stage manages its own).
                 div()
                     .flex()
                     .flex_row()
                     .flex_1()
                     .min_w_0()
                     .h_full()
-                    .when(!show_explore && !show_voice_stage, |d| d.pt(px(1.)).pb(px(1.)))
+                    .when(!show_voice_stage, |d| d.pt(px(1.)).pb(px(1.)))
                     .child(
                         div()
                             .flex()
@@ -960,38 +960,38 @@ impl Render for ClientView {
                             .flex_1()
                             .min_w_0()
                             .h_full()
+                            .when(show_explore, |d| {
+                                d.bg(theme.background_secondary)
+                                    .flx("app.discovery-layout.guild-layout-container")
+                            })
                             .when(self.place == Place::Home, |d| {
                                 d.bg(theme.background_secondary)
                                     .flx("channel.direct-message.dm-layout.dm-layout-container")
                             })
                             .child(
                                 div()
-                                    .h_full()
-                                    .flex_none()
-                                    .when(show_explore, |d| d.pt(px(1.)).pb(px(1.)))
-                                    .when(self.place == Place::Home, |d| {
-                                        d.bg(theme.background_secondary)
-                                            .flx("channel.direct-message.dm-layout.dm-list-column--2")
-                                    })
-                                    .child(
-                                        div()
-                                            .h_full()
-                                            .when(matches!(self.place, Place::Guild(_)), |d| d.pb(px(73.)))
-                                            .flx("app.guild-sidebar.guild-navbar")
-                                            .child(ui::channel_list::render(self, &theme, cx)),
-                                    ),
-                            )
-                            .child(
-                                div()
                                     .flex()
+                                    .flex_row()
                                     .flex_1()
                                     .min_w_0()
                                     .h_full()
-                                    .when(self.place == Place::Home, |d| {
-                                        d.bg(theme.background_tertiary)
-                                            .flx("channel.direct-message.dm-layout.content-column--2")
-                                    })
-                                    .when(self.place != Place::Home, |d| d.bg(theme.background_secondary_lighter))
+                                    .when(show_explore, |d| d.flx("app.discovery-layout.guild-layout-content"))
+                                    .child(
+                                        div()
+                                            .h_full()
+                                            .flex_none()
+                                            .when(self.place == Place::Home, |d| {
+                                                d.bg(theme.background_secondary)
+                                                    .flx("channel.direct-message.dm-layout.dm-list-column--2")
+                                            })
+                                            .child(
+                                                div()
+                                                    .h_full()
+                                                    .when(matches!(self.place, Place::Guild(_)), |d| d.pb(px(73.)))
+                                                    .flx("app.guild-sidebar.guild-navbar")
+                                                    .child(ui::channel_list::render(self, &theme, cx)),
+                                            ),
+                                    )
                                     .child(
                                         div()
                                             .flex()
@@ -999,10 +999,22 @@ impl Render for ClientView {
                                             .min_w_0()
                                             .h_full()
                                             .when(self.place == Place::Home, |d| {
-                                                d.bg(theme.background_secondary)
-                                                    .flx("channel.direct-message.dm-layout.content-inner--2")
+                                                d.bg(theme.background_tertiary)
+                                                    .flx("channel.direct-message.dm-layout.content-column--2")
                                             })
-                                            .child(main_pane),
+                                            .when(self.place != Place::Home, |d| d.bg(theme.background_secondary_lighter))
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .flex_1()
+                                                    .min_w_0()
+                                                    .h_full()
+                                                    .when(self.place == Place::Home, |d| {
+                                                        d.bg(theme.background_secondary)
+                                                            .flx("channel.direct-message.dm-layout.content-inner--2")
+                                                    })
+                                                    .child(main_pane),
+                                            ),
                                     ),
                             ),
                     ),

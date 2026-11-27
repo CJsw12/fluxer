@@ -145,23 +145,29 @@ fn render_audio_avatar_slot(
 
     div()
         .id(("voice-stage-tile", uid.0))
+        .aria_label(name_label)
         .debug_selector(move || format!("voice-stage-tile-{}", uid.0))
         .flx_text("voice.voice-stage.participant-speaking", speaking_meta)
+        .w(px(84.))
+        .h(px(72.))
+        .px(px(6.))
         .flex()
-        .flex_col()
         .items_center()
         .justify_center()
-        .gap_2()
-        .px_3()
-        .py_2()
+        .flx("voice.voice-participant-avatar-list.voice-participant-wrapped-avatar-list.wrap-avatar-slot")
         .child(
             div()
                 .relative()
-                .p(px(3.))
+                .size(px(72.))
+                .flex()
+                .items_center()
+                .justify_center()
+                .p(px(2.))
                 .rounded_full()
                 .border_2()
                 .border_color(ring_color)
                 .bg(theme.background_secondary)
+                .flx("voice.voice-participant-avatar-list.voice-participant-wrapped-avatar-list.wrap-avatar")
                 .child(render_avatar(
                     AvatarSpec {
                         user_id: uid,
@@ -213,21 +219,6 @@ fn render_audio_avatar_slot(
                             }),
                     )
                 }),
-        )
-        .child(
-            div()
-                .max_w(px(140.))
-                .px_2()
-                .py_0p5()
-                .rounded(px(999.))
-                .bg(theme.background_secondary)
-                .border_1()
-                .border_color(theme.border)
-                .truncate()
-                .text_xs()
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(theme.foreground)
-                .child(name_label),
         )
         .into_any_element()
 }
@@ -391,6 +382,8 @@ fn render_participant_tile(
 fn split_control_group(
     main_id: &'static str,
     caret_id: &'static str,
+    container_flx: &'static str,
+    button_flx: &'static str,
     caret_flx: &'static str,
     icon: AppIcon,
     main_label: String,
@@ -418,7 +411,7 @@ fn split_control_group(
         .relative()
         .size(px(44.))
         .flex_none()
-        .flx("voice.voice-control-bar.voice-control-bar-inner.button-container")
+        .flx(container_flx)
         .child(
             div()
                 .id(main_id)
@@ -438,7 +431,7 @@ fn split_control_group(
                         .hover(|s| s.opacity(0.88))
                         .on_click(on_main_click)
                 })
-                .flx("voice.voice-control-bar.voice-control-bar-inner.button.undefined")
+                .flx(button_flx)
                 .child(Icon::new(icon).with_size(px(22.)).text_color(fg)),
         )
         .child(
@@ -631,7 +624,7 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
         .flex()
         .flex_row()
         .when(compact_tiles, |d| d.flex_none().overflow_x_scroll().py_2().px_4().gap_2())
-        .when(!compact_tiles, |d| d.flex_wrap().gap_4().p_4())
+        .when(!compact_tiles, |d| d.w_full().flex_wrap().gap_4().p_4())
         .items_center()
         .justify_center();
 
@@ -651,12 +644,16 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
         let mut avatar_list = div()
             .id("voice-stage-avatar-list")
             .debug_selector(|| "voice-stage-avatar-list".to_owned())
+            .w_full()
+            .max_w(px(780.))
             .flex()
             .flex_row()
             .flex_wrap()
             .items_center()
             .justify_center()
-            .gap_4();
+            .gap_x(px(0.))
+            .gap_y(px(12.))
+            .flx("voice.voice-participant-avatar-list.voice-participant-wrapped-avatar-list.wrap-container");
         for p in &participants {
             avatar_list = avatar_list.child(render_audio_avatar_slot(p, is_connected, theme));
         }
@@ -768,6 +765,8 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
         .child(split_control_group(
             "voice-stage-mute-btn",
             "voice-stage-input-settings-btn",
+            "voice.voice-control-bar.voice-control-bar-inner.button-container",
+            "voice.voice-control-bar.voice-control-bar-inner.button.undefined",
             "voice.voice-control-bar.voice-control-bar-inner.settings-button.input-settings-click",
             if effective_muted {
                 AppIcon::MicrophoneSlash
@@ -788,6 +787,8 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
         .child(split_control_group(
             "voice-stage-deaf-btn",
             "voice-stage-output-settings-btn",
+            "voice.voice-control-bar.voice-control-bar-inner.button-container.output-settings",
+            "voice.voice-control-bar.voice-control-bar-inner.button.undefined--2",
             "voice.voice-control-bar.voice-control-bar-inner.settings-button.output-settings-click",
             if effective_deafened {
                 AppIcon::SpeakerSlash
@@ -808,6 +809,8 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
         .child(split_control_group(
             "voice-stage-camera-btn",
             "voice-stage-camera-settings-btn",
+            "voice.voice-control-bar.voice-control-bar-inner.button-container--2",
+            "voice.voice-control-bar.voice-control-bar-inner.button.undefined--3",
             "voice.voice-control-bar.voice-control-bar-inner.settings-button.camera-settings-click",
             AppIcon::CameraSlash,
             l10n::tr("Turn on camera"),
@@ -822,6 +825,8 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
         .child(split_control_group(
             "voice-stage-share-btn",
             "voice-stage-share-settings-btn",
+            "voice.voice-control-bar.voice-control-bar-inner.button-container.screen-share-settings",
+            "voice.voice-control-bar.voice-control-bar-inner.button.undefined--4",
             "voice.voice-control-bar.voice-control-bar-inner.settings-button.screen-share-settings-click",
             AppIcon::MonitorPlay,
             share_label,
@@ -1201,7 +1206,16 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
         .gap_2()
         .flx("voice.compact-voice-call-view.compact-voice-call-view-inner.control-bar-section")
         .children(control_popout)
-        .child(control_pill);
+        .child(
+            div()
+                .w_full()
+                .min_w_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .flx("voice.compact-voice-call-view.compact-voice-call-view-inner.control-bar-inner")
+                .child(control_pill),
+        );
 
     let is_split_view = !view.voice_stage_expanded && view.selected_channel.is_some();
     let pill_opacity = if matches!(
@@ -1291,6 +1305,7 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
                     .cursor_pointer()
                     .hover(|s| s.border_color(theme.vc_corner_hover_border))
                     .on_click(cx.listener(|this, _, _, cx| this.toggle_voice_stage_expanded(cx)))
+                    .flx("voice.compact-voice-call-view.compact-call-height-toggle-button.height-toggle-pill")
                     .child(Icon::new(AppIcon::ChatCircleFill).with_size(px(20.)).text_color(theme.vc_control_fg)),
             )
         });

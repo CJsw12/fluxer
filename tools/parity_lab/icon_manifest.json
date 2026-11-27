@@ -1397,7 +1397,7 @@
   {
    "rust_icon": "MicrophoneSlash",
    "file": "fluxer_client/app/src/ui/voice_stage.rs",
-   "line": 197,
+   "line": 203,
    "rust_asset": "fluxer_client/app/assets/icons/microphone-slash.svg",
    "kind": "phosphor",
    "phosphor": "fill/microphone-slash-fill.svg",
@@ -1412,7 +1412,7 @@
   {
    "rust_icon": "SpeakerSlash",
    "file": "fluxer_client/app/src/ui/voice_stage.rs",
-   "line": 208,
+   "line": 214,
    "rust_asset": "fluxer_client/app/assets/icons/speaker-slash.svg",
    "kind": "phosphor",
    "phosphor": "fill/speaker-slash-fill.svg",
@@ -1427,7 +1427,7 @@
   {
    "rust_icon": "MicrophoneSlash",
    "file": "fluxer_client/app/src/ui/voice_stage.rs",
-   "line": 344,
+   "line": 335,
    "rust_asset": "fluxer_client/app/assets/icons/microphone-slash.svg",
    "kind": "phosphor",
    "phosphor": "fill/microphone-slash-fill.svg",
@@ -1442,7 +1442,7 @@
   {
    "rust_icon": "SpeakerSlash",
    "file": "fluxer_client/app/src/ui/voice_stage.rs",
-   "line": 351,
+   "line": 342,
    "rust_asset": "fluxer_client/app/assets/icons/speaker-slash.svg",
    "kind": "phosphor",
    "phosphor": "fill/speaker-slash-fill.svg",
@@ -1457,7 +1457,7 @@
   {
    "rust_icon": "CaretDown",
    "file": "fluxer_client/app/src/ui/voice_stage.rs",
-   "line": 466,
+   "line": 459,
    "rust_asset": "fluxer_client/app/assets/icons/caret-down.svg",
    "kind": "phosphor",
    "phosphor": "bold/caret-down-bold.svg",
@@ -1472,7 +1472,7 @@
   {
    "rust_icon": "SpeakerHigh",
    "file": "fluxer_client/app/src/ui/voice_stage.rs",
-   "line": 577,
+   "line": 570,
    "rust_asset": "fluxer_client/app/assets/icons/speaker-high.svg",
    "kind": "phosphor",
    "phosphor": "fill/speaker-high-fill.svg",
@@ -1487,7 +1487,7 @@
   {
    "rust_icon": "Monitor",
    "file": "fluxer_client/app/src/ui/voice_stage.rs",
-   "line": 728,
+   "line": 725,
    "rust_asset": "fluxer_client/app/assets/icons/monitor.svg",
    "kind": "phosphor",
    "phosphor": "fill/monitor-fill.svg",
@@ -1502,7 +1502,7 @@
   {
    "rust_icon": "MicrophoneSlash",
    "file": "fluxer_client/app/src/ui/voice_stage.rs",
-   "line": 773,
+   "line": 772,
    "rust_asset": "fluxer_client/app/assets/icons/microphone-slash.svg",
    "kind": "phosphor",
    "phosphor": "fill/microphone-slash-fill.svg",
@@ -1517,7 +1517,7 @@
   {
    "rust_icon": "Microphone",
    "file": "fluxer_client/app/src/ui/voice_stage.rs",
-   "line": 775,
+   "line": 774,
    "rust_asset": "fluxer_client/app/assets/icons/microphone.svg",
    "kind": "phosphor",
    "phosphor": "fill/microphone-fill.svg",
@@ -1532,7 +1532,7 @@
   {
    "rust_icon": "SpeakerSlash",
    "file": "fluxer_client/app/src/ui/voice_stage.rs",
-   "line": 793,
+   "line": 794,
    "rust_asset": "fluxer_client/app/assets/icons/speaker-slash.svg",
    "kind": "phosphor",
    "phosphor": "fill/speaker-slash-fill.svg",
@@ -1547,7 +1547,7 @@
   {
    "rust_icon": "SpeakerHigh",
    "file": "fluxer_client/app/src/ui/voice_stage.rs",
-   "line": 795,
+   "line": 796,
    "rust_asset": "fluxer_client/app/assets/icons/speaker-high.svg",
    "kind": "phosphor",
    "phosphor": "fill/speaker-high-fill.svg",
@@ -1562,7 +1562,7 @@
   {
    "rust_icon": "CameraSlash",
    "file": "fluxer_client/app/src/ui/voice_stage.rs",
-   "line": 812,
+   "line": 815,
    "rust_asset": "fluxer_client/app/assets/icons/camera-slash.svg",
    "kind": "phosphor",
    "phosphor": "fill/camera-slash-fill.svg",
@@ -1577,7 +1577,7 @@
   {
    "rust_icon": "MonitorPlay",
    "file": "fluxer_client/app/src/ui/voice_stage.rs",
-   "line": 826,
+   "line": 831,
    "rust_asset": "fluxer_client/app/assets/icons/monitor-play.svg",
    "kind": "phosphor",
    "phosphor": "fill/monitor-play-fill.svg",
@@ -1592,7 +1592,7 @@
   {
    "rust_icon": "DotsThreeBold",
    "file": "fluxer_client/app/src/ui/voice_stage.rs",
-   "line": 841,
+   "line": 846,
    "rust_asset": "fluxer_client/app/assets/icons/dots-three-bold.svg",
    "kind": "phosphor",
    "phosphor": "bold/dots-three-bold.svg",
@@ -1607,7 +1607,7 @@
   {
    "rust_icon": "PhoneX",
    "file": "fluxer_client/app/src/ui/voice_stage.rs",
-   "line": 860,
+   "line": 865,
    "rust_asset": "fluxer_client/app/assets/icons/phone-x.svg",
    "kind": "phosphor",
    "phosphor": "fill/phone-x-fill.svg",
@@ -1622,7 +1622,7 @@
   {
    "rust_icon": "EyeSlash",
    "file": "fluxer_client/app/src/ui/voice_stage.rs",
-   "line": 871,
+   "line": 876,
    "rust_asset": "fluxer_client/app/assets/icons/eye-slash.svg",
    "kind": "phosphor",
    "phosphor": "fill/eye-slash-fill.svg",
@@ -3407,7 +3407,7 @@
   {
    "rust_icon": "ChatCircleFill",
    "file": "fluxer_client/app/src/ui/voice_stage.rs",
-   "line": 1294,
+   "line": 1309,
    "rust_asset": "fluxer_client/app/assets/icons/chat-circle-fill.svg",
    "kind": "phosphor",
    "phosphor": "fill/chat-circle-fill.svg",

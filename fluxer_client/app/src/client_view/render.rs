@@ -166,8 +166,6 @@ impl ClientView {
                 .flex_1()
                 .min_w_0()
                 .h_full()
-                .pt(px(1.))
-                .pb(px(1.))
                 .child(ui::explore::render_page(self, theme, cx))
                 // Keep the composer mounted in a 0px hidden slot so shortcut contexts stay live.
                 .child(div().h(px(0.)).overflow_hidden().child(composer))

@@ -68,7 +68,7 @@
         },
         "explore": {
           "deltas": 9,
-          "missing": 3
+          "missing": 1
         },
         "settings-appearance": {
           "deltas": 18,
@@ -115,8 +115,8 @@
           "missing": 10
         },
         "voice-channel": {
-          "deltas": 3,
-          "missing": 48
+          "deltas": 4,
+          "missing": 37
         }
       },
       "ignore": [],

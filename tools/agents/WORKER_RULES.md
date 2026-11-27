@@ -15,13 +15,14 @@
 - 도구 소스코드(`tools/parity_lab/*.py`, `*.mjs`)는 읽지 않는다. 사용법은 `--help`로 본다.
 
 ## 빌드·실기
-- 수정 후 재측정은 `python -I tools/parity_lab/cycle.py --skip-tests`로 한다(빌드 디렉터리는 `target/fc-root` 하나, `jobs=4`). 클라이언트는 `cycle.py`·`env.py`가 사용자 화면에 띄우므로 직접 실행 파일을 띄우지 않는다.
-- 수정으로 대상 장면의 `deltas`/`missing`이 오히려 늘어난 변경은 남기지 말고 즉시 원복한다.
-- 실기 테스트 후 반드시 원래 길드 채널·다크 테마·음성 퇴장·마이크 켜짐(`Mute microphone`) 상태로 복원한다. 아이콘 사용 파일의 줄 번호가 바뀌면 `check_icons.py` 결과를 보고한다.
+- `cargo check`/`cargo test`는 루트에서 `--manifest-path fluxer_client/Cargo.toml -p fluxer_client_app -j 4`를 쓴다(`CARGO_TARGET_DIR=<repo>/target/fc-root`, `jobs=4`). 병렬 `swarm` 구현 워커는 브리프에 별도 지시가 없으면 `cargo`를 생략하고 `check_colors.py`·`check_icons.py`만 돌린다(동시 락·형제 미완성 파일 충돌 방지).
+- 수정 후 실기 재측정이 필요하면 `python -I tools/parity_lab/cycle.py --skip-tests`로 한다. 클라이언트는 `cycle.py`·`env.py`가 띄우므로 직접 실행 파일을 띄우지 않는다.
+- 기존 UI 행 수·칩 인덱스·표시용 콤보(`default_shortcut_rows` 등)는 명시적 요청 없이 바꾸지 않고, 수정으로 대상 장면의 `deltas`/`missing`이 늘면 즉시 원복한다.
+- 실기 테스트 후 반드시 원래 길드 채널·다크 테마·음성 퇴장·마이크 켜짐(`Mute microphone`) 상태로 복원한다. 아이콘 줄 번호가 바뀌면 `check_icons.py` 결과를 보고한다.
 - 실기 클라이언트를 조작하는 에이전트는 동시에 하나뿐이다. 모든 장시간 명령에 시간 제한을 둔다.
 
 ## 금지
 - `Logs/`, `../Logs`, `%APPDATA%`, 키·자격 증명 접근, 커밋·push, 사용자 개인 공식 앱 조작, `SSL_CERT_FILE` 설정.
 
 ## 보고
-- 25줄 이내: 수정 전후 표, 남은 차이와 이유, 검사 합계, 끝 상태(클라이언트·복원 여부), **실수·실패·낭비(Friction, 0~3줄: 실패한 명령·재시도·시간/토큰 낭비 지점·다음 워커 주의점)**.
+- `swarm` 워커는 종료 시 반드시 `@coordinator` 멘션으로 25줄 이내 보고한다: 수정 전후 표, 남은 차이와 이유, 검사 합계, 끝 상태(클라이언트·복원 여부), **실수·실패·낭비(Friction, 0~3줄: 실패한 명령·재시도·시간/토큰 낭비 지점·다음 워커 주의점)**.

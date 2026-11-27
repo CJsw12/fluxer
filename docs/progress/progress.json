@@ -150,6 +150,11 @@
           "name": "반응 pill 표시",
           "status": "done",
           "verified": true
+        },
+        {
+          "name": "채널 헤더·DM/커뮤니티 메뉴 범위별 읽음 처리",
+          "status": "done",
+          "verified": true
         }
       ]
     },
@@ -391,6 +396,11 @@
           "name": "그룹 DM",
           "status": "implemented",
           "verified": false
+        },
+        {
+          "name": "프로필 배지·연결 계정",
+          "status": "implemented",
+          "verified": false
         }
       ]
     },
@@ -556,6 +566,11 @@
           "name": "음성 UI",
           "status": "implemented",
           "verified": false
+        },
+        {
+          "name": "화면 공유 시스템 오디오(Windows 기본 출력)",
+          "status": "done",
+          "verified": true
         }
       ]
     }

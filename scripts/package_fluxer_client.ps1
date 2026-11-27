@@ -49,7 +49,13 @@ try {
 }
 finally {
     Pop-Location
-    [Environment]::SetEnvironmentVariable($parityLinkerVar, $previousLinker)
+    # pwsh 7.7 keeps an empty variable when given $null; an empty linker breaks later cargo builds.
+    if ([string]::IsNullOrEmpty($previousLinker)) {
+        Remove-Item "Env:$parityLinkerVar" -ErrorAction SilentlyContinue
+    }
+    else {
+        [Environment]::SetEnvironmentVariable($parityLinkerVar, $previousLinker)
+    }
     if ($null -eq $previousTargetDir) {
         Remove-Item Env:CARGO_TARGET_DIR -ErrorAction SilentlyContinue
     }

@@ -1,7 +1,7 @@
 //! WASAPI capture of the default render endpoint for a screen-share audio track.
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use cpal::{Device, FromSample, SampleFormat, SizedSample, Stream, StreamConfig};
+use cpal::{Device, ErrorKind, FromSample, SampleFormat, SizedSample, Stream, StreamConfig};
 use livekit::options::TrackPublishOptions;
 use livekit::prelude::*;
 use livekit::webrtc::audio_frame::AudioFrame;
@@ -13,7 +13,7 @@ pub(super) struct Capture {
     source: NativeAudioSource,
     sid: TrackSid,
     pcm: mpsc::Receiver<Vec<i16>>,
-    device_errors: mpsc::Receiver<()>,
+    device_errors: mpsc::Receiver<&'static str>,
 }
 
 impl Capture {
@@ -66,7 +66,7 @@ impl Capture {
         loop {
             tokio::select! {
                 biased;
-                _ = self.device_errors.recv() => return "Windows loopback capture stopped",
+                reason = self.device_errors.recv() => return reason.unwrap_or("Windows loopback capture stopped"),
                 samples = self.pcm.recv() => {
                     let Some(samples) = samples else { return "Windows loopback capture ended"; };
                     let frame = AudioFrame {
@@ -88,7 +88,7 @@ fn loopback_stream<T>(
     device: &Device,
     config: StreamConfig,
     pcm: mpsc::Sender<Vec<i16>>,
-    errors: mpsc::Sender<()>,
+    errors: mpsc::Sender<&'static str>,
 ) -> Result<Stream, cpal::Error>
 where
     T: SizedSample,
@@ -99,9 +99,26 @@ where
     device.build_input_stream(
         config,
         move |data: &[T], _| queue_pcm(data, frame_samples, &mut frame, &pcm),
-        move |_| { let _ = errors.try_send(()); },
+        move |err: cpal::Error| match fatal_stream_error(err.kind()) {
+            Some(reason) => { let _ = errors.try_send(reason); }
+            // stdout carries the IPC protocol, so diagnostics go to stderr only.
+            None => eprintln!("screen share audio: ignoring non-fatal capture event: {err}"),
+        },
         None,
     )
+}
+
+/// Returns the user-facing stop reason for stream errors that end capture.
+///
+/// cpal reports glitches (`Xrun`), refused real-time priority and automatic default-device
+/// rerouting through the same callback; the stream keeps running after those.
+fn fatal_stream_error(kind: ErrorKind) -> Option<&'static str> {
+    match kind {
+        ErrorKind::Xrun | ErrorKind::RealtimeDenied | ErrorKind::DeviceChanged => None,
+        ErrorKind::DeviceNotAvailable => Some("Windows playback device is no longer available"),
+        ErrorKind::StreamInvalidated => Some("Windows playback format changed"),
+        _ => Some("Windows loopback capture stopped"),
+    }
 }
 
 fn queue_pcm<T: SizedSample>(
@@ -127,6 +144,25 @@ fn queue_pcm<T: SizedSample>(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn glitches_priority_and_reroutes_keep_capturing() {
+        for kind in [ErrorKind::Xrun, ErrorKind::RealtimeDenied, ErrorKind::DeviceChanged] {
+            assert_eq!(fatal_stream_error(kind), None, "{kind:?}");
+        }
+    }
+
+    #[test]
+    fn device_loss_and_backend_failures_stop_capture() {
+        assert_eq!(
+            fatal_stream_error(ErrorKind::DeviceNotAvailable),
+            Some("Windows playback device is no longer available"),
+        );
+        assert_eq!(fatal_stream_error(ErrorKind::StreamInvalidated), Some("Windows playback format changed"));
+        for kind in [ErrorKind::BackendError, ErrorKind::DeviceBusy, ErrorKind::ResourceExhausted, ErrorKind::Other] {
+            assert_eq!(fatal_stream_error(kind), Some("Windows loopback capture stopped"), "{kind:?}");
+        }
+    }
 
     #[test]
     fn pcm_packets_span_callbacks_and_drop_whole_frames_under_backpressure() {

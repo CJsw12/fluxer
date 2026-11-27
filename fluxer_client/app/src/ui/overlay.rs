@@ -401,49 +401,82 @@ pub fn settings_modal_with_preview(
                 .child(content_pane),
         );
 
+    let top_ext = px(-theme.sizes.titlebar_height);
+    let layer = // Modal.module.css `.layerFullscreen` at >=1024px: pad-x = 6% of the layer width,
+        // pad-y = 2.5vh = 20px at 800px (percent padding is width-relative in GPUI); the
+        // measured modal root is inset a further 1px per side.
+        div()
+            .size_full()
+            .px(gpui_kit::relative(0.06))
+            .py(px(20.))
+            .flex()
+            .flex_col()
+            .flx("app.modal.layer")
+            .child(
+                div()
+                    .flex_1()
+                    .min_h_0()
+                    .w_full()
+                    .overflow_hidden()
+                    .flex()
+                    .flex_col()
+                    .flx("app.modal.focus-lock")
+                    // Official screen-reader label: 1x1 clipped element (no aria API in GPUI).
+                    .child(
+                        div()
+                            .absolute()
+                            .left(px(1.))
+                            .top(px(0.))
+                            .w(px(1.))
+                            .h(px(1.))
+                            .overflow_hidden()
+                            .flx("app.modal.screen-reader-label.screen-reader-label"),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_h_0()
+                            .w_full()
+                            .overflow_hidden()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .justify_center()
+                            .flx("app.modal.surface")
+                            .child(panel),
+                    ),
+            );
+
     div()
         .id("settings-modal-backdrop")
         .absolute()
         .top_0()
         .left_0()
         .size_full()
-        .bg(gpui_kit::hsla(0., 0., 0., 0.72))
-        .occlude()
-        .on_mouse_down(MouseButton::Left, move |_, window, cx| on_dismiss_bg(window, cx))
         .child(
-            // Modal.module.css `.layerFullscreen` at >=1024px: pad-x = 6% of the layer width,
-            // pad-y = 2.5vh = 20px at 800px (percent padding is width-relative in GPUI); the
-            // measured modal root is inset a further 1px per side.
             div()
-                .size_full()
-                .px(gpui_kit::relative(0.06))
-                .py(px(20.))
-                .flex()
-                .flex_col()
-                .flx("app.modal.layer")
-                .child(
-                    div()
-                        .flex_1()
-                        .min_h_0()
-                        .w_full()
-                        .overflow_hidden()
-                        .flex()
-                        .flex_col()
-                        .flx("app.modal.focus-lock")
-                        .child(
-                            div()
-                                .flex_1()
-                                .min_h_0()
-                                .w_full()
-                                .overflow_hidden()
-                                .flex()
-                                .flex_row()
-                                .items_center()
-                                .justify_center()
-                                .flx("app.modal.surface")
-                                .child(panel),
-                        ),
-                ),
+                .absolute()
+                .top(top_ext)
+                .left_0()
+                .right_0()
+                .bottom_0()
+                .bg(gpui_kit::black())
+                .opacity(0.85)
+                .flx("app.modal.modal-backdrop"),
+        )
+        .child(
+            div()
+                .id("settings-modal-click-layer")
+                .absolute()
+                .top(top_ext)
+                .left_0()
+                .right_0()
+                .bottom_0()
+                .pt(px(theme.sizes.titlebar_height))
+                .occlude()
+                .on_mouse_down(MouseButton::Left, move |_, window, cx| on_dismiss_bg(window, cx))
+                .flx("app.modal.modal-backdrop.backdrop-click-event")
+                .child(layer),
         )
         .into_any_element()
 }
@@ -464,6 +497,8 @@ pub fn popover(
         .shadow_lg()
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .child(content);
+    // PopoverPopouts.tsx `.popout` item: transparent, radius 8, same box as the panel.
+    let panel = div().rounded(px(8.)).flx("ui.popover.popouts.popout-item.popout").child(panel);
     div()
         .id("popover-backdrop")
         .absolute()
@@ -472,6 +507,8 @@ pub fn popover(
         .size_full()
         .occlude()
         .on_mouse_down(MouseButton::Left, move |_, window, cx| on_dismiss(window, cx))
+        .flx("ui.popover.popouts.popouts")
+        .flx("ui.popover.popouts.backdrop")
         .child(
             anchored()
                 .position(anchor)
@@ -523,10 +560,15 @@ pub fn resizable_popover(
         .on_mouse_up(MouseButton::Left, on_drag_end)
         .flx(flx)
         .child(content);
+    let panel = div().rounded(px(8.)).flx("ui.popover.popouts.popout-item.popout").child(panel);
     div()
         .absolute()
         .top_0()
         .left_0()
+        .size_full()
+        // Outside clicks dismiss through the panel's `on_mouse_down_out`. Not occluding keeps
+        // expression-tab triggers and edge-resize drags working while the picker is open.
+        .flx("ui.popover.popouts.popouts")
         .child(anchored().position(gpui_kit::point(px(left), px(top))).anchor(Anchor::TopLeft).child(panel))
         .into_any_element()
 }

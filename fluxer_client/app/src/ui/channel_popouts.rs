@@ -802,6 +802,25 @@ pub fn render(
         }
     };
 
+    // PopoverPopouts.tsx: header popouts (threads/pins/inbox) render inside a full-viewport
+    // `.popouts` layer with a transparent `.backdrop` and a `.popout` item wrapping the panel.
+    // Context-menu style popouts use the action-menu shell instead, so they keep the bare anchor.
+    if matches!(
+        pop.kind,
+        ChannelPopoutKind::Threads { .. } | ChannelPopoutKind::PinnedMessages { .. } | ChannelPopoutKind::Inbox { .. }
+    ) {
+        let item = div().rounded(px(8.)).flx("ui.popover.popouts.popout-item.popout").child(anchored_child);
+        // Outside clicks are dismissed by the panel's `on_mouse_down_out`. The backdrop does not
+        // occlude so another header/composer trigger can switch popouts in one click.
+        return div()
+            .absolute()
+            .inset_0()
+            .flx("ui.popover.popouts.popouts")
+            .child(div().id("channel-popout-backdrop").absolute().inset_0().flx("ui.popover.popouts.backdrop"))
+            .child(anchored().position(gpui_kit::point(px(final_left), px(top))).anchor(final_anchor).child(item))
+            .into_any_element();
+    }
+
     div()
         .absolute()
         .top_0()
@@ -1346,12 +1365,14 @@ fn render_threads(
                     ),
                 ),
         )
-        .child(div().flex_none().px_4().pt_3().child(Input::new(query)))
+        // ThreadBrowser.module.css: the search block and the segmented-tabs container are each
+        // 56px tall (padding-top 12px) so the list starts at the official offset.
+        .child(div().flex_none().h(px(56.)).px_4().pt_3().child(Input::new(query)))
         .child(
+            div().flex_none().h(px(56.)).pt_3().child(
             div()
                 .flex_none()
                 .mx_4()
-                .mt_3()
                 .p_1()
                 .rounded(px(8.))
                 .bg(theme.background)
@@ -1382,6 +1403,7 @@ fn render_threads(
                         .child(text)
                         .on_click(cx.listener(move |this, _, _, cx| this.set_threads_popout_tab(t, cx)))
                 })),
+            ),
         )
         .child(if show_rows {
             div()
@@ -1389,10 +1411,14 @@ fn render_threads(
                 .flex_1()
                 .min_h_0()
                 .overflow_y_scroll()
-                .p_3()
+                // ThreadBrowser.module.css .list: padding 0 8px 12px.
+                .pt_0()
+                .px_2()
+                .pb_3()
                 .flex()
                 .flex_col()
                 .gap_1()
+                .flx("threads.thread-browser.list.active")
                 .children(threads.into_iter().map(|(tid, name)| {
                     div()
                         .id(SharedString::from(format!("thread-row-{}", tid.0)))
@@ -1414,17 +1440,16 @@ fn render_threads(
                 }))
                 .into_any_element()
         } else {
-            div()
+            let empty = div()
                 .flex_1()
                 .min_h_0()
-                .px(px(40.))
-                .pt(px(10.))
+                .p(px(32.))
                 .flex()
                 .flex_col()
                 .items_center()
                 .justify_center()
                 .gap_2()
-                .flx("threads.thread-browser.empty")
+                .flx("threads.thread-browser.empty-state.empty")
                 .child(
                     div()
                         .size(px(40.))
@@ -1448,7 +1473,18 @@ fn render_threads(
                         .text_color(theme.muted_foreground)
                         .flx("threads.thread-browser.empty-state.hint")
                         .child(l10n::tr("Stay focused on a conversation with a thread, a temporary text channel.")),
-                )
+                );
+            // The official empty state sits inside the (active) list container.
+            div()
+                .flex_1()
+                .min_h_0()
+                .pt_0()
+                .px_2()
+                .pb_3()
+                .flex()
+                .flex_col()
+                .flx("threads.thread-browser.list.active")
+                .child(empty)
                 .into_any_element()
         })
         .into_any_element()
@@ -1470,15 +1506,16 @@ fn render_pins(
         .child(
             div()
                 .flex_none()
-                .px_4()
+                .relative()
+                .p_4()
                 .h(px(68.))
-                .pt(px(3.))
-                .border_b_1()
-                .border_color(theme.border)
                 .flex()
                 .flex_row()
                 .items_center()
                 .gap_1()
+                .flx("channel.channel-pins-popout.header")
+                // Separator drawn as an overlay line so the header keeps the official 16px padding box.
+                .child(div().absolute().left_0().right_0().bottom_0().h(px(1.)).bg(theme.border))
                 .child(
                     div()
                         .size(px(24.))
@@ -1496,7 +1533,7 @@ fn render_pins(
                         .child(l10n::tr("Pinned messages")),
                 ),
         )
-        .child(if let Some(err) = error {
+        .child(div().flex_1().min_h_0().flex().flex_col().flx("channel.channel-pins-popout.body").child(if let Some(err) = error {
             div()
                 .flex_1()
                 .min_h_0()
@@ -1596,7 +1633,7 @@ fn render_pins(
                         .child(div().text_sm().text_color(theme.muted_foreground).child(content))
                 }))
                 .into_any_element()
-        })
+        }))
         .into_any_element()
 }
 

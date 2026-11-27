@@ -1,7 +1,7 @@
 {
   "updated": "2026-11-27",
   "m9_1": {
-    "batch": 9,
+    "batch": 11,
     "status": "verified",
     "interactions": {"total": 770, "present": 286, "missing": 459, "differs": 25},
     "tests_passed": 431,

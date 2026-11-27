@@ -28,23 +28,23 @@
         },
         "emoji-picker": {
           "deltas": 0,
-          "missing": 7
+          "missing": 5
         },
         "inbox": {
           "deltas": 1,
-          "missing": 8
+          "missing": 5
         },
         "pinned-messages": {
           "deltas": 0,
-          "missing": 5
+          "missing": 0
         },
         "settings-modal": {
           "deltas": 0,
-          "missing": 3
+          "missing": 0
         },
         "threads": {
           "deltas": 3,
-          "missing": 10
+          "missing": 5
         },
         "user-area-popout": {
           "deltas": 2,
@@ -72,27 +72,27 @@
         },
         "settings-appearance": {
           "deltas": 18,
-          "missing": 7
+          "missing": 4
         },
         "settings-keybinds": {
           "deltas": 299,
-          "missing": 7
+          "missing": 4
         },
         "settings-language": {
           "deltas": 15,
-          "missing": 7
+          "missing": 4
         },
         "settings-my-account": {
           "deltas": 11,
-          "missing": 7
+          "missing": 4
         },
         "settings-notifications": {
           "deltas": 17,
-          "missing": 7
+          "missing": 4
         },
         "settings-voice-video": {
           "deltas": 17,
-          "missing": 7
+          "missing": 4
         }
       },
       "ignore": [],
@@ -112,7 +112,7 @@
         },
         "threads-panel": {
           "deltas": 3,
-          "missing": 10
+          "missing": 5
         },
         "voice-channel": {
           "deltas": 3,

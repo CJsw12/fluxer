@@ -95,7 +95,7 @@ RUST_SHORTCUT_SPEC_RE = re.compile(
 )
 RUST_ASSIGNABLE_RE = re.compile(r'\("([a-z0-9_]+)"\s*,\s*"([^"]+)"\)')
 RUST_RESIZE_ACTIVE_RE = re.compile(r"ActiveResize::([A-Za-z0-9_]+)")
-RUST_HOVER_RE = re.compile(r"\.hover\(|_hovered\b|on_hover\b")
+RUST_HOVER_RE = re.compile(r"\.(?:group_)?hover\(|_hovered\b|on_hover\b")
 
 
 def _rel_posix(path: Path, root: Path) -> str:
@@ -157,6 +157,7 @@ class RustIndex:
         self.resize_variants: set[str] = set()
         self.resize_files: list[str] = []
         self.hover_files: set[str] = set()
+        self.hover_markers: dict[str, set[str]] = {}
         self._scan()
 
     def _scan(self) -> None:
@@ -196,6 +197,18 @@ class RustIndex:
 
             if RUST_HOVER_RE.search(text):
                 self.hover_files.add(rel)
+                markers = self.hover_markers.setdefault(rel, set())
+                for marker in (
+                    "user-panel-profile-group",
+                    "user-area-popout-username",
+                    "inbox-unread-row-",
+                    "search-hit-",
+                    "friend-row-",
+                    "category-hover-affordance",
+                    "channel-hover-affordance",
+                ):
+                    if marker in text:
+                        markers.add(marker)
 
             if p.name == "shortcuts.rs":
                 for m in RUST_BUILTIN_SHORTCUT_RE.finditer(text):
@@ -566,9 +579,93 @@ def _classify_keybind(item: dict, rust: RustIndex) -> tuple[str, list[str], str]
     return "missing", [], "action not present in shortcuts.rs"
 
 
+def _has_flx_in_file(rust: RustIndex, flx: str, rust_file: str) -> bool:
+    return any(loc.startswith(f"{rust_file}:") for loc in rust.flx_locations.get(flx, []))
+
+
 def _classify_hover_only(item: dict, rust: RustIndex) -> tuple[str, list[str], str]:
     off = item["official"]
     stem = Path(off["file"]).name.replace(".module.css", "").lower()
+    sel = off.get("selector", "").lower()
+
+    if stem == "favoriteschannellistcontent":
+        return "missing", [], "Favorites channel list view is not implemented in Rust"
+
+    if stem == "channelitem":
+        rf = "fluxer_client/app/src/ui/channel_list.rs"
+        if ".hoveraffordance" in sel:
+            if rf in rust.hover_files and (
+                "channel-hover-affordance" in rust.hover_markers.get(rf, set())
+                or "category-hover-affordance" in rust.hover_markers.get(rf, set())
+                or _has_flx_in_file(rust, "app.channel-item.hover-affordance", rf)
+            ):
+                return "present", [rf], "hoverAffordance group_hover implemented in channel_list.rs"
+        if ".voiceusercount" in sel:
+            if rf in rust.hover_files and _has_flx_in_file(rust, "app.channel-item.voice-user-count", rf):
+                return "present", [rf], "voiceUserCount hover visibility implemented in channel_list.rs"
+        if rf in rust.hover_files:
+            return "differs", [rf], "partial hover state in channel_list.rs"
+        return "missing", [], f"no hover-only visibility transition matched for {stem}"
+
+    if stem == "settingsmodallayout":
+        rf = "fluxer_client/app/src/ui/settings/sidebar.rs"
+        if ".sidebaritemchevron" in sel:
+            if rf in rust.hover_files and _has_flx_in_file(
+                rust, "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-chevron", rf
+            ):
+                return "present", [rf], "sidebarItemChevron hover opacity implemented in settings/sidebar.rs"
+        if ".sidebaritemattentiondot" in sel:
+            if rf in rust.hover_files and _has_flx_in_file(
+                rust, "app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-attention-dot", rf
+            ):
+                return "present", [rf], "sidebarItemAttentionDot hover visibility implemented in settings/sidebar.rs"
+            return "missing", [], "sidebarItemAttentionDot element not present in settings/sidebar.rs"
+
+    if stem == "userarea":
+        rf = "fluxer_client/app/src/ui/user_panel.rs"
+        if ".hoverroll" in sel:
+            if (
+                rf in rust.hover_files
+                and "user-panel-profile-group" in rust.hover_markers.get(rf, set())
+                and _has_flx_in_file(rust, "app.user-area.user-area-inner.user-status", rf)
+            ):
+                return "present", [rf], "hoverRoll defaultState/hovered transition implemented in user_panel.rs"
+
+    if stem == "userareapopout":
+        rf = "fluxer_client/app/src/ui/user_panel.rs"
+        if ".copyusernamebutton" in sel:
+            if (
+                rf in rust.hover_files
+                and "user-area-popout-username" in rust.hover_markers.get(rf, set())
+                and _has_flx_in_file(rust, "app.floating.user-area-popout.copy-username-button.copy-user-tag", rf)
+            ):
+                return "present", [rf], "copyUsernameButton hover opacity implemented in user_panel.rs"
+
+    if stem == "unreadchannelscontent":
+        rf = "fluxer_client/app/src/ui/channel_popouts.rs"
+        if ".messageactions" in sel:
+            if rf in rust.hover_files and "inbox-unread-row-" in rust.hover_markers.get(rf, set()):
+                return "present", [rf], "Unread messageActions hover group implemented in channel_popouts.rs"
+
+    if stem == "channelsearchresults":
+        rf = "fluxer_client/app/src/ui/search_panel.rs"
+        if ".actionbuttons" in sel:
+            if rf in rust.hover_files and "search-hit-" in rust.hover_markers.get(rf, set()):
+                return "present", [rf], "search result actionButtons hover group implemented in search_panel.rs"
+        return "missing", [], "no hover-only visibility transition matched for channelsearchresults"
+
+    if stem == "memberlistitem":
+        rf = "fluxer_client/app/src/ui/member_list.rs"
+        if ".button:hover" in sel:
+            if rf in rust.hover_files and _has_flx_in_file(rust, "channel.member-list-item.focus-ring-wrapper", rf):
+                return "present", [rf], "member row hover opacity(1) implemented in member_list.rs"
+
+    if stem == "friendlistitem":
+        rf = "fluxer_client/app/src/ui/friends.rs"
+        if ".friendtag" in sel:
+            if rf in rust.hover_files and "friend-row-" in rust.hover_markers.get(rf, set()):
+                return "present", [rf], "friendTag hover opacity implemented in friends.rs"
+
     if "message" in stem and "fluxer_client/app/src/ui/message_row.rs" in rust.hover_files:
         return "present", ["fluxer_client/app/src/ui/message_row.rs"], "hover action bar implemented in message_row.rs"
     if "channel" in stem and "fluxer_client/app/src/ui/channel_list.rs" in rust.hover_files:
@@ -744,6 +841,103 @@ class ExtractInteractionsTests(unittest.TestCase):
                 len(r1["action_items"]),
                 r1["summary"]["total"]["missing"] + r1["summary"]["total"]["differs"],
             )
+
+    def test_hover_only_component_mapping(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            off = root / "fluxer_app/src"
+            rust = root / "fluxer_client/app/src"
+            (off / "features/channel/components").mkdir(parents=True)
+            (off / "features/app/components/layout").mkdir(parents=True)
+            (off / "features/app/components/dialogs/shared").mkdir(parents=True)
+            (off / "features/app/components/floating").mkdir(parents=True)
+            (off / "features/channel/components/friends").mkdir(parents=True)
+            (rust / "ui/settings").mkdir(parents=True)
+
+            (off / "features/app/components/layout/ChannelItem.module.css").write_text(
+                ".channelItemCategory:hover .hoverAffordance { display: flex; }\n"
+                ".channelItemVoice:hover .voiceUserCount { display: none; }\n",
+                encoding="utf-8",
+            )
+            (off / "features/channel/components/ChannelSearchResults.module.css").write_text(
+                ".messageItem:hover .actionButtons { display: flex; }\n",
+                encoding="utf-8",
+            )
+            (off / "features/channel/components/FavoritesChannelListContent.module.css").write_text(
+                ".favoriteItem:hover .hoverAffordance { display: flex; }\n",
+                encoding="utf-8",
+            )
+            (off / "features/app/components/dialogs/shared/SettingsModalLayout.module.css").write_text(
+                ".sidebarItem:hover:not(.sidebarItemSelected) .sidebarItemChevron { opacity: 1; }\n"
+                ".sidebarItem[data-expandable='true']:hover .sidebarItemAttentionDot { visibility: hidden; }\n",
+                encoding="utf-8",
+            )
+            (off / "features/app/components/layout/UserArea.module.css").write_text(
+                ".userInfo:hover .hoverRoll .defaultState { opacity: 0; }\n"
+                ".userInfo:hover .hoverRoll .hovered { opacity: 1; }\n",
+                encoding="utf-8",
+            )
+            (off / "features/app/components/floating/UserAreaPopout.module.css").write_text(
+                ".container:hover .copyUsernameButton { opacity: 1; }\n",
+                encoding="utf-8",
+            )
+            (off / "features/app/components/floating/UnreadChannelsContent.module.css").write_text(
+                ".messageRow:hover .messageActions { display: flex; }\n",
+                encoding="utf-8",
+            )
+            (off / "features/channel/components/MemberListItem.module.css").write_text(
+                ".button:hover { opacity: 1; }\n",
+                encoding="utf-8",
+            )
+            (off / "features/channel/components/friends/FriendListItem.module.css").write_text(
+                ".friendListItem:hover .friendTag { opacity: 1; }\n",
+                encoding="utf-8",
+            )
+
+            (rust / "ui/channel_list.rs").write_text(
+                'fn f() { div().group_hover("g", |s| s).flx("app.channel-item.hover-affordance").flx("app.channel-item.voice-user-count"); }\n',
+                encoding="utf-8",
+            )
+            (rust / "ui/search_panel.rs").write_text(
+                'fn f() { div().group("search-hit-1").group_hover("search-hit-1", |s| s); }\n',
+                encoding="utf-8",
+            )
+            (rust / "ui/settings/sidebar.rs").write_text(
+                'fn f() { div().group_hover("g", |s| s).flx("app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-chevron"); }\n',
+                encoding="utf-8",
+            )
+            (rust / "ui/user_panel.rs").write_text(
+                'fn f() { div().group("user-panel-profile-group").group_hover("user-panel-profile-group", |s| s).flx_text("app.user-area.user-area-inner.user-status", "x").group("user-area-popout-username").flx("app.floating.user-area-popout.copy-username-button.copy-user-tag"); }\n',
+                encoding="utf-8",
+            )
+            (rust / "ui/channel_popouts.rs").write_text(
+                'fn f() { div().group("inbox-unread-row-1").group_hover("inbox-unread-row-1", |s| s); }\n',
+                encoding="utf-8",
+            )
+            (rust / "ui/member_list.rs").write_text(
+                'fn f() { div().hover(|s| s.opacity(1.)).flx("channel.member-list-item.focus-ring-wrapper"); }\n',
+                encoding="utf-8",
+            )
+            (rust / "ui/friends.rs").write_text(
+                'fn f() { div().group("friend-row-1").group_hover("friend-row-1", |s| s); }\n',
+                encoding="utf-8",
+            )
+
+            report = build_report(off, rust, root)
+            by_id = {item["id"]: item for item in report["items"]}
+            self.assertEqual(by_id["hover_only:fluxer_app/src/features/app/components/layout/ChannelItem.module.css:.channelItemCategory:hover .hoverAffordance"]["status"], "present")
+            self.assertEqual(by_id["hover_only:fluxer_app/src/features/app/components/layout/ChannelItem.module.css:.channelItemVoice:hover .voiceUserCount"]["status"], "present")
+            self.assertEqual(by_id["hover_only:fluxer_app/src/features/channel/components/ChannelSearchResults.module.css:.messageItem:hover .actionButtons"]["status"], "present")
+            self.assertEqual(by_id["hover_only:fluxer_app/src/features/channel/components/ChannelSearchResults.module.css:.messageItem:hover .actionButtons"]["rust"]["matches"], ["fluxer_client/app/src/ui/search_panel.rs"])
+            self.assertEqual(by_id["hover_only:fluxer_app/src/features/channel/components/FavoritesChannelListContent.module.css:.favoriteItem:hover .hoverAffordance"]["status"], "missing")
+            self.assertEqual(by_id["hover_only:fluxer_app/src/features/app/components/dialogs/shared/SettingsModalLayout.module.css:.sidebarItem:hover:not(.sidebarItemSelected) .sidebarItemChevron"]["status"], "present")
+            self.assertEqual(by_id["hover_only:fluxer_app/src/features/app/components/dialogs/shared/SettingsModalLayout.module.css:.sidebarItem[data-expandable='true']:hover .sidebarItemAttentionDot"]["status"], "missing")
+            self.assertEqual(by_id["hover_only:fluxer_app/src/features/app/components/layout/UserArea.module.css:.userInfo:hover .hoverRoll .defaultState"]["status"], "present")
+            self.assertEqual(by_id["hover_only:fluxer_app/src/features/app/components/layout/UserArea.module.css:.userInfo:hover .hoverRoll .hovered"]["status"], "present")
+            self.assertEqual(by_id["hover_only:fluxer_app/src/features/app/components/floating/UserAreaPopout.module.css:.container:hover .copyUsernameButton"]["status"], "present")
+            self.assertEqual(by_id["hover_only:fluxer_app/src/features/app/components/floating/UnreadChannelsContent.module.css:.messageRow:hover .messageActions"]["status"], "present")
+            self.assertEqual(by_id["hover_only:fluxer_app/src/features/channel/components/MemberListItem.module.css:.button:hover"]["status"], "present")
+            self.assertEqual(by_id["hover_only:fluxer_app/src/features/channel/components/friends/FriendListItem.module.css:.friendListItem:hover .friendTag"]["status"], "present")
 
 
 def run_selftest() -> int:

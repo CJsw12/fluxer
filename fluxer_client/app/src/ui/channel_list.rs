@@ -626,22 +626,11 @@ fn clickable_item(
 fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
     let (muted_fg, fg) = (theme.text_tertiary_muted, theme.foreground);
     let row_group: SharedString = format!("channel-row-{}", c.id.0).into();
-    let perm_right = if c.is_category {
-        76.
-    } else if c.can_manage {
-        32.
-    } else {
-        8.
-    };
     let permissions = match view.place {
         Place::Guild(guild) if c.can_manage_permissions => {
             let channel = c.id;
             Some(div().id(("channel-permissions-wrap", channel.0))
                 .debug_selector(move || format!("channel-permissions-{}", channel.0))
-                .absolute()
-                .right(px(perm_right))
-                .opacity(0.)
-                .group_hover(row_group.clone(), |s| s.opacity(1.))
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .on_click(|_, _, cx| cx.stop_propagation())
                 .child(Button::new(("channel-permissions", channel.0)).ghost().xsmall()
@@ -659,6 +648,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         let cat_id = c.id;
         let create_sel = format!("create-in-category-{}", cat_id.0);
         let edit_sel = format!("edit-channel-{}", cat_id.0);
+        let has_affordances = c.can_manage || permissions.is_some();
         return div()
             .group(row_group.clone())
             .relative()
@@ -684,47 +674,55 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                     .flx_text("app.channel-item-content.category-name", c.name.to_string())
                     .child(c.name.clone()),
             )
-            .when(c.can_manage, |d| {
+            .when(has_affordances, |d| {
                 d.child(
                     div()
-                        .debug_selector(move || create_sel.clone())
-                        .absolute()
-                        .right(px(52.))
-                        .opacity(0.)
-                        .group_hover(row_group.clone(), |s| s.opacity(1.))
-                        .child(
-                            Button::new(("create-in-category", cat_id.0))
-                                .ghost()
-                                .xsmall()
-                                .icon(AppIcon::Plus)
-                                .tooltip(l10n::tr("Create channel"))
-                                .accessibility_label(l10n::tr("Create channel"))
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.open_create_channel(Some(cat_id), window, cx);
-                                })),
-                        ),
-                )
-                .child(
-                    div()
-                        .debug_selector(move || edit_sel.clone())
+                        .id(("category-hover-affordance", cat_id.0))
                         .absolute()
                         .right(px(28.))
+                        .top_0()
+                        .bottom_0()
+                        .flex()
+                        .flex_row_reverse()
+                        .items_center()
+                        .gap(px(2.))
                         .opacity(0.)
                         .group_hover(row_group.clone(), |s| s.opacity(1.))
-                        .child(
-                            Button::new(("edit-channel", cat_id.0))
-                                .ghost()
-                                .xsmall()
-                                .icon(AppIcon::Gear)
-                                .tooltip(l10n::tr("Category settings"))
-                                .accessibility_label(l10n::tr("Category settings"))
-                                .on_click(cx.listener(move |this, _, window, cx| {
-                                    this.open_edit_channel(cat_id, window, cx);
-                                })),
-                        ),
+                        .when(c.can_manage, |d| {
+                            d.child(
+                                div()
+                                    .debug_selector(move || edit_sel.clone())
+                                    .child(
+                                        Button::new(("edit-channel", cat_id.0))
+                                            .ghost()
+                                            .xsmall()
+                                            .icon(AppIcon::Gear)
+                                            .tooltip(l10n::tr("Category settings"))
+                                            .accessibility_label(l10n::tr("Category settings"))
+                                            .on_click(cx.listener(move |this, _, window, cx| {
+                                                this.open_edit_channel(cat_id, window, cx);
+                                            })),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .debug_selector(move || create_sel.clone())
+                                    .child(
+                                        Button::new(("create-in-category", cat_id.0))
+                                            .ghost()
+                                            .xsmall()
+                                            .icon(AppIcon::Plus)
+                                            .tooltip(l10n::tr("Create channel"))
+                                            .accessibility_label(l10n::tr("Create channel"))
+                                            .on_click(cx.listener(move |this, _, window, cx| {
+                                                this.open_create_channel(Some(cat_id), window, cx);
+                                            })),
+                                    ),
+                            )
+                        })
+                        .children(permissions),
                 )
             })
-            .children(permissions)
             .child(
                 div()
                     .flex_none()
@@ -896,31 +894,73 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
     } else if highlight_unread {
         row = row.child(div().text_color(fg).child("•"));
     }
-    if can_edit_row {
+    let voice_members = if is_voice {
+        view.voice.members_in_channel(c.id)
+    } else {
+        Vec::new()
+    };
+    if is_voice && !voice_members.is_empty() {
+        let count_label = format!("{}", voice_members.len());
+        let hover_affordances_active = can_edit_row || matches!(view.place, Place::Guild(_) if c.can_manage_permissions);
+        row = row.child(
+            div()
+                .mr(px(8.))
+                .px(px(6.))
+                .h(px(16.))
+                .rounded(px(8.))
+                .bg(theme.background_modifier_accent)
+                .flex()
+                .flex_none()
+                .items_center()
+                .justify_center()
+                .text_size(px(11.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(muted_fg)
+                .flx("app.channel-item.voice-user-count")
+                .when(!hover_affordances_active, |d| {
+                    d.group_hover(row_group.clone(), |s| s.opacity(0.))
+                })
+                .child(count_label),
+        );
+    }
+    if can_edit_row || permissions.is_some() {
         let ch_id = c.id;
         let edit_sel = format!("edit-channel-{}", ch_id.0);
         row = row.child(
             div()
-                .id(("edit-channel-wrap", ch_id.0))
-                .debug_selector(move || edit_sel.clone())
+                .id(("channel-hover-affordance", ch_id.0))
                 .absolute()
                 .right(px(8.))
-                .opacity(0.)
-                .group_hover(row_group, |s| s.opacity(1.))
-                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                .on_click(|_, _, cx| cx.stop_propagation())
-                .child(
-                    Button::new(("edit-channel", ch_id.0))
-                        .ghost()
-                        .xsmall()
-                        .icon(AppIcon::Gear)
-                        .tooltip(l10n::tr("Channel settings"))
-                        .accessibility_label(l10n::tr("Channel settings"))
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            cx.stop_propagation();
-                            this.open_edit_channel(ch_id, window, cx);
-                        })),
-                ),
+                .top_0()
+                .bottom_0()
+                .flex()
+                .flex_row_reverse()
+                .items_center()
+                .gap(px(4.))
+                .opacity(if selected { 1. } else { 0. })
+                .when(!selected, |d| d.group_hover(row_group, |s| s.opacity(1.)))
+                .when(can_edit_row, |d| {
+                    d.child(
+                        div()
+                            .id(("edit-channel-wrap", ch_id.0))
+                            .debug_selector(move || edit_sel.clone())
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .on_click(|_, _, cx| cx.stop_propagation())
+                            .child(
+                                Button::new(("edit-channel", ch_id.0))
+                                    .ghost()
+                                    .xsmall()
+                                    .icon(AppIcon::Gear)
+                                    .tooltip(l10n::tr("Channel settings"))
+                                    .accessibility_label(l10n::tr("Channel settings"))
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        cx.stop_propagation();
+                                        this.open_edit_channel(ch_id, window, cx);
+                                    })),
+                            ),
+                    )
+                })
+                .children(permissions),
         );
     }
     if c.has_messages {
@@ -930,11 +970,10 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
         let id = c.id;
         row = row.on_click(cx.listener(move |this, _, _, cx| this.join_voice_channel(id, cx)));
     }
-    let row = row.children(permissions);
     if !is_voice {
         return row.into_any_element();
     }
-    let members = view.voice.members_in_channel(c.id);
+    let members = voice_members;
     if members.is_empty() {
         return row.into_any_element();
     }

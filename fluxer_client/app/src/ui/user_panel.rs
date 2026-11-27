@@ -160,6 +160,17 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     };
 
 
+    // Only roll the status line on hover when a custom status is active; swapping
+    // "Online" for the username exceeds the 150px phantom-hover guard (174px).
+    let has_custom_status = false;
+    let hover_username = {
+        let state = view.backend.state();
+        state
+            .current_user
+            .as_ref()
+            .map(|u| u.username.clone())
+            .unwrap_or_else(|| name.to_string())
+    };
     let mut status_color_text = theme.muted_foreground;
     status_color_text.a = 0.85;
 
@@ -193,6 +204,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .child(
                     div()
                         .id("user-panel-profile")
+                        .group("user-panel-profile-group")
                         .debug_selector(|| "user-panel-profile".to_owned())
                         .flex()
                         .flex_row()
@@ -261,6 +273,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 )
                                 .child(
                                     div()
+                                        .relative()
                                         .flex()
                                         .flex_row()
                                         .w_full()
@@ -273,9 +286,27 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                                 .line_height(px(14.))
                                                 .font_weight(FontWeight::MEDIUM)
                                                 .text_color(status_color_text)
+                                                .when(has_custom_status, |d| {
+                                                    d.group_hover("user-panel-profile-group", |s| s.opacity(0.))
+                                                })
                                                 .flx("app.user-area.user-area-inner.user-status-label")
                                                 .child(label),
-                                        ),
+                                        )
+                                        .when(has_custom_status, |d| {
+                                            d.child(
+                                                div()
+                                                    .absolute()
+                                                    .inset_0()
+                                                    .truncate()
+                                                    .text_size(px(11.))
+                                                    .line_height(px(14.))
+                                                    .font_weight(FontWeight::MEDIUM)
+                                                    .text_color(status_color_text)
+                                                    .opacity(0.)
+                                                    .group_hover("user-panel-profile-group", |s| s.opacity(1.))
+                                                    .child(hover_username),
+                                            )
+                                        }),
                                 ),
                         ),
                 )
@@ -523,6 +554,8 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                 )
                 .child(
                     div()
+                        .id("user-area-popout-username-row")
+                        .group("user-area-popout-username")
                         .h(px(20.))
                         .flex()
                         .flex_row()
@@ -539,6 +572,8 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                                 .flex()
                                 .items_center()
                                 .justify_center()
+                                .opacity(0.)
+                                .group_hover("user-area-popout-username", |s| s.opacity(1.))
                                 .hover(|s| s.bg(theme.hover_bg))
                                 .flx("app.floating.user-area-popout.copy-username-button.copy-user-tag")
                                 .on_click(cx.listener(move |_, _, _, cx| {

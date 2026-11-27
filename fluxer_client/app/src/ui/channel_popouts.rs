@@ -1432,9 +1432,9 @@ fn render_inbox(
 
     let body: AnyElement = match tab {
         InboxTab::Unread => {
-            let unread_channels: Vec<(Snowflake, String, u32)> = {
+            let unread_channels: Vec<(Snowflake, String, u32, Option<Snowflake>)> = {
                 let state = view.backend.state();
-                let mut rows: Vec<(Snowflake, String, u32)> = state
+                let mut rows: Vec<(Snowflake, String, u32, Option<Snowflake>)> = state
                     .channels
                     .values()
                     .filter(|c| c.kind.has_messages() && state.can_view_channel(c.id))
@@ -1444,10 +1444,10 @@ fn render_inbox(
                             return None;
                         }
                         let name = c.name.clone().unwrap_or_else(|| format!("channel-{}", c.id.0));
-                        Some((c.id, format!("# {name}"), u.mention_count))
+                        Some((c.id, format!("# {name}"), u.mention_count, c.last_message_id))
                     })
                     .collect();
-                rows.sort_by_key(|(id, _, _)| *id);
+                rows.sort_by_key(|(id, _, _, _)| *id);
                 rows
             };
             if unread_channels.is_empty() {
@@ -1486,9 +1486,11 @@ fn render_inbox(
                     .flex()
                     .flex_col()
                     .gap_1()
-                    .children(unread_channels.into_iter().map(|(cid, title, mentions)| {
+                    .children(unread_channels.into_iter().map(|(cid, title, mentions, last_message_id)| {
+                        let row_group = SharedString::from(format!("inbox-unread-row-{}", cid.0));
                         div()
                             .id(SharedString::from(format!("inbox-unread-{}", cid.0)))
+                            .group(row_group.clone())
                             .px_3()
                             .py_2()
                             .rounded(px(6.))
@@ -1498,12 +1500,47 @@ fn render_inbox(
                             .flex_row()
                             .items_center()
                             .justify_between()
+                            .gap_2()
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.open_channel(None, cid, cx);
                                 this.close_overlay(window, cx);
                             }))
-                            .child(div().text_sm().text_color(theme.foreground).child(title))
-                            .when(mentions > 0, |d| d.child(crate::ui::badge(mentions, theme)))
+                            .child(div().flex_1().min_w_0().truncate().text_sm().text_color(theme.foreground).child(title))
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap_1()
+                                    .when(mentions > 0, |d| d.child(crate::ui::badge(mentions, theme)))
+                                    .when_some(last_message_id, |d, last| {
+                                        d.child(
+                                            div()
+                                                .id(SharedString::from(format!("inbox-unread-actions-{}", cid.0)))
+                                                .flex()
+                                                .flex_row()
+                                                .items_center()
+                                                .gap_1()
+                                                .opacity(0.)
+                                                .group_hover(row_group, |s| s.opacity(1.))
+                                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                                                .on_click(|_, _, cx| cx.stop_propagation())
+                                                .child(
+                                                    Button::new(("inbox-unread-ack", cid.0))
+                                                        .ghost()
+                                                        .xsmall()
+                                                        .icon(AppIcon::Check)
+                                                        .tooltip(l10n::tr("Mark as read"))
+                                                        .accessibility_label(l10n::tr("Mark as read"))
+                                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                                            cx.stop_propagation();
+                                                            this.backend.ack(cid, last);
+                                                            this.refresh(cx);
+                                                        })),
+                                                ),
+                                        )
+                                    }),
+                            )
                     }))
                     .into_any_element()
             }

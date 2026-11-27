@@ -14,9 +14,9 @@
   "summary": {
     "total": {
       "total": 770,
-      "present": 91,
-      "missing": 605,
-      "differs": 74
+      "present": 127,
+      "missing": 588,
+      "differs": 55
     },
     "by_category": {
       "resize_drag": {
@@ -39,15 +39,15 @@
       },
       "keybinds": {
         "total": 108,
-        "present": 34,
-        "missing": 42,
-        "differs": 32
+        "present": 59,
+        "missing": 30,
+        "differs": 19
       },
       "hover_only": {
         "total": 63,
-        "present": 4,
-        "missing": 49,
-        "differs": 10
+        "present": 15,
+        "missing": 44,
+        "differs": 4
       }
     }
   },
@@ -844,7 +844,7 @@
       "rust": {
         "status": "differs",
         "matches": [
-          "fluxer_client/app/src/ui/channel_list.rs:684"
+          "fluxer_client/app/src/ui/channel_list.rs:674"
         ],
         "reason": "flx 'app.channel-item-content.category-name' exists in Rust without tooltip call"
       }
@@ -956,7 +956,7 @@
       "rust": {
         "status": "differs",
         "matches": [
-          "fluxer_client/app/src/ui/user_panel.rs:291"
+          "fluxer_client/app/src/ui/user_panel.rs:315"
         ],
         "reason": "flx 'app.user-area.user-area-inner.controls-container' exists in Rust without tooltip call"
       }
@@ -1030,7 +1030,7 @@
       "rust": {
         "status": "differs",
         "matches": [
-          "fluxer_client/app/src/ui/channel_list.rs:1007"
+          "fluxer_client/app/src/ui/channel_list.rs:1046"
         ],
         "reason": "flx 'app.voice-state-icons.container' exists in Rust without tooltip call"
       }
@@ -6779,7 +6779,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_list.rs:968"
+          "fluxer_client/app/src/ui/channel_list.rs:1007"
         ],
         "reason": "matched data-flx 'app.voice-participant-item.participant-row.click' with right-click/context-menu handler"
       }
@@ -9219,7 +9219,7 @@
         "status": "present",
         "matches": [
           "fluxer_client/app/src/ui/channel_popouts.rs:1034",
-          "fluxer_client/app/src/ui/channel_popouts.rs:1880",
+          "fluxer_client/app/src/ui/channel_popouts.rs:1917",
           "fluxer_client/app/src/ui/channel_popouts.rs:821"
         ],
         "reason": "matched data-flx 'ui.action-menu.context-menu.sub-menu.submenu-caret' with right-click/context-menu handler"
@@ -11573,13 +11573,13 @@
         "section": "messages",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11613,13 +11613,13 @@
         "section": "messages",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11633,13 +11633,13 @@
         "section": "messages",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11653,13 +11653,13 @@
         "section": "messages",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11673,13 +11673,13 @@
         "section": "messages",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11693,13 +11693,13 @@
         "section": "messages",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11713,13 +11713,13 @@
         "section": "messages",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11733,13 +11733,13 @@
         "section": "messages",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11753,13 +11753,13 @@
         "section": "messages",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11773,13 +11773,13 @@
         "section": "messages",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11793,13 +11793,13 @@
         "section": "messages",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11813,13 +11813,13 @@
         "section": "messages",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11833,13 +11833,13 @@
         "section": "messages",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11989,11 +11989,13 @@
         "section": "navigation",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12047,11 +12049,13 @@
         "section": "navigation",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12065,11 +12069,13 @@
         "section": "navigation",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12083,11 +12089,13 @@
         "section": "navigation",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12101,11 +12109,13 @@
         "section": "navigation",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12119,11 +12129,13 @@
         "section": "navigation",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12137,11 +12149,13 @@
         "section": "navigation",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12155,11 +12169,13 @@
         "section": "navigation",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12173,11 +12189,13 @@
         "section": "navigation",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12191,11 +12209,13 @@
         "section": "navigation",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12209,11 +12229,13 @@
         "section": "navigation",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12227,11 +12249,13 @@
         "section": "navigation",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -13135,11 +13159,13 @@
           "opacity: 1"
         ]
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no hover-only visibility transition matched for settingsmodallayout"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/settings/sidebar.rs"
+        ],
+        "reason": "sidebarItemChevron hover opacity implemented in settings/sidebar.rs"
       }
     },
     {
@@ -13158,7 +13184,7 @@
       "rust": {
         "status": "missing",
         "matches": [],
-        "reason": "no hover-only visibility transition matched for settingsmodallayout"
+        "reason": "sidebarItemAttentionDot element not present in settings/sidebar.rs"
       }
     },
     {
@@ -13173,13 +13199,13 @@
           "display: flex"
         ]
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_list.rs"
+          "fluxer_client/app/src/ui/channel_popouts.rs"
         ],
-        "reason": "partial hover state in channel_list.rs"
+        "reason": "Unread messageActions hover group implemented in channel_popouts.rs"
       }
     },
     {
@@ -13194,11 +13220,13 @@
           "opacity: 1"
         ]
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no hover-only visibility transition matched for userareapopout"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/user_panel.rs"
+        ],
+        "reason": "copyUsernameButton hover opacity implemented in user_panel.rs"
       }
     },
     {
@@ -13213,13 +13241,13 @@
           "display: flex"
         ]
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/ui/channel_list.rs"
         ],
-        "reason": "partial hover state in channel_list.rs"
+        "reason": "hoverAffordance group_hover implemented in channel_list.rs"
       }
     },
     {
@@ -13234,13 +13262,13 @@
           "display: flex"
         ]
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/ui/channel_list.rs"
         ],
-        "reason": "partial hover state in channel_list.rs"
+        "reason": "voiceUserCount hover visibility implemented in channel_list.rs"
       }
     },
     {
@@ -13255,13 +13283,13 @@
           "display: none"
         ]
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/ui/channel_list.rs"
         ],
-        "reason": "partial hover state in channel_list.rs"
+        "reason": "voiceUserCount hover visibility implemented in channel_list.rs"
       }
     },
     {
@@ -13276,13 +13304,11 @@
           "display: flex"
         ]
       },
-      "status": "differs",
+      "status": "missing",
       "rust": {
-        "status": "differs",
-        "matches": [
-          "fluxer_client/app/src/ui/channel_list.rs"
-        ],
-        "reason": "partial hover state in channel_list.rs"
+        "status": "missing",
+        "matches": [],
+        "reason": "Favorites channel list view is not implemented in Rust"
       }
     },
     {
@@ -13316,11 +13342,13 @@
           "opacity: 0"
         ]
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no hover-only visibility transition matched for userarea"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/user_panel.rs"
+        ],
+        "reason": "hoverRoll defaultState/hovered transition implemented in user_panel.rs"
       }
     },
     {
@@ -13335,11 +13363,13 @@
           "opacity: 1"
         ]
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no hover-only visibility transition matched for userarea"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/user_panel.rs"
+        ],
+        "reason": "hoverRoll defaultState/hovered transition implemented in user_panel.rs"
       }
     },
     {
@@ -13459,13 +13489,13 @@
           "display: flex"
         ]
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_list.rs"
+          "fluxer_client/app/src/ui/search_panel.rs"
         ],
-        "reason": "partial hover state in channel_list.rs"
+        "reason": "search result actionButtons hover group implemented in search_panel.rs"
       }
     },
     {
@@ -13500,11 +13530,13 @@
           "opacity: 1"
         ]
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no hover-only visibility transition matched for memberlistitem"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/member_list.rs"
+        ],
+        "reason": "member row hover opacity(1) implemented in member_list.rs"
       }
     },
     {
@@ -13640,11 +13672,13 @@
           "opacity: 1"
         ]
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no hover-only visibility transition matched for friendlistitem"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/friends.rs"
+        ],
+        "reason": "friendTag hover opacity implemented in friends.rs"
       }
     },
     {
@@ -14677,7 +14711,7 @@
       "official_file": "fluxer_app/src/features/app/components/layout/ChannelItemContent.tsx",
       "official_line": 48,
       "rust_matches": [
-        "fluxer_client/app/src/ui/channel_list.rs:684"
+        "fluxer_client/app/src/ui/channel_list.rs:674"
       ]
     },
     {
@@ -14741,7 +14775,7 @@
       "official_file": "fluxer_app/src/features/app/components/layout/UserArea.tsx",
       "official_line": 333,
       "rust_matches": [
-        "fluxer_client/app/src/ui/user_panel.rs:291"
+        "fluxer_client/app/src/ui/user_panel.rs:315"
       ]
     },
     {
@@ -14783,7 +14817,7 @@
       "official_file": "fluxer_app/src/features/app/components/layout/VoiceStateIcons.tsx",
       "official_line": 65,
       "rust_matches": [
-        "fluxer_client/app/src/ui/channel_list.rs:1007"
+        "fluxer_client/app/src/ui/channel_list.rs:1046"
       ]
     },
     {
@@ -19991,18 +20025,6 @@
       "rust_matches": []
     },
     {
-      "id": "action:keybinds:message_copy_text",
-      "item_id": "keybinds:message_copy_text",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] message_copy_text: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 408,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
       "id": "action:keybinds:message_delete",
       "item_id": "keybinds:message_delete",
       "category": "keybinds",
@@ -20010,150 +20032,6 @@
       "title": "[keybinds/differs] message_delete: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
       "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
       "official_line": 336,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:message_edit",
-      "item_id": "keybinds:message_edit",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] message_edit: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 328,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:message_edit_next",
-      "item_id": "keybinds:message_edit_next",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] message_edit_next: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 386,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:message_edit_prev",
-      "item_id": "keybinds:message_edit_prev",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] message_edit_prev: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 380,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:message_focus_textarea",
-      "item_id": "keybinds:message_focus_textarea",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] message_focus_textarea: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 424,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:message_forward",
-      "item_id": "keybinds:message_forward",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] message_forward: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 392,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:message_mark_unread",
-      "item_id": "keybinds:message_mark_unread",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] message_mark_unread: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 416,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:message_pin",
-      "item_id": "keybinds:message_pin",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] message_pin: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 344,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:message_react",
-      "item_id": "keybinds:message_react",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] message_react: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 352,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:message_reply",
-      "item_id": "keybinds:message_reply",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] message_reply: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 360,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:message_reply_next",
-      "item_id": "keybinds:message_reply_next",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] message_reply_next: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 374,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:message_reply_prev",
-      "item_id": "keybinds:message_reply_prev",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] message_reply_prev: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 368,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:message_speak",
-      "item_id": "keybinds:message_speak",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] message_speak: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 400,
       "rust_matches": [
         "fluxer_client/app/src/shortcuts.rs"
       ]
@@ -20189,126 +20067,6 @@
       "rust_matches": [
         "fluxer_client/app/src/shortcuts.rs"
       ]
-    },
-    {
-      "id": "action:keybinds:nav_current_call",
-      "item_id": "keybinds:nav_current_call",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] nav_current_call: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 495,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:nav_guild_slot_1",
-      "item_id": "keybinds:nav_guild_slot_1",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] nav_guild_slot_1: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 519,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:nav_guild_slot_2",
-      "item_id": "keybinds:nav_guild_slot_2",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] nav_guild_slot_2: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 525,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:nav_guild_slot_3",
-      "item_id": "keybinds:nav_guild_slot_3",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] nav_guild_slot_3: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 531,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:nav_guild_slot_4",
-      "item_id": "keybinds:nav_guild_slot_4",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] nav_guild_slot_4: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 537,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:nav_guild_slot_5",
-      "item_id": "keybinds:nav_guild_slot_5",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] nav_guild_slot_5: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 543,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:nav_guild_slot_6",
-      "item_id": "keybinds:nav_guild_slot_6",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] nav_guild_slot_6: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 549,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:nav_guild_slot_7",
-      "item_id": "keybinds:nav_guild_slot_7",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] nav_guild_slot_7: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 555,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:nav_guild_slot_8",
-      "item_id": "keybinds:nav_guild_slot_8",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] nav_guild_slot_8: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 561,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:nav_guild_slot_9",
-      "item_id": "keybinds:nav_guild_slot_9",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] nav_guild_slot_9: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 567,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:nav_guild_tab_next",
-      "item_id": "keybinds:nav_guild_tab_next",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] nav_guild_tab_next: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 513,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:nav_guild_tab_prev",
-      "item_id": "keybinds:nav_guild_tab_prev",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] nav_guild_tab_prev: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 507,
-      "rust_matches": []
     },
     {
       "id": "action:keybinds:nav_quick_switcher_accounts",
@@ -20679,94 +20437,24 @@
       "rust_matches": []
     },
     {
-      "id": "action:hover_only:fluxer_app/src/features/app/components/dialogs/shared/SettingsModalLayout.module.css:.sidebarItemSelected .sidebarItemChevron, .sidebarItem[aria-expanded='true'] .sidebarItemChevron, .sidebarItem:hover:not(.sidebarItemSelected) .sidebarItemChevron, .sidebarItem.sidebarItemFocused .sidebarItemChevron",
-      "item_id": "hover_only:fluxer_app/src/features/app/components/dialogs/shared/SettingsModalLayout.module.css:.sidebarItemSelected .sidebarItemChevron, .sidebarItem[aria-expanded='true'] .sidebarItemChevron, .sidebarItem:hover:not(.sidebarItemSelected) .sidebarItemChevron, .sidebarItem.sidebarItemFocused .sidebarItemChevron",
-      "category": "hover_only",
-      "status": "missing",
-      "title": "[hover_only/missing] SettingsModalLayout.module:.sidebarItemSelected .sidebarItemChevron, .sidebarItem[aria-expanded='true'] .sidebarItemChevron, .sidebarItem:hover:not(.sidebarItemSelected) .sidebarItemChevron, .sidebarItem.sidebarItemFocused .sidebarItemChevron: no hover-only visibility transition matched for settingsmodallayout",
-      "official_file": "fluxer_app/src/features/app/components/dialogs/shared/SettingsModalLayout.module.css",
-      "official_line": 403,
-      "rust_matches": []
-    },
-    {
       "id": "action:hover_only:fluxer_app/src/features/app/components/dialogs/shared/SettingsModalLayout.module.css:.sidebarItem[data-expandable='true'].sidebarItemSelected .sidebarItemAttentionDot, .sidebarItem[data-expandable='true'][aria-expanded='true'] .sidebarItemAttentionDot, .sidebarItem[data-expandable='true']:hover .sidebarItemAttentionDot, .sidebarItem[data-expandable='true'].sidebarItemFocused .sidebarItemAttentionDot",
       "item_id": "hover_only:fluxer_app/src/features/app/components/dialogs/shared/SettingsModalLayout.module.css:.sidebarItem[data-expandable='true'].sidebarItemSelected .sidebarItemAttentionDot, .sidebarItem[data-expandable='true'][aria-expanded='true'] .sidebarItemAttentionDot, .sidebarItem[data-expandable='true']:hover .sidebarItemAttentionDot, .sidebarItem[data-expandable='true'].sidebarItemFocused .sidebarItemAttentionDot",
       "category": "hover_only",
       "status": "missing",
-      "title": "[hover_only/missing] SettingsModalLayout.module:.sidebarItem[data-expandable='true'].sidebarItemSelected .sidebarItemAttentionDot, .sidebarItem[data-expandable='true'][aria-expanded='true'] .sidebarItemAttentionDot, .sidebarItem[data-expandable='true']:hover .sidebarItemAttentionDot, .sidebarItem[data-expandable='true'].sidebarItemFocused .sidebarItemAttentionDot: no hover-only visibility transition matched for settingsmodallayout",
+      "title": "[hover_only/missing] SettingsModalLayout.module:.sidebarItem[data-expandable='true'].sidebarItemSelected .sidebarItemAttentionDot, .sidebarItem[data-expandable='true'][aria-expanded='true'] .sidebarItemAttentionDot, .sidebarItem[data-expandable='true']:hover .sidebarItemAttentionDot, .sidebarItem[data-expandable='true'].sidebarItemFocused .sidebarItemAttentionDot: sidebarItemAttentionDot element not present in settings/sidebar.rs",
       "official_file": "fluxer_app/src/features/app/components/dialogs/shared/SettingsModalLayout.module.css",
       "official_line": 387,
       "rust_matches": []
     },
     {
-      "id": "action:hover_only:fluxer_app/src/features/app/components/floating/UnreadChannelsContent.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .messageRow:hover .messageActions",
-      "item_id": "hover_only:fluxer_app/src/features/app/components/floating/UnreadChannelsContent.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .messageRow:hover .messageActions",
-      "category": "hover_only",
-      "status": "differs",
-      "title": "[hover_only/differs] UnreadChannelsContent.module::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .messageRow:hover .messageActions: partial hover state in channel_list.rs",
-      "official_file": "fluxer_app/src/features/app/components/floating/UnreadChannelsContent.module.css",
-      "official_line": 118,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/channel_list.rs"
-      ]
-    },
-    {
-      "id": "action:hover_only:fluxer_app/src/features/app/components/floating/UserAreaPopout.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .container:hover .copyUsernameButton, .container:focus-within .copyUsernameButton",
-      "item_id": "hover_only:fluxer_app/src/features/app/components/floating/UserAreaPopout.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .container:hover .copyUsernameButton, .container:focus-within .copyUsernameButton",
-      "category": "hover_only",
-      "status": "missing",
-      "title": "[hover_only/missing] UserAreaPopout.module::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .container:hover .copyUsernameButton, .container:focus-within .copyUsernameButton: no hover-only visibility transition matched for userareapopout",
-      "official_file": "fluxer_app/src/features/app/components/floating/UserAreaPopout.module.css",
-      "official_line": 61,
-      "rust_matches": []
-    },
-    {
-      "id": "action:hover_only:fluxer_app/src/features/app/components/layout/ChannelItem.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .channelItemCategory:hover .hoverAffordance, :global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .channelItemHoverable:hover .hoverAffordance",
-      "item_id": "hover_only:fluxer_app/src/features/app/components/layout/ChannelItem.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .channelItemCategory:hover .hoverAffordance, :global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .channelItemHoverable:hover .hoverAffordance",
-      "category": "hover_only",
-      "status": "differs",
-      "title": "[hover_only/differs] ChannelItem.module::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .channelItemCategory:hover .hoverAffordance, :global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .channelItemHoverable:hover .hoverAffordance: partial hover state in channel_list.rs",
-      "official_file": "fluxer_app/src/features/app/components/layout/ChannelItem.module.css",
-      "official_line": 286,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/channel_list.rs"
-      ]
-    },
-    {
-      "id": "action:hover_only:fluxer_app/src/features/app/components/layout/ChannelItem.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .channelItemVoice.channelItemHoverAffordancesActive:hover .voiceUserCount",
-      "item_id": "hover_only:fluxer_app/src/features/app/components/layout/ChannelItem.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .channelItemVoice.channelItemHoverAffordancesActive:hover .voiceUserCount",
-      "category": "hover_only",
-      "status": "differs",
-      "title": "[hover_only/differs] ChannelItem.module::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .channelItemVoice.channelItemHoverAffordancesActive:hover .voiceUserCount: partial hover state in channel_list.rs",
-      "official_file": "fluxer_app/src/features/app/components/layout/ChannelItem.module.css",
-      "official_line": 382,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/channel_list.rs"
-      ]
-    },
-    {
-      "id": "action:hover_only:fluxer_app/src/features/app/components/layout/ChannelItem.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .channelItemVoice:hover .voiceUserCount",
-      "item_id": "hover_only:fluxer_app/src/features/app/components/layout/ChannelItem.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .channelItemVoice:hover .voiceUserCount",
-      "category": "hover_only",
-      "status": "differs",
-      "title": "[hover_only/differs] ChannelItem.module::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .channelItemVoice:hover .voiceUserCount: partial hover state in channel_list.rs",
-      "official_file": "fluxer_app/src/features/app/components/layout/ChannelItem.module.css",
-      "official_line": 372,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/channel_list.rs"
-      ]
-    },
-    {
       "id": "action:hover_only:fluxer_app/src/features/app/components/layout/FavoritesChannelListContent.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .favoriteItem:hover .hoverAffordance, :global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .categoryItem:hover .categoryActions .hoverAffordance",
       "item_id": "hover_only:fluxer_app/src/features/app/components/layout/FavoritesChannelListContent.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .favoriteItem:hover .hoverAffordance, :global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .categoryItem:hover .categoryActions .hoverAffordance",
       "category": "hover_only",
-      "status": "differs",
-      "title": "[hover_only/differs] FavoritesChannelListContent.module::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .favoriteItem:hover .hoverAffordance, :global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .categoryItem:hover .categoryActions .hoverAffordance: partial hover state in channel_list.rs",
+      "status": "missing",
+      "title": "[hover_only/missing] FavoritesChannelListContent.module::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .favoriteItem:hover .hoverAffordance, :global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .categoryItem:hover .categoryActions .hoverAffordance: Favorites channel list view is not implemented in Rust",
       "official_file": "fluxer_app/src/features/app/components/layout/FavoritesChannelListContent.module.css",
       "official_line": 249,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/channel_list.rs"
-      ]
+      "rust_matches": []
     },
     {
       "id": "action:hover_only:fluxer_app/src/features/app/components/layout/SidebarResizeHandle.module.css:.handle:hover .indicator, .handle:focus-visible .indicator",
@@ -20776,26 +20464,6 @@
       "title": "[hover_only/missing] SidebarResizeHandle.module:.handle:hover .indicator, .handle:focus-visible .indicator: no hover-only visibility transition matched for sidebarresizehandle",
       "official_file": "fluxer_app/src/features/app/components/layout/SidebarResizeHandle.module.css",
       "official_line": 35,
-      "rust_matches": []
-    },
-    {
-      "id": "action:hover_only:fluxer_app/src/features/app/components/layout/UserArea.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .userInfo:hover .hoverRoll .defaultState",
-      "item_id": "hover_only:fluxer_app/src/features/app/components/layout/UserArea.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .userInfo:hover .hoverRoll .defaultState",
-      "category": "hover_only",
-      "status": "missing",
-      "title": "[hover_only/missing] UserArea.module::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .userInfo:hover .hoverRoll .defaultState: no hover-only visibility transition matched for userarea",
-      "official_file": "fluxer_app/src/features/app/components/layout/UserArea.module.css",
-      "official_line": 156,
-      "rust_matches": []
-    },
-    {
-      "id": "action:hover_only:fluxer_app/src/features/app/components/layout/UserArea.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .userInfo:hover .hoverRoll .hovered",
-      "item_id": "hover_only:fluxer_app/src/features/app/components/layout/UserArea.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .userInfo:hover .hoverRoll .hovered",
-      "category": "hover_only",
-      "status": "missing",
-      "title": "[hover_only/missing] UserArea.module::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .userInfo:hover .hoverRoll .hovered: no hover-only visibility transition matched for userarea",
-      "official_file": "fluxer_app/src/features/app/components/layout/UserArea.module.css",
-      "official_line": 171,
       "rust_matches": []
     },
     {
@@ -20845,18 +20513,6 @@
       ]
     },
     {
-      "id": "action:hover_only:fluxer_app/src/features/channel/components/ChannelSearchResults.module.css:.messageItem:hover .actionButtons",
-      "item_id": "hover_only:fluxer_app/src/features/channel/components/ChannelSearchResults.module.css:.messageItem:hover .actionButtons",
-      "category": "hover_only",
-      "status": "differs",
-      "title": "[hover_only/differs] ChannelSearchResults.module:.messageItem:hover .actionButtons: partial hover state in channel_list.rs",
-      "official_file": "fluxer_app/src/features/channel/components/ChannelSearchResults.module.css",
-      "official_line": 207,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/channel_list.rs"
-      ]
-    },
-    {
       "id": "action:hover_only:fluxer_app/src/features/channel/components/GifPicker.module.css:.gridItemGif:hover .hoverActionButtons",
       "item_id": "hover_only:fluxer_app/src/features/channel/components/GifPicker.module.css:.gridItemGif:hover .hoverActionButtons",
       "category": "hover_only",
@@ -20864,16 +20520,6 @@
       "title": "[hover_only/missing] GifPicker.module:.gridItemGif:hover .hoverActionButtons: no hover-only visibility transition matched for gifpicker",
       "official_file": "fluxer_app/src/features/channel/components/GifPicker.module.css",
       "official_line": 551,
-      "rust_matches": []
-    },
-    {
-      "id": "action:hover_only:fluxer_app/src/features/channel/components/MemberListItem.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .button:hover",
-      "item_id": "hover_only:fluxer_app/src/features/channel/components/MemberListItem.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .button:hover",
-      "category": "hover_only",
-      "status": "missing",
-      "title": "[hover_only/missing] MemberListItem.module::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .button:hover: no hover-only visibility transition matched for memberlistitem",
-      "official_file": "fluxer_app/src/features/channel/components/MemberListItem.module.css",
-      "official_line": 14,
       "rust_matches": []
     },
     {
@@ -20916,16 +20562,6 @@
       "title": "[hover_only/missing] MediaContainer.module::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .mediaContainer:hover .mediaHoverAction: no hover-only visibility transition matched for mediacontainer",
       "official_file": "fluxer_app/src/features/channel/components/embeds/media/MediaContainer.module.css",
       "official_line": 27,
-      "rust_matches": []
-    },
-    {
-      "id": "action:hover_only:fluxer_app/src/features/channel/components/friends/FriendListItem.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .friendListItem:hover .friendTag",
-      "item_id": "hover_only:fluxer_app/src/features/channel/components/friends/FriendListItem.module.css::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .friendListItem:hover .friendTag",
-      "category": "hover_only",
-      "status": "missing",
-      "title": "[hover_only/missing] FriendListItem.module::global(:where(html.window-focused, html.unfocused-fully-interactive):not(.window-focus-activation-guard)) .friendListItem:hover .friendTag: no hover-only visibility transition matched for friendlistitem",
-      "official_file": "fluxer_app/src/features/channel/components/friends/FriendListItem.module.css",
-      "official_line": 97,
       "rust_matches": []
     },
     {

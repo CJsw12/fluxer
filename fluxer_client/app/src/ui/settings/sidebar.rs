@@ -46,6 +46,7 @@ pub(super) fn render_sidebar_tab(
 
     let item_btn = div()
         .id(sel_id)
+        .group(sel_id)
         .debug_selector(move || sel_id.to_owned())
         .w_full()
         .h(px(34.))
@@ -105,6 +106,10 @@ pub(super) fn render_sidebar_tab(
                             .flex()
                             .items_center()
                             .justify_center()
+                            .opacity(if selected || has_tree { 1. } else { 0. })
+                            .when(!selected && !has_tree, |d| {
+                                d.group_hover(sel_id, |s| s.opacity(1.))
+                            })
                             .flx("app.settings-modal-layout.settings-modal-sidebar-item.sidebar-item-chevron")
                             .child(
                                 Icon::new(if has_tree {

@@ -722,6 +722,7 @@ pub fn render(view: &ClientView, theme: &Theme, window: &Window, cx: &mut Contex
             let message_id = hit.message_id;
             let jumpable = hit.jumpable;
 
+            let hit_group = SharedString::from(format!("search-hit-{}", message_id.0));
             let header_row = div()
                 .flex()
                 .flex_row()
@@ -740,13 +741,22 @@ pub fn render(view: &ClientView, theme: &Theme, window: &Window, cx: &mut Contex
                 )
                 .when(jumpable, |d| {
                     d.child(
-                        Button::new(("search-jump", message_id.0))
-                            .ghost()
-                            .small()
-                            .label(l10n::tr("Jump"))
-                            .on_click(cx.listener(move |v, _, _, cx| {
-                                v.jump_to_channel_message(guild_id, channel_id, message_id, cx);
-                            })),
+                        div()
+                            .flex()
+                            .flex_row()
+                            .items_center()
+                            .gap_1()
+                            .opacity(0.)
+                            .group_hover(hit_group.clone(), |s| s.opacity(1.))
+                            .child(
+                                Button::new(("search-jump", message_id.0))
+                                    .ghost()
+                                    .small()
+                                    .label(l10n::tr("Jump"))
+                                    .on_click(cx.listener(move |v, _, _, cx| {
+                                        v.jump_to_channel_message(guild_id, channel_id, message_id, cx);
+                                    })),
+                            ),
                     )
                 });
 
@@ -820,6 +830,7 @@ pub fn render(view: &ClientView, theme: &Theme, window: &Window, cx: &mut Contex
 
             let mut card = div()
                 .id(("search-hit", message_id.0))
+                .group(hit_group)
                 .debug_selector(|| "search-hit".to_owned())
                 .p_2()
                 .rounded(px(6.))

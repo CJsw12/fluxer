@@ -491,8 +491,10 @@ fn render_row(row: &FriendRow, theme: &Theme, cx: &mut Context<ClientView>) -> A
         RelationshipKind::Unknown(_) => {}
     }
 
+    let friend_group = SharedString::from(format!("friend-row-{}", uid.0));
     div()
         .id(("friend-row", uid.0))
+        .group(friend_group.clone())
         .flex()
         .flex_row()
         .items_center()
@@ -542,7 +544,14 @@ fn render_row(row: &FriendRow, theme: &Theme, cx: &mut Context<ClientView>) -> A
                                 .items_center()
                                 .gap_2()
                                 .child(div().font_weight(FontWeight::SEMIBOLD).truncate().child(row.display_name.clone()))
-                                .child(div().text_xs().text_color(theme.muted_foreground).child(row.username_tag.clone())),
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .text_color(theme.muted_foreground)
+                                        .opacity(0.)
+                                        .group_hover(friend_group, |s| s.opacity(1.))
+                                        .child(row.username_tag.clone()),
+                                ),
                         )
                         .child(div().text_xs().text_color(theme.muted_foreground).child(subtitle)),
                 ),

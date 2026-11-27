@@ -52,6 +52,7 @@ ENV_STRIP_PREFIXES = ("ORCA_AGENT_", "ORCA_STRUCTURED_", "ANTIGRAVITY_")
 DEFAULT_STATE_PATH = Path("Logs/handoff/runner_state.json")
 DEFAULT_LOCK_PATH = Path("Logs/handoff/coordinator_runner.lock")
 DEFAULT_OPERATIONS_PATH = Path("Logs/handoff/OPERATIONS.md")
+DEFAULT_RETRO_PATH = Path("Logs/handoff/worker_retro.md")
 DEFAULT_RUNNER_DIR = Path("target/parity-tmp/runner")
 
 EXIT_OK = 0
@@ -421,6 +422,26 @@ class SystemAdapter:
             timeout_sec=30,
         )
 
+    def audit_since(self, started_at: str) -> dict[str, Any] | None:
+        """Run agy_audit.py --since <started_at> --json; return parsed dict or None."""
+        audit_script = Path("tools/agents/agy_audit.py")
+        if not audit_script.is_file():
+            return None
+        try:
+            proc = self.run_cmd(
+                [sys.executable, "-I", str(audit_script), "--since", started_at, "--json"],
+                timeout_sec=30,
+            )
+        except Exception:
+            return None
+        if proc.returncode != 0:
+            return None
+        try:
+            data = json.loads((proc.stdout or "").strip())
+        except json.JSONDecodeError:
+            return None
+        return data if isinstance(data, dict) else None
+
 
 def check_pre_batch_gate(
     *,
@@ -539,12 +560,25 @@ def generate_batch_brief(
 
     history = state.get("history") or []
     prev_summary = "없음 (첫 배치)"
+    prev_next_task = "없음"
     if history:
         last = history[-1]
         prev_summary = (
             f"gen={last.get('generation')}, status={last.get('status')}, "
             f"committed={last.get('committed')}, summary={last.get('summary')}"
         )
+        if last.get("next_task"):
+            prev_next_task = str(last.get("next_task"))
+
+    recent_frictions: list[str] = []
+    for entry in reversed(history):
+        fr = normalize_friction(entry.get("friction"))
+        if fr:
+            recent_frictions.append(f"- gen={entry.get('generation')}: {fr}")
+            if len(recent_frictions) >= 3:
+                break
+    recent_frictions.reverse()
+    friction_block = "\n".join(recent_frictions) if recent_frictions else "- 없음"
 
     feature_failures: dict[str, int] = dict(state.get("feature_failures") or {})
     skip_features = [k for k, v in sorted(feature_failures.items()) if int(v) >= 2]
@@ -592,10 +626,14 @@ def generate_batch_brief(
 - Branch: `{snapshot.branch}`
 - HEAD: `{snapshot.head}`
 - 직전 세대 요약: {prev_summary}
+- 직전 권장 다음 작업: {prev_next_task}
 - 연속 무진전 횟수: {state.get('consecutive_no_progress', 0)} / 2
 - 건너뛰기 목록 (2회 이상 실패): {skip_text}
 - 1회 실패 기능 주의: {warn_text}
 - 게이트 연속 실패 현황: {gate_text}
+
+## 직전 마찰·개선 포인트 (재귀 개선, 2회 반복 시 도구·규칙 우선 보강)
+{friction_block}
 
 ## 내부 위임 원칙
 - 화면 수치 맞추기·구현 위임은 `swarm`에 `gemini-4-hydrogen-medium`을 지정해 맡기십시오.
@@ -626,6 +664,108 @@ def generate_batch_brief(
 
     brief_path.write_text(content, encoding="utf-8", newline="\n")
     return content
+
+
+def normalize_friction(value: Any) -> str | None:
+    """Normalize friction field (str, list[str], or None) into a single-line string."""
+    if value is None:
+        return None
+    if isinstance(value, list):
+        parts = [" ".join(str(x).split()) for x in value if str(x).strip()]
+        joined = "; ".join(parts).strip()
+        return joined or None
+    text = " ".join(str(value).split()).strip()
+    if not text or text.lower() in {"none", "null", "없음", "n/a"}:
+        return None
+    return text
+
+
+def _fmt_duration_short(seconds: int | float) -> str:
+    sec = max(0, int(seconds))
+    m, s = divmod(sec, 60)
+    return f"{m}m{s:02d}s" if m else f"{s}s"
+
+
+def _fmt_tokens_short(n: int) -> str:
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.1f}k"
+    return str(n)
+
+
+def _escape_md_cell(text: str, limit: int = 240) -> str:
+    cleaned = " ".join(text.replace("|", "/").split())
+    if len(cleaned) > limit:
+        return cleaned[: limit - 1] + "…"
+    return cleaned or "-"
+
+
+def append_retro_entry(
+    *,
+    retro_path: Path,
+    generation: int,
+    model: str,
+    effort: str,
+    batch_result: dict[str, Any],
+    committed: bool,
+    audit_data: dict[str, Any] | None,
+) -> None:
+    """Append one batch retrospective row (subjective friction + objective agy_audit KPIs)."""
+    retro_path.parent.mkdir(parents=True, exist_ok=True)
+    if not retro_path.exists():
+        header = (
+            "# 워커 재귀 개선 회고 로그 (로컬 전용, Git 제외)\n\n"
+            "| 날짜 | 작업 | brain / 모델 | 시간 · 스텝 · 토큰 | KPI (`rep` / `>8KB` / `err` / `rework`) | 결과 | Friction (주관+객관) | 반영한 개선 |\n"
+            "|---|---|---|---|---|---|---|---|\n"
+        )
+        retro_path.write_text(header, encoding="utf-8", newline="\n")
+
+    today = dt.datetime.now().strftime("%Y-%m-%d")
+    brain_cell = f"- / `{model}-{effort}`"
+    time_cell = "-"
+    kpi_cell = "- / - / - / -"
+    audit_flags_text = ""
+
+    if isinstance(audit_data, dict):
+        sessions = audit_data.get("sessions") or []
+        if sessions and isinstance(sessions[0], dict):
+            s0 = sessions[0]
+            sid = str(s0.get("id") or "")[:8] or "-"
+            brain_cell = f"`{sid}` / `{model}-{effort}`"
+            dur = _fmt_duration_short(s0.get("duration_seconds") or 0)
+            tools_map = s0.get("tools") or {}
+            steps = sum(int(v) for v in tools_map.values()) if isinstance(tools_map, dict) else 0
+            models_map = s0.get("models") or {}
+            toks = 0
+            if isinstance(models_map, dict):
+                for vals in models_map.values():
+                    if isinstance(vals, list) and len(vals) >= 2:
+                        toks += sum(int(x) for x in vals[1:])
+            time_cell = f"{dur} · {steps}s · {_fmt_tokens_short(toks)}"
+            rep_cnt = len(s0.get("repeated_reads") or [])
+            big_cnt = sum(
+                1 for r in (s0.get("top_results") or []) if isinstance(r, dict) and int(r.get("bytes") or 0) > 8192
+            )
+            err_cnt = int(s0.get("errors") or 0)
+            rework_cnt = 1 if (batch_result.get("failed_gate") or batch_result.get("failed_feature")) else 0
+            kpi_cell = f"{rep_cnt} / {big_cnt} / {err_cnt} / {rework_cnt}"
+            flags = s0.get("flags") or {}
+            if isinstance(flags, dict) and flags:
+                audit_flags_text = f" [audit flags: {', '.join(sorted(flags.keys()))}]"
+
+    friction_str = normalize_friction(batch_result.get("friction")) or "없음"
+    friction_cell = _escape_md_cell(friction_str + audit_flags_text, limit=260)
+    result_cell = _escape_md_cell(
+        f"status={batch_result.get('status')}, committed={committed}", limit=80
+    )
+    next_cell = _escape_md_cell(str(batch_result.get("next_task") or "-"), limit=140)
+    row = (
+        f"| {today} | `Gen {generation}` | {brain_cell} | {time_cell} | "
+        f"{kpi_cell} | {result_cell} | {friction_cell} | {next_cell} |\n"
+    )
+    with retro_path.open("a", encoding="utf-8", newline="\n") as fh:
+        fh.write(row)
 
 
 def evaluate_post_batch(
@@ -686,6 +826,8 @@ def evaluate_post_batch(
             "head_after": post_snapshot.head,
             "failed_gate": failed_gate,
             "failed_feature": failed_feature,
+            "friction": normalize_friction(batch_result.get("friction")),
+            "next_task": batch_result.get("next_task"),
             "summary": batch_result["summary"],
         }
     )
@@ -751,11 +893,17 @@ def run_batches(
     sys_adapter: SystemAdapter | None = None,
     operations_path: Path = DEFAULT_OPERATIONS_PATH,
     runner_dir: Path = DEFAULT_RUNNER_DIR,
+    retro_path: Path | None = DEFAULT_RETRO_PATH,
 ) -> int:
     """Execute --recover, --dry-run, or live batch loop."""
     adapter = sys_adapter or SystemAdapter()
     state_path = Path(args.state_path)
     lock_path = Path(args.lock_path)
+    effective_retro_path = (
+        None
+        if isinstance(adapter, _FakeAdapter) and retro_path == DEFAULT_RETRO_PATH
+        else retro_path
+    )
 
     with ExclusiveFileLock(lock_path):
         if args.recover:
@@ -941,8 +1089,26 @@ def run_batches(
                     allow_dirty=args.allow_dirty,
                     smoke_only=args.smoke_only,
                 )
+                started_at = str((state.get("active_dispatch") or {}).get("started_at") or "")
                 state["active_dispatch"] = None
                 save_state_atomic(state_path, state)
+                if effective_retro_path is not None and not args.smoke_only:
+                    try:
+                        audit_data = adapter.audit_since(started_at) if started_at else None
+                        append_retro_entry(
+                            retro_path=effective_retro_path,
+                            generation=generation,
+                            model=args.model,
+                            effort=args.effort,
+                            batch_result=batch_result,
+                            committed=post_snapshot.head != snapshot.head,
+                            audit_data=audit_data,
+                        )
+                    except Exception as retro_exc:
+                        print(
+                            f"[batch gen={generation}] [warn] worker_retro 기록 실패(무시): {retro_exc}",
+                            file=sys.stderr,
+                        )
                 print(f"[batch gen={generation}] {reason}")
 
                 if not should_continue:
@@ -1004,6 +1170,9 @@ class _FakeAdapter(SystemAdapter):
 
     def close_terminal(self, handle: str) -> None:
         self.terminal_closed = True
+
+    def audit_since(self, started_at: str) -> dict[str, Any] | None:
+        return None
 
     def worker_start(
         self,
@@ -1332,6 +1501,73 @@ class CoordinatorRunnerSelfTests(unittest.TestCase):
                     res_path.write_text(backup, encoding="utf-8")
                 elif res_path.exists():
                     res_path.unlink()
+
+    def test_12_friction_propagates_to_next_brief_and_retro_log(self) -> None:
+        class _AuditAdapter(_FakeAdapter):
+            def audit_since(self, started_at: str) -> dict[str, Any] | None:
+                return {
+                    "sessions": [
+                        {
+                            "id": "abcd1234-5678-90ef",
+                            "duration_seconds": 125,
+                            "tools": {"read_file": 4, "run_command": 3},
+                            "models": {"gemini-4-neon": [7, 10000, 2000]},
+                            "repeated_reads": [{"path": "foo.rs", "count": 3}],
+                            "top_results": [{"bytes": 12000}, {"bytes": 500}],
+                            "errors": 1,
+                            "flags": {},
+                        }
+                    ]
+                }
+
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            runner_dir = tmp / "runner"
+            retro_path = tmp / "worker_retro.md"
+            briefs: list[str] = []
+
+            def _on_start(gen: int, spec_file: Path) -> None:
+                briefs.append(spec_file.read_text(encoding="utf-8"))
+                res_file = runner_dir / f"batch_result_gen_{gen}.json"
+                res_file.parent.mkdir(parents=True, exist_ok=True)
+                res_file.write_text(
+                    json.dumps(
+                        {
+                            "status": "continue" if gen == 1 else "done",
+                            "summary": f"gen {gen} summary",
+                            "next_task": f"next after {gen}" if gen == 1 else None,
+                            "failed_gate": None,
+                            "failed_feature": None,
+                            "friction": f"friction from gen {gen}",
+                            "decisions": [f"dec {gen}"],
+                        },
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+
+            adapter = _AuditAdapter(
+                head_seq=["h0", "h1", "h1", "h2"],
+                on_worker_start=_on_start,
+            )
+            args = _make_args(tmp, max_batches=2)
+            rc = run_batches(
+                args,
+                sys_adapter=adapter,
+                runner_dir=runner_dir,
+                retro_path=retro_path,
+            )
+            self.assertEqual(rc, EXIT_OK)
+            self.assertEqual(len(briefs), 2)
+            self.assertIn("friction from gen 1", briefs[1])
+            self.assertIn("next after 1", briefs[1])
+
+            retro_text = retro_path.read_text(encoding="utf-8")
+            self.assertIn("`Gen 1`", retro_text)
+            self.assertIn("`Gen 2`", retro_text)
+            self.assertIn("`abcd1234`", retro_text)
+            self.assertIn("1 / 1 / 1 / 0", retro_text)
+            self.assertIn("friction from gen 1", retro_text)
 
 
 def run_selftest() -> int:

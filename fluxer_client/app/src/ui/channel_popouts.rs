@@ -1367,7 +1367,51 @@ fn render_threads(
         )
         // ThreadBrowser.module.css: the search block and the segmented-tabs container are each
         // 56px tall (padding-top 12px) so the list starts at the official offset.
-        .child(div().flex_none().h(px(56.)).px_4().pt_3().child(Input::new(query)))
+        .child(
+            div()
+                .flex_none()
+                .h(px(56.))
+                .px_4()
+                .pt_3()
+                .flx("threads.thread-browser.search")
+                .child(
+                    div()
+                        .relative()
+                        .w_full()
+                        .h(px(44.))
+                        .flx("threads.thread-browser.search.input")
+                        .child(
+                            div()
+                                .w_full()
+                                .h(px(44.))
+                                .rounded(px(8.))
+                                .bg(theme.background_tertiary)
+                                .border_1()
+                                .border_color(theme.background_modifier_accent)
+                                .pl(px(36.))
+                                .pr(px(16.))
+                                .flex()
+                                .items_center()
+                                .child(Input::new(query).appearance(false)),
+                        )
+                        .child(
+                            div()
+                                .absolute()
+                                .left(px(12.))
+                                .top(px(14.))
+                                .size(px(16.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .flx("threads.thread-browser.search.magnifying-glass-icon")
+                                .child(
+                                    Icon::new(AppIcon::MagnifyingGlass)
+                                        .with_size(px(16.))
+                                        .text_color(theme.muted_foreground),
+                                ),
+                        ),
+                ),
+        )
         .child(
             div().flex_none().h(px(56.)).pt_3().child(
             div()
@@ -2019,6 +2063,7 @@ fn render_inbox(
         .h(px((height - 2.).max(1.)))
         .flex()
         .flex_row()
+        .flx("messaging.inbox-popout.body")
         .child(
             div()
                 .w(px(46.))
@@ -2132,6 +2177,15 @@ fn render_inbox(
                 .h_full()
                 .flex()
                 .flex_col()
+                .flx("messaging.inbox-popout.main-panel")
+                .child(
+                    div()
+                        .flex_1()
+                        .min_h_0()
+                        .w_full()
+                        .flex()
+                        .flex_col()
+                        .flx("messaging.inbox-popout.content")
                 .child(
                     div()
                         .flex_none()
@@ -2171,6 +2225,7 @@ fn render_inbox(
                         ),
                 )
                 .child(body),
+                ),
         )
         .into_any_element()
 }

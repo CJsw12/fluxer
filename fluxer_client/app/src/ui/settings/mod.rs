@@ -14,7 +14,7 @@ use gpui_kit::component::switch::Switch;
 use gpui_kit::component::{Disableable as _, Icon, Sizable as _};
 use gpui_kit::{
     AnyElement, Context, Entity, FontWeight, Hsla, ScrollHandle, SharedString, Subscription, Window, div,
-    prelude::*, px,
+    point, prelude::*, px,
 };
 
 use crate::backend::voice::VoiceAudioSettings;
@@ -587,6 +587,16 @@ impl ClientView {
         if let Overlay::Settings(modal) = &mut self.overlay {
             modal.active_tab = tab;
             modal.active_section = tab.sections().first().map(|(id, _)| *id);
+            // Official sidebar scrolls the clicked item into view ("nearest");
+            // offsets measured from the official spec (nav-list top = 179 - scroll).
+            // GPUI scroll offsets are negative for content scrolled up.
+            let sidebar_offset = match tab {
+                SettingsTab::VoiceVideo => 2.,
+                SettingsTab::Language => 82.,
+                SettingsTab::Keybinds => 122.,
+                _ => 0.,
+            };
+            modal.sidebar_scroll.set_offset(point(px(0.), px(-sidebar_offset)));
             if tab != SettingsTab::Applications {
                 modal.selected_application_id = None;
                 modal.selected_application_loading = false;

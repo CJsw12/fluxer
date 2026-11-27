@@ -604,7 +604,18 @@ pub fn render_page(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView
                         .child(
                             div()
                                 .w_full()
+                                .relative()
                                 .flx("discovery.discovery.discovery-page.search-layout")
+                                .child(
+                                    div()
+                                        .absolute()
+                                        .left(px(-1.))
+                                        .top(px(-1.))
+                                        .w(px(1.))
+                                        .h(px(1.))
+                                        .overflow_hidden()
+                                        .flx("discovery.discovery.discovery-page.sr-only"),
+                                )
                                 .child(
                                     div()
                                         .w_full()

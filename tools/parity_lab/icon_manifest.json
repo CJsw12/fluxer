@@ -1727,7 +1727,7 @@
   {
    "rust_icon": "Chats",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 1438,
+   "line": 1482,
    "rust_asset": "fluxer_client/app/assets/icons/chats.svg",
    "kind": "phosphor",
    "phosphor": "fill/chats-fill.svg",
@@ -1742,7 +1742,7 @@
   {
    "rust_icon": "Chats",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 1458,
+   "line": 1502,
    "rust_asset": "fluxer_client/app/assets/icons/chats.svg",
    "kind": "phosphor",
    "phosphor": "fill/chats-fill.svg",
@@ -1757,7 +1757,7 @@
   {
    "rust_icon": "PushPin",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 1524,
+   "line": 1568,
    "rust_asset": "fluxer_client/app/assets/icons/push-pin.svg",
    "kind": "phosphor",
    "phosphor": "fill/push-pin-fill.svg",
@@ -1772,7 +1772,7 @@
   {
    "rust_icon": "Bell",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 1651,
+   "line": 1695,
    "rust_asset": "fluxer_client/app/assets/icons/bell.svg",
    "kind": "phosphor",
    "phosphor": "fill/bell-fill.svg",
@@ -1787,7 +1787,7 @@
   {
    "rust_icon": "X",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 2170,
+   "line": 2224,
    "rust_asset": "fluxer_client/app/assets/icons/x.svg",
    "kind": "phosphor",
    "phosphor": "bold/x-bold.svg",
@@ -1802,7 +1802,7 @@
   {
    "rust_icon": "Chats",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 2212,
+   "line": 2267,
    "rust_asset": "fluxer_client/app/assets/icons/chats.svg",
    "kind": "phosphor",
    "phosphor": "fill/chats-fill.svg",
@@ -1937,7 +1937,7 @@
   {
    "rust_icon": "Chats",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 2242,
+   "line": 2297,
    "rust_asset": "fluxer_client/app/assets/icons/chats.svg",
    "kind": "phosphor",
    "phosphor": "fill/chats-fill.svg",
@@ -2057,7 +2057,7 @@
   {
    "rust_icon": "CaretRight",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 2271,
+   "line": 2326,
    "rust_asset": "fluxer_client/app/assets/icons/caret-right.svg",
    "kind": "phosphor",
    "phosphor": "bold/caret-right-bold.svg",
@@ -2477,7 +2477,7 @@
   {
    "rust_icon": "Trash",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 2393,
+   "line": 2448,
    "rust_asset": "fluxer_client/app/assets/icons/trash.svg",
    "kind": "phosphor",
    "phosphor": "fill/trash-fill.svg",
@@ -2597,7 +2597,7 @@
   {
    "rust_icon": "WarningCircle",
    "file": "fluxer_client/app/src/ui/explore.rs",
-   "line": 892,
+   "line": 903,
    "rust_asset": "fluxer_client/app/assets/icons/warning-circle.svg",
    "kind": "phosphor",
    "phosphor": "fill/warning-circle-fill.svg",
@@ -2612,7 +2612,7 @@
   {
    "rust_icon": "MagnifyingGlass",
    "file": "fluxer_client/app/src/ui/explore.rs",
-   "line": 899,
+   "line": 910,
    "rust_asset": "fluxer_client/app/assets/icons/magnifying-glass.svg",
    "kind": "phosphor",
    "phosphor": "bold/magnifying-glass-bold.svg",
@@ -2627,7 +2627,7 @@
   {
    "rust_icon": "Compass",
    "file": "fluxer_client/app/src/ui/explore.rs",
-   "line": 906,
+   "line": 917,
    "rust_asset": "fluxer_client/app/assets/icons/compass.svg",
    "kind": "phosphor",
    "phosphor": "fill/compass-fill.svg",
@@ -3182,7 +3182,7 @@
   {
    "rust_icon": "PushPin",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 1570,
+   "line": 1614,
    "rust_asset": "fluxer_client/app/assets/icons/push-pin.svg",
    "kind": "phosphor",
    "phosphor": "fill/push-pin-fill.svg",
@@ -3197,7 +3197,7 @@
   {
    "rust_icon": "BookmarkSimple",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 1652,
+   "line": 1696,
    "rust_asset": "fluxer_client/app/assets/icons/bookmark-simple.svg",
    "kind": "phosphor",
    "phosphor": "regular/bookmark-simple.svg",
@@ -3212,7 +3212,7 @@
   {
    "rust_icon": "AtBold",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 1653,
+   "line": 1697,
    "rust_asset": "fluxer_client/app/assets/icons/at-bold.svg",
    "kind": "phosphor",
    "phosphor": "bold/at-bold.svg",
@@ -3227,7 +3227,7 @@
   {
    "rust_icon": "SparkleFill",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 1698,
+   "line": 1742,
    "rust_asset": "fluxer_client/app/assets/icons/sparkle-fill.svg",
    "kind": "phosphor",
    "phosphor": "fill/sparkle-fill.svg",
@@ -3242,7 +3242,7 @@
   {
    "rust_icon": "SparkleFill",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 1818,
+   "line": 1862,
    "rust_asset": "fluxer_client/app/assets/icons/sparkle-fill.svg",
    "kind": "phosphor",
    "phosphor": "fill/sparkle-fill.svg",
@@ -3257,7 +3257,7 @@
   {
    "rust_icon": "SparkleFill",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 1996,
+   "line": 2040,
    "rust_asset": "fluxer_client/app/assets/icons/sparkle-fill.svg",
    "kind": "phosphor",
    "phosphor": "fill/sparkle-fill.svg",
@@ -3272,7 +3272,7 @@
   {
    "rust_icon": "UploadSimpleFill",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 2227,
+   "line": 2282,
    "rust_asset": "fluxer_client/app/assets/icons/upload-simple-fill.svg",
    "kind": "phosphor",
    "phosphor": "fill/upload-simple-fill.svg",
@@ -3287,7 +3287,7 @@
   {
    "rust_icon": "PaperclipBold",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 2235,
+   "line": 2290,
    "rust_asset": "fluxer_client/app/assets/icons/paperclip-bold.svg",
    "kind": "phosphor",
    "phosphor": "bold/paperclip-bold.svg",
@@ -3302,7 +3302,7 @@
   {
    "rust_icon": "MicrophoneBold",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 2252,
+   "line": 2307,
    "rust_asset": "fluxer_client/app/assets/icons/microphone-bold.svg",
    "kind": "phosphor",
    "phosphor": "bold/microphone-bold.svg",
@@ -3662,7 +3662,7 @@
   {
    "rust_icon": "Check",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 1766,
+   "line": 1810,
    "rust_asset": "fluxer_client/app/assets/icons/check.svg",
    "kind": "phosphor",
    "phosphor": "bold/check-bold.svg",
@@ -3692,7 +3692,7 @@
   {
    "rust_icon": "Check",
    "file": "fluxer_client/app/src/ui/channel_popouts.rs",
-   "line": 2120,
+   "line": 2165,
    "rust_asset": "fluxer_client/app/assets/icons/check.svg",
    "kind": "phosphor",
    "phosphor": "bold/check-bold.svg",
@@ -3801,6 +3801,21 @@
    "rust_asset": "fluxer_client/app/assets/icons/star.svg",
    "kind": "phosphor",
    "phosphor": "fill/star-fill.svg",
+   "status": "unverified",
+   "official_component": null,
+   "official_icon": null,
+   "weight": null,
+   "size": null,
+   "source_file": null,
+   "reason": "new call site, not yet matched to official harvest"
+  },
+  {
+   "rust_icon": "MagnifyingGlass",
+   "file": "fluxer_client/app/src/ui/channel_popouts.rs",
+   "line": 1408,
+   "rust_asset": "fluxer_client/app/assets/icons/magnifying-glass.svg",
+   "kind": "phosphor",
+   "phosphor": "bold/magnifying-glass-bold.svg",
    "status": "unverified",
    "official_component": null,
    "official_icon": null,

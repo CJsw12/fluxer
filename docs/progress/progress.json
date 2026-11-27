@@ -356,7 +356,8 @@
         {
           "name": "설정 화면",
           "status": "done",
-          "verified": true
+          "verified": true,
+          "note": "Gen 20에서 Applications와 Connections의 빈 상태 및 상단 액션 배치를 조정했다."
         },
         {
           "name": "글꼴·밀도·확대",

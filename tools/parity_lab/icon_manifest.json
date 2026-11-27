@@ -2657,7 +2657,7 @@
   {
    "rust_icon": "LinkSimple",
    "file": "fluxer_client/app/src/ui/settings/connections.rs",
-   "line": 18,
+   "line": 25,
    "rust_asset": "fluxer_client/app/assets/icons/link-simple.svg",
    "kind": "phosphor",
    "phosphor": "bold/link-simple-bold.svg",
@@ -2672,7 +2672,7 @@
   {
    "rust_icon": "Plus",
    "file": "fluxer_client/app/src/ui/settings/connections.rs",
-   "line": 36,
+   "line": 42,
    "rust_asset": "fluxer_client/app/assets/icons/plus.svg",
    "kind": "phosphor",
    "phosphor": "bold/plus-bold.svg",
@@ -2687,7 +2687,7 @@
   {
    "rust_icon": "Trash",
    "file": "fluxer_client/app/src/ui/settings/connections.rs",
-   "line": 195,
+   "line": 200,
    "rust_asset": "fluxer_client/app/assets/icons/trash.svg",
    "kind": "phosphor",
    "phosphor": "fill/trash-fill.svg",
@@ -2732,7 +2732,7 @@
   {
    "rust_icon": "CaretRight",
    "file": "fluxer_client/app/src/ui/settings/applications.rs",
-   "line": 312,
+   "line": 330,
    "rust_asset": "fluxer_client/app/assets/icons/caret-right.svg",
    "kind": "phosphor",
    "phosphor": "bold/caret-right-bold.svg",
@@ -3392,7 +3392,7 @@
   {
    "rust_icon": "BookOpenFill",
    "file": "fluxer_client/app/src/ui/settings/applications.rs",
-   "line": 177,
+   "line": 191,
    "rust_asset": "fluxer_client/app/assets/icons/book-open-fill.svg",
    "kind": "phosphor",
    "phosphor": "fill/book-open-fill.svg",
@@ -3407,7 +3407,7 @@
   {
    "rust_icon": "AppWindowFill",
    "file": "fluxer_client/app/src/ui/settings/applications.rs",
-   "line": 234,
+   "line": 252,
    "rust_asset": "fluxer_client/app/assets/icons/app-window-fill.svg",
    "kind": "phosphor",
    "phosphor": "fill/app-window-fill.svg",
@@ -3422,7 +3422,7 @@
   {
    "rust_icon": "UserListFill",
    "file": "fluxer_client/app/src/ui/settings/connections.rs",
-   "line": 91,
+   "line": 96,
    "rust_asset": "fluxer_client/app/assets/icons/user-list-fill.svg",
    "kind": "phosphor",
    "phosphor": "fill/user-list-fill.svg",

@@ -83,7 +83,7 @@
           "missing": 1
         },
         "settings-applications": {
-          "deltas": 26,
+          "deltas": 13,
           "missing": 3
         },
         "settings-chat": {
@@ -91,7 +91,7 @@
           "missing": 14
         },
         "settings-connections": {
-          "deltas": 28,
+          "deltas": 16,
           "missing": 3
         },
         "settings-keybinds": {

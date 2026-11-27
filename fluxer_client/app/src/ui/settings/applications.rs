@@ -147,6 +147,7 @@ pub(super) fn render_applications_tab(modal: &SettingsModal, theme: &Theme, cx: 
         .flex_wrap()
         .items_center()
         .gap_3()
+        .mb_2()
         .flx("user.applications-tab.button-container")
         .child(
             div()
@@ -156,6 +157,9 @@ pub(super) fn render_applications_tab(modal: &SettingsModal, theme: &Theme, cx: 
                     Button::new("settings-applications-create")
                         .primary()
                         .small()
+                        .h(px(36.))
+                        .min_w(px(133.34))
+                        .rounded(px(8.))
                         .label(l10n::tr("Create application"))
                         .on_click(cx.listener(|this, _, _, cx| {
                             // TODO(backlog, T3): Connect POST /oauth2/applications creation modal.
@@ -172,10 +176,25 @@ pub(super) fn render_applications_tab(modal: &SettingsModal, theme: &Theme, cx: 
                 .flx("user.applications-tab.documentation-link")
                 .child(
                     Button::new("settings-applications-docs")
-                        .ghost()
-                        .small()
-                        .icon(AppIcon::BookOpenFill)
-                        .label(l10n::tr("Read the documentation (docs.fluxer.app)"))
+                        .text()
+                        .h(px(20.))
+                        .accessibility_label(l10n::tr("Read the documentation (docs.fluxer.app)"))
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap_1()
+                                .text_sm()
+                                .line_height(px(20.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(theme.text_link)
+                                .child(Icon::new(AppIcon::BookOpenFill).with_size(px(18.)))
+                                .child(
+                                    div()
+                                        .hover(|style| style.text_decoration_1())
+                                        .child(l10n::tr("Read the documentation (docs.fluxer.app)")),
+                                ),
+                        )
                         .on_click(cx.listener(|this, _, _, cx| {
                             #[cfg(test)]
                             this.launch_external_url(DOCS_URL, cx);
@@ -221,21 +240,20 @@ pub(super) fn render_applications_tab(modal: &SettingsModal, theme: &Theme, cx: 
     } else if modal.applications.is_empty() {
         div()
             .debug_selector(|| "settings-applications-empty".to_owned())
-            .p_6()
-            .rounded(px(8.))
-            .border_1()
-            .border_color(settings_border(theme))
-            .bg(settings_card_bg(theme))
             .flex()
             .flex_col()
             .items_center()
-            .gap_2()
+            .justify_center()
+            .min_h(px(132.))
+            .gap_3()
+            .text_center()
+            .line_height(px(24.))
             .flx("user.applications-tab.applications-list.empty-state")
-            .child(Icon::new(AppIcon::AppWindowFill).with_size(px(28.)).text_color(theme.muted_foreground))
-            .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("No applications yet")))
+            .child(Icon::new(AppIcon::AppWindowFill).with_size(px(44.)).text_color(theme.muted_foreground))
+            .child(div().text_lg().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("No applications yet")))
             .child(
                 div()
-                    .text_xs()
+                    .text_base()
                     .text_color(theme.muted_foreground)
                     .child(l10n::tr("Create your first application to get started with the Fluxer API.")),
             )

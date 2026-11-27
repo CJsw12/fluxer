@@ -5,7 +5,9 @@ pub(super) fn render_connections_tab(modal: &SettingsModal, theme: &Theme, cx: &
         .flex()
         .flex_row()
         .flex_wrap()
-        .gap_2()
+        .items_center()
+        .gap_3()
+        .mb_6()
         .flx("user.linked-accounts-tab.platform-row")
         .child(
             div()
@@ -14,9 +16,13 @@ pub(super) fn render_connections_tab(modal: &SettingsModal, theme: &Theme, cx: &
                 .child(
                     Button::new("settings-connections-add-domain")
                         .ghost()
-                        .small()
-                        .icon(AppIcon::LinkSimple)
-                        .label(l10n::tr("Add domain"))
+                        .size(px(40.))
+                        .p_0()
+                        .rounded(px(6.))
+                        .bg(theme.on_fill)
+                        .accessibility_label(l10n::tr("Add domain"))
+                        .tooltip(l10n::tr("Add domain"))
+                        .child(Icon::new(AppIcon::LinkSimple).with_size(px(28.)).text_color(theme.brand))
                         .on_click(cx.listener(|this, _, _, cx| {
                             // TODO(backlog, T3): Connect POST /users/@me/connections domain verification flow.
                             this.settings_set_connections_notice(
@@ -78,21 +84,20 @@ pub(super) fn render_connections_tab(modal: &SettingsModal, theme: &Theme, cx: &
     } else if modal.connections.is_empty() {
         div()
             .debug_selector(|| "settings-connections-empty".to_owned())
-            .p_6()
-            .rounded(px(8.))
-            .border_1()
-            .border_color(settings_border(theme))
-            .bg(settings_card_bg(theme))
             .flex()
             .flex_col()
             .items_center()
-            .gap_2()
+            .justify_center()
+            .min_h(px(132.))
+            .gap_3()
+            .text_center()
+            .line_height(px(24.))
             .flx("user.linked-accounts-tab.empty-state")
-            .child(Icon::new(AppIcon::UserListFill).with_size(px(28.)).text_color(theme.muted_foreground))
-            .child(div().text_sm().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("No connections yet")))
+            .child(Icon::new(AppIcon::UserListFill).with_size(px(44.)).text_color(theme.muted_foreground))
+            .child(div().text_lg().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("No connections yet")))
             .child(
                 div()
-                    .text_xs()
+                    .text_base()
                     .text_color(theme.muted_foreground)
                     .child(l10n::tr("Verify domain ownership or link accounts to display them on your profile.")),
             )

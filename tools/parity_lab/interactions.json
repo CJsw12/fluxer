@@ -14,9 +14,9 @@
   "summary": {
     "total": {
       "total": 770,
-      "present": 66,
-      "missing": 629,
-      "differs": 75
+      "present": 91,
+      "missing": 605,
+      "differs": 74
     },
     "by_category": {
       "resize_drag": {
@@ -27,14 +27,14 @@
       },
       "tooltips": {
         "total": 280,
-        "present": 1,
-        "missing": 268,
-        "differs": 11
+        "present": 12,
+        "missing": 258,
+        "differs": 10
       },
       "context_menus": {
         "total": 292,
-        "present": 16,
-        "missing": 258,
+        "present": 30,
+        "missing": 244,
         "differs": 18
       },
       "keybinds": {
@@ -500,7 +500,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/voice_stage.rs:1277"
+          "fluxer_client/app/src/ui/voice_stage.rs:1309"
         ],
         "reason": "matched data-flx 'voice.compact-voice-call-view.compact-voice-call-view-inner.resize-handle.resize-key-down'"
       }
@@ -1806,8 +1806,8 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/message_row.rs:208",
-          "fluxer_client/app/src/ui/message_row.rs:603"
+          "fluxer_client/app/src/ui/message_row.rs:209",
+          "fluxer_client/app/src/ui/message_row.rs:626"
         ],
         "reason": "flx 'channel.timestamp-with-tooltip.container' has tooltip in Rust"
       }
@@ -4785,13 +4785,13 @@
         "detail": "text={() =",
         "flx": "voice.voice-control-bar.voice-control-bar-inner.container"
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/voice_stage.rs:764"
+          "fluxer_client/app/src/ui/voice_stage.rs"
         ],
-        "reason": "flx 'voice.voice-control-bar.voice-control-bar-inner.container' exists in Rust without tooltip call"
+        "reason": "VoiceControlBar tooltips implemented via split_control_group/single_control_button in voice_stage.rs"
       }
     },
     {
@@ -4805,11 +4805,13 @@
         "detail": "text={inputSettingsLabel} data-flx=\"voice.voice-control-bar.voice-control-bar-inner.tooltip--2\"",
         "flx": "voice.voice-control-bar.voice-control-bar-inner.icon"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs"
+        ],
+        "reason": "VoiceControlBar tooltips implemented via split_control_group/single_control_button in voice_stage.rs"
       }
     },
     {
@@ -4823,11 +4825,13 @@
         "detail": "text={() =",
         "flx": "voice.voice-control-bar.voice-control-bar-inner.icon-small"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs"
+        ],
+        "reason": "VoiceControlBar tooltips implemented via split_control_group/single_control_button in voice_stage.rs"
       }
     },
     {
@@ -4841,11 +4845,13 @@
         "detail": "text={outputSettingsLabel} data-flx=\"voice.voice-control-bar.voice-control-bar-inner.tooltip.output-settings\"",
         "flx": "voice.voice-control-bar.voice-control-bar-inner.icon--3"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs"
+        ],
+        "reason": "VoiceControlBar tooltips implemented via split_control_group/single_control_button in voice_stage.rs"
       }
     },
     {
@@ -4859,11 +4865,13 @@
         "detail": "text={cameraControlLabel} data-flx=\"voice.voice-control-bar.voice-control-bar-inner.tooltip--4\"",
         "flx": "voice.voice-control-bar.voice-control-bar-inner.icon-small.output-settings"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs"
+        ],
+        "reason": "VoiceControlBar tooltips implemented via split_control_group/single_control_button in voice_stage.rs"
       }
     },
     {
@@ -4877,11 +4885,13 @@
         "detail": "text={cameraSettingsLabel} data-flx=\"voice.voice-control-bar.voice-control-bar-inner.tooltip--5\"",
         "flx": "voice.voice-control-bar.voice-control-bar-inner.icon--5"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs"
+        ],
+        "reason": "VoiceControlBar tooltips implemented via split_control_group/single_control_button in voice_stage.rs"
       }
     },
     {
@@ -4895,11 +4905,13 @@
         "detail": "text={screenShareControlLabel} data-flx=\"voice.voice-control-bar.voice-control-bar-inner.tooltip--6\"",
         "flx": "voice.voice-control-bar.voice-control-bar-inner.icon-small--2"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs"
+        ],
+        "reason": "VoiceControlBar tooltips implemented via split_control_group/single_control_button in voice_stage.rs"
       }
     },
     {
@@ -4913,11 +4925,13 @@
         "detail": "text={screenShareSettingsLabel} data-flx=\"voice.voice-control-bar.voice-control-bar-inner.tooltip.screen-share-settings\"",
         "flx": "voice.voice-control-bar.voice-control-bar-inner.button.undefined--4"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs"
+        ],
+        "reason": "VoiceControlBar tooltips implemented via split_control_group/single_control_button in voice_stage.rs"
       }
     },
     {
@@ -4931,11 +4945,13 @@
         "detail": "text={i18n._(MORE_OPTIONS_DESCRIPTOR)} data-flx=\"voice.voice-control-bar.voice-control-bar-inner.tooltip--7\"",
         "flx": "voice.voice-control-bar.voice-control-bar-inner.icon-small.screen-share-settings"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs"
+        ],
+        "reason": "VoiceControlBar tooltips implemented via split_control_group/single_control_button in voice_stage.rs"
       }
     },
     {
@@ -4949,11 +4965,13 @@
         "detail": "text={disconnectLabel} data-flx=\"voice.voice-control-bar.voice-control-bar-inner.tooltip--8\"",
         "flx": "voice.voice-control-bar.voice-control-bar-inner.icon--8"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs"
+        ],
+        "reason": "VoiceControlBar tooltips implemented via split_control_group/single_control_button in voice_stage.rs"
       }
     },
     {
@@ -4967,11 +4985,13 @@
         "detail": "text={i18n._(STOP_WATCHING_STREAM_DESCRIPTOR)} data-flx=\"voice.voice-control-bar.voice-control-bar-inner.tooltip--9\"",
         "flx": "voice.voice-control-bar.voice-control-bar-inner.button.disconnect"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs"
+        ],
+        "reason": "VoiceControlBar tooltips implemented via split_control_group/single_control_button in voice_stage.rs"
       }
     },
     {
@@ -6096,11 +6116,31 @@
         "kind": "component_definition",
         "flx": null
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for MediaContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/channel_popouts.rs:129",
+          "fluxer_client/app/src/ui/channel_popouts.rs:130",
+          "fluxer_client/app/src/ui/channel_popouts.rs:150",
+          "fluxer_client/app/src/ui/channel_popouts.rs:22",
+          "fluxer_client/app/src/ui/channel_popouts.rs:422",
+          "fluxer_client/app/src/ui/channel_popouts.rs:570",
+          "fluxer_client/app/src/ui/channel_popouts.rs:601",
+          "fluxer_client/app/src/ui/media_context_menu.rs:1",
+          "fluxer_client/app/src/ui/media_context_menu.rs:153",
+          "fluxer_client/app/src/ui/media_context_menu.rs:17",
+          "fluxer_client/app/src/ui/media_context_menu.rs:19",
+          "fluxer_client/app/src/ui/media_context_menu.rs:208",
+          "fluxer_client/app/src/ui/media_context_menu.rs:23",
+          "fluxer_client/app/src/ui/media_context_menu.rs:296",
+          "fluxer_client/app/src/ui/media_context_menu.rs:34",
+          "fluxer_client/app/src/ui/media_context_menu.rs:72",
+          "fluxer_client/app/src/ui/media_viewer.rs:218",
+          "fluxer_client/app/src/ui/media_viewer.rs:23",
+          "fluxer_client/app/src/ui/media_viewer.rs:55"
+        ],
+        "reason": "Rust implements MediaContextMenu"
       }
     },
     {
@@ -6113,11 +6153,31 @@
         "kind": "component_definition",
         "flx": null
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for MediaContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/channel_popouts.rs:129",
+          "fluxer_client/app/src/ui/channel_popouts.rs:130",
+          "fluxer_client/app/src/ui/channel_popouts.rs:150",
+          "fluxer_client/app/src/ui/channel_popouts.rs:22",
+          "fluxer_client/app/src/ui/channel_popouts.rs:422",
+          "fluxer_client/app/src/ui/channel_popouts.rs:570",
+          "fluxer_client/app/src/ui/channel_popouts.rs:601",
+          "fluxer_client/app/src/ui/media_context_menu.rs:1",
+          "fluxer_client/app/src/ui/media_context_menu.rs:153",
+          "fluxer_client/app/src/ui/media_context_menu.rs:17",
+          "fluxer_client/app/src/ui/media_context_menu.rs:19",
+          "fluxer_client/app/src/ui/media_context_menu.rs:208",
+          "fluxer_client/app/src/ui/media_context_menu.rs:23",
+          "fluxer_client/app/src/ui/media_context_menu.rs:296",
+          "fluxer_client/app/src/ui/media_context_menu.rs:34",
+          "fluxer_client/app/src/ui/media_context_menu.rs:72",
+          "fluxer_client/app/src/ui/media_viewer.rs:218",
+          "fluxer_client/app/src/ui/media_viewer.rs:23",
+          "fluxer_client/app/src/ui/media_viewer.rs:55"
+        ],
+        "reason": "Rust implements MediaContextMenu"
       }
     },
     {
@@ -6134,7 +6194,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:666",
+          "fluxer_client/app/src/ui/channel_popouts.rs:706",
           "fluxer_client/app/src/ui/message_actions.rs:209",
           "fluxer_client/app/src/ui/message_actions.rs:3"
         ],
@@ -6155,7 +6215,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:666",
+          "fluxer_client/app/src/ui/channel_popouts.rs:706",
           "fluxer_client/app/src/ui/message_actions.rs:209",
           "fluxer_client/app/src/ui/message_actions.rs:3"
         ],
@@ -6193,7 +6253,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:122"
+          "fluxer_client/app/src/ui/channel_popouts.rs:123"
         ],
         "reason": "Rust implements PersonalNotesContextMenu"
       }
@@ -6919,7 +6979,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/message_row.rs:87"
+          "fluxer_client/app/src/ui/message_row.rs:88"
         ],
         "reason": "matched data-flx 'app.expiry-footnote.inline-footnote.text' with right-click/context-menu handler"
       }
@@ -7119,7 +7179,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:666",
+          "fluxer_client/app/src/ui/channel_popouts.rs:706",
           "fluxer_client/app/src/ui/message_actions.rs:209",
           "fluxer_client/app/src/ui/message_actions.rs:3"
         ],
@@ -8689,11 +8749,13 @@
         "handler": "handleMuteContextMenu",
         "flx": "voice.voice-control-bar.voice-control-bar-inner.div"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for VoiceControlBar.onContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs"
+        ],
+        "reason": "VoiceControlBar right-click context popouts/settings implemented in voice_stage.rs"
       }
     },
     {
@@ -8707,11 +8769,13 @@
         "handler": "handleDeafenContextMenu",
         "flx": "voice.voice-control-bar.voice-control-bar-inner.div--2"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for VoiceControlBar.onContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs"
+        ],
+        "reason": "VoiceControlBar right-click context popouts/settings implemented in voice_stage.rs"
       }
     },
     {
@@ -8725,11 +8789,13 @@
         "handler": "cameraDisabled",
         "flx": "voice.voice-control-bar.voice-control-bar-inner.focus-ring--4"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for VoiceControlBar.onContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs"
+        ],
+        "reason": "VoiceControlBar right-click context popouts/settings implemented in voice_stage.rs"
       }
     },
     {
@@ -8743,11 +8809,13 @@
         "handler": "resolvedScreenShareDisabled",
         "flx": null
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for VoiceControlBar.onContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/voice_stage.rs"
+        ],
+        "reason": "VoiceControlBar right-click context popouts/settings implemented in voice_stage.rs"
       }
     },
     {
@@ -9150,9 +9218,9 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:1840",
-          "fluxer_client/app/src/ui/channel_popouts.rs:781",
-          "fluxer_client/app/src/ui/channel_popouts.rs:994"
+          "fluxer_client/app/src/ui/channel_popouts.rs:1034",
+          "fluxer_client/app/src/ui/channel_popouts.rs:1880",
+          "fluxer_client/app/src/ui/channel_popouts.rs:821"
         ],
         "reason": "matched data-flx 'ui.action-menu.context-menu.sub-menu.submenu-caret' with right-click/context-menu handler"
       }
@@ -9205,8 +9273,9 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:678",
-          "fluxer_client/app/src/ui/channel_popouts.rs:965"
+          "fluxer_client/app/src/ui/channel_popouts.rs:1005",
+          "fluxer_client/app/src/ui/channel_popouts.rs:718",
+          "fluxer_client/app/src/ui/media_context_menu.rs:225"
         ],
         "reason": "matched data-flx 'ui.action-menu.context-menu.separator' with right-click/context-menu handler"
       }
@@ -9259,7 +9328,8 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:685"
+          "fluxer_client/app/src/ui/channel_popouts.rs:725",
+          "fluxer_client/app/src/ui/media_context_menu.rs:238"
         ],
         "reason": "matched data-flx 'ui.action-menu.context-menu.menu-group.group' with right-click/context-menu handler"
       }
@@ -10000,11 +10070,31 @@
         "kind": "component_render",
         "flx": null
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for MediaContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/channel_popouts.rs:129",
+          "fluxer_client/app/src/ui/channel_popouts.rs:130",
+          "fluxer_client/app/src/ui/channel_popouts.rs:150",
+          "fluxer_client/app/src/ui/channel_popouts.rs:22",
+          "fluxer_client/app/src/ui/channel_popouts.rs:422",
+          "fluxer_client/app/src/ui/channel_popouts.rs:570",
+          "fluxer_client/app/src/ui/channel_popouts.rs:601",
+          "fluxer_client/app/src/ui/media_context_menu.rs:1",
+          "fluxer_client/app/src/ui/media_context_menu.rs:153",
+          "fluxer_client/app/src/ui/media_context_menu.rs:17",
+          "fluxer_client/app/src/ui/media_context_menu.rs:19",
+          "fluxer_client/app/src/ui/media_context_menu.rs:208",
+          "fluxer_client/app/src/ui/media_context_menu.rs:23",
+          "fluxer_client/app/src/ui/media_context_menu.rs:296",
+          "fluxer_client/app/src/ui/media_context_menu.rs:34",
+          "fluxer_client/app/src/ui/media_context_menu.rs:72",
+          "fluxer_client/app/src/ui/media_viewer.rs:218",
+          "fluxer_client/app/src/ui/media_viewer.rs:23",
+          "fluxer_client/app/src/ui/media_viewer.rs:55"
+        ],
+        "reason": "Rust implements MediaContextMenu"
       }
     },
     {
@@ -10017,11 +10107,31 @@
         "kind": "component_render",
         "flx": null
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for MediaContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/channel_popouts.rs:129",
+          "fluxer_client/app/src/ui/channel_popouts.rs:130",
+          "fluxer_client/app/src/ui/channel_popouts.rs:150",
+          "fluxer_client/app/src/ui/channel_popouts.rs:22",
+          "fluxer_client/app/src/ui/channel_popouts.rs:422",
+          "fluxer_client/app/src/ui/channel_popouts.rs:570",
+          "fluxer_client/app/src/ui/channel_popouts.rs:601",
+          "fluxer_client/app/src/ui/media_context_menu.rs:1",
+          "fluxer_client/app/src/ui/media_context_menu.rs:153",
+          "fluxer_client/app/src/ui/media_context_menu.rs:17",
+          "fluxer_client/app/src/ui/media_context_menu.rs:19",
+          "fluxer_client/app/src/ui/media_context_menu.rs:208",
+          "fluxer_client/app/src/ui/media_context_menu.rs:23",
+          "fluxer_client/app/src/ui/media_context_menu.rs:296",
+          "fluxer_client/app/src/ui/media_context_menu.rs:34",
+          "fluxer_client/app/src/ui/media_context_menu.rs:72",
+          "fluxer_client/app/src/ui/media_viewer.rs:218",
+          "fluxer_client/app/src/ui/media_viewer.rs:23",
+          "fluxer_client/app/src/ui/media_viewer.rs:55"
+        ],
+        "reason": "Rust implements MediaContextMenu"
       }
     },
     {
@@ -10034,11 +10144,31 @@
         "kind": "component_render",
         "flx": null
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for MediaContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/channel_popouts.rs:129",
+          "fluxer_client/app/src/ui/channel_popouts.rs:130",
+          "fluxer_client/app/src/ui/channel_popouts.rs:150",
+          "fluxer_client/app/src/ui/channel_popouts.rs:22",
+          "fluxer_client/app/src/ui/channel_popouts.rs:422",
+          "fluxer_client/app/src/ui/channel_popouts.rs:570",
+          "fluxer_client/app/src/ui/channel_popouts.rs:601",
+          "fluxer_client/app/src/ui/media_context_menu.rs:1",
+          "fluxer_client/app/src/ui/media_context_menu.rs:153",
+          "fluxer_client/app/src/ui/media_context_menu.rs:17",
+          "fluxer_client/app/src/ui/media_context_menu.rs:19",
+          "fluxer_client/app/src/ui/media_context_menu.rs:208",
+          "fluxer_client/app/src/ui/media_context_menu.rs:23",
+          "fluxer_client/app/src/ui/media_context_menu.rs:296",
+          "fluxer_client/app/src/ui/media_context_menu.rs:34",
+          "fluxer_client/app/src/ui/media_context_menu.rs:72",
+          "fluxer_client/app/src/ui/media_viewer.rs:218",
+          "fluxer_client/app/src/ui/media_viewer.rs:23",
+          "fluxer_client/app/src/ui/media_viewer.rs:55"
+        ],
+        "reason": "Rust implements MediaContextMenu"
       }
     },
     {
@@ -10051,11 +10181,31 @@
         "kind": "component_render",
         "flx": null
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for MediaContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/channel_popouts.rs:129",
+          "fluxer_client/app/src/ui/channel_popouts.rs:130",
+          "fluxer_client/app/src/ui/channel_popouts.rs:150",
+          "fluxer_client/app/src/ui/channel_popouts.rs:22",
+          "fluxer_client/app/src/ui/channel_popouts.rs:422",
+          "fluxer_client/app/src/ui/channel_popouts.rs:570",
+          "fluxer_client/app/src/ui/channel_popouts.rs:601",
+          "fluxer_client/app/src/ui/media_context_menu.rs:1",
+          "fluxer_client/app/src/ui/media_context_menu.rs:153",
+          "fluxer_client/app/src/ui/media_context_menu.rs:17",
+          "fluxer_client/app/src/ui/media_context_menu.rs:19",
+          "fluxer_client/app/src/ui/media_context_menu.rs:208",
+          "fluxer_client/app/src/ui/media_context_menu.rs:23",
+          "fluxer_client/app/src/ui/media_context_menu.rs:296",
+          "fluxer_client/app/src/ui/media_context_menu.rs:34",
+          "fluxer_client/app/src/ui/media_context_menu.rs:72",
+          "fluxer_client/app/src/ui/media_viewer.rs:218",
+          "fluxer_client/app/src/ui/media_viewer.rs:23",
+          "fluxer_client/app/src/ui/media_viewer.rs:55"
+        ],
+        "reason": "Rust implements MediaContextMenu"
       }
     },
     {
@@ -10068,11 +10218,31 @@
         "kind": "component_render",
         "flx": null
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for MediaContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/channel_popouts.rs:129",
+          "fluxer_client/app/src/ui/channel_popouts.rs:130",
+          "fluxer_client/app/src/ui/channel_popouts.rs:150",
+          "fluxer_client/app/src/ui/channel_popouts.rs:22",
+          "fluxer_client/app/src/ui/channel_popouts.rs:422",
+          "fluxer_client/app/src/ui/channel_popouts.rs:570",
+          "fluxer_client/app/src/ui/channel_popouts.rs:601",
+          "fluxer_client/app/src/ui/media_context_menu.rs:1",
+          "fluxer_client/app/src/ui/media_context_menu.rs:153",
+          "fluxer_client/app/src/ui/media_context_menu.rs:17",
+          "fluxer_client/app/src/ui/media_context_menu.rs:19",
+          "fluxer_client/app/src/ui/media_context_menu.rs:208",
+          "fluxer_client/app/src/ui/media_context_menu.rs:23",
+          "fluxer_client/app/src/ui/media_context_menu.rs:296",
+          "fluxer_client/app/src/ui/media_context_menu.rs:34",
+          "fluxer_client/app/src/ui/media_context_menu.rs:72",
+          "fluxer_client/app/src/ui/media_viewer.rs:218",
+          "fluxer_client/app/src/ui/media_viewer.rs:23",
+          "fluxer_client/app/src/ui/media_viewer.rs:55"
+        ],
+        "reason": "Rust implements MediaContextMenu"
       }
     },
     {
@@ -10085,11 +10255,31 @@
         "kind": "component_render",
         "flx": null
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for MediaContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/channel_popouts.rs:129",
+          "fluxer_client/app/src/ui/channel_popouts.rs:130",
+          "fluxer_client/app/src/ui/channel_popouts.rs:150",
+          "fluxer_client/app/src/ui/channel_popouts.rs:22",
+          "fluxer_client/app/src/ui/channel_popouts.rs:422",
+          "fluxer_client/app/src/ui/channel_popouts.rs:570",
+          "fluxer_client/app/src/ui/channel_popouts.rs:601",
+          "fluxer_client/app/src/ui/media_context_menu.rs:1",
+          "fluxer_client/app/src/ui/media_context_menu.rs:153",
+          "fluxer_client/app/src/ui/media_context_menu.rs:17",
+          "fluxer_client/app/src/ui/media_context_menu.rs:19",
+          "fluxer_client/app/src/ui/media_context_menu.rs:208",
+          "fluxer_client/app/src/ui/media_context_menu.rs:23",
+          "fluxer_client/app/src/ui/media_context_menu.rs:296",
+          "fluxer_client/app/src/ui/media_context_menu.rs:34",
+          "fluxer_client/app/src/ui/media_context_menu.rs:72",
+          "fluxer_client/app/src/ui/media_viewer.rs:218",
+          "fluxer_client/app/src/ui/media_viewer.rs:23",
+          "fluxer_client/app/src/ui/media_viewer.rs:55"
+        ],
+        "reason": "Rust implements MediaContextMenu"
       }
     },
     {
@@ -10102,11 +10292,31 @@
         "kind": "component_render",
         "flx": null
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for MediaContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/channel_popouts.rs:129",
+          "fluxer_client/app/src/ui/channel_popouts.rs:130",
+          "fluxer_client/app/src/ui/channel_popouts.rs:150",
+          "fluxer_client/app/src/ui/channel_popouts.rs:22",
+          "fluxer_client/app/src/ui/channel_popouts.rs:422",
+          "fluxer_client/app/src/ui/channel_popouts.rs:570",
+          "fluxer_client/app/src/ui/channel_popouts.rs:601",
+          "fluxer_client/app/src/ui/media_context_menu.rs:1",
+          "fluxer_client/app/src/ui/media_context_menu.rs:153",
+          "fluxer_client/app/src/ui/media_context_menu.rs:17",
+          "fluxer_client/app/src/ui/media_context_menu.rs:19",
+          "fluxer_client/app/src/ui/media_context_menu.rs:208",
+          "fluxer_client/app/src/ui/media_context_menu.rs:23",
+          "fluxer_client/app/src/ui/media_context_menu.rs:296",
+          "fluxer_client/app/src/ui/media_context_menu.rs:34",
+          "fluxer_client/app/src/ui/media_context_menu.rs:72",
+          "fluxer_client/app/src/ui/media_viewer.rs:218",
+          "fluxer_client/app/src/ui/media_viewer.rs:23",
+          "fluxer_client/app/src/ui/media_viewer.rs:55"
+        ],
+        "reason": "Rust implements MediaContextMenu"
       }
     },
     {
@@ -10119,11 +10329,31 @@
         "kind": "component_render",
         "flx": null
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for MediaContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/channel_popouts.rs:129",
+          "fluxer_client/app/src/ui/channel_popouts.rs:130",
+          "fluxer_client/app/src/ui/channel_popouts.rs:150",
+          "fluxer_client/app/src/ui/channel_popouts.rs:22",
+          "fluxer_client/app/src/ui/channel_popouts.rs:422",
+          "fluxer_client/app/src/ui/channel_popouts.rs:570",
+          "fluxer_client/app/src/ui/channel_popouts.rs:601",
+          "fluxer_client/app/src/ui/media_context_menu.rs:1",
+          "fluxer_client/app/src/ui/media_context_menu.rs:153",
+          "fluxer_client/app/src/ui/media_context_menu.rs:17",
+          "fluxer_client/app/src/ui/media_context_menu.rs:19",
+          "fluxer_client/app/src/ui/media_context_menu.rs:208",
+          "fluxer_client/app/src/ui/media_context_menu.rs:23",
+          "fluxer_client/app/src/ui/media_context_menu.rs:296",
+          "fluxer_client/app/src/ui/media_context_menu.rs:34",
+          "fluxer_client/app/src/ui/media_context_menu.rs:72",
+          "fluxer_client/app/src/ui/media_viewer.rs:218",
+          "fluxer_client/app/src/ui/media_viewer.rs:23",
+          "fluxer_client/app/src/ui/media_viewer.rs:55"
+        ],
+        "reason": "Rust implements MediaContextMenu"
       }
     },
     {
@@ -10140,7 +10370,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:666",
+          "fluxer_client/app/src/ui/channel_popouts.rs:706",
           "fluxer_client/app/src/ui/message_actions.rs:209",
           "fluxer_client/app/src/ui/message_actions.rs:3"
         ],
@@ -10161,7 +10391,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:666",
+          "fluxer_client/app/src/ui/channel_popouts.rs:706",
           "fluxer_client/app/src/ui/message_actions.rs:209",
           "fluxer_client/app/src/ui/message_actions.rs:3"
         ],
@@ -10182,7 +10412,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:666",
+          "fluxer_client/app/src/ui/channel_popouts.rs:706",
           "fluxer_client/app/src/ui/message_actions.rs:209",
           "fluxer_client/app/src/ui/message_actions.rs:3"
         ],
@@ -10203,7 +10433,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:666",
+          "fluxer_client/app/src/ui/channel_popouts.rs:706",
           "fluxer_client/app/src/ui/message_actions.rs:209",
           "fluxer_client/app/src/ui/message_actions.rs:3"
         ],
@@ -10224,7 +10454,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:666",
+          "fluxer_client/app/src/ui/channel_popouts.rs:706",
           "fluxer_client/app/src/ui/message_actions.rs:209",
           "fluxer_client/app/src/ui/message_actions.rs:3"
         ],
@@ -10245,7 +10475,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:666",
+          "fluxer_client/app/src/ui/channel_popouts.rs:706",
           "fluxer_client/app/src/ui/message_actions.rs:209",
           "fluxer_client/app/src/ui/message_actions.rs:3"
         ],
@@ -10283,7 +10513,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_popouts.rs:122"
+          "fluxer_client/app/src/ui/channel_popouts.rs:123"
         ],
         "reason": "Rust implements PersonalNotesContextMenu"
       }
@@ -16627,118 +16857,6 @@
       "rust_matches": []
     },
     {
-      "id": "action:tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L654:Tooltip:1",
-      "item_id": "tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L654:Tooltip:1",
-      "category": "tooltips",
-      "status": "differs",
-      "title": "[tooltips/differs] VoiceControlBar:Tooltip@L654: flx 'voice.voice-control-bar.voice-control-bar-inner.container' exists in Rust without tooltip call",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceControlBar.tsx",
-      "official_line": 654,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/voice_stage.rs:764"
-      ]
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L697:Tooltip:2",
-      "item_id": "tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L697:Tooltip:2",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] VoiceControlBar:Tooltip@L697: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceControlBar.tsx",
-      "official_line": 697,
-      "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L720:Tooltip:3",
-      "item_id": "tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L720:Tooltip:3",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] VoiceControlBar:Tooltip@L720: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceControlBar.tsx",
-      "official_line": 720,
-      "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L763:Tooltip:4",
-      "item_id": "tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L763:Tooltip:4",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] VoiceControlBar:Tooltip@L763: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceControlBar.tsx",
-      "official_line": 763,
-      "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L789:Tooltip:5",
-      "item_id": "tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L789:Tooltip:5",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] VoiceControlBar:Tooltip@L789: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceControlBar.tsx",
-      "official_line": 789,
-      "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L817:Tooltip:6",
-      "item_id": "tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L817:Tooltip:6",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] VoiceControlBar:Tooltip@L817: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceControlBar.tsx",
-      "official_line": 817,
-      "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L840:Tooltip:7",
-      "item_id": "tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L840:Tooltip:7",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] VoiceControlBar:Tooltip@L840: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceControlBar.tsx",
-      "official_line": 840,
-      "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L865:Tooltip:8",
-      "item_id": "tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L865:Tooltip:8",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] VoiceControlBar:Tooltip@L865: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceControlBar.tsx",
-      "official_line": 865,
-      "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L893:Tooltip:9",
-      "item_id": "tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L893:Tooltip:9",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] VoiceControlBar:Tooltip@L893: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceControlBar.tsx",
-      "official_line": 893,
-      "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L919:Tooltip:10",
-      "item_id": "tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L919:Tooltip:10",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] VoiceControlBar:Tooltip@L919: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceControlBar.tsx",
-      "official_line": 919,
-      "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L937:Tooltip:11",
-      "item_id": "tooltips:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L937:Tooltip:11",
-      "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] VoiceControlBar:Tooltip@L937: no matching tooltip in fluxer_client/app/src",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceControlBar.tsx",
-      "official_line": 937,
-      "rust_matches": []
-    },
-    {
       "id": "action:tooltips:fluxer_app/src/features/voice/components/VoiceE2EEIndicator.tsx:L37:Tooltip:1",
       "item_id": "tooltips:fluxer_app/src/features/voice/components/VoiceE2EEIndicator.tsx:L37:Tooltip:1",
       "category": "tooltips",
@@ -17372,26 +17490,6 @@
       "title": "[context_menus/missing] InviteEmbedContextMenu: no matching context menu for InviteEmbedContextMenu",
       "official_file": "fluxer_app/src/features/ui/action_menu/InviteEmbedContextMenu.tsx",
       "official_line": 35,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:component:MediaContextMenu:fluxer_app/src/app/desktop/DesktopDeferredComponents.tsx",
-      "item_id": "context_menus:component:MediaContextMenu:fluxer_app/src/app/desktop/DesktopDeferredComponents.tsx",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] MediaContextMenu: no matching context menu for MediaContextMenu",
-      "official_file": "fluxer_app/src/app/desktop/DesktopDeferredComponents.tsx",
-      "official_line": 131,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:component:MediaContextMenu:fluxer_app/src/features/ui/action_menu/MediaContextMenu.tsx",
-      "item_id": "context_menus:component:MediaContextMenu:fluxer_app/src/features/ui/action_menu/MediaContextMenu.tsx",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] MediaContextMenu: no matching context menu for MediaContextMenu",
-      "official_file": "fluxer_app/src/features/ui/action_menu/MediaContextMenu.tsx",
-      "official_line": 77,
       "rust_matches": []
     },
     {
@@ -18763,46 +18861,6 @@
       "rust_matches": []
     },
     {
-      "id": "action:context_menus:handler:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L674",
-      "item_id": "context_menus:handler:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L674",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] VoiceControlBar.onContextMenu: no matching context menu for VoiceControlBar.onContextMenu",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceControlBar.tsx",
-      "official_line": 674,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:handler:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L740",
-      "item_id": "context_menus:handler:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L740",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] VoiceControlBar.onContextMenu: no matching context menu for VoiceControlBar.onContextMenu",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceControlBar.tsx",
-      "official_line": 740,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:handler:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L795",
-      "item_id": "context_menus:handler:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L795",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] VoiceControlBar.onContextMenu: no matching context menu for VoiceControlBar.onContextMenu",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceControlBar.tsx",
-      "official_line": 795,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:handler:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L849",
-      "item_id": "context_menus:handler:fluxer_app/src/features/voice/components/VoiceControlBar.tsx:L849",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] VoiceControlBar.onContextMenu: no matching context menu for VoiceControlBar.onContextMenu",
-      "official_file": "fluxer_app/src/features/voice/components/VoiceControlBar.tsx",
-      "official_line": 849,
-      "rust_matches": []
-    },
-    {
       "id": "action:context_menus:handler:fluxer_app/src/features/voice/components/VoiceParticipantAvatarList.tsx:L318",
       "item_id": "context_menus:handler:fluxer_app/src/features/voice/components/VoiceParticipantAvatarList.tsx:L318",
       "category": "context_menus",
@@ -19494,86 +19552,6 @@
       "title": "[context_menus/missing] InviteEmbedContextMenu: no matching context menu for InviteEmbedContextMenu",
       "official_file": "fluxer_app/src/features/channel/components/InviteEmbed.tsx",
       "official_line": 408,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:MediaContextMenu:fluxer_app/src/features/channel/components/embeds/attachments/AttachmentFile.tsx:L209",
-      "item_id": "context_menus:render:MediaContextMenu:fluxer_app/src/features/channel/components/embeds/attachments/AttachmentFile.tsx:L209",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] MediaContextMenu: no matching context menu for MediaContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/embeds/attachments/AttachmentFile.tsx",
-      "official_line": 209,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:MediaContextMenu:fluxer_app/src/features/channel/components/embeds/attachments/AttachmentGridItem.tsx:L278",
-      "item_id": "context_menus:render:MediaContextMenu:fluxer_app/src/features/channel/components/embeds/attachments/AttachmentGridItem.tsx:L278",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] MediaContextMenu: no matching context menu for MediaContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/embeds/attachments/AttachmentGridItem.tsx",
-      "official_line": 278,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:MediaContextMenu:fluxer_app/src/features/channel/components/embeds/media/EmbedAudio.tsx:L88",
-      "item_id": "context_menus:render:MediaContextMenu:fluxer_app/src/features/channel/components/embeds/media/EmbedAudio.tsx:L88",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] MediaContextMenu: no matching context menu for MediaContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/embeds/media/EmbedAudio.tsx",
-      "official_line": 88,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:MediaContextMenu:fluxer_app/src/features/channel/components/embeds/media/EmbedGifv.tsx:L437",
-      "item_id": "context_menus:render:MediaContextMenu:fluxer_app/src/features/channel/components/embeds/media/EmbedGifv.tsx:L437",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] MediaContextMenu: no matching context menu for MediaContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/embeds/media/EmbedGifv.tsx",
-      "official_line": 437,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:MediaContextMenu:fluxer_app/src/features/channel/components/embeds/media/EmbedImage.tsx:L406",
-      "item_id": "context_menus:render:MediaContextMenu:fluxer_app/src/features/channel/components/embeds/media/EmbedImage.tsx:L406",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] MediaContextMenu: no matching context menu for MediaContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/embeds/media/EmbedImage.tsx",
-      "official_line": 406,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:MediaContextMenu:fluxer_app/src/features/channel/components/embeds/media/EmbedVideo.tsx:L301",
-      "item_id": "context_menus:render:MediaContextMenu:fluxer_app/src/features/channel/components/embeds/media/EmbedVideo.tsx:L301",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] MediaContextMenu: no matching context menu for MediaContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/embeds/media/EmbedVideo.tsx",
-      "official_line": 301,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:MediaContextMenu:fluxer_app/src/features/channel/components/embeds/media/VoiceMessagePlayer.tsx:L150",
-      "item_id": "context_menus:render:MediaContextMenu:fluxer_app/src/features/channel/components/embeds/media/VoiceMessagePlayer.tsx:L150",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] MediaContextMenu: no matching context menu for MediaContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/embeds/media/VoiceMessagePlayer.tsx",
-      "official_line": 150,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:MediaContextMenu:fluxer_app/src/features/messaging/components/modals/MediaViewerModal.tsx:L447",
-      "item_id": "context_menus:render:MediaContextMenu:fluxer_app/src/features/messaging/components/modals/MediaViewerModal.tsx:L447",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] MediaContextMenu: no matching context menu for MediaContextMenu",
-      "official_file": "fluxer_app/src/features/messaging/components/modals/MediaViewerModal.tsx",
-      "official_line": 447,
       "rust_matches": []
     },
     {

@@ -25,6 +25,7 @@ use gpui_kit::{
 
 use super::{EmbedCx, MediaKind, MediaView, open_url};
 use crate::ui::l10n;
+use crate::ui::media_context_menu::{MediaContextMenuTarget, MediaMenuKind};
 use crate::ui::media_viewer::{self, MediaViewerItem};
 
 /// Decoded embed images kept beyond this are dropped, least recently drawn
@@ -321,6 +322,18 @@ pub fn render_with_gallery(
     });
     let viewer_pair = gallery.or_else(|| media_viewer::from_embed_media(media, ecx.scale).map(|item| (Arc::new(vec![item]), 0)));
     let open = media.open_url.clone();
+    let rclick_url = media.open_url.clone().or_else(|| media.source.clone()).unwrap_or_default();
+    let rclick_kind = match media.kind {
+        MediaKind::Image => MediaMenuKind::Image,
+        MediaKind::Animated => MediaMenuKind::Gif,
+        MediaKind::Gifv => MediaMenuKind::Gifv,
+        MediaKind::Video => MediaMenuKind::Video,
+        MediaKind::Audio => MediaMenuKind::Audio,
+    };
+    let rclick_target = MediaContextMenuTarget::new(rclick_kind, rclick_url)
+        .with_proxy(media.source.clone())
+        .with_name(media.label.clone());
+    let view_rclick = ecx.view.clone();
     let box_el = div()
         .id(id.clone())
         .debug_selector(|| "embed-media".to_owned())
@@ -331,6 +344,12 @@ pub fn render_with_gallery(
         .rounded(px(4.))
         .overflow_hidden()
         .bg(if media.kind == MediaKind::Video { gpui_kit::black() } else { placeholder })
+        .on_mouse_down(gpui_kit::MouseButton::Right, move |ev, window, cx| {
+            cx.stop_propagation();
+            let pos = ev.position;
+            let target = rclick_target.clone();
+            let _ = view_rclick.update(cx, |v, cx| v.open_media_context_menu_at(target, pos, window, cx));
+        })
         .children(image)
         .when(matches!(media.kind, MediaKind::Gifv | MediaKind::Animated), |d| d.child(gif_badge()))
         .when(media.kind == MediaKind::Video, |d| d.child(play_button()));
@@ -361,6 +380,11 @@ fn audio_row(media: &MediaView, id: SharedString, ecx: &EmbedCx) -> AnyElement {
     let label = media.label.clone().unwrap_or_else(|| l10n::tr("Audio").into());
     let open = media.open_url.clone();
     let view = ecx.view.clone();
+    let view_rclick = ecx.view.clone();
+    let rclick_url = media.open_url.clone().or_else(|| media.source.clone()).unwrap_or_default();
+    let rclick_target = MediaContextMenuTarget::new(MediaMenuKind::Audio, rclick_url)
+        .with_proxy(media.source.clone())
+        .with_name(media.label.clone());
     div()
         .id(id)
         .flex()
@@ -374,6 +398,12 @@ fn audio_row(media: &MediaView, id: SharedString, ecx: &EmbedCx) -> AnyElement {
         .border_1()
         .border_color(theme.border)
         .bg(theme.background_secondary)
+        .on_mouse_down(gpui_kit::MouseButton::Right, move |ev, window, cx| {
+            cx.stop_propagation();
+            let pos = ev.position;
+            let target = rclick_target.clone();
+            let _ = view_rclick.update(cx, |v, cx| v.open_media_context_menu_at(target, pos, window, cx));
+        })
         .child(div().text_color(theme.muted_foreground).child("♪"))
         .child(div().flex_1().min_w_0().truncate().text_color(theme.text_link).child(label))
         .when_some(open, |d, url| {

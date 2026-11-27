@@ -21,6 +21,7 @@ pub mod header;
 pub mod invite_modal;
 pub mod l10n;
 pub mod link_warning;
+pub mod media_context_menu;
 pub mod media_viewer;
 pub mod message_list;
 pub mod message_row;

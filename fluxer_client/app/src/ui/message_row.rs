@@ -16,6 +16,7 @@ use crate::client_view::ClientView;
 use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 use crate::ui::avatar::{AvatarSpec, render_avatar_tagged};
+use crate::ui::media_context_menu::{MediaContextMenuTarget, MediaMenuKind};
 use crate::ui::media_viewer::{self, MediaViewerItem};
 use crate::ui::{embed, l10n, message_actions, reactions, reply};
 use crate::view_model::MessageRow;
@@ -342,6 +343,12 @@ pub fn render(
             }
             let url = image.url.clone();
             let view_img = view.clone();
+            let view_rclick = view.clone();
+            let media_target = MediaContextMenuTarget::new(
+                if image.animated { MediaMenuKind::Gif } else { MediaMenuKind::Image },
+                image.url.clone(),
+            )
+            .with_proxy(image.proxy_url.clone());
             let items_for_click = viewer_items.clone();
             let thumb = img(image.source(scale))
                 .image_cache(&cache)
@@ -373,6 +380,12 @@ pub fn render(
                         .flx("channel.embeds.media.embed-image.image-element")
                 })
                 .cursor_pointer()
+                .on_mouse_down(gpui_kit::MouseButton::Right, move |ev, window, cx| {
+                    cx.stop_propagation();
+                    let pos = ev.position;
+                    let target = media_target.clone();
+                    let _ = view_rclick.update(cx, |v, cx| v.open_media_context_menu_at(target, pos, window, cx));
+                })
                 .on_click(move |_, window, cx| {
                     let items = (*items_for_click).clone();
                     let _ = view_img.update(cx, |v, cx| v.open_media_viewer(items, ix, window, cx));
@@ -509,9 +522,19 @@ pub fn render(
                     let _ = view_file.update(cx, |v, cx| v.open_external_url(&url, window, cx));
                 });
             }
+            let file_url = file.url.clone();
+            let file_name = file.filename.clone();
+            let view_file_rclick = view.clone();
             list = list.child(
                 div()
                     .debug_selector(move || debug_id.to_string())
+                    .on_mouse_down(gpui_kit::MouseButton::Right, move |ev, window, cx| {
+                        cx.stop_propagation();
+                        let pos = ev.position;
+                        let target = MediaContextMenuTarget::new(MediaMenuKind::File, file_url.clone())
+                            .with_name(Some(file_name.clone().into()));
+                        let _ = view_file_rclick.update(cx, |v, cx| v.open_media_context_menu_at(target, pos, window, cx));
+                    })
                     .child(card)
                     .children(file.expiry.clone().map(|label| expiry_footnote(label, theme))),
             );

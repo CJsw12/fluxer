@@ -12,13 +12,15 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::Escape;
 use gpui_kit::{
     AnyElement, ClipboardItem, Context, Corners, FocusHandle, FontWeight, ImageCache, ImageSource, KeyDownEvent,
-    MouseButton, ObjectFit, SharedString, StyledImage as _, Window, canvas, div, img, prelude::*, px,
+    MouseButton, MouseDownEvent, ObjectFit, Pixels, Point, SharedString, StyledImage as _, Window, canvas, div, img,
+    prelude::*, px,
 };
 
 use super::embed::{self, MediaKind, MediaView};
 use crate::client_view::ClientView;
 use crate::theme::Theme;
 use crate::ui::l10n;
+use crate::ui::media_context_menu::{self, MediaContextMenu, MediaContextMenuTarget, MediaMenuKind};
 use crate::ui::overlay::Overlay;
 use crate::view_model::ImagePreview;
 
@@ -50,6 +52,7 @@ pub struct MediaViewerModal {
     pub zoomed: bool,
     pub focus: FocusHandle,
     playback: Cell<ViewerPlayback>,
+    pub context_menu: Option<(MediaContextMenu, Point<Pixels>)>,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -168,6 +171,7 @@ impl ClientView {
             zoomed: false,
             focus: focus.clone(),
             playback: Cell::default(),
+            context_menu: None,
         });
         window.focus(&focus, cx);
         cx.notify();
@@ -183,6 +187,7 @@ impl ClientView {
             modal.index = next;
             modal.zoomed = false;
             modal.playback.set(ViewerPlayback::default());
+            modal.context_menu = None;
             cx.notify();
         }
     }
@@ -199,6 +204,26 @@ impl ClientView {
     pub(crate) fn media_viewer_toggle_zoom(&mut self, cx: &mut Context<Self>) {
         if let Overlay::MediaViewer(modal) = &mut self.overlay {
             modal.zoomed = !modal.zoomed;
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn open_media_viewer_context_menu(&mut self, anchor: Point<Pixels>, cx: &mut Context<Self>) {
+        let Overlay::MediaViewer(modal) = &mut self.overlay else { return };
+        let Some(item) = modal.items.get(modal.index) else { return };
+        let kind = if item.animated { MediaMenuKind::Gif } else { MediaMenuKind::Image };
+        let target = MediaContextMenuTarget::new(kind, item.url.clone())
+            .with_proxy(Some(item.preview_url.clone()))
+            .with_name(item.label.clone());
+        modal.context_menu = Some((MediaContextMenu { target }, anchor));
+        cx.notify();
+    }
+
+    pub(crate) fn close_media_viewer_context_menu(&mut self, cx: &mut Context<Self>) {
+        if let Overlay::MediaViewer(modal) = &mut self.overlay
+            && modal.context_menu.is_some()
+        {
+            modal.context_menu = None;
             cx.notify();
         }
     }
@@ -380,8 +405,32 @@ pub fn render(
         .p_2()
         .cursor_pointer()
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .on_mouse_down(
+            MouseButton::Right,
+            cx.listener(|this, ev: &MouseDownEvent, _, cx| {
+                cx.stop_propagation();
+                this.open_media_viewer_context_menu(ev.position, cx);
+            }),
+        )
         .on_click(cx.listener(|this, _, _, cx| this.media_viewer_toggle_zoom(cx)))
         .child(image_el);
+
+    let context_menu_el = modal.context_menu.as_ref().map(|(menu, anchor)| {
+        let target_cb = menu.target.clone();
+        media_context_menu::render_floating(
+            &menu.target,
+            *anchor,
+            window.viewport_size(),
+            theme,
+            cx.listener(move |this, action, window, cx| {
+                this.close_media_viewer_context_menu(cx);
+                media_context_menu::execute_action(this, *action, &target_cb, window, cx);
+            }),
+            cx.listener(|this, _, _, cx| {
+                this.close_media_viewer_context_menu(cx);
+            }),
+        )
+    });
 
     div()
         .id("media-viewer-backdrop")
@@ -401,11 +450,21 @@ pub fn render(
         .occlude()
         .on_mouse_down(
             MouseButton::Left,
-            cx.listener(|this, _, window, cx| this.close_overlay(window, cx)),
+            cx.listener(|this, _, window, cx| {
+                if matches!(&this.overlay, Overlay::MediaViewer(m) if m.context_menu.is_some()) {
+                    this.close_media_viewer_context_menu(cx);
+                } else {
+                    this.close_overlay(window, cx);
+                }
+            }),
         )
         .capture_action(cx.listener(|this, _: &Escape, window, cx| {
             cx.stop_propagation();
-            this.close_overlay(window, cx);
+            if matches!(&this.overlay, Overlay::MediaViewer(m) if m.context_menu.is_some()) {
+                this.close_media_viewer_context_menu(cx);
+            } else {
+                this.close_overlay(window, cx);
+            }
         }))
         .on_key_down(cx.listener(|this, ev: &KeyDownEvent, _, cx| {
             let m = ev.keystroke.modifiers;
@@ -434,6 +493,7 @@ pub fn render(
         }))
         .child(stage)
         .child(toolbar)
+        .children(context_menu_el)
         .into_any_element()
 }
 

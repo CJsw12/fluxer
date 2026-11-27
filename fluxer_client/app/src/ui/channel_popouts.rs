@@ -19,6 +19,7 @@ use crate::client_view::ClientView;
 use crate::icons::AppIcon;
 use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
+use crate::ui::media_context_menu::{self, MediaContextMenu, MediaContextMenuTarget};
 use crate::ui::message_actions::{self, ActionTarget, MessageAction};
 use crate::ui::overlay::Overlay;
 use crate::ui::search_panel::SearchScopeChoice;
@@ -125,6 +126,8 @@ pub enum ChannelPopoutKind {
     },
     /// Explore page language filter (`DiscoveryLanguageDropdown`).
     ExploreLanguage,
+    /// Media right-click context menu (`MediaContextMenu`).
+    MediaContextMenu(MediaContextMenu),
 }
 
 pub struct ChannelPopout {
@@ -144,6 +147,7 @@ impl ChannelPopoutKind {
             Self::SearchScope => "search-scope",
             Self::PersonalNotesMenu { .. } => "personal-notes-menu",
             Self::ExploreLanguage => "explore-language",
+            Self::MediaContextMenu(_) => "media-context-menu",
         }
     }
 }
@@ -403,6 +407,24 @@ impl ClientView {
         cx.notify();
     }
 
+    /// Opens the media context menu at cursor coordinates (right click on an attachment or embed).
+    pub(crate) fn open_media_context_menu_at(
+        &mut self,
+        target: MediaContextMenuTarget,
+        anchor: Point<Pixels>,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.dismissed_channel_popout = None;
+        self.prepare_overlay_replace(cx);
+        self.autocomplete = None;
+        self.overlay = Overlay::ChannelPopout(ChannelPopout {
+            kind: ChannelPopoutKind::MediaContextMenu(MediaContextMenu { target }),
+            anchor,
+        });
+        cx.notify();
+    }
+
     pub(crate) fn toggle_explore_language_popout(
         &mut self,
         anchor: Point<Pixels>,
@@ -545,6 +567,22 @@ pub fn render(
             "discovery.discovery.discovery-language-dropdown.menu-group",
             render_explore_language(view, theme, hover_bg, cx),
         ),
+        ChannelPopoutKind::MediaContextMenu(menu) => {
+            let target_for_cb = menu.target.clone();
+            (
+                208.,
+                media_context_menu::menu_height(menu.target.kind),
+                "ui.action-menu.context-menu.popup",
+                media_context_menu::render_menu_body(
+                    &menu.target,
+                    theme,
+                    cx.listener(move |this, action, window, cx| {
+                        this.close_overlay(window, cx);
+                        media_context_menu::execute_action(this, *action, &target_for_cb, window, cx);
+                    }),
+                ),
+            )
+        }
     };
 
     let vw = f32::from(viewport.width);
@@ -557,8 +595,10 @@ pub fn render(
     // from the trigger's left edge with a 4px gap.
     let (anchor_corner, left, top) = match &pop.kind {
         ChannelPopoutKind::Inbox { .. } => (Anchor::TopLeft, (vw - width - 16.).max(16.), 52.0_f32.min((vh - height - 12.).max(44.))),
-        // Right-click message / personal-notes menus open at cursor clamped within viewport.
-        ChannelPopoutKind::MessageMenu { at_cursor: true, .. } | ChannelPopoutKind::PersonalNotesMenu { .. } => {
+        // Right-click message / personal-notes / media menus open at cursor clamped within viewport.
+        ChannelPopoutKind::MessageMenu { at_cursor: true, .. }
+        | ChannelPopoutKind::PersonalNotesMenu { .. }
+        | ChannelPopoutKind::MediaContextMenu(_) => {
             (Anchor::TopLeft, ax.clamp(12., (vw - width - 12.).max(12.)), ay.clamp(12., (vh - height - 12.).max(12.)))
         }
         ChannelPopoutKind::SearchScope => (

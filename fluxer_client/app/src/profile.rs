@@ -9,7 +9,8 @@
 //! keeps `a_` and adds `?animated=true`).
 
 use fluxer_client_core::rest::{
-    GuildMemberSummary, PROFILE_FLAG_AVATAR_UNSET, PROFILE_FLAG_BANNER_UNSET, ProfileUser, UserProfileFull,
+    GuildMemberSummary, PROFILE_FLAG_AVATAR_UNSET, PROFILE_FLAG_BANNER_UNSET, ProfileBadge, ProfileUser,
+    UserConnection, UserProfileFull,
 };
 use fluxer_client_core::state::{ClientState, RelationshipKind, Snowflake, User, parse_timestamp_ms};
 
@@ -51,7 +52,7 @@ pub struct VoiceActivityItem {
 }
 
 /// Everything the profile surface draws, built under the state lock.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ProfileCard {
     pub user_id: Snowflake,
     pub guild_id: Option<Snowflake>,
@@ -64,6 +65,8 @@ pub struct ProfileCard {
     pub banner_color: u32,
     pub bio: Option<String>,
     pub pronouns: Option<String>,
+    pub profile_badges: Vec<ProfileBadge>,
+    pub connected_accounts: Vec<UserConnection>,
     pub roles: Vec<ProfileRole>,
     pub mutual_guilds: Vec<MutualGuildItem>,
     /// Empty when the fetch has no `mutual_friends` (section hidden).
@@ -190,6 +193,30 @@ fn flags(fetched_member: Option<&GuildMemberSummary>) -> u32 {
 
 fn non_empty(value: Option<&str>) -> Option<&str> {
     value.filter(|value| !value.is_empty())
+}
+
+pub(crate) fn profile_badge_image(badge: &ProfileBadge, static_cdn: Option<&str>) -> Option<String> {
+    if let Some(url) = badge.asset_url.as_deref()
+        && url::Url::parse(url).is_ok_and(|url| matches!(url.scheme(), "http" | "https"))
+    {
+        return Some(url.to_owned());
+    }
+    let base = static_cdn?.trim_end_matches('/');
+    let hash = [badge.small_asset.as_deref(), badge.asset.as_deref()]
+        .into_iter()
+        .flatten()
+        .find(|hash| hash.len() == 16 && hash.bytes().all(|b| b.is_ascii_hexdigit()))?;
+    Some(format!("{base}/badges/{hash}.webp"))
+}
+
+pub(crate) fn profile_badge_tooltip(badge: &ProfileBadge) -> String {
+    let Some(details) = &badge.details else { return badge.label.clone(); };
+    let text = std::iter::once(details.title.as_str())
+        .chain(details.lines.iter().map(String::as_str))
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
+    if text.is_empty() { badge.label.clone() } else { text }
 }
 
 /// Formats `username#discriminator` while suppressing `0` and `0000` placeholders.
@@ -370,6 +397,17 @@ pub fn build_profile_card(
         banner_color,
         bio,
         pronouns,
+        profile_badges: fetched.into_iter().flat_map(|profile| {
+            profile.profile_badges.iter().filter(|badge| {
+                !profile.profile_limited || !matches!(
+                    badge.kind.as_str(),
+                    "premium" | "plutonium" | "visionary" | "visionary_number" | "operator_pass"
+                )
+            })
+        }).cloned().collect(),
+        connected_accounts: fetched
+            .filter(|profile| !profile.profile_limited)
+            .map_or_else(Vec::new, |profile| profile.connected_accounts.clone()),
         roles,
         mutual_guilds,
         mutual_friends,
@@ -524,6 +562,7 @@ mod tests {
                 MutualGuild { id: Snowflake(100), nick: Some("MyNick".to_owned()) },
                 MutualGuild { id: Snowflake(999), nick: None },
             ]),
+            ..Default::default()
         }
     }
 
@@ -660,6 +699,7 @@ mod tests {
             guild_member: None,
             mutual_friends: None,
             mutual_guilds: None,
+            ..Default::default()
         };
         build_profile_card(&state, None, Snowflake(user_id), None, Some(&fetched)).banner_color
     }
@@ -700,6 +740,7 @@ mod tests {
             }),
             mutual_friends: None,
             mutual_guilds: None,
+            ..Default::default()
         };
 
         let guild_card = build_profile_card(&state, Some("https://media.example"), Snowflake(10), Some(Snowflake(100)), Some(&fetched));
@@ -754,6 +795,7 @@ mod tests {
             }),
             mutual_friends: None,
             mutual_guilds: None,
+            ..Default::default()
         };
 
         let card = build_profile_card(&state, None, Snowflake(10), Some(Snowflake(100)), Some(&fetched));

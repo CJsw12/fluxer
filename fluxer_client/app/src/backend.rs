@@ -215,6 +215,7 @@ pub struct Backend {
     last_nonce: Arc<AtomicU64>,
     /// Instance media endpoint (avatars), from discovery.
     media: Option<Arc<str>>,
+    pub(crate) static_cdn: Option<Arc<str>>,
     /// Web app origin for `Copy message link`.
     webapp: Option<Arc<str>>,
     /// Invite link base origin from discovery (`endpoints.invite`).
@@ -331,6 +332,7 @@ impl Backend {
         };
         let (mut backend, rx) = Self::new(runtime, instance.rest, Some(gateway));
         backend.media = instance.endpoints.media.as_deref().map(Arc::from);
+        backend.static_cdn = instance.endpoints.static_cdn.as_deref().map(Arc::from);
         backend.webapp = derive_webapp_origin(&instance.endpoints).map(Arc::from);
         backend.invite_origin = instance.endpoints.invite.as_deref().map(|u| Arc::from(u.trim_end_matches('/')));
         backend.webauthn_origin = crate::webauthn::derive_origin(&instance.endpoints).ok().map(Arc::from);
@@ -378,6 +380,7 @@ impl Backend {
             gateway,
             last_nonce: Arc::new(AtomicU64::new(0)),
             media: None,
+            static_cdn: None,
             webapp: None,
             invite_origin: None,
             webauthn_origin: None,

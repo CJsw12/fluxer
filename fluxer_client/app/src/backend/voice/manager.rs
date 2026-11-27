@@ -906,6 +906,15 @@ impl VoiceManager {
 
     pub(super) fn handle_room_event(&mut self, event: VoiceRoomEvent) -> bool {
         match event {
+            VoiceRoomEvent::ScreenShareAudio { request, active, .. } => {
+                if !self.self_stream || !self.last_screen_share_options.with_audio
+                    || self.media.as_ref().and_then(|media| media.room.screen_share_request_id()) != Some(request)
+                {
+                    return false;
+                }
+                self.screen_share_audio = active;
+                true
+            }
             VoiceRoomEvent::TracksChanged => {
                 if let Some(watched) = &self.watched_video_track {
                     let published = self

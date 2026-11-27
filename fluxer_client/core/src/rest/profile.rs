@@ -5,6 +5,7 @@
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::state::Snowflake;
+use super::UserConnection;
 
 /// The profile explicitly cleared its avatar (`PROFILE_FLAGS.AVATAR_UNSET`).
 pub const PROFILE_FLAG_AVATAR_UNSET: u32 = 1 << 0;
@@ -22,7 +23,7 @@ where
 
 /// `UserProfileFullResponse`: the user, their profile and the guild-scoped
 /// member profile when `guild_id` was requested.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct UserProfileFull {
     #[serde(default)]
     pub user: Option<ProfileUser>,
@@ -37,6 +38,31 @@ pub struct UserProfileFull {
     /// `with_mutual_friends=true` users; `null`/absent -> `None`.
     #[serde(default)]
     pub mutual_friends: Option<Vec<ProfileUser>>,
+    #[serde(default, deserialize_with = "null_default")]
+    pub profile_badges: Vec<ProfileBadge>,
+    #[serde(default, deserialize_with = "null_default")]
+    pub connected_accounts: Vec<UserConnection>,
+    #[serde(default, deserialize_with = "null_default")]
+    pub profile_limited: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProfileBadge {
+    pub key: String,
+    pub kind: String,
+    pub label: String,
+    pub asset: Option<String>,
+    pub asset_url: Option<String>,
+    pub small_asset: Option<String>,
+    pub aspect_ratio: Option<f32>,
+    pub caption: Option<String>,
+    pub details: Option<ProfileBadgeDetails>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProfileBadgeDetails {
+    pub title: String,
+    pub lines: Vec<String>,
 }
 
 /// The profile's user subset. `username` falls back to an empty string when

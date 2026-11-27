@@ -62,7 +62,7 @@ pub use discovery::{
 pub use error::{ApiError, DiscoveryAttempt, DiscoveryError, FieldError, RestError};
 pub use profile::{
     GuildMemberSummary, MutualGuild, PROFILE_FLAG_AVATAR_UNSET, PROFILE_FLAG_BANNER_UNSET, ProfileUser,
-    UserProfileData, UserProfileFull,
+    ProfileBadge, ProfileBadgeDetails, UserProfileData, UserProfileFull,
 };
 pub use secret::{Secret, SecretToken, redact_json};
 pub use upload::{

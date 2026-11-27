@@ -12,6 +12,10 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::process::Stdio;
 use std::sync::atomic::{AtomicBool, Ordering};
+
+#[cfg(test)]
+#[path = "../tests_voice_share_audio.rs"]
+mod tests_voice_share_audio;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -203,6 +207,7 @@ impl fmt::Debug for WorkerCommand {
 pub(crate) enum WorkerEvent {
     Connected,
     Error { message: String },
+    ScreenShareAudio { request: u64, active: bool, error: Option<String> },
     Disconnected { reason: String },
     ScreenSources {
         sources: Vec<ScreenSourceInfo>,
@@ -340,6 +345,7 @@ impl WorkerEvent {
             )),
             Self::Connected
             | Self::Error { .. }
+            | Self::ScreenShareAudio { .. }
             | Self::Disconnected { .. }
             | Self::ScreenSources { .. }
             | Self::ActiveSpeakers { .. }
@@ -491,6 +497,7 @@ pub(crate) struct ProcessVoiceRoom {
     pending_video_frame: Arc<Mutex<Option<(String, u32, u32, Vec<u8>)>>>,
     video_frame_notified: Arc<AtomicBool>,
     event_rx: Mutex<Option<mpsc::UnboundedReceiver<VoiceRoomEvent>>>,
+    screen_share_request: Mutex<u64>,
 }
 
 impl ProcessVoiceRoom {
@@ -531,21 +538,15 @@ impl VoiceRoom for ProcessVoiceRoom {
     }
 
     fn set_screen_share(&self, active: bool, with_audio: bool) {
-        self.send_command(WorkerCommand::SetScreenShare {
-            active,
-            with_audio,
-            source_id: None,
-            source_kind: None,
-            width: None,
-            height: None,
-            fps: None,
-            codec: None,
-            max_bitrate: None,
-        });
+        self.set_screen_share_with_options(active, &ScreenShareOptions { with_audio, ..Default::default() });
     }
 
     fn set_screen_share_with_options(&self, active: bool, opts: &ScreenShareOptions) {
-        self.send_command(WorkerCommand::SetScreenShare {
+        let mut request = self.screen_share_request.lock().unwrap_or_else(|err| err.into_inner());
+        if self.closed.load(Ordering::SeqCst) {
+            return;
+        }
+        if self.tx.try_send(WorkerCommand::SetScreenShare {
             active,
             with_audio: opts.with_audio,
             source_id: opts.source_id,
@@ -555,7 +556,18 @@ impl VoiceRoom for ProcessVoiceRoom {
             fps: opts.fps,
             codec: opts.codec.clone(),
             max_bitrate: opts.max_bitrate,
-        });
+        }).is_ok() {
+            // The worker counts SetScreenShare commands in the same FIFO order.
+            *request = request.wrapping_add(1);
+        } else {
+            // Close the worker if its queue cannot accept a capture state change.
+            self.mute_state.close_requested.store(true, Ordering::Release);
+            self.mute_state.notify.notify_one();
+        }
+    }
+
+    fn screen_share_request_id(&self) -> Option<u64> {
+        self.screen_share_request.lock().ok().map(|request| *request)
     }
 
     fn request_screen_sources(&self) {
@@ -775,6 +787,9 @@ async fn run_event_reader<R>(
             WorkerEvent::ScreenSources { sources } => {
                 let _ = event_tx.send(VoiceRoomEvent::ScreenSources(sources));
             }
+            WorkerEvent::ScreenShareAudio { request, active, error } => {
+                let _ = event_tx.send(VoiceRoomEvent::ScreenShareAudio { request, active, error });
+            }
             WorkerEvent::ActiveSpeakers { speakers } => {
                 let _ = event_tx.send(VoiceRoomEvent::ActiveSpeakers(speakers));
             }
@@ -898,6 +913,7 @@ where
                 pending_video_frame,
                 video_frame_notified,
                 event_rx: Mutex::new(Some(event_rx)),
+                screen_share_request: Mutex::new(0),
             })
         }
         WorkerEvent::Error { message } => Err(message),
@@ -909,6 +925,7 @@ where
         | WorkerEvent::TrackSubscribed { .. }
         | WorkerEvent::TrackUnsubscribed { .. }
         | WorkerEvent::ScreenSources { .. }
+        | WorkerEvent::ScreenShareAudio { .. }
         | WorkerEvent::ActiveSpeakers { .. }
         | WorkerEvent::VideoFrame { .. } => {
             Err("unexpected track event before voice worker connected".to_owned())

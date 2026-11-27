@@ -136,6 +136,7 @@ fn profile_opens_loads_saves_note_and_navigates(cx: &mut TestAppContext) {
         }),
         mutual_friends: None,
         mutual_guilds: Some(vec![MutualGuild { id: SECOND_GUILD, nick: None }]),
+        ..Default::default()
     };
     view.update(cx, |v, cx| {
         v.handle_events(

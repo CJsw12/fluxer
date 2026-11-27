@@ -13,6 +13,7 @@ use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
 use crate::ui::avatar::{AvatarSpec, render_clickable_avatar_tagged};
 use crate::ui::search_panel::SearchScopeChoice;
+use crate::ui::sidebar_menus::{SidebarMenuKind, open_context_menu};
 use crate::ui::{l10n, rail_tooltip};
 use crate::updater::UpdateStatus;
 use crate::view_model::{ChannelIcon, Place};
@@ -150,16 +151,18 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .gap(px(8.))
                         .overflow_hidden()
                         .flx("channel.channel-header.left-content-container")
+                        .when_some(view.selected_channel.filter(|_| !is_personal_notes), |d, channel_id| {
+                            d.on_mouse_down(
+                                MouseButton::Right,
+                                cx.listener(move |this, event: &gpui_kit::MouseDownEvent, window, cx| {
+                                    cx.stop_propagation();
+                                    this.close_overlay(window, cx);
+                                    open_context_menu(SidebarMenuKind::Header(channel_id), this, event, cx);
+                                }),
+                            )
+                        })
                         .when(is_guild_channel, |d| {
                             d.flx("channel.channel-header.channel-info-container.context-menu")
-                                .on_mouse_down(
-                                    MouseButton::Right,
-                                    cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
-                                        cx.stop_propagation();
-                                        // TODO(backlog): open ChannelContextMenu / ThreadContextMenu
-                                        this.close_overlay(window, cx);
-                                    }),
-                                )
                         })
                         .when_some(dm_peer, |d, peer| {
                             let dm_uid = peer.dm_user_id.unwrap_or(peer.id);
@@ -173,14 +176,6 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                     .on_click(cx.listener(move |this, ev: &gpui_kit::ClickEvent, window, cx| {
                                         this.open_profile(dm_uid, None, ev.position(), window, cx);
                                     }))
-                                    .on_mouse_down(
-                                        MouseButton::Right,
-                                        cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
-                                            cx.stop_propagation();
-                                            // TODO(backlog): open DMContextMenu
-                                            this.close_overlay(window, cx);
-                                        }),
-                                    )
                                     .flx("channel.channel-header.desktop-button.open-user-profile")
                                     .child(render_clickable_avatar_tagged(
                                         AvatarSpec {
@@ -234,14 +229,6 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                     .gap(px(8.))
                                     .cursor_pointer()
                                     .on_click(cx.listener(|this, _, _, cx| this.toggle_member_list(cx)))
-                                    .on_mouse_down(
-                                        MouseButton::Right,
-                                        cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
-                                            cx.stop_propagation();
-                                            // TODO(backlog): open GroupDMContextMenu
-                                            this.close_overlay(window, cx);
-                                        }),
-                                    )
                                     .flx("channel.channel-header.group-dm-header-trigger.open-edit-group")
                                     .child(
                                         div()
@@ -331,6 +318,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             d.child(
                                 div()
                                     .id("header-channel-name")
+                                    .debug_selector(|| "header-channel-name".to_owned())
                                     .flex_none()
                                     .ml(px(4.))
                                     .font_weight(FontWeight::MEDIUM)

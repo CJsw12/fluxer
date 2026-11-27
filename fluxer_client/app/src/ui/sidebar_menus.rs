@@ -5,6 +5,7 @@
 use gpui_kit::{
     AnyElement, App, Context, MouseDownEvent, Pixels, Point, Role, Size, Window, div, prelude::*, px,
 };
+use fluxer_client_core::state::{ChannelKind, Snowflake};
 
 use super::settings::SettingsTab;
 use super::{l10n, overlay};
@@ -18,6 +19,38 @@ pub(crate) enum SidebarMenuKind {
     FluxerButton,
     Favorites,
     Settings,
+    Header(Snowflake),
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum ReadScope {
+    All,
+    Dms,
+    Communities,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum HeaderAction {
+    Invite,
+    AddPeople,
+    CopyLink,
+    Notifications,
+    Edit,
+}
+
+pub(crate) fn header_actions(kind: ChannelKind, invite: bool, manage: bool) -> Vec<HeaderAction> {
+    use HeaderAction::*;
+    let mut actions = Vec::new();
+    if kind == ChannelKind::GroupDm {
+        actions.push(AddPeople);
+    } else if !kind.is_private() && !kind.is_thread() && invite {
+        actions.push(Invite);
+    }
+    actions.extend([CopyLink, Notifications]);
+    if !kind.is_private() && !kind.is_thread() && manage {
+        actions.push(Edit);
+    }
+    actions
 }
 
 pub(crate) struct SidebarContextMenu {
@@ -96,6 +129,7 @@ pub(crate) fn render_context_menu(
 
     let content = div()
         .id("sidebar-context-menu")
+        .debug_selector(|| "sidebar-context-menu".to_owned())
         .w(width)
         .max_h((viewport.height - px(18.)).max(px(1.)))
         .overflow_y_scroll()
@@ -108,8 +142,8 @@ pub(crate) fn render_context_menu(
             .flx("ui.action-menu.fluxer-button-context-menu.menu-group")
             .child(row("fluxer-menu-mark-dms-read", "ui.action-menu.fluxer-button-context-menu.menu-item.mark-all-dms-read", l10n::tr("Mark All DMs as Read"))
                 .on_click(cx.listener(|view, _, _, cx| {
-                    // TODO(backlog): Ack only unread DM channels (mark_all_inbox_read also covers guilds).
                     close_context_menu(view, cx);
+                    view.mark_inbox_scope_read(ReadScope::Dms, cx);
                 })))
             .child(row("fluxer-menu-toggle-inline-dms", "ui.action-menu.fluxer-button-context-menu.menu-item.toggle-inline-dms", l10n::tr("Collapse Inline DM List"))
                 .on_click(cx.listener(|view, _, _, cx| {
@@ -118,8 +152,8 @@ pub(crate) fn render_context_menu(
                 })))
             .child(row("fluxer-menu-mark-communities-read", "ui.action-menu.fluxer-button-context-menu.menu-item.mark-all-communities-read", l10n::tr("Mark All Communities as Read"))
                 .on_click(cx.listener(|view, _, _, cx| {
-                    // TODO(backlog): Ack only unread guild channels (mark_all_inbox_read also covers DMs).
                     close_context_menu(view, cx);
+                    view.mark_inbox_scope_read(ReadScope::Communities, cx);
                 })))
             .child(row("fluxer-menu-bulk-notifications", "ui.action-menu.fluxer-button-context-menu.bulk-guild-settings-menu-items", l10n::tr("Notifications"))
                 .on_click(cx.listener(|view, _, window, cx| {
@@ -133,6 +167,57 @@ pub(crate) fn render_context_menu(
                     // TODO(backlog): Persist favorites mute state once favorites settings exist.
                     close_context_menu(view, cx);
                 }))),
+        SidebarMenuKind::Header(channel_id) => {
+            let (guild_id, actions) = {
+                let state = view.backend.state();
+                let channel = state.channels.get(&channel_id)?;
+                (
+                    channel.guild_id,
+                    header_actions(
+                        channel.kind,
+                        channel.guild_id.is_some_and(|guild_id| {
+                            super::invite_modal::can_invite_in_guild(&state, guild_id, Some(channel_id))
+                        }),
+                        state.can_manage_channel(channel_id),
+                    ),
+                )
+            };
+            let mut content = content.flx("channel.channel-header.context-menu");
+            for action in actions {
+                let (id, label) = match action {
+                    HeaderAction::Invite => ("header-menu-invite", "Invite members"),
+                    HeaderAction::AddPeople => ("header-menu-add-people", "Add Friends to Group"),
+                    HeaderAction::CopyLink => ("header-menu-copy-link", "Copy Channel Link"),
+                    HeaderAction::Notifications => ("header-menu-notifications", "Notification settings"),
+                    HeaderAction::Edit => ("header-menu-edit", "Edit Channel"),
+                };
+                content = content.child(
+                    row(id, id, l10n::tr(label)).on_click(cx.listener(move |view, event: &gpui_kit::ClickEvent, window, cx| {
+                        close_context_menu(view, cx);
+                        if view.selected_channel != Some(channel_id) {
+                            return;
+                        }
+                        match action {
+                            HeaderAction::Invite => {
+                                if let Some(guild_id) = guild_id {
+                                    view.open_invite_members(guild_id, window, cx);
+                                }
+                            }
+                            HeaderAction::AddPeople => {
+                                view.group_dm_panel_open = true;
+                                if !view.group_dm_adding {
+                                    view.group_dm_toggle_add(cx);
+                                }
+                            }
+                            HeaderAction::CopyLink => view.copy_channel_link(cx),
+                            HeaderAction::Notifications => view.toggle_channel_notification_popout(event.position(), window, cx),
+                            HeaderAction::Edit => view.open_edit_channel(channel_id, window, cx),
+                        }
+                    })),
+                );
+            }
+            content
+        }
         SidebarMenuKind::Settings => {
             let mut content = content.flx("ui.action-menu.settings-context-menu.menu-group");
             for tab in SETTINGS_MENU_TABS {

@@ -3,7 +3,7 @@
 //! composer's autocomplete popup.
 
 use fluxer_client_core::search::switcher::{SwitcherContext, SwitcherItem, SwitcherTarget, quick_switcher_results};
-use fluxer_client_core::state::Snowflake;
+use fluxer_client_core::state::{ChannelKind, ClientState, Snowflake};
 use gpui_kit::component::input::{InputContent, InputEvent, InputState};
 use gpui_kit::{AppContext as _, Context, EntityInputHandler as _, Focusable as _, ScrollHandle, Window};
 
@@ -15,7 +15,32 @@ use crate::ui::composer_text;
 use crate::ui::l10n;
 use crate::ui::overlay::Overlay;
 use crate::ui::quick_switcher::QuickSwitcher;
+use crate::ui::sidebar_menus::ReadScope;
 use crate::view_model::{Place, opens_message_pane};
+
+#[cfg(test)]
+#[path = "../tests_menus.rs"]
+mod tests_menus;
+
+fn inbox_acks(state: &ClientState, scope: ReadScope) -> Vec<(Snowflake, Snowflake)> {
+    state
+        .channels
+        .values()
+        .filter(|channel| match scope {
+            ReadScope::All => true,
+            ReadScope::Dms => matches!(channel.kind, ChannelKind::Dm | ChannelKind::GroupDm),
+            ReadScope::Communities => channel.guild_id.is_some() && !channel.kind.is_private(),
+        })
+        .filter(|channel| channel.kind.has_messages() && state.can_view_channel(channel.id))
+        .filter_map(|channel| {
+            let unread = state.channel_unread(channel.id);
+            if !unread.unread && unread.mention_count == 0 {
+                return None;
+            }
+            channel.last_message_id.map(|last| (channel.id, last))
+        })
+        .collect()
+}
 
 /// Navigation and read marking.
 impl ClientView {
@@ -222,21 +247,11 @@ impl ClientView {
 
     /// Marks every unread inbox channel as read.
     pub(crate) fn mark_all_inbox_read(&mut self, cx: &mut Context<Self>) {
-        let acks: Vec<(Snowflake, Snowflake)> = {
-            let state = self.backend.state();
-            state
-                .channels
-                .values()
-                .filter(|c| c.kind.has_messages() && state.can_view_channel(c.id))
-                .filter_map(|c| {
-                    let u = state.channel_unread(c.id);
-                    if !u.unread && u.mention_count == 0 {
-                        return None;
-                    }
-                    c.last_message_id.map(|last| (c.id, last))
-                })
-                .collect()
-        };
+        self.mark_inbox_scope_read(ReadScope::All, cx);
+    }
+
+    pub(crate) fn mark_inbox_scope_read(&mut self, scope: ReadScope, cx: &mut Context<Self>) {
+        let acks = inbox_acks(&self.backend.state(), scope);
         if acks.is_empty() {
             return;
         }

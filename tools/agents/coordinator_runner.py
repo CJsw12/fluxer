@@ -12,6 +12,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from typing import Any, Callable
@@ -712,6 +713,15 @@ def evaluate_post_batch(
     return True, "다음 배치 진행 가능"
 
 
+def _is_nonfatal_progress_notice(msg: dict[str, Any]) -> bool:
+    """Return True for Orca's informational stall-watchdog escalation notices."""
+    if msg.get("type") != "escalation":
+        return False
+    subject = str(msg.get("subject") or "").strip().lower()
+    body = str(msg.get("body") or "").strip().lower()
+    return subject == "worker has made no progress" or "nothing was stopped" in body
+
+
 def recover_state(state_path: Path) -> int:
     """Inspect and clear residual active_dispatch so the runner can resume."""
     state = load_state(state_path)
@@ -856,9 +866,16 @@ def run_batches(
                 state["active_dispatch"]["runId"] = run_id
                 save_state_atomic(state_path, state)
 
-                timeout_ms = max(1000, int(args.timeout_sec) * 1000)
+                deadline = time.monotonic() + max(1, int(args.timeout_sec))
                 worker_done_msg: dict[str, Any] | None = None
                 while worker_done_msg is None:
+                    remaining_sec = deadline - time.monotonic()
+                    if remaining_sec <= 0:
+                        raise RunnerError(
+                            f"배치 gen={generation} 대기 시간 초과 ({args.timeout_sec}s, runId={run_id}).",
+                            EXIT_ERROR,
+                        )
+                    timeout_ms = max(1000, int(remaining_sec * 1000))
                     messages, delivery_id = adapter.check_wait(
                         terminal_handle=terminal_handle,
                         run_id=run_id,
@@ -871,6 +888,7 @@ def run_batches(
                         )
                     ask_question: str | None = None
                     unexpected_msg: dict[str, Any] | None = None
+                    ignored_notices: list[str] = []
                     for msg in messages:
                         msg_type = msg.get("type")
                         if msg_type == "ask":
@@ -879,6 +897,9 @@ def run_batches(
                         if msg_type == "worker_done":
                             worker_done_msg = msg
                             break
+                        if _is_nonfatal_progress_notice(msg):
+                            ignored_notices.append(str(msg.get("subject") or msg.get("id") or "no-progress"))
+                            continue
                         unexpected_msg = msg
                         break
                     if delivery_id:
@@ -887,6 +908,8 @@ def run_batches(
                             run_id=run_id,
                             msg_id=delivery_id,
                         )
+                    for notice in ignored_notices:
+                        print(f"[batch gen={generation}] [warn] Orca 무진전 알림 무시 후 계속 대기: {notice}")
                     if ask_question is not None:
                         raise RunnerError(
                             f"코디네이터가 질문을 보냈습니다 (안전 정지, 추측 응답 금지):\n{ask_question}",
@@ -1236,6 +1259,79 @@ class CoordinatorRunnerSelfTests(unittest.TestCase):
         invalid_status = dict(valid, status="unknown_status")
         with self.assertRaises(RunnerError):
             validate_batch_result_schema(invalid_status)
+
+    def test_11_ignores_orca_nonfatal_no_progress_escalation(self) -> None:
+        class _NoticeThenDoneAdapter(_FakeAdapter):
+            def __init__(self, first_msg: dict[str, Any], result_path: Path) -> None:
+                super().__init__(
+                    head_seq=["h1", "h2"],
+                    on_worker_start=lambda _g, _p: result_path.write_text(
+                        json.dumps(
+                            {
+                                "status": "done",
+                                "summary": "ok after notice",
+                                "next_task": None,
+                                "failed_gate": None,
+                                "failed_feature": None,
+                                "friction": None,
+                                "decisions": [],
+                            }
+                        ),
+                        encoding="utf-8",
+                    ),
+                )
+                self._first_msg = first_msg
+                self._checks = 0
+
+            def check_wait(
+                self,
+                *,
+                terminal_handle: str,
+                run_id: str,
+                timeout_ms: int,
+            ) -> tuple[list[dict[str, Any]], str | None]:
+                self._checks += 1
+                if self._checks == 1:
+                    return [self._first_msg], "deliv_notice"
+                return super().check_wait(
+                    terminal_handle=terminal_handle,
+                    run_id=run_id,
+                    timeout_ms=timeout_ms,
+                )
+
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            res_path = DEFAULT_RUNNER_DIR / "batch_result_gen_1.json"
+            backup = res_path.read_text(encoding="utf-8") if res_path.exists() else None
+            try:
+                notice = {
+                    "id": "msg_stop_123",
+                    "type": "escalation",
+                    "subject": "Worker has made no progress",
+                    "body": "Worker has made no progress for 10 min. It is still running; nothing was stopped.",
+                }
+                adapter = _NoticeThenDoneAdapter(notice, res_path)
+                args = _make_args(tmp, max_batches=1, timeout_sec=30)
+                rc = run_batches(args, sys_adapter=adapter)
+                self.assertEqual(rc, EXIT_OK)
+                self.assertEqual(adapter._checks, 2)
+
+                real_esc = {
+                    "id": "msg_real_123",
+                    "type": "escalation",
+                    "subject": "Blocked: external approval required",
+                    "body": "Need user approval.",
+                }
+                adapter2 = _NoticeThenDoneAdapter(real_esc, res_path)
+                args2 = _make_args(tmp, state_path=str(tmp / "state2.json"), max_batches=1, timeout_sec=30)
+                with self.assertRaises(RunnerError) as ctx:
+                    run_batches(args2, sys_adapter=adapter2)
+                self.assertIn("escalation", str(ctx.exception))
+            finally:
+                if backup is not None:
+                    res_path.write_text(backup, encoding="utf-8")
+                elif res_path.exists():
+                    res_path.unlink()
 
 
 def run_selftest() -> int:

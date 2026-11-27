@@ -1832,7 +1832,7 @@
   {
    "rust_icon": "Sticker",
    "file": "fluxer_client/app/src/ui/emoji_picker/view.rs",
-   "line": 465,
+   "line": 474,
    "rust_asset": "fluxer_client/app/assets/icons/sticker.svg",
    "kind": "phosphor",
    "phosphor": "fill/sticker-fill.svg",
@@ -3317,7 +3317,7 @@
   {
    "rust_icon": "SmileySadFill",
    "file": "fluxer_client/app/src/ui/emoji_picker/view.rs",
-   "line": 537,
+   "line": 546,
    "rust_asset": "fluxer_client/app/assets/icons/smiley-sad-fill.svg",
    "kind": "phosphor",
    "phosphor": "fill/smiley-sad-fill.svg",

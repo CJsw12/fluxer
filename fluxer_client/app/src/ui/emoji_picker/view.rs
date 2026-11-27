@@ -4,6 +4,7 @@
 use fluxer_client_core::search::emoji::{EmojiCategory, EmojiChoice};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Enter, Escape, Input, MoveDown, MoveLeft, MoveRight, MoveUp};
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
     AnyElement, Context, FontWeight, KeyDownEvent, MouseButton, MouseDownEvent, ObjectFit, Pixels, Role, SharedString,
@@ -179,6 +180,12 @@ pub fn render(
     let rail = (!searching).then(|| {
         let buttons = picker.sections.iter().enumerate().map(|(ix, section)| {
             let active = ix == picker.active_section;
+            let tooltip_flx = match section.kind {
+                SectionKind::FrequentlyUsed => "channel.emoji-picker.emoji-picker-category-list.tooltip",
+                SectionKind::Guild(_) => "channel.emoji-picker.emoji-picker-category-list.tooltip--2",
+                SectionKind::Category(_) => "channel.emoji-picker.emoji-picker-category-list.tooltip--3",
+            };
+            let tip = SharedString::from(section.title.clone());
             div()
                 .id(("emoji-rail", ix))
                 .w(px(32.))
@@ -191,6 +198,8 @@ pub fn render(
                 .text_sm()
                 .when(active, |d| d.bg(theme.accent))
                 .hover(|s| s.bg(theme.hover_bg))
+                .flx(tooltip_flx)
+                .tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
                 .child(rail_icon(section.kind, &section.title))
                 .on_click(cx.listener(move |this, _, _, cx| this.emoji_picker_select_section(ix, cx)))
         });

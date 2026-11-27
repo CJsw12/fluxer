@@ -394,8 +394,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             cx.listener(|this, _, window, cx| this.open_settings(window, cx)),
                             cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
                                 cx.stop_propagation();
-                                // TODO(backlog): open SettingsContextMenu
                                 this.close_overlay(window, cx);
+                                crate::ui::sidebar_menus::open_context_menu(crate::ui::sidebar_menus::SidebarMenuKind::Settings, this, _ev, cx);
                             }),
                         )),
                 ),

@@ -105,8 +105,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         cx.listener(|this, _, _, cx| this.select_place(Place::Home, cx)),
         Some(Box::new(cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
             cx.stop_propagation();
-            // TODO(backlog): open FluxerButtonContextMenu
             this.close_overlay(window, cx);
+            crate::ui::sidebar_menus::open_context_menu(crate::ui::sidebar_menus::SidebarMenuKind::FluxerButton, this, _ev, cx);
         }))),
         cx.listener(|this, hovered: &bool, _, cx| {
             this.set_rail_hover(RailHoverTarget::Home, *hovered, cx);
@@ -166,8 +166,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             cx.listener(|this, _, _, cx| this.select_favorites(cx)),
             Some(Box::new(cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
                 cx.stop_propagation();
-                // TODO(backlog): open FavoritesGuildContextMenu
                 this.close_overlay(window, cx);
+                crate::ui::sidebar_menus::open_context_menu(crate::ui::sidebar_menus::SidebarMenuKind::Favorites, this, _ev, cx);
             }))),
             cx.listener(|this, hovered: &bool, _, cx| {
                 this.set_rail_hover(RailHoverTarget::Favorites, *hovered, cx);

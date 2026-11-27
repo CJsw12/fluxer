@@ -327,6 +327,7 @@ pub struct ClientView {
     /// When true, `ui::voice_stage` fills the central pane; when false, renders top call stage + bottom text chat split view.
     pub(crate) voice_stage_expanded: bool,
     pub(crate) voice_context_menu: Option<ui::voice_panel::VoiceContextMenu>,
+    pub(crate) sidebar_context_menu: Option<ui::sidebar_menus::SidebarContextMenu>,
     pub(crate) voice_show_call_avatars: bool,
     pub(crate) voice_focus_participants_expanded: bool,
     pub(crate) voice_focus_members_visible: bool,
@@ -599,6 +600,7 @@ impl ClientView {
             voice_stage_open: false,
             voice_stage_expanded: true,
             voice_context_menu: None,
+            sidebar_context_menu: None,
             voice_show_call_avatars: true,
             voice_focus_participants_expanded: false,
             voice_focus_members_visible: true,
@@ -693,6 +695,7 @@ impl ClientView {
 
     pub(crate) fn prepare_overlay_replace(&mut self, cx: &mut Context<Self>) {
         self.voice_context_menu = None;
+        self.sidebar_context_menu = None;
         if matches!(self.overlay, Overlay::Profile(_)) {
             self.save_profile_note(cx);
         }
@@ -1088,6 +1091,7 @@ impl Render for ClientView {
             .child(self.render_sidebar_resize_handle(sidebar_w, theme.sizes.rail_width, cx))
             .children(overlay)
             .children(ui::voice_panel::render_context_menu(self, window.viewport_size(), &theme, cx))
+            .children(ui::sidebar_menus::render_context_menu(self, window.viewport_size(), &theme, cx))
     }
 }
 

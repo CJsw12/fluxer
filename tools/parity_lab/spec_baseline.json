@@ -40,7 +40,7 @@
         },
         "settings-modal": {
           "deltas": 0,
-          "missing": 6
+          "missing": 3
         },
         "threads": {
           "deltas": 3,
@@ -60,7 +60,7 @@
       "max": {
         "dm-conversation": {
           "deltas": 26,
-          "missing": 25
+          "missing": 22
         },
         "dm-home": {
           "deltas": 5,
@@ -72,27 +72,27 @@
         },
         "settings-appearance": {
           "deltas": 18,
-          "missing": 11
+          "missing": 7
         },
         "settings-keybinds": {
           "deltas": 299,
-          "missing": 11
+          "missing": 7
         },
         "settings-language": {
           "deltas": 15,
-          "missing": 11
+          "missing": 7
         },
         "settings-my-account": {
           "deltas": 11,
-          "missing": 11
+          "missing": 7
         },
         "settings-notifications": {
           "deltas": 17,
-          "missing": 11
+          "missing": 7
         },
         "settings-voice-video": {
           "deltas": 17,
-          "missing": 11
+          "missing": 7
         }
       },
       "ignore": [],

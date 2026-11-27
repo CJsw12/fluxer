@@ -888,8 +888,6 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                         .flex_row()
                         .items_center()
                         .h(px(20.))
-                        // Room for the close button (24px) + 12px gap the official row reserves.
-                        .mr(px(36.))
                         .when(selected, |d| {
                             d.flx("channel.direct-message.dm-list-item.dm-item-info--2")
                                 .flx("channel.direct-message.dm-list-item.dm-item-name--2")
@@ -918,6 +916,45 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                         })
                         .child(c.name.clone())
                         .into_any_element()
+                })
+                .when(is_dm, |d| {
+                    let close_fg = if selected { fg } else { theme.muted_foreground };
+                    d.child(
+                        div()
+                            .id(("dm-close", c.id.0))
+                            .role(Role::Button)
+                            .aria_label(format!("{} {}", l10n::tr("Close Direct Message"), c.name))
+                            .flex_none()
+                            .size(px(24.))
+                            .rounded_full()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .text_size(px(16.))
+                            .line_height(px(24.))
+                            .font_weight(FontWeight::NORMAL)
+                            .cursor_pointer()
+                            .opacity(0.)
+                            .group_hover(row_group.clone(), |s| s.opacity(1.))
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                cx.stop_propagation();
+                                // TODO(backlog): close DM channel (REST DELETE /channels/{id})
+                                this.close_overlay(window, cx);
+                            }))
+                            .when(selected, |d| {
+                                d.flx("channel.direct-message.dm-list-item.dm-item-close-button.remove-channel")
+                            })
+                            .child(
+                                div()
+                                    .size(px(16.))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .when(selected, |d| d.flx("channel.direct-message.dm-list-item.icon-size4"))
+                                    .child(Icon::new(AppIcon::X).with_size(px(16.)).text_color(close_fg)),
+                            ),
+                    )
                 }),
         )
         // Official trailing slot: gap plus reserved icon space (16px when selected).

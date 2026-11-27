@@ -116,7 +116,15 @@ pub fn reaction_bar(
             .line_height(px(16.))
             .font_weight(gpui_kit::FontWeight::SEMIBOLD)
             .text_color(fg)
-            .child(pill.count.to_string())
+            .child(
+                div()
+                    .min_w(px(12.))
+                    .h(px(16.))
+                    .flex()
+                    .justify_center()
+                    .flx("channel.message-reactions.message-reaction-item.div")
+                    .child(pill.count.to_string()),
+            )
             .flx("channel.message-reactions.message-reaction-item.count-wrapper");
         let inner = div()
             .flex()

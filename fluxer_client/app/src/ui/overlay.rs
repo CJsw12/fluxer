@@ -3,7 +3,7 @@
 use std::rc::Rc;
 
 use gpui_kit::component::{Icon, Sizable as _};
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::{
     Anchor, AnyElement, App, ClipboardItem, FontWeight, MouseButton, MouseMoveEvent, MouseUpEvent, Pixels, Point,
     SharedString, Size, Window, anchored, div, prelude::*, px,
@@ -196,22 +196,35 @@ pub fn settings_modal_with_preview(
     let sidebar_bg = theme.background_tertiary;
     let modal_border = theme.background_modifier_accent;
 
+    let close_hover_bg = theme.hover_bg;
+    let close_hover_fg = theme.foreground;
     let close_button = div()
+        .id("settings-close")
         .debug_selector(|| "settings-close".to_owned())
         .size(px(34.))
         .flex_none()
+        .rounded(px(8.))
+        .border_1()
+        .border_color(gpui_kit::transparent_black())
+        .cursor_pointer()
         .flex()
         .items_center()
         .justify_center()
+        .text_color(theme.text_tertiary)
+        .hover(move |s| s.bg(close_hover_bg).text_color(close_hover_fg))
+        .tooltip(move |window, cx| Tooltip::new(l10n::tr("Close")).build(window, cx))
+        .on_click(move |_, window, cx| on_dismiss_btn(window, cx))
         .flx("app.settings-modal-header.button.close")
         .child(
-            Button::new("settings-close")
-                .ghost()
-                .small()
-                .icon(AppIcon::X)
-                .tooltip(l10n::tr("Close"))
-                .accessibility_label(l10n::tr("Close"))
-                .on_click(move |_, window, cx| on_dismiss_btn(window, cx)),
+            div()
+                .size(px(16.))
+                .overflow_hidden()
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_color(theme.text_tertiary)
+                .flx("app.settings-modal-header.icon")
+                .child(Icon::new(AppIcon::X).with_size(px(16.))),
         );
 
     // `SettingsModalHeader`: 60px bar, 16px side padding, 18px/600 title + optional 28×28 copy button.
@@ -394,18 +407,44 @@ pub fn settings_modal_with_preview(
         .top_0()
         .left_0()
         .size_full()
-        // Modal.module.css `.layerFullscreen` at >=1024px: pad-x = 6% of the layer width,
-        // pad-y = 2.5vh = 20px at 800px (percent padding is width-relative in GPUI); the
-        // measured modal root is inset a further 1px per side.
-        .px(gpui_kit::relative(0.06))
-        .py(px(20.))
-        .flex()
-        .items_center()
-        .justify_center()
         .bg(gpui_kit::hsla(0., 0., 0., 0.72))
         .occlude()
         .on_mouse_down(MouseButton::Left, move |_, window, cx| on_dismiss_bg(window, cx))
-        .child(panel)
+        .child(
+            // Modal.module.css `.layerFullscreen` at >=1024px: pad-x = 6% of the layer width,
+            // pad-y = 2.5vh = 20px at 800px (percent padding is width-relative in GPUI); the
+            // measured modal root is inset a further 1px per side.
+            div()
+                .size_full()
+                .px(gpui_kit::relative(0.06))
+                .py(px(20.))
+                .flex()
+                .flex_col()
+                .flx("app.modal.layer")
+                .child(
+                    div()
+                        .flex_1()
+                        .min_h_0()
+                        .w_full()
+                        .overflow_hidden()
+                        .flex()
+                        .flex_col()
+                        .flx("app.modal.focus-lock")
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_h_0()
+                                .w_full()
+                                .overflow_hidden()
+                                .flex()
+                                .flex_row()
+                                .items_center()
+                                .justify_center()
+                                .flx("app.modal.surface")
+                                .child(panel),
+                        ),
+                ),
+        )
         .into_any_element()
 }
 

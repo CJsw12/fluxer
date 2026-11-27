@@ -7,6 +7,8 @@
 - **배치 워커 (배치당 새 탭 1개):** 배치 시작 전 `python -I ~/.agent-rules/usage.py`로 주간·단기 잔여 한도를 확인하고, 배치 전체를 마칠 여유가 큰 도구를 고른다. Antigravity는 `gemini-4-neon` medium, Codex는 단순 배치에 `gpt-6.1-terra` medium, 통합 배치에 `gpt-6.2-sol` medium을 쓴다. 맡은 배치의 구현·`verify_all.py --build`·육안 확인·커밋·push·결과 JSON 보고까지 마친다. **중첩 `worker-start` 금지.**
 - **워커 내부 실행기 (새 탭 없음):** 독립 파일 묶음은 Antigravity `swarm`(`gemini-4-hydrogen-medium`) 또는 Codex 병렬 서브에이전트(`gpt-6.1-terra` 또는 `gpt-6.2-sol`, medium 명시)에 맡긴다. DeepSeek과 Luna는 T0 탐색·분류에만 쓴다.
 
+- **제공자 제한(사용자 지시 2026-11-28):** 지시 세션과 배치 워커는 Codex·Gemini만 쓴다(Claude 금지, DeepSeek T0 유지). `director_ctl.py start`는 한도가 없는 제공자를 거부한다. 둘 다 소진되면 `director_ctl.py pause`를 실행하고 세션을 멈춘다. 워치독 자동화 `Fluxer director quota resume (codex|antigravity)`가 10분마다 `resume-check`로 먼저 회복된 제공자에 새 지시 세션을 띄우고, 새 세션은 `boot`에서 이전 지시 세션 탭(terminal)을 닫는다. `rotate`는 새 지시 세션을 terminal로 띄운다.
+
 ## 2. 지시 세션 읽기 화이트리스트 (컨텍스트·편향 차단)
 - **읽어도 되는 것 (5종):** `target/parity-tmp/` 아래 스크린샷·diff 크롭 이미지와 visual backlog, `Logs/handoff/OPERATIONS.md`(스냅샷), 워커의 `worker_done` + `target/parity-tmp/runner/batch_result_gen_N.json`, `python -I tools/agents/agy_audit.py --since <UTC시작시각> --json`, `Logs/handoff/worker_retro.md` 최근 5행.
 - **절대 금지:** `fluxer_client/`·`fluxer_app/` 소스 읽기/수정, `git diff` 본문 열람, 빌드·테스트·실기 직접 실행, `coordinator_runner.py`와 동시 실행(러너는 밤샘 무인 전용).

@@ -21,6 +21,20 @@ VERIFY_ROOT = REPO / "target" / "parity-tmp" / "verify"
 USAGE_SCRIPT = Path.home() / ".agent-rules" / "usage.py"
 ORCA_BIN = os.environ.get("ORCA_CLI_COMMAND") or shutil.which("orca") or "orca"
 ROTATION_PROMPT = STATE_PATH.with_name("DIRECTOR_ROTATE_PROMPT.txt")
+# User directive 2026-11-28: directors and batch workers run only on Codex or Gemini
+# (Antigravity). Claude is not used; DeepSeek stays for T0 helpers.
+ALLOWED_AGENTS = ("codex", "antigravity")
+AGENT_MODELS = {
+    "codex": ("gpt-6.2-sol", "medium", "--model gpt-6.2-sol -c model_reasoning_effort=medium"),
+    "antigravity": ("gemini-4-neon", "medium", "--model gemini-4-neon"),
+}
+CREDIT_FLOOR = 15
+WATCHDOG_NAME = "Fluxer director quota resume ({agent})"
+WATCHDOG_CRON = "*/10 * * * *"
+# A director that hit its limit can die without running `pause`; treat the
+# state as abandoned after this long without a save/heartbeat.
+STALE_DIRECTOR_MIN = 150
+LAUNCH_GUARD_MIN = 20
 
 
 def now_utc() -> dt.datetime:
@@ -64,11 +78,11 @@ def parse_usage() -> tuple[str, dict]:
     if not USAGE_SCRIPT.exists():
         return "usage.py not found", {}
     rc, out = run_cmd([sys.executable, "-I", str(USAGE_SCRIPT)], timeout=25)
-    info: dict[str, int] = {}
+    info: dict = {}
     m_cw = re.search(r"Codex\s*:.*?week\s+(\d+)%\s+left", out)
     m_c5 = re.search(r"Codex\s*:.*?5h\s+(\d+)%\s+left", out)
-    m_gw = re.search(r"Gemini Models Weekly Limit Remaining\s+(\d+)%", out)
-    m_g5 = re.search(r"Gemini Models Five Hour Limit Remaining\s+(\d+)%", out)
+    m_gw = re.search(r"Gemini Models Weekly Limit Remaining\s+(\d+)%\s*(\S+)?", out)
+    m_g5 = re.search(r"Gemini Models Five Hour Limit Remaining\s+(\d+)%\s*(\S+)?", out)
     m_clw = re.search(r"Claude\s*:.*?week\s+(\d+)%\s+left", out)
     m_cl5 = re.search(r"Claude\s*:.*?5h\s+(\d+)%\s+left", out)
     if m_cw:
@@ -77,8 +91,12 @@ def parse_usage() -> tuple[str, dict]:
         info["codex_5h"] = int(m_c5.group(1))
     if m_gw:
         info["gemini_week"] = int(m_gw.group(1))
+        if m_gw.group(2) and m_gw.group(2)[:4].isdigit():
+            info["gemini_week_reset"] = m_gw.group(2)
     if m_g5:
         info["gemini_5h"] = int(m_g5.group(1))
+        if m_g5.group(2) and m_g5.group(2)[:4].isdigit():
+            info["gemini_5h_reset"] = m_g5.group(2)
     if m_clw:
         info["claude_week"] = int(m_clw.group(1))
     if m_cl5:
@@ -98,32 +116,73 @@ def load_blocked_providers() -> dict:
     return blocked
 
 
-def pick_best_director(u: dict, blocked: dict | None = None) -> tuple[str, str, str, str]:
-    """Return (agent, model, effort, reason) picking the provider with most headroom."""
-    codex_score = min(u.get("codex_week", -1), u.get("codex_5h", -1))
-    gemini_score = min(u.get("gemini_week", -1), u.get("gemini_5h", -1))
-    claude_score = min(u.get("claude_week", -1), u.get("claude_5h", -1))
+def parse_iso(value: str | None) -> dt.datetime | None:
+    if not value:
+        return None
+    try:
+        t = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)
+
+
+def provider_scores(u: dict, blocked: dict | None = None) -> dict[str, int]:
     # usage.py can report stale headroom after a provider hit its session limit;
     # DIRECTOR_STATE.json "provider_blocked_until" {agent: ISO-UTC} overrides it.
     if blocked is None:
         blocked = load_blocked_providers()
-    if "codex" in blocked:
-        codex_score = -1
-    if "antigravity" in blocked:
-        gemini_score = -1
-    candidates = []
-    if codex_score > 15:
-        candidates.append((codex_score, 3, "codex", "gpt-6.2-sol", "medium", f"Codex min={codex_score}%"))
-    if gemini_score > 15:
-        candidates.append((gemini_score, 2, "antigravity", "gemini-4-neon", "medium", f"Gemini min={gemini_score}%"))
-    if claude_score > 15:
-        candidates.append((claude_score, 1, "claude", "claude-opus-5-5", "medium", f"Claude min={claude_score}%"))
+    scores = {
+        "codex": min(u.get("codex_week", -1), u.get("codex_5h", -1)),
+        "antigravity": min(u.get("gemini_week", -1), u.get("gemini_5h", -1)),
+    }
+    for ag in blocked:
+        if ag in scores:
+            scores[ag] = -1
+    return scores
+
+
+def pick_best_director(u: dict, blocked: dict | None = None) -> tuple[str, str, str, str]:
+    """Return (agent, model, effort, reason); agent is "" when Codex and Gemini are both exhausted."""
+    scores = provider_scores(u, blocked)
+    candidates = [
+        (score, 2 if ag == "codex" else 1, ag)
+        for ag, score in scores.items()
+        if score > CREDIT_FLOOR
+    ]
     if candidates:
-        candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
-        _, _, ag, mod, eff, why = candidates[0]
-        return ag, mod, eff, why
-    # Fallback when Claude statusline has no rate_limits printed and both Codex/Gemini < 15%
-    return "claude", "claude-opus-5-5", "medium", f"Codex({codex_score}%) & Gemini({gemini_score}%) low -> Claude fallback"
+        candidates.sort(reverse=True)
+        score, _, ag = candidates[0]
+        model, effort, _ = AGENT_MODELS[ag]
+        return ag, model, effort, f"{ag} min={score}%"
+    return "", "", "", (
+        f"Codex({scores['codex']}%) & Gemini({scores['antigravity']}%) exhausted -> pause until "
+        f"{earliest_reset(u, blocked) or 'unknown'}"
+    )
+
+
+def earliest_reset(u: dict, blocked: dict | None = None) -> str:
+    """Earliest UTC time at which Codex or Gemini should have headroom again."""
+    if blocked is None:
+        blocked = load_blocked_providers()
+    times: list[dt.datetime] = []
+    t = parse_iso(blocked.get("codex"))
+    if t:
+        times.append(t)
+    elif min(u.get("codex_week", -1), u.get("codex_5h", -1)) <= CREDIT_FLOOR:
+        times.append(now_utc() + dt.timedelta(hours=1))  # usage.py has no Codex reset time
+    t = parse_iso(blocked.get("antigravity"))
+    if t:
+        times.append(t)
+    elif u.get("gemini_week", -1) <= CREDIT_FLOOR:
+        t = parse_iso(u.get("gemini_week_reset"))
+        if t:
+            times.append(t)
+    elif u.get("gemini_5h", -1) <= CREDIT_FLOOR:
+        t = parse_iso(u.get("gemini_5h_reset"))
+        if t:
+            times.append(t)
+    future = [x for x in times if x > now_utc()]
+    return iso_utc(min(future)) if future else ""
 
 
 def should_rotate(state: dict, u: dict) -> tuple[bool, list[str]]:
@@ -141,15 +200,15 @@ def should_rotate(state: dict, u: dict) -> tuple[bool, list[str]]:
         cmin = min(u.get("codex_5h", 100), u.get("codex_week", 100))
         if cmin <= 15:
             reasons.append(f"Codex credit low ({cmin}%)")
-    elif cur_ag == "claude":
-        clmin = min(u.get("claude_5h", 100), u.get("claude_week", 100))
-        if clmin <= 15:
-            reasons.append(f"Claude credit low ({clmin}%)")
+    else:
+        reasons.append(f"director agent {cur_ag!r} is not allowed (Codex/Gemini only)")
     return bool(reasons), reasons
 
 
 def recommend_agent(u: dict) -> str:
     ag, mod, eff, why = pick_best_director(u)
+    if not ag:
+        return f"RECOMMEND: NONE ({why}) -> run `director_ctl.py pause` and stop this session"
     cw, c5 = u.get("codex_week", -1), u.get("codex_5h", -1)
     gw, g5 = u.get("gemini_week", -1), u.get("gemini_5h", -1)
     return f"RECOMMEND: {ag} / {mod} {eff} ({why}; Codex 5h={c5}% wk={cw}%, Gemini 5h={g5}% wk={gw}%)"
@@ -191,6 +250,7 @@ def check_active_worker(state: dict) -> str:
 def cmd_boot(_args: argparse.Namespace) -> int:
     state = load_state()
     print("=== DIRECTOR BOOT DASHBOARD (compact <4KB) ===")
+    print(take_over_director(state))
     print(f"ORCA RUN: {state.get('orca_run_id')}")
     print(
         f"IF NEW SESSION, RUN FIRST: orca orchestration run-use --environment local --id {state.get('orca_run_id')} --json"
@@ -268,6 +328,11 @@ def cmd_start(args: argparse.Namespace) -> int:
 
     _, u = parse_usage()
     print(recommend_agent(u))
+    scores = provider_scores(u)
+    if scores.get(args.agent, -1) <= CREDIT_FLOOR:
+        print(f"ERROR: {args.agent} has no headroom ({scores.get(args.agent)}%). "
+              "Pick the recommended agent, or run `director_ctl.py pause` when none is left.")
+        return 3
 
     started = iso_utc()
     cmd = [
@@ -431,6 +496,9 @@ def cmd_rotate(args: argparse.Namespace) -> int:
 
     _, u = parse_usage()
     ag, mod, eff, why = pick_best_director(u)
+    if not ag:
+        print(f"NO PROVIDER: {why}")
+        return cmd_pause(argparse.Namespace(reason=why, dry_run=args.dry_run))
     run_id = state.get("orca_run_id", "")
     worktree = state.get("worktree_id") or "current"
     if not ROTATION_PROMPT.is_file():
@@ -447,6 +515,7 @@ def cmd_rotate(args: argparse.Namespace) -> int:
         "--agent", ag,
         "--model", mod,
         "--effort", eff,
+        "--surface", "terminal",
         "--prompt", prompt,
         "--json",
     ]
@@ -473,6 +542,7 @@ def cmd_rotate(args: argparse.Namespace) -> int:
 
     state["batches_in_current_session"] = 0
     state["last_rotation_utc"] = iso_utc()
+    state["previous_director"] = state.get("current_director")
     state["current_director"] = {
         "agent": ag,
         "model": mod,
@@ -484,7 +554,161 @@ def cmd_rotate(args: argparse.Namespace) -> int:
     }
     save_state(state)
     print(f"ROTATED OK: agent={ag} model={mod} effort={eff} kind={kind} handle={handle} prompt={p_out}")
-    print("HANDOFF COMPLETE — STOP THIS SESSION NOW (do not wait for the new Director).")
+    print("HANDOFF COMPLETE — STOP THIS SESSION NOW (the new Director closes this tab on boot).")
+    return 0
+
+
+def close_director(d: dict | None) -> str:
+    if not d:
+        return "none"
+    handle = d.get("handle") or ""
+    if d.get("kind") != "terminal" or not handle:
+        return f"cannot auto-close {d.get('kind') or '?'} session {handle or '?'} (close its tab manually)"
+    rc, out = run_cmd([ORCA_BIN, "terminal", "close", "--terminal", handle, "--tab", "--json"], timeout=30)
+    if rc == 0:
+        return f"closed {handle}"
+    if "terminal_handle_stale" in out:
+        return f"already gone {handle}"
+    return f"close failed for {handle}: {out[:160]}"
+
+
+def take_over_director(state: dict) -> str:
+    """Called on boot: record this session, close the previous Director tab, clear pause."""
+    me_handle = os.environ.get("ORCA_TERMINAL_HANDLE") or ""
+    me_session = os.environ.get("ORCA_AGENT_SESSION_ID") or ""
+    cur = dict(state.get("current_director") or {})
+    prev = state.get("previous_director")
+    is_me = bool((me_handle and cur.get("handle") == me_handle) or (me_session and cur.get("session") == me_session))
+    if cur.get("booted_utc") and not is_me:
+        # The recorded director already booted in another session: it is the old one.
+        prev = cur
+        cur = {k: v for k, v in cur.items() if k in ("agent", "model", "effort")}
+    lines = []
+    if prev and not ((me_handle and prev.get("handle") == me_handle) or (me_session and prev.get("session") == me_session)):
+        lines.append(f"PREVIOUS DIRECTOR: {close_director(prev)}")
+    state["previous_director"] = None
+    if me_handle:
+        cur["handle"] = me_handle
+        cur["kind"] = "terminal"
+    if me_session:
+        cur["session"] = me_session
+    cur["booted_utc"] = iso_utc()
+    state["current_director"] = cur
+    if state.get("paused"):
+        lines.append(f"RESUMED FROM PAUSE: {state['paused'].get('reason')}")
+        state["paused"] = None
+    save_state(state)
+    agent = cur.get("agent") or "?"
+    if agent not in ALLOWED_AGENTS:
+        lines.append(f"WARN: director agent {agent!r} is not Codex/Gemini -> finish the current step, then `rotate`.")
+    return "\n".join(lines) if lines else "DIRECTOR: takeover recorded"
+
+
+def ensure_watchdogs(dry_run: bool = False) -> list[str]:
+    """One recurring automation per allowed provider; the precheck only lets the best one fire."""
+    rc, out = run_cmd([ORCA_BIN, "automations", "list", "--json"], timeout=30)
+    existing = set()
+    if rc == 0:
+        try:
+            existing = {a.get("name") for a in json.loads(out)["result"]["automations"]}
+        except Exception:
+            pass
+    state = load_state()
+    prompt = ROTATION_PROMPT.read_text(encoding="utf-8").strip().replace("{run_id}", state.get("orca_run_id", ""))
+    worktree = state.get("worktree_id") or "current"
+    script = str(Path(__file__).resolve()).replace("\\", "/")
+    python = sys.executable.replace("\\", "/")
+    msgs = []
+    for ag in ALLOWED_AGENTS:
+        name = WATCHDOG_NAME.format(agent=ag)
+        if name in existing:
+            msgs.append(f"watchdog exists: {name}")
+            continue
+        cmd = [
+            ORCA_BIN, "automations", "create",
+            "--name", name,
+            "--trigger", WATCHDOG_CRON,
+            "--provider", ag,
+            "--workspace", worktree,
+            "--workspace-mode", "existing",
+            f"--extra-agent-args={AGENT_MODELS[ag][2]}",
+            "--precheck", f'"{python}" -I "{script}" resume-check --agent {ag}',
+            "--precheck-timeout", "90",
+            "--prompt", prompt,
+            "--json",
+        ]
+        if dry_run:
+            msgs.append("DRY-RUN: " + " ".join(cmd[:14]))
+            continue
+        rc, out = run_cmd(cmd, timeout=45)
+        msgs.append(f"watchdog {'created' if rc == 0 else 'FAILED'}: {name}" + ("" if rc == 0 else f" {out[:300]}"))
+    return msgs
+
+
+def cmd_pause(args: argparse.Namespace) -> int:
+    state = load_state()
+    _, u = parse_usage()
+    resume = earliest_reset(u) or iso_utc(now_utc() + dt.timedelta(hours=1))
+    state["paused"] = {"since": iso_utc(), "resume_after": resume, "reason": getattr(args, "reason", "") or "quota"}
+    if not args.dry_run:
+        save_state(state)
+    for m in ensure_watchdogs(args.dry_run):
+        print(m)
+    print(f"PAUSED until >= {resume}. The watchdog automation starts the next Codex/Gemini Director,")
+    print("which closes this tab on boot when it is a terminal. STOP THIS SESSION NOW.")
+    return 0
+
+
+def director_alive(state: dict) -> bool:
+    cur = state.get("current_director") or {}
+    sid = cur.get("session") or ""
+    handle = cur.get("handle") or ""
+    rc, out = run_cmd([ORCA_BIN, "agent", "list", "--json"], timeout=30)
+    if rc != 0:
+        return True  # unknown -> do not risk a second director
+    try:
+        res = json.loads(out)["result"]
+        items = res if isinstance(res, list) else next(v for v in res.values() if isinstance(v, list))
+    except Exception:
+        return True
+    for a in items:
+        if (sid and a.get("orcaSessionId") == sid) or (handle and handle in str(a.get("paneKey", ""))):
+            return a.get("state") in ("working", "waiting", "ready")
+    return False
+
+
+def cmd_resume_check(args: argparse.Namespace) -> int:
+    """Automation precheck: exit 0 only when this provider should start the next Director."""
+    state = load_state()
+    paused = dict(state.get("paused") or {})
+    age = (now_utc() - (parse_iso(state.get("updated_utc")) or now_utc())).total_seconds() / 60.0
+    if not paused and (age < STALE_DIRECTOR_MIN or director_alive(state)):
+        print(f"skip: director active (state age {age:.0f}m)")
+        return 1
+    launching = parse_iso(paused.get("launching_utc"))
+    if launching and (now_utc() - launching).total_seconds() < LAUNCH_GUARD_MIN * 60:
+        print("skip: a resume launch is already in progress")
+        return 1
+    resume_after = parse_iso(paused.get("resume_after"))
+    if resume_after and now_utc() < resume_after:
+        print(f"skip: waiting for reset {paused.get('resume_after')}")
+        return 1
+    _, u = parse_usage()
+    best = pick_best_director(u)[0]
+    if best != args.agent:
+        print(f"skip: best provider is {best or 'none'}")
+        return 1
+    model, effort, _ = AGENT_MODELS[args.agent]
+    if not paused:
+        paused = {"since": iso_utc(), "reason": f"stale director state ({age:.0f}m)"}
+    paused["launching_utc"] = iso_utc()
+    state["paused"] = paused
+    state["previous_director"] = state.get("current_director")
+    state["current_director"] = {"agent": args.agent, "model": model, "effort": effort,
+                                 "rotated_utc": iso_utc(), "reason": "quota-resume watchdog"}
+    state["batches_in_current_session"] = 0
+    save_state(state)
+    print(f"go: {args.agent}")
     return 0
 
 
@@ -524,7 +748,14 @@ def cmd_selftest(_args: argparse.Namespace) -> int:
     assert pick_best_director({"codex_week": 94, "codex_5h": 86, "gemini_week": 19, "gemini_5h": 20}, {})[0] == "codex"
     assert pick_best_director({"codex_week": 94, "codex_5h": 86, "gemini_week": 19, "gemini_5h": 20}, {"codex": "x"})[0] == "antigravity"
     assert pick_best_director({"codex_week": 10, "codex_5h": 10, "gemini_week": 80, "gemini_5h": 80}, {})[0] == "antigravity"
-    assert pick_best_director({"codex_week": 5, "codex_5h": 5, "gemini_week": 10, "gemini_5h": 10}, {})[0] == "claude"
+    assert pick_best_director({"codex_week": 5, "codex_5h": 5, "gemini_week": 10, "gemini_5h": 10}, {})[0] == ""
+    assert pick_best_director({"codex_week": 5, "codex_5h": 5, "gemini_week": 10, "gemini_5h": 10, "claude_week": 90, "claude_5h": 90}, {})[0] == ""
+    soon = iso_utc(now_utc() + dt.timedelta(hours=2))
+    later = iso_utc(now_utc() + dt.timedelta(days=3))
+    assert earliest_reset({"codex_week": 90, "codex_5h": 90, "gemini_week": 10, "gemini_week_reset": later, "gemini_5h": 90}, {"codex": soon}) == soon
+    assert earliest_reset({"codex_week": 90, "codex_5h": 90, "gemini_week": 10, "gemini_week_reset": soon, "gemini_5h": 90}, {"codex": later}) == soon
+    rot3, _ = should_rotate({"batches_in_current_session": 0, "current_director": {"agent": "claude"}}, {})
+    assert rot3 is True
     rot, _ = should_rotate({"batches_in_current_session": 4, "rotate_session_after_batches": 4, "current_director": {"agent": "antigravity"}}, {"gemini_5h": 50, "gemini_week": 50})
     assert rot is True
     rot2, _ = should_rotate({"batches_in_current_session": 1, "rotate_session_after_batches": 4, "current_director": {"agent": "antigravity"}}, {"gemini_5h": 10, "gemini_week": 16})
@@ -541,7 +772,7 @@ def main() -> int:
     p_st = sub.add_parser("start", help="Start next worker and persist DIRECTOR_STATE.json")
     p_st.add_argument("--id", required=True)
     p_st.add_argument("--title", required=True)
-    p_st.add_argument("--agent", required=True, choices=["codex", "antigravity", "claude"])
+    p_st.add_argument("--agent", required=True, choices=list(ALLOWED_AGENTS))
     p_st.add_argument("--model", required=True)
     p_st.add_argument("--effort", default="medium")
     p_st.add_argument("--spec", required=True)
@@ -552,6 +783,12 @@ def main() -> int:
     p_rt = sub.add_parser("rotate", help="Auto-launch new Director session on richest-credit provider")
     p_rt.add_argument("--dry-run", action="store_true")
     p_rt.add_argument("--force", action="store_true")
+    p_pa = sub.add_parser("pause", help="Codex/Gemini exhausted: record pause and ensure quota-resume watchdogs")
+    p_pa.add_argument("--reason", default="")
+    p_pa.add_argument("--dry-run", action="store_true")
+    p_rc = sub.add_parser("resume-check", help="Automation precheck: exit 0 if this provider should start the next Director")
+    p_rc.add_argument("--agent", required=True, choices=list(ALLOWED_AGENTS))
+    sub.add_parser("watchdogs", help="Create missing quota-resume watchdog automations")
     sub.add_parser("selftest", help="Run self-test")
     args = ap.parse_args()
     return {
@@ -560,6 +797,9 @@ def main() -> int:
         "start": cmd_start,
         "finish": cmd_finish,
         "rotate": cmd_rotate,
+        "pause": cmd_pause,
+        "resume-check": cmd_resume_check,
+        "watchdogs": lambda _a: (print("\n".join(ensure_watchdogs())), 0)[1],
         "selftest": cmd_selftest,
     }[args.cmd](args)
 

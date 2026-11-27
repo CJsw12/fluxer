@@ -8,7 +8,7 @@
 - **워커 내부 실행기 (새 탭 없음):** 독립 파일 묶음은 Antigravity `swarm`(`gemini-4-hydrogen-medium`) 또는 Codex 병렬 서브에이전트(`gpt-6.1-terra` 또는 `gpt-6.2-sol`, medium 명시)에 맡긴다. DeepSeek과 Luna는 T0 탐색·분류에만 쓴다.
 
 ## 2. 지시 세션 읽기 화이트리스트 (컨텍스트·편향 차단)
-- **읽어도 되는 것 (4종만):** `Logs/handoff/OPERATIONS.md`(스냅샷), 워커의 `worker_done` + `target/parity-tmp/runner/batch_result_gen_N.json`, `python -I tools/agents/agy_audit.py --since <UTC시작시각> --json`, `Logs/handoff/worker_retro.md` 최근 5행.
+- **읽어도 되는 것 (5종):** `target/parity-tmp/` 아래 스크린샷·diff 크롭 이미지와 visual backlog, `Logs/handoff/OPERATIONS.md`(스냅샷), 워커의 `worker_done` + `target/parity-tmp/runner/batch_result_gen_N.json`, `python -I tools/agents/agy_audit.py --since <UTC시작시각> --json`, `Logs/handoff/worker_retro.md` 최근 5행.
 - **절대 금지:** `fluxer_client/`·`fluxer_app/` 소스 읽기/수정, `git diff` 본문 열람, 빌드·테스트·실기 직접 실행, `coordinator_runner.py`와 동시 실행(러너는 밤샘 무인 전용).
 - 5~8배치마다 `/compact`하거나 새 지시 세션으로 교체한다.
 
@@ -35,3 +35,4 @@
 ## 6. T3 및 멈춤 조건
 - **T3(삭제·인증·권한·저장 형식):** 구현 전 지시 세션에서 다른 모델 계열의 독립 검토를 받는다. 구현은 GPT-6.2 Sol high 또는 Claude Opus high에 맡기고, 구현 뒤에는 지시 세션이 구현에 참여하지 않은 다른 계열(GPT-6.2 Sol high, Claude Opus high 또는 Gemini 4 Neon high)에 검토를 배정한다. 교차 검토와 통합 검증이 통과한 뒤 지시 세션에서 커밋을 진행한다.
 - **즉시 중단·보고:** 동일 게이트 2회 연속 실패, 백로그 소진, 외부 승인·차단 발생.
+- **비차단 진행:** 외부 승인·T3가 아닌 차단(항목 하나의 구현 실패·측정 불가)은 워커가 그 항목을 `parked`로 결과 JSON에 기록하고 나머지 항목을 계속 진행한다. 사용자 질문은 배치 끝에 모아 보낸다.

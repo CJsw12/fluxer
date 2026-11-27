@@ -8,12 +8,21 @@ Steps, in order:
   build    only with --build: cycle.py --release --fast [--worker] [--skip-tests] (tests + SHA256)
   precheck Rust Online, member list "Online ... 2", Rust mic on, official CDP mic/speaker on
            (on FAIL: env.py heal once, 240 s, OUT/heal.log, then precheck again)
-  icons    check_icons.py (errors -> FAIL, moved -> WARN)
+  icons    check_icons.py (errors -> FAIL, moved -> WARN). With --build, a pre-build pass runs
+           check_icons.py first and, when the only finding is line drift (moved>0, new=gone=errors=0),
+           runs check_icons.py --sync and prints "icons: auto-synced ..." (new/gone call sites still FAIL)
   colors   check_colors.py --base REF
   ratchet  spec_gate.py --live --all (counts OK/FAIL, names only the failing scenes)
   resize   check_resize.py --out OUT/resize
   surface  check_surface_parity.py --out OUT/surface
+  surface  also official-reference pixels: user-card band, settings-modal corners, y=32 row,
+           composer glyph bbox (dark+light; official via surface_reference.mjs)
   state    state_matrix.py --strict --out OUT/state, then matrix_report.json strict_failures
+           (includes tooltip:<slug> rect checks for spec_scenes_extra.json "tooltip_rect" scenes)
+  user-area check_user_area.py OUT/user-area
+
+Each run appends {ts, tool, profile, test_s, build_s, restart_s, total_s, git_tree} to
+target/parity-tmp/runner/timing.jsonl (helper shared with cycle.py).
 
 Every step's stdout+stderr goes to OUT/<step>.log (OUT defaults to
 target/parity-tmp/verify/<timestamp>) and is never echoed; only the final table is printed.
@@ -575,6 +584,24 @@ def step_precheck(args: argparse.Namespace, out_dir: Path) -> Result:
     return retry
 
 
+ICON_PRESYNC: dict[str, str] = {}
+
+
+def presync_icons(out_dir: Path, runner=None) -> str | None:
+    """Before --build: fold pure line drift into icon_manifest.json; returns the note or None."""
+    runner = runner or run_logged
+    code, text, timed_out, _log = runner("icons-presync", [sys.executable, "-I", str(HERE / "check_icons.py")], out_dir, TIMEOUTS["icons"])
+    st = None if timed_out else parse_icons(text)
+    if st is None or st["moved"] == 0 or st["errors"] or st["new"] or st["gone"]:
+        return None
+    code, text, timed_out, _log = runner(
+        "icons-sync", [sys.executable, "-I", str(HERE / "check_icons.py"), "--sync"], out_dir, TIMEOUTS["icons"]
+    )
+    if timed_out:
+        return f"auto --sync timed out ({st['moved']} moved line(s) left)"
+    return f"auto-synced {st['moved']} moved line(s) via check_icons.py --sync (exit {code})"
+
+
 def step_icons(args: argparse.Namespace, out_dir: Path) -> Result:
     code, text, timed_out, log = run_logged(
         "icons", [sys.executable, "-I", str(HERE / "check_icons.py")], out_dir, TIMEOUTS["icons"]
@@ -592,9 +619,11 @@ def step_icons(args: argparse.Namespace, out_dir: Path) -> Result:
         return Result("FAIL", clip(f"{detail} ({first_error(text)})"), log)
     if code != 0:
         return Result("FAIL", clip(f"exit {code}, {detail}"), log)
+    if ICON_PRESYNC.get("note"):
+        detail += f" [{ICON_PRESYNC['note']}]"
     if st["moved"] > 0:
         return Result("WARN", clip(f"{detail} (run --sync to fold line drift)"), log)
-    return Result("PASS", detail, log)
+    return Result("PASS", clip(detail), log)
 
 
 def step_colors(args: argparse.Namespace, out_dir: Path) -> Result:
@@ -826,6 +855,25 @@ def selftest() -> None:
     assert parse_spec_gate("markdown deltas=5 max 1->2 missing=0 max 0->0 lowered") == (0, [])
 
     assert parse_gate_summary(RESIZE_SAMPLE) == (7, 8)
+
+    def fake_icons(summary: str):
+        calls: list[list[str]] = []
+
+        def runner(name, cmd, out_dir, timeout):
+            calls.append(cmd)
+            return 0, summary, False, Path("x.log")
+        return calls, runner
+
+    drift = "256 sites, 96 assets checked, 0 errors, new=0 gone=0 moved=24 unverified=83"
+    calls, runner = fake_icons(drift)
+    note = presync_icons(Path("."), runner)
+    assert note and "auto-synced 24" in note and calls[-1][-1] == "--sync", (note, calls)
+    for real_gap in ("256 sites, 96 assets checked, 0 errors, new=1 gone=0 moved=24 unverified=83",
+                     "256 sites, 96 assets checked, 0 errors, new=0 gone=2 moved=3 unverified=83",
+                     "256 sites, 96 assets checked, 1 errors, new=0 gone=0 moved=3 unverified=83",
+                     "256 sites, 96 assets checked, 0 errors, new=0 gone=0 moved=0 unverified=83"):
+        calls, runner = fake_icons(real_gap)
+        assert presync_icons(Path("."), runner) is None and len(calls) == 1, real_gap
     assert parse_gate_summary("no summary") is None
 
     assert select_steps(None, False) == ["precheck", "icons", "colors", "ratchet", "resize", "surface", "state", "user-area"]
@@ -1073,6 +1121,12 @@ def main(argv: list[str] | None = None) -> int:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     started = time.monotonic()
+    ICON_PRESYNC.clear()
+    if "build" in steps and "icons" in steps:
+        note = presync_icons(out_dir)
+        if note:
+            ICON_PRESYNC["note"] = note
+            print(f"icons: {note}")
     with ThreadPoolExecutor(max_workers=2) as executor:
         static = {
             name: executor.submit(timed_step, name, args, out_dir)
@@ -1086,7 +1140,20 @@ def main(argv: list[str] | None = None) -> int:
     longest = max(rows, key=lambda row: row["sec"])
     summary = {"total_sec": round(time.monotonic() - started, 3), "longest_step": longest["name"], "steps": rows}
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    record_timing(steps, durations, summary["total_sec"])
     return print_table(results)
+
+
+def record_timing(steps: list[str], durations: dict[str, float], total: float) -> None:
+    try:
+        sys.path.insert(0, str(HERE))
+        import cycle  # noqa: PLC0415
+
+        cycle.append_timing(
+            "verify_all", ",".join(steps), build_s=durations.get("build"), restart_s=durations.get("client"), total_s=total,
+        )
+    except Exception as exc:  # noqa: BLE001 - timing must never fail the gate
+        print(f"verify: timing not recorded: {exc}")
 
 
 def timed_step(name: str, args: argparse.Namespace, out_dir: Path) -> tuple[Result, float]:

@@ -106,6 +106,38 @@
           "deltas": 7,
           "missing": 2
         },
+        "hover-composer-emojis": {
+          "deltas": 0,
+          "missing": 0
+        },
+        "hover-composer-media": {
+          "deltas": 1,
+          "missing": 0
+        },
+        "hover-composer-stickers": {
+          "deltas": 0,
+          "missing": 0
+        },
+        "hover-rail-add": {
+          "deltas": 0,
+          "missing": 0
+        },
+        "hover-rail-discover": {
+          "deltas": 0,
+          "missing": 0
+        },
+        "hover-rail-favorites": {
+          "deltas": 3,
+          "missing": 0
+        },
+        "hover-rail-guild": {
+          "deltas": 0,
+          "missing": 0
+        },
+        "hover-rail-home": {
+          "deltas": 0,
+          "missing": 0
+        },
         "light-theme": {
           "deltas": 11,
           "missing": 123
@@ -120,7 +152,7 @@
         }
       },
       "ignore": [],
-      "updated": "2026-11-27"
+      "updated": "2026-11-28"
     }
   }
 }

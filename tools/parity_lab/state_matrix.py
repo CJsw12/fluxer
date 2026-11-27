@@ -1,11 +1,18 @@
 """M9.2 state-matrix capture & diff runner: official (CDP) vs Rust (parity probe).
 
     python -I tools/parity_lab/state_matrix.py --out DIR [--voice] [--launch-rust EXE]
-        [--official-dir DIR] [--attach 9334]
+        [--official-dir DIR] [--attach 9334] [--strict] [--tooltips-only]
+    python -I tools/parity_lab/state_matrix.py --selftest
 
 Captures baseline + 14 hover states (+ optional voice/mute/deafen states with mic ALWAYS muted)
 on both apps at 1280x800, runs geometry+color comparison per state, diffs newly-appeared elements
 (tooltips, action bars, voice badges, voice panel) and hover target pixel/color deltas.
+
+Tooltip rects: every scene in spec_scenes_extra.json with `"tooltip_rect": true` is replayed on the
+Rust client (its `rust` actions) and the official `ui.tooltip.tooltip.tooltip` rect from
+target/parity-tmp/extra/spec/<slug>.spec.json is compared with the Rust element of the same flx
+(x/y/w/h within +-2 px). A missing Rust tooltip or a zero-size flx wrapper is a strict failure.
+`--tooltips-only` skips the hover/voice matrix and runs just these checks (no official CDP use).
 """
 
 from __future__ import annotations
@@ -20,6 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import compare  # noqa: E402
 import rust_probe as rp  # noqa: E402
+import spec_delta  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 GUILD = "1572284491404148736"
@@ -27,6 +35,87 @@ CHANNEL = "1572284491404148743"
 VOICE_CHANNEL = "1572284491404148740"
 MUTE_FLX = "app.user-area.user-area-inner.control-button.mute"
 DEAFEN_FLX = "app.user-area.user-area-inner.control-button.deafen"
+TOOLTIP_FLX = "ui.tooltip.tooltip.tooltip"
+TOOLTIP_TOL = 2.0
+TOOLTIP_SCENES = REPO / "tools" / "parity_lab" / "spec_scenes_extra.json"
+TOOLTIP_SPEC_DIR = REPO / "target" / "parity-tmp" / "extra" / "spec"
+
+
+def tooltip_scenes(path: Path = TOOLTIP_SCENES) -> list[dict]:
+    return [sc for sc in json.loads(path.read_text(encoding="utf-8")) if sc.get("tooltip_rect")]
+
+
+def visible_rect(elements: list[dict], flx: str) -> list[float] | None:
+    """First rect of `flx`; prefers a non-empty one so a 0x0 wrapper twin does not hide the box."""
+    hits = [e["rect"] for e in elements if e.get("flx") == flx]
+    sized = [r for r in hits if r[2] >= 1 and r[3] >= 1]
+    return (sized or hits or [None])[0]
+
+
+def tooltip_rect_problem(official: list[float] | None, rust: list[float] | None, tol: float = TOOLTIP_TOL) -> str | None:
+    """None when the Rust tooltip box matches the official one within tol on x/y/w/h."""
+    if official is None:
+        return "no official tooltip in spec (recapture the scene)"
+    if rust is None:
+        return f"missing rust {TOOLTIP_FLX} (official {[round(v, 1) for v in official]})"
+    if rust[2] < 1 or rust[3] < 1:
+        return f"rust {TOOLTIP_FLX} is a zero-size wrapper {[round(v, 1) for v in rust]}"
+    diff = [round(r - o, 1) for o, r in zip(official, rust)]
+    if any(abs(d) > tol for d in diff):
+        return f"rect official {[round(v, 1) for v in official]} rust {[round(v, 1) for v in rust]} delta {diff} > {tol:g}px"
+    return None
+
+
+def run_tooltip_checks(out_dir: Path, scenes: list[dict] | None = None, spec_dir: Path = TOOLTIP_SPEC_DIR) -> list[dict]:
+    """Replays each tooltip scene on Rust and compares the tooltip box with the official spec."""
+    rows = []
+    for sc in tooltip_scenes() if scenes is None else scenes:
+        slug = sc["slug"]
+        spec_path = spec_dir / f"{slug}.spec.json"
+        official = None
+        if spec_path.is_file():
+            official = visible_rect(json.loads(spec_path.read_text(encoding="utf-8")).get("elements", []), TOOLTIP_FLX)
+        rust = None
+        error = None
+        try:
+            rp.send("probe_hover", x=1240.0, y=760.0)
+            time.sleep(0.3)
+            for act in sc.get("rust", []):
+                spec_delta._exec_rust_action(rp, act, time)
+            data = rp.inspect_until(lambda d: visible_rect(d.get("elements", []), TOOLTIP_FLX) is not None, 1.5)
+            (out_dir / f"tooltip_{slug}.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+            rust = visible_rect(data.get("elements", []), TOOLTIP_FLX)
+        except Exception as exc:  # noqa: BLE001 - one broken scene must not stop the run
+            error = f"rust scene failed: {exc}"
+        finally:
+            try:
+                rp.send("probe_hover", x=1240.0, y=760.0)
+            except Exception:  # noqa: BLE001
+                pass
+        problem = error or tooltip_rect_problem(official, rust)
+        rows.append({
+            "slug": f"tooltip:{slug}",
+            "official_rect": official,
+            "rust_rect": rust,
+            "strict_failures": [f"tooltip:{slug}: {problem}"] if problem else [],
+        })
+        print(f"tooltip:{slug:24} {'FAIL' if problem else 'PASS'} official={official} rust={rust}" + (f" - {problem}" if problem else ""))
+    return rows
+
+
+def selftest() -> None:
+    assert tooltip_rect_problem([80, 39, 140.3, 42], [81, 40, 141, 42]) is None
+    assert "delta" in tooltip_rect_problem([80, 39, 140.3, 42], [138, 39, 141, 42])
+    assert "missing" in tooltip_rect_problem([80, 39, 140, 42], None)
+    assert "zero-size" in tooltip_rect_problem([80, 39, 140, 42], [80, 39, 0, 0])
+    assert "official" in tooltip_rect_problem(None, [80, 39, 140, 42])
+    els = [{"flx": TOOLTIP_FLX, "rect": [58, 60, 0, 0]}, {"flx": TOOLTIP_FLX, "rect": [80, 39, 140, 42]}]
+    assert visible_rect(els, TOOLTIP_FLX) == [80, 39, 140, 42]
+    assert visible_rect(els[:1], TOOLTIP_FLX) == [58, 60, 0, 0]
+    assert visible_rect([], TOOLTIP_FLX) is None
+    slugs = [sc["slug"] for sc in tooltip_scenes()]
+    assert len(slugs) == 8 and all(s.startswith("hover-") for s in slugs), slugs
+    print("state_matrix selftest: OK")
 
 
 def box_stats(png: Path, rect: list[int]) -> tuple[list[int], float] | None:
@@ -142,9 +231,13 @@ def ensure_rust_muted(out_dir: Path) -> str:
 
 def main(argv: list[str]) -> int:
     sys.stdout.reconfigure(encoding="utf-8")
+    if "--selftest" in argv:
+        selftest()
+        return 0
     voice = "--voice" in argv
     strict = "--strict" in argv
-    clean_args = [a for a in argv if a not in ("--voice", "--strict")]
+    tooltips_only = "--tooltips-only" in argv
+    clean_args = [a for a in argv if a not in ("--voice", "--strict", "--tooltips-only")]
     opts = dict(zip(clean_args[0::2], clean_args[1::2]))
     out = Path(opts.get("--out", "Logs/parity/m92_baseline"))
     attach = int(opts.get("--attach", 9334))
@@ -154,6 +247,19 @@ def main(argv: list[str]) -> int:
     cmp_dir = out / "compare"
     for d in (out, off_dir, rust_dir, cmp_dir):
         d.mkdir(parents=True, exist_ok=True)
+
+    if tooltips_only:
+        rp.send("probe_resize", w=1280.0, h=800.0)
+        rp.deep_link(f"fluxer://channels/{GUILD}/{CHANNEL}")
+        rp.inspect_until(rp.markdown_ready, 1.5)
+        rp.send("probe_key", keystroke="escape")
+        rows = run_tooltip_checks(rust_dir)
+        failures = [m for r in rows for m in r["strict_failures"]]
+        (out / "matrix_report.json").write_text(
+            json.dumps({"strict_failures": failures, "states": rows}, ensure_ascii=False, indent=1), encoding="utf-8"
+        )
+        print(f"\nTOOLTIP RECTS: {sum(1 for r in rows if not r['strict_failures'])}/{len(rows)} pass")
+        return 1 if (strict and failures) else 0
 
     if "--official-dir" not in opts:
         cmd = ["node", str(REPO / "tools" / "parity_lab" / "state_official.mjs"), "--attach", str(attach), "--origin", "fluxer-app://app", "--out", str(off_dir)]
@@ -204,6 +310,9 @@ def main(argv: list[str]) -> int:
                 method = "coord_fallback"
             data, png = rust_park_and_inspect(slug, rust_dir, settle=0.55)
             rust_states[slug] = {"data": data, "png": png, "hover_method": method, "hover_reply": r_hover}
+
+        tooltip_rows = run_tooltip_checks(rust_dir)
+        rp.send("probe_hover", x=1240.0, y=760.0)
 
         if voice:
             mic_status = ensure_rust_muted(rust_dir)
@@ -332,6 +441,7 @@ def main(argv: list[str]) -> int:
         }
         summary_rows.append(row)
 
+    summary_rows.extend(tooltip_rows)
     all_strict_failures = [msg for r in summary_rows for msg in r.get("strict_failures", [])]
     report = {
         "official_client": manifest.get("client"),
@@ -348,6 +458,9 @@ def main(argv: list[str]) -> int:
     for r in summary_rows:
         if r.get("status") == "skipped":
             print(f"{r['slug']:22} SKIPPED")
+            continue
+        if r["slug"].startswith("tooltip:"):
+            print(f"{r['slug']:22} official={r['official_rect']} rust={r['rust_rect']} {'FAIL' if r['strict_failures'] else 'OK'}")
             continue
         extra_str = ""
         if "official_box_delta" in r:

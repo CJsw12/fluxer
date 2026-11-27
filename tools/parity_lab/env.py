@@ -943,6 +943,57 @@ def _rust_key_escape() -> dict:
     return rust_probe.send("probe_key", keystroke="escape")
 
 
+MARKDOWN_CHANNEL_FLX = "app.channel-item-content.channel-name"
+
+
+def _rust_markdown_ready(timeout: float) -> bool:
+    sys.path.insert(0, str(HERE))
+    import rust_probe  # noqa: PLC0415
+
+    return rust_probe.markdown_ready(rust_probe.inspect_until(rust_probe.markdown_ready, timeout))
+
+
+def _rust_click_markdown_row() -> dict:
+    """Clicks the '#markdown' channel row (a fresh client's guild link can land on another channel)."""
+    sys.path.insert(0, str(HERE))
+    import rust_probe  # noqa: PLC0415
+
+    rows = [e for e in rust_probe.send("probe_inspect").get("elements", []) if e.get("flx") == MARKDOWN_CHANNEL_FLX]
+    idx = next((i for i, e in enumerate(rows) if e.get("text") == "markdown"), None)
+    if idx is None:
+        return {"ok": False, "error": "no markdown channel row"}
+    return rust_probe.send("probe_click", flx=MARKDOWN_CHANNEL_FLX, index=idx)
+
+
+def open_markdown_route(cfg: Config, actions: list[str], attempts: int = 3,
+                        link=None, ready=None, click_row=None, escape=None) -> bool:
+    """Deep-links the markdown route, falls back to clicking the row, then sends Escape."""
+    link, ready = link or _rust_deep_link, ready or _rust_markdown_ready
+    click_row, escape = click_row or _rust_click_markdown_row, escape or _rust_key_escape
+    url = route_url(cfg.markdown_route)
+    ok = False
+    for attempt in range(1, attempts + 1):
+        try:
+            reply = link(url)
+            actions.append(f"rust: link {url} -> {reply}")
+            ok = ready(4.0)
+            if not ok:
+                reply = click_row()
+                actions.append(f"rust: #markdown not selected after link (try {attempt}); click row -> {reply}")
+                ok = ready(2.0)
+        except Exception as exc:  # noqa: BLE001
+            actions.append(f"rust: open markdown failed: {type(exc).__name__}: {exc}")
+        if ok:
+            break
+        time.sleep(1.0)
+    try:
+        actions.append(f"rust: key escape -> {escape()}")
+    except Exception as exc:  # noqa: BLE001
+        actions.append(f"rust: key escape failed: {type(exc).__name__}: {exc}")
+    actions.append(f"rust: #markdown {'selected' if ok else 'NOT selected'}")
+    return ok
+
+
 def cmd_heal(cfg: Config, args: argparse.Namespace) -> int:
     dry = args.dry_run
     actions: list[str] = []
@@ -1010,16 +1061,7 @@ def cmd_heal(cfg: Config, args: argparse.Namespace) -> int:
             actions.append(f"rust: waiting up to {RUST_ONLINE_WAIT}s for user status 'Online' ({rust.reason})")
             rust = wait_until(lambda: check_rust(cfg, 1), RUST_ONLINE_WAIT, interval=3.0)
             actions.append(f"rust: after wait {rust.state} ({rust.reason})")
-        try:
-            reply = _rust_deep_link(url)
-            actions.append(f"rust: link {url} -> {reply}")
-        except Exception as exc:  # noqa: BLE001
-            actions.append(f"rust: link {url} failed: {type(exc).__name__}: {exc}")
-        try:
-            reply = _rust_key_escape()
-            actions.append(f"rust: key escape -> {reply}")
-        except Exception as exc:  # noqa: BLE001
-            actions.append(f"rust: key escape failed: {type(exc).__name__}: {exc}")
+        open_markdown_route(cfg, actions)
         time.sleep(1.5)
         rust = check_rust(cfg, 2)
         actions.append(f"rust: now {rust.state} ({rust.reason})")
@@ -1078,6 +1120,8 @@ def cmd_restart_client(cfg: Config, args: argparse.Namespace) -> int:
     checks = {"rust": rust}
     final = checks if rust.ok else {"rust": check_rust(cfg, 2)}
     actions.append(f"rust: {'Online' if final['rust'].ok else 'NOT Online'} ({final['rust'].reason})")
+    if final["rust"].ok and not getattr(args, "no_route", False):
+        open_markdown_route(cfg, actions)
     return emit(final, actions, args.json, cfg)
 
 
@@ -1141,6 +1185,8 @@ def broker_args(args: argparse.Namespace) -> list[str]:
         out += ["--config", str(args.config)]
     if getattr(args, "dev", False):
         out.append("--dev")
+    if getattr(args, "no_route", False):
+        out.append("--no-route")
     return out
 
 
@@ -1338,6 +1384,20 @@ def selftest() -> None:
         assert "navigate(cdp, port, undefined, {overallMs: 110000})" in nav[3]
         assert lib_url() in nav[3] and "PARITY_CDP_PORT" in nav[3]
 
+        # markdown route after restart-client / heal: link, row-click fallback, always Escape
+        calls: list[str] = []
+        acts: list[str] = []
+        states = iter([False, True])
+        assert open_markdown_route(cfg, acts, link=lambda u: calls.append("link") or {"ok": True},
+                                   ready=lambda t: next(states), click_row=lambda: calls.append("row") or {"ok": True},
+                                   escape=lambda: calls.append("esc") or {"ok": True})
+        assert calls == ["link", "row", "esc"] and acts[-1] == "rust: #markdown selected", (calls, acts)
+        calls.clear()
+        assert not open_markdown_route(cfg, [], attempts=1, link=lambda u: {"ok": True}, ready=lambda t: False,
+                                       click_row=lambda: {"ok": False}, escape=lambda: calls.append("esc") or {})
+        assert calls == ["esc"]
+        assert "--no-route" in broker_args(argparse.Namespace(json=False, config=None, dev=False, no_route=True))
+
     # interactive-desktop broker routing
     assert needs_broker("up", False, {}, interactive=False)
     assert not needs_broker("up", False, {}, interactive=True)
@@ -1375,6 +1435,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("command", nargs="?", choices=("status", "up", "heal", "down", "restart-client"),
                         help="status | up | heal | down | restart-client")
     parser.add_argument("--dev", action="store_true", help="restart-client: launch target/fc-root/debug/fluxer_client.exe")
+    parser.add_argument("--no-route", action="store_true",
+                        help="restart-client: do not open markdown_route (+ Escape) after the client is Online")
     parser.add_argument("--json", action="store_true", help="print one JSON object instead of the table")
     parser.add_argument("--dry-run", action="store_true",
                         help="read-only checks only (process/TCP/HTTP); print planned actions, change nothing")

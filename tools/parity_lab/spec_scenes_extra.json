@@ -176,5 +176,192 @@
   "expect_flx": "channel.channel-header.header-wrapper",
   "expect_theme": "theme-light",
   "scope": []
+ },
+ {
+  "slug": "hover-rail-home",
+  "official": [
+   {
+    "hover": "[data-flx=\"app.sidebar-nav.fluxer-button.fluxer-button-icon\"]"
+   },
+   {
+    "wait_ms": 700
+   }
+  ],
+  "rust": [
+   {
+    "hover": "app.sidebar-nav.fluxer-button.fluxer-button-icon"
+   },
+   {
+    "wait_ms": 700
+   }
+  ],
+  "scope": [
+   "ui.tooltip."
+  ],
+  "tooltip_rect": true
+ },
+ {
+  "slug": "hover-rail-favorites",
+  "official": [
+   {
+    "hover": "[data-flx=\"app.sidebar-nav.favorites-button.fluxer-button-icon\"]"
+   },
+   {
+    "wait_ms": 700
+   }
+  ],
+  "rust": [
+   {
+    "hover": "app.sidebar-nav.favorites-button.fluxer-button-icon"
+   },
+   {
+    "wait_ms": 700
+   }
+  ],
+  "scope": [
+   "ui.tooltip."
+  ],
+  "tooltip_rect": true
+ },
+ {
+  "slug": "hover-rail-guild",
+  "official": [
+   {
+    "hover": "[data-flx=\"app.sidebar-nav.guild-list-item-presentation.guild-icon\"]"
+   },
+   {
+    "wait_ms": 700
+   }
+  ],
+  "rust": [
+   {
+    "hover": "app.sidebar-nav.guild-list-item-presentation.guild-icon"
+   },
+   {
+    "wait_ms": 700
+   }
+  ],
+  "scope": [
+   "ui.tooltip."
+  ],
+  "tooltip_rect": true
+ },
+ {
+  "slug": "hover-rail-discover",
+  "official": [
+   {
+    "hover": "[data-flx=\"app.sidebar-nav.discovery-button.button.click\"]"
+   },
+   {
+    "wait_ms": 700
+   }
+  ],
+  "rust": [
+   {
+    "hover": "app.sidebar-nav.discovery-button.button.click"
+   },
+   {
+    "wait_ms": 700
+   }
+  ],
+  "scope": [
+   "ui.tooltip."
+  ],
+  "tooltip_rect": true
+ },
+ {
+  "slug": "hover-rail-add",
+  "official": [
+   {
+    "hover": "[data-flx=\"app.sidebar-nav.add-guild-button.button.add-guild\"]"
+   },
+   {
+    "wait_ms": 700
+   }
+  ],
+  "rust": [
+   {
+    "hover": "app.sidebar-nav.add-guild-button.button.add-guild"
+   },
+   {
+    "wait_ms": 700
+   }
+  ],
+  "scope": [
+   "ui.tooltip."
+  ],
+  "tooltip_rect": true
+ },
+ {
+  "slug": "hover-composer-media",
+  "official": [
+   {
+    "hover": "[data-flx=\"channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--2\"]"
+   },
+   {
+    "wait_ms": 1600
+   }
+  ],
+  "rust": [
+   {
+    "hover": "channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--2"
+   },
+   {
+    "wait_ms": 900
+   }
+  ],
+  "scope": [
+   "ui.tooltip.",
+   "channel.textarea.textarea-buttons."
+  ],
+  "tooltip_rect": true
+ },
+ {
+  "slug": "hover-composer-stickers",
+  "official": [
+   {
+    "hover": "[data-flx=\"channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--3\"]"
+   },
+   {
+    "wait_ms": 1600
+   }
+  ],
+  "rust": [
+   {
+    "hover": "channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--3"
+   },
+   {
+    "wait_ms": 900
+   }
+  ],
+  "scope": [
+   "ui.tooltip.",
+   "channel.textarea.textarea-buttons."
+  ],
+  "tooltip_rect": true
+ },
+ {
+  "slug": "hover-composer-emojis",
+  "official": [
+   {
+    "hover": "[data-flx=\"channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--4\"]"
+   },
+   {
+    "wait_ms": 1600
+   }
+  ],
+  "rust": [
+   {
+    "hover": "channel.textarea.textarea-buttons.textarea-button.expression-picker-toggle--4"
+   },
+   {
+    "wait_ms": 900
+   }
+  ],
+  "scope": [
+   "ui.tooltip.",
+   "channel.textarea.textarea-buttons."
+  ],
+  "tooltip_rect": true
  }
 ]

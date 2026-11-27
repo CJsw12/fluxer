@@ -14,6 +14,9 @@ with FLUXER_PARITY_PROBE=1 and the test profile from env PARITY_PROFILE (LOCALAP
 Plain --release skips test/build/package when dist/fluxer_client/BUILD_STAMP.json matches the current
 git state (HEAD + dirty/untracked tree) and dist/fluxer_client/fluxer_client.exe exists; --force
 rebuilds anyway. --selftest only exercises argparse and the stamp match logic.
+
+Every real run appends one line to target/parity-tmp/runner/timing.jsonl:
+{ts, tool, profile, test_s, build_s, restart_s, total_s, git_tree} (verify_all.py uses the same helper).
 """
 
 from __future__ import annotations
@@ -42,6 +45,7 @@ DIST = REPO / "dist" / "fluxer_client"
 DIST_EXE = DIST / "fluxer_client.exe"
 STAMP = DIST / "BUILD_STAMP.json"
 STAMP_SKIP_LINE = "cycle: dist matches HEAD (stamp), skipping build/package"
+TIMING_LOG = REPO / "target" / "parity-tmp" / "runner" / "timing.jsonl"
 
 
 def run(cmd: list[str], cwd: Path = REPO, env: dict | None = None, tail: int = 6, timeout: int = 900) -> int:
@@ -114,6 +118,41 @@ def git_tree() -> str:
     return h.hexdigest()
 
 
+def short_tree() -> str:
+    """HEAD^{tree} (12 hex) plus '+dirty:<8 hex of git diff HEAD>' when tracked files differ."""
+    tree = _git("rev-parse", "HEAD^{tree}").decode("utf-8", "replace").strip()[:12] or "unknown"
+    diff = _git("diff", "HEAD")
+    return tree + (f"+dirty:{hashlib.sha256(diff).hexdigest()[:8]}" if diff else "")
+
+
+def append_timing(tool: str, profile: str, *, test_s: float | None = None, build_s: float | None = None,
+                  restart_s: float | None = None, total_s: float | None = None, path: Path | None = None) -> None:
+    """Appends one timing record; never raises (timing must not fail a gate)."""
+    rnd = lambda v: None if v is None else round(v, 1)  # noqa: E731
+    rec = {
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "tool": tool,
+        "profile": profile,
+        "test_s": rnd(test_s),
+        "build_s": rnd(build_s),
+        "restart_s": rnd(restart_s),
+        "total_s": rnd(total_s),
+        "git_tree": short_tree(),
+    }
+    path = path or TIMING_LOG
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8", newline="\n") as fh:
+            fh.write(json.dumps(rec) + "\n")
+    except OSError as exc:
+        print(f"cycle: could not append timing: {exc}")
+
+
+def cycle_profile(opts: argparse.Namespace) -> str:
+    base = ("release-fast" if opts.fast else "release") if opts.release else "debug"
+    return base + ("+worker" if opts.worker else "") + ("+skip-tests" if opts.skip_tests else "")
+
+
 def current_state() -> dict:
     return {"head": git_head(), "tree": git_tree()}
 
@@ -148,7 +187,8 @@ def stamp_matches(stamp: dict | None, current: dict, worker: bool = False) -> bo
     return not (worker and not stamp.get("worker"))
 
 
-def run_cycle(opts: argparse.Namespace) -> int:
+def run_cycle(opts: argparse.Namespace, timing: dict | None = None) -> int:
+    timing = {} if timing is None else timing
     env = dict(os.environ, CARGO_TARGET_DIR=str(TARGET))
     linker_var = "CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER"
     if sys.platform == "win32" and not env.get(linker_var) and not shutil.which("rust-lld.exe"):
@@ -167,16 +207,22 @@ def run_cycle(opts: argparse.Namespace) -> int:
             do_build = False
             print(STAMP_SKIP_LINE)
     if do_build and not opts.skip_tests:
-        if run(["cargo", "test", "-p", "fluxer_client_app", "-j", "4", "--", "--test-threads=2"], REPO / "fluxer_client", env, timeout=300):
+        t_test = time.monotonic()
+        code = run(["cargo", "test", "-p", "fluxer_client_app", "-j", "4", "--", "--test-threads=2"], REPO / "fluxer_client", env, timeout=300)
+        timing["test_s"] = time.monotonic() - t_test
+        if code:
             return 1
     for im in ("fluxer_client.exe", "fluxer_voice_worker.exe"):
         subprocess.run(["taskkill", "/F", "/IM", im], capture_output=True)
+    t_build = time.monotonic()
     if do_build:
         if opts.release:
             args = [str(PWSH), "-NoProfile", "-File", "scripts/package_fluxer_client.ps1"] + (["-IncludeVoiceWorker"] if opts.worker else [])
             if opts.fast:
                 args.append("-Fast")
-            if run(args, env=env):
+            code = run(args, env=env)
+            timing["build_s"] = time.monotonic() - t_build
+            if code:
                 return 1
             if not opts.fast:
                 try:
@@ -185,7 +231,9 @@ def run_cycle(opts: argparse.Namespace) -> int:
                     print(f"cycle: could not write build stamp: {e}")
             exe = DIST_EXE
         else:
-            if run(["cargo", "build", "-p", "fluxer_client_app", "-j", "4"], REPO / "fluxer_client", env):
+            code = run(["cargo", "build", "-p", "fluxer_client_app", "-j", "4"], REPO / "fluxer_client", env)
+            timing["build_s"] = time.monotonic() - t_build
+            if code:
                 return 1
             exe = TARGET / "debug" / "fluxer_client.exe"
     else:
@@ -198,6 +246,7 @@ def run_cycle(opts: argparse.Namespace) -> int:
         code, out = r.returncode, (r.stdout or "") + (r.stderr or "")
     except subprocess.TimeoutExpired:
         code, out = 124, "env.py restart-client timed out"
+    timing["restart_s"] = time.monotonic() - t
     print(f"[{time.monotonic() - t:5.1f}s] env.py restart-client -> {code}")
     print(chr(10).join(out.splitlines()[-6:]))
     if code != 0:
@@ -262,6 +311,19 @@ def selftest() -> int:
     check("empty tree", not stamp_matches(dict(base, tree=""), dict(cur), False))
     check("missing current", not stamp_matches(dict(base), {}, False))
 
+    import tempfile  # noqa: PLC0415
+
+    with tempfile.TemporaryDirectory() as td:
+        log = Path(td) / "runner" / "timing.jsonl"
+        append_timing("cycle", "debug", build_s=12.345, total_s=20, path=log)
+        append_timing("verify_all", "precheck", path=log)
+        recs = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
+        keys = {"ts", "tool", "profile", "test_s", "build_s", "restart_s", "total_s", "git_tree"}
+        check("timing appends one line per run", len(recs) == 2 and all(set(r) == keys for r in recs))
+        check("timing rounds and keeps None", recs[0]["build_s"] == 12.3 and recs[0]["test_s"] is None)
+        check("timing git_tree short", 12 <= len(recs[0]["git_tree"]) <= 30)
+    check("profile name", cycle_profile(parse_args(["--release", "--fast", "--skip-tests"])) == "release-fast+skip-tests")
+
     if failures:
         print("selftest FAILED: " + ", ".join(failures))
         return 1
@@ -277,7 +339,14 @@ def main(argv: list[str], runner=None) -> int:
     opts = parse_args(argv)
     if opts.selftest:
         return selftest()
-    return (runner or run_cycle)(opts)
+    if runner is not None:
+        return runner(opts)
+    timing: dict = {}
+    started = time.monotonic()
+    try:
+        return run_cycle(opts, timing)
+    finally:
+        append_timing("cycle", cycle_profile(opts), total_s=time.monotonic() - started, **timing)
 
 
 if __name__ == "__main__":

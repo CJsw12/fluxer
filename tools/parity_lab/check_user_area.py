@@ -57,6 +57,13 @@ def distance(a, b):
     return max(abs(x - y) for x, y in zip(a, b))
 
 
+def hover_fill_top(image, x, frame_y, depth=8):
+    """First row (from frame_y - 4) whose colour matches the hover fill sampled `depth` px below the frame."""
+    fill = image.getpixel((x, frame_y + depth))
+    return next((row for row in range(frame_y - 4, frame_y + depth + 1)
+                 if distance(image.getpixel((x, row)), fill) <= 3), None)
+
+
 def count_dashes(image, bounds):
     x, y, w, h = bounds
     cx, cy = x + w / 2 - 0.5, y + h / 2 - 0.5
@@ -157,13 +164,17 @@ def main(out):
         hovered = shot(out, "user6_fix_hover_rail.png", data)
         x, y, w, _ = map(round, rect(data, GUILD))
         frame_y = round(rect(data, FRAME)[1])
-        edge = (x + w // 2, frame_y)
         corner = (x + 1, y + 1)
-        check("guild hover flush with frame", y == frame_y and
-              distance(resting.getpixel(edge), hovered.getpixel(edge)) >= 2, (y, frame_y))
+        official_hover = Image.open(out / "official_hover.png").convert("RGB")
+        cx = x + w // 2
+        top_rows = {row: (hovered.getpixel((cx, row)), official_hover.getpixel((cx, row)))
+                    for row in (frame_y, frame_y + 1)}
+        rust_top, official_top = hover_fill_top(hovered, cx, frame_y), hover_fill_top(official_hover, cx, frame_y)
+        check("guild hover top rows match official (frame line + fill start)",
+              all(distance(r, o) <= 3 for r, o in top_rows.values()) and rust_top == official_top is not None,
+              f"rows {top_rows} fill_top Rust {rust_top} official {official_top} header_y {y} frame_y {frame_y}")
         check("guild hover clipped at rounded corner",
               distance(resting.getpixel(corner), hovered.getpixel(corner)) <= 2)
-        official_hover = Image.open(out / "official_hover.png").convert("RGB")
         for button in ("discovery-button", "add-guild-button"):
             flx = RAIL + button + ".div--2"
             official_dashes = count_dashes(official_hover, rect(data, flx))

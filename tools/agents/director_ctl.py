@@ -86,17 +86,37 @@ def parse_usage() -> tuple[str, dict]:
     return out, info
 
 
-def pick_best_director(u: dict) -> tuple[str, str, str, str]:
+def load_blocked_providers() -> dict:
+    """Providers known to be rate-limited (DIRECTOR_STATE.json provider_blocked_until)."""
+    blocked = {}
+    try:
+        for ag_name, until in (load_state().get("provider_blocked_until") or {}).items():
+            if now_utc() < dt.datetime.fromisoformat(until.replace("Z", "+00:00")):
+                blocked[ag_name] = until
+    except Exception:
+        return {}
+    return blocked
+
+
+def pick_best_director(u: dict, blocked: dict | None = None) -> tuple[str, str, str, str]:
     """Return (agent, model, effort, reason) picking the provider with most headroom."""
     codex_score = min(u.get("codex_week", -1), u.get("codex_5h", -1))
     gemini_score = min(u.get("gemini_week", -1), u.get("gemini_5h", -1))
     claude_score = min(u.get("claude_week", -1), u.get("claude_5h", -1))
+    # usage.py can report stale headroom after a provider hit its session limit;
+    # DIRECTOR_STATE.json "provider_blocked_until" {agent: ISO-UTC} overrides it.
+    if blocked is None:
+        blocked = load_blocked_providers()
+    if "codex" in blocked:
+        codex_score = -1
+    if "antigravity" in blocked:
+        gemini_score = -1
     candidates = []
-    if codex_score >= 15:
+    if codex_score > 15:
         candidates.append((codex_score, 3, "codex", "gpt-6.2-sol", "medium", f"Codex min={codex_score}%"))
-    if gemini_score >= 15:
+    if gemini_score > 15:
         candidates.append((gemini_score, 2, "antigravity", "gemini-4-neon", "medium", f"Gemini min={gemini_score}%"))
-    if claude_score >= 15:
+    if claude_score > 15:
         candidates.append((claude_score, 1, "claude", "claude-opus-5-5", "medium", f"Claude min={claude_score}%"))
     if candidates:
         candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
@@ -484,9 +504,10 @@ def cmd_selftest(_args: argparse.Namespace) -> int:
             "Verify timing: total=110.262s longest=build (59.76s)",
             "Verify summary.json: total=0.096s longest=precheck",
         ], verification
-    assert pick_best_director({"codex_week": 94, "codex_5h": 86, "gemini_week": 19, "gemini_5h": 20})[0] == "codex"
-    assert pick_best_director({"codex_week": 10, "codex_5h": 10, "gemini_week": 80, "gemini_5h": 80})[0] == "antigravity"
-    assert pick_best_director({"codex_week": 5, "codex_5h": 5, "gemini_week": 10, "gemini_5h": 10})[0] == "claude"
+    assert pick_best_director({"codex_week": 94, "codex_5h": 86, "gemini_week": 19, "gemini_5h": 20}, {})[0] == "codex"
+    assert pick_best_director({"codex_week": 94, "codex_5h": 86, "gemini_week": 19, "gemini_5h": 20}, {"codex": "x"})[0] == "antigravity"
+    assert pick_best_director({"codex_week": 10, "codex_5h": 10, "gemini_week": 80, "gemini_5h": 80}, {})[0] == "antigravity"
+    assert pick_best_director({"codex_week": 5, "codex_5h": 5, "gemini_week": 10, "gemini_5h": 10}, {})[0] == "claude"
     rot, _ = should_rotate({"batches_in_current_session": 4, "rotate_session_after_batches": 4, "current_director": {"agent": "antigravity"}}, {"gemini_5h": 50, "gemini_week": 50})
     assert rot is True
     rot2, _ = should_rotate({"batches_in_current_session": 1, "rotate_session_after_batches": 4, "current_director": {"agent": "antigravity"}}, {"gemini_5h": 10, "gemini_week": 16})

@@ -211,6 +211,23 @@ def cmd_boot(_args: argparse.Namespace) -> int:
             f"  summary: {pp.get('summary')}"
         )
 
+    directives = state.get("user_directives") or []
+    if directives:
+        print("\n=== USER DIRECTIVES (must apply; full text in Logs/handoff/DIRECTOR_HANDOFF.md) ===")
+        for d in directives:
+            print(f"  - {d}")
+
+    pending = state.get("pending") or []
+    if pending:
+        print("\n=== PENDING WORK (in-flight T0 / queued batches / tracks) ===")
+        for p in pending:
+            f = p.get("file")
+            ex = f" exists={(REPO / f).exists()}" if f else ""
+            print(f"  - [{p.get('track', '-')}] {p.get('id')}: {p.get('note')} ({f or '-'}{ex})")
+
+    if state.get("blocker"):
+        print(f"\n=== BLOCKER ===\n  {state['blocker']}")
+
     b_cnt = state.get("batches_in_current_session", 0)
     b_max = state.get("rotate_session_after_batches", 4)
     p_cnt = state.get("batches_since_progress_sync", 0)

@@ -2,6 +2,7 @@
 //! user panel at the bottom.
 
 use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{AnyElement, Context, FontWeight, deferred, MouseButton, Role, SharedString, div, prelude::*, px, rgb, rgba};
 
@@ -481,6 +482,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                     .hover(|s| s.text_color(theme.foreground))
                                     .on_click(cx.listener(|this, _, window, cx| this.open_create_group_dm(window, cx)))
                                     .flx("channel.direct-message.dm-list.dm-create-button.open-create-dm-modal")
+                                    .tooltip(move |window, cx| Tooltip::new(l10n::tr("Create DM")).build(window, cx))
                                     .child(
                                         div()
                                             .size(px(16.))
@@ -668,10 +670,15 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
             .font_weight(FontWeight::SEMIBOLD)
             .child(
                 div()
+                    .id(("category-name", cat_id.0))
                     .flex_1()
                     .min_w_0()
                     .truncate()
                     .flx_text("app.channel-item-content.category-name", c.name.to_string())
+                    .tooltip({
+                        let tip = c.name.clone();
+                        move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
+                    })
                     .child(c.name.clone()),
             )
             .when(has_affordances, |d| {
@@ -707,6 +714,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                             .child(
                                 div()
                                     .debug_selector(move || create_sel.clone())
+                                    .flx("app.channel-item.tooltip--2")
                                     .child(
                                         Button::new(("create-in-category", cat_id.0))
                                             .ghost()
@@ -827,6 +835,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                         _ => AppIcon::TextChannel,
                     };
                     div()
+                        .id(("channel-icon", c.id.0))
                         .size(px(20.))
                         .flex_none()
                         .flex()
@@ -847,6 +856,10 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                                 ),
                         )
                         .flx("app.channel-item-content.div")
+                        .tooltip({
+                            let tip = c.name.clone();
+                            move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
+                        })
                         .into_any_element()
                 })
                 .child(if is_dm {
@@ -876,10 +889,15 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                         .into_any_element()
                 } else {
                     div()
+                        .id(("channel-name", c.id.0))
                         .flex_1()
                         .min_w_0()
                         .truncate()
                         .flx_text("app.channel-item-content.channel-name", c.name.to_string())
+                        .tooltip({
+                            let tip = c.name.clone();
+                            move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
+                        })
                         .child(c.name.clone())
                         .into_any_element()
                 }),

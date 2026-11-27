@@ -3,6 +3,7 @@
 //! + optional topic; right toolbar displays `[Bell]`, `[Threads]`, `[Pins]`, `[Favorites (Star)]`,
 //! `[Member List (Users)]`, `[Search messages pill]`, and `[Inbox (Tray)]`.
 
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{AnyElement, Context, FontWeight, MouseButton, Role, div, prelude::*, px, rgb};
 
@@ -159,12 +160,17 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                             .flx("channel.channel-header.dm-name-wrapper--2")
                                             .child(
                                                 div()
+                                                    .id("header-dm-name")
                                                     .flex_none()
                                                     .font_weight(FontWeight::MEDIUM)
                                                     .text_size(px(16.))
                                                     .line_height(px(24.))
                                                     .text_color(theme.foreground)
                                                     .flx_text("channel.channel-header.channel-name--4", view.channel_title.to_string())
+                                                    .tooltip({
+                                                        let tip = view.channel_title.clone();
+                                                        move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
+                                                    })
                                                     .child(view.channel_title.clone()),
                                             ),
                                     ),
@@ -196,6 +202,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .when(dm_peer.is_none(), |d| {
                             d.child(
                                 div()
+                                    .id("header-channel-name")
                                     .flex_none()
                                     .ml(px(4.))
                                     .font_weight(FontWeight::MEDIUM)
@@ -203,6 +210,10 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                     .line_height(px(24.))
                                     .text_color(theme.foreground)
                                     .flx_text("channel.channel-header.channel-name--8", view.channel_title.to_string())
+                                    .tooltip({
+                                        let tip = view.channel_title.clone();
+                                        move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
+                                    })
                                     .child(view.channel_title.clone()),
                             )
                         })

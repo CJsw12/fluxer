@@ -32,7 +32,7 @@
         },
         "inbox": {
           "deltas": 1,
-          "missing": 9
+          "missing": 8
         },
         "pinned-messages": {
           "deltas": 0,
@@ -52,7 +52,7 @@
         }
       },
       "ignore": [],
-      "updated": "2026-11-26"
+      "updated": "2026-11-27"
     },
     "more": {
       "scenes": "tools/parity_lab/spec_scenes_more.json",

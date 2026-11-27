@@ -103,12 +103,14 @@ pub(crate) enum UserControlHoverTarget {
     Settings,
 }
 
-/// Drag edge for bottom-right anchored resizable popouts such as the emoji picker.
+/// Drag edge for resizable popouts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ResizeEdge {
     Top,
     Left,
     TopLeft,
+    Bottom,
+    BottomLeft,
 }
 
 /// Active interactive in-app layout resize operation.
@@ -117,6 +119,8 @@ pub(crate) enum ActiveResize {
     Sidebar { start_x: f32, start_width: f32 },
     VoiceCallHeight { start_y: f32, start_height: f32 },
     EmojiPicker { edge: ResizeEdge, start_x: f32, start_y: f32, start_w: f32, start_h: f32 },
+    PinsPopout { edge: ResizeEdge, start_x: f32, start_y: f32, start_w: f32, start_h: f32 },
+    InboxPopout { edge: ResizeEdge, start_x: f32, start_y: f32, start_w: f32, start_h: f32 },
 }
 
 /// Emitted to the window root.
@@ -367,6 +371,10 @@ pub struct ClientView {
     pub(crate) voice_call_height: f32,
     pub(crate) emoji_picker_width: f32,
     pub(crate) emoji_picker_height: f32,
+    pub(crate) pins_popout_width: f32,
+    pub(crate) pins_popout_height: f32,
+    pub(crate) inbox_popout_width: f32,
+    pub(crate) inbox_popout_height: f32,
     pub(crate) active_resize: Option<ActiveResize>,
     pub(crate) sidebar_resize_hovered: bool,
     pub(crate) voice_resize_hovered: bool,
@@ -609,6 +617,10 @@ impl ClientView {
             voice_call_height: VOICE_CALL_HEIGHT_DEFAULT as f32,
             emoji_picker_width: EMOJI_PICKER_WIDTH_DEFAULT as f32,
             emoji_picker_height: EMOJI_PICKER_HEIGHT_DEFAULT as f32,
+            pins_popout_width: crate::ui::channel_popouts::PINS_POPOUT_WIDTH_DEFAULT,
+            pins_popout_height: crate::ui::channel_popouts::PINS_POPOUT_HEIGHT_DEFAULT,
+            inbox_popout_width: crate::ui::channel_popouts::INBOX_POPOUT_WIDTH_DEFAULT,
+            inbox_popout_height: crate::ui::channel_popouts::INBOX_POPOUT_HEIGHT_DEFAULT,
             active_resize: None,
             sidebar_resize_hovered: false,
             voice_resize_hovered: false,

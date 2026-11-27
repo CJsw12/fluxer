@@ -499,7 +499,13 @@ def _classify_resize_drag(item: dict, rust: RustIndex) -> tuple[str, list[str], 
     if "CompactVoiceCall" in f:
         if "VoiceCallHeight" in rust.resize_variants:
             return "present", ["fluxer_client/app/src/client_view.rs"], "ActiveResize::VoiceCallHeight implemented"
-    if any(k in f for k in ("ChannelPinsPopout", "InboxPopout")):
+    if "ChannelPinsPopout" in f:
+        if "PinsPopout" in rust.resize_variants:
+            return "present", ["fluxer_client/app/src/client_view.rs"], "ActiveResize::PinsPopout implemented"
+        return "differs", ["fluxer_client/app/src/ui/channel_popouts.rs"], "popout exists in Rust without resize handle"
+    if "InboxPopout" in f:
+        if "InboxPopout" in rust.resize_variants:
+            return "present", ["fluxer_client/app/src/client_view.rs"], "ActiveResize::InboxPopout implemented"
         return "differs", ["fluxer_client/app/src/ui/channel_popouts.rs"], "popout exists in Rust without resize handle"
     return "missing", [], "no matching resize/drag handle in fluxer_client/app/src"
 

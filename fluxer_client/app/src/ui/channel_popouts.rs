@@ -6,16 +6,17 @@ use fluxer_client_core::state::{
 };
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable as _};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
 use gpui_kit::{
-    Anchor, AnyElement, Bounds, Context, Div, Entity, Focusable as _, FontWeight, MouseButton, Pixels, Point, Role,
-    SharedString, Size, Stateful, Window, anchored, canvas, div, prelude::*, px, rgb, rgba,
+    Anchor, AnyElement, Bounds, Context, Div, Entity, Focusable as _, FontWeight, MouseButton, MouseDownEvent, Pixels,
+    Point, Role, SharedString, Size, Stateful, Window, anchored, canvas, div, prelude::*, px, rgb, rgba,
 };
 
-use crate::client_view::ClientView;
+use crate::client_view::{ClientView, ResizeEdge};
 use crate::icons::AppIcon;
 use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
@@ -27,6 +28,16 @@ use crate::ui::{attachments, composer_text, l10n};
 use crate::view_model::Place;
 
 pub const POPOUT_CONTEXT: &str = "ChannelPopout";
+
+pub(crate) const PINS_POPOUT_WIDTH_DEFAULT: f32 = 480.0;
+pub(crate) const PINS_POPOUT_HEIGHT_DEFAULT: f32 = 640.0;
+pub(crate) const PINS_POPOUT_WIDTH_MIN: f32 = 320.0;
+pub(crate) const PINS_POPOUT_HEIGHT_MIN: f32 = 200.0;
+
+pub(crate) const INBOX_POPOUT_WIDTH_DEFAULT: f32 = 600.0;
+pub(crate) const INBOX_POPOUT_HEIGHT_DEFAULT: f32 = 736.0;
+pub(crate) const INBOX_POPOUT_WIDTH_MIN: f32 = 440.0;
+pub(crate) const INBOX_POPOUT_HEIGHT_MIN: f32 = 400.0;
 
 thread_local! {
     /// Trigger rects recorded at prepaint (UI thread only), keyed by trigger id.
@@ -521,16 +532,16 @@ pub fn render(
             error,
             ..
         } => (
-            480.,
-            640.,
+            view.pins_popout_width,
+            view.pins_popout_height,
             "channel.channel-pins-popout.container",
-            render_pins(*loading, items, error.as_deref(), theme, hover_bg, cx),
+            render_pins(*loading, items, error.as_deref(), view.pins_popout_height, theme, hover_bg, cx),
         ),
         ChannelPopoutKind::Inbox { tab } => (
-            600.,
-            736.,
+            view.inbox_popout_width,
+            view.inbox_popout_height,
             "messaging.inbox-popout.container",
-            render_inbox(view, *tab, theme, active_bg, hover_bg, cx),
+            render_inbox(view, *tab, view.inbox_popout_height, theme, active_bg, hover_bg, cx),
         ),
         ChannelPopoutKind::ComposerPlusMenu => (
             208.,
@@ -652,7 +663,75 @@ pub fn render(
         }))
         .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         .flx(flx)
+        .relative()
         .child(body);
+
+    if matches!(pop.kind, ChannelPopoutKind::PinnedMessages { .. } | ChannelPopoutKind::Inbox { .. }) {
+        let is_pins = matches!(pop.kind, ChannelPopoutKind::PinnedMessages { .. });
+        let prefix = if is_pins { "pins" } else { "inbox" };
+        let make_handle = |suffix: &'static str, edge: ResizeEdge, aria: String| {
+            let id = SharedString::from(format!("{prefix}-resize-{suffix}"));
+            let dbg = id.clone();
+            div()
+                .id(id)
+                .debug_selector(move || dbg.to_string())
+                .aria_label(aria)
+                .absolute()
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, ev: &MouseDownEvent, _, cx| {
+                        if is_pins {
+                            this.begin_pins_popout_resize(edge, ev, cx);
+                        } else {
+                            this.begin_inbox_popout_resize(edge, ev, cx);
+                        }
+                    }),
+                )
+                .flx("ui.resizable-pane.resizable-pane-handles.handle.button")
+        };
+        let left_handle = make_handle(
+            "left",
+            ResizeEdge::Left,
+            l10n::tr(if is_pins {
+                "Resize pinned messages from the left edge"
+            } else {
+                "Resize inbox from the left edge"
+            }),
+        )
+        .top_0()
+        .bottom_0()
+        .left_0()
+        .w(px(8.))
+        .cursor_w_resize();
+        let bottom_handle = make_handle(
+            "bottom",
+            ResizeEdge::Bottom,
+            l10n::tr(if is_pins {
+                "Resize pinned messages from the bottom edge"
+            } else {
+                "Resize inbox from the bottom edge"
+            }),
+        )
+        .bottom_0()
+        .left_0()
+        .right_0()
+        .h(px(8.))
+        .cursor_ns_resize();
+        let corner_handle = make_handle(
+            "bottom-left",
+            ResizeEdge::BottomLeft,
+            l10n::tr(if is_pins {
+                "Resize pinned messages from bottom left"
+            } else {
+                "Resize inbox from bottom left"
+            }),
+        )
+        .bottom_0()
+        .left_0()
+        .size(px(14.))
+        .cursor_nesw_resize();
+        panel = panel.child(left_handle).child(bottom_handle).child(corner_handle);
+    }
 
     let (final_anchor, final_left, anchored_child): (Anchor, f32, AnyElement) = match translate_sub_content {
         Some(content) => {
@@ -1274,12 +1353,13 @@ fn render_pins(
     loading: bool,
     items: &[Message],
     error: Option<&str>,
+    height: f32,
     theme: &Theme,
     hover_bg: gpui_kit::Hsla,
     cx: &mut Context<ClientView>,
 ) -> AnyElement {
     div()
-        .h(px(638.))
+        .h(px((height - 2.).max(1.)))
         .flex()
         .flex_col()
         .child(
@@ -1418,6 +1498,7 @@ fn render_pins(
 fn render_inbox(
     view: &ClientView,
     tab: InboxTab,
+    height: f32,
     theme: &Theme,
     active_bg: gpui_kit::Hsla,
     hover_bg: gpui_kit::Hsla,
@@ -1429,6 +1510,17 @@ fn render_inbox(
         (InboxTab::Bookmarks, AppIcon::BookmarkSimple, "Bookmarks"),
         (InboxTab::Mentions, AppIcon::AtBold, "Mentions"),
     ];
+    let has_unread = {
+        let state = view.backend.state();
+        state.channels.values().any(|c| {
+            c.kind.has_messages()
+                && state.can_view_channel(c.id)
+                && {
+                    let u = state.channel_unread(c.id);
+                    u.unread || u.mention_count > 0
+                }
+        })
+    };
 
     let body: AnyElement = match tab {
         InboxTab::Unread => {
@@ -1782,7 +1874,7 @@ fn render_inbox(
     };
 
     div()
-        .h(px(734.))
+        .h(px((height - 2.).max(1.)))
         .flex()
         .flex_row()
         .child(
@@ -1796,45 +1888,100 @@ fn render_inbox(
                 .flex()
                 .flex_col()
                 .items_center()
-                .gap_2()
-                .children(tabs.into_iter().map(|(t, icon, label)| {
-                    let active = t == tab;
-                    let tr_label = l10n::tr(label);
+                .justify_between()
+                .child(
                     div()
-                        .id(SharedString::from(format!("inbox-tab-{t:?}")))
-                        .debug_selector(move || format!("inbox-tab-{t:?}"))
-                        .role(Role::Button)
-                        .aria_label(tr_label.clone())
-                        .aria_selected(active)
-                        .size(px(30.))
-                        .rounded(px(6.))
-                        .cursor_pointer()
+                        .w_full()
                         .flex()
+                        .flex_col()
                         .items_center()
-                        .justify_center()
-                        .when(active, |d| d.bg(tab_active_bg))
-                        .when(!active, |d| d.hover(move |s| s.bg(hover_bg)))
-                        .flx_text(
-                            "messaging.inbox-popout.render-tab-button.sidebar-tab.set-active-tab.button",
-                            tr_label,
-                        )
-                        .child(
+                        .gap_2()
+                        .flx("messaging.inbox-popout.sidebar-tab-list")
+                        .children(tabs.into_iter().map(|(t, icon, label)| {
+                            let active = t == tab;
+                            let tr_label = l10n::tr(label);
+                            let tip_label = tr_label.clone();
                             div()
-                                .size(px(16.))
-                                .flex_none()
-                                .flx(match t {
-                                    InboxTab::Unread => "messaging.inbox-popout.icon-small",
-                                    InboxTab::Bookmarks => "messaging.inbox-popout.icon-small--2",
-                                    InboxTab::Mentions => "messaging.inbox-popout.icon-small--3",
+                                .id(SharedString::from(format!("inbox-tab-tooltip-{t:?}")))
+                                .flx("messaging.inbox-popout.render-tab-button.tooltip")
+                                .tooltip(move |window, cx| {
+                                    Tooltip::new(SharedString::from(tip_label.clone())).build(window, cx)
                                 })
                                 .child(
-                                    Icon::new(icon)
-                                        .with_size(px(16.))
-                                        .text_color(if active { theme.foreground } else { theme.muted_foreground }),
-                                ),
-                        )
-                        .on_click(cx.listener(move |this, _, _, cx| this.set_inbox_popout_tab(t, cx)))
-                })),
+                                    div()
+                                        .id(SharedString::from(format!("inbox-tab-{t:?}")))
+                                        .debug_selector(move || format!("inbox-tab-{t:?}"))
+                                        .role(Role::Button)
+                                        .aria_label(tr_label.clone())
+                                        .aria_selected(active)
+                                        .size(px(30.))
+                                        .rounded(px(6.))
+                                        .cursor_pointer()
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .when(active, |d| d.bg(tab_active_bg))
+                                        .when(!active, |d| d.hover(move |s| s.bg(hover_bg)))
+                                        .flx_text(
+                                            "messaging.inbox-popout.render-tab-button.sidebar-tab.set-active-tab.button",
+                                            tr_label,
+                                        )
+                                        .child(
+                                            div()
+                                                .size(px(16.))
+                                                .flex_none()
+                                                .flx(match t {
+                                                    InboxTab::Unread => "messaging.inbox-popout.icon-small",
+                                                    InboxTab::Bookmarks => "messaging.inbox-popout.icon-small--2",
+                                                    InboxTab::Mentions => "messaging.inbox-popout.icon-small--3",
+                                                })
+                                                .child(
+                                                    Icon::new(icon)
+                                                        .with_size(px(16.))
+                                                        .text_color(if active { theme.foreground } else { theme.muted_foreground }),
+                                                ),
+                                        )
+                                        .on_click(cx.listener(move |this, _, _, cx| this.set_inbox_popout_tab(t, cx))),
+                                )
+                        })),
+                )
+                .when(tab == InboxTab::Unread, |s| {
+                    s.child(
+                        div()
+                            .w_full()
+                            .pt_2()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .flx("messaging.inbox-popout.sidebar-footer-actions--2")
+                            .child(
+                                div()
+                                    .id("inbox-mark-all-read-btn")
+                                    .role(Role::Button)
+                                    .aria_label(l10n::tr("Mark all inbox channels as read"))
+                                    .size(px(30.))
+                                    .rounded(px(6.))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .tooltip(move |window, cx| {
+                                        Tooltip::new(SharedString::from(l10n::tr("Mark all as read"))).build(window, cx)
+                                    })
+                                    .when(has_unread, |d| {
+                                        d.cursor_pointer()
+                                            .hover(move |st| st.bg(hover_bg))
+                                            .on_click(cx.listener(|this, _, _, cx| this.mark_all_inbox_read(cx)))
+                                    })
+                                    .when(!has_unread, |d| d.opacity(0.5))
+                                    .flx("messaging.inbox-popout.sidebar-action-button.mark-all-read")
+                                    .child(
+                                        Icon::new(AppIcon::Check)
+                                            .with_size(px(16.))
+                                            .text_color(theme.muted_foreground),
+                                    ),
+                            ),
+                    )
+                }),
         )
         .child(
             div()

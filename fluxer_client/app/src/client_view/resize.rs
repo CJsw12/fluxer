@@ -155,6 +155,62 @@ impl ClientView {
         cx.notify();
     }
 
+    pub(crate) fn begin_pins_popout_resize(
+        &mut self,
+        edge: ResizeEdge,
+        ev: &MouseDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        if ev.button != MouseButton::Left {
+            return;
+        }
+        if ev.click_count >= 2 {
+            self.active_resize = None;
+            self.pins_popout_width = crate::ui::channel_popouts::PINS_POPOUT_WIDTH_DEFAULT;
+            self.pins_popout_height = crate::ui::channel_popouts::PINS_POPOUT_HEIGHT_DEFAULT;
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
+        self.active_resize = Some(ActiveResize::PinsPopout {
+            edge,
+            start_x: f32::from(ev.position.x),
+            start_y: f32::from(ev.position.y),
+            start_w: self.pins_popout_width,
+            start_h: self.pins_popout_height,
+        });
+        cx.stop_propagation();
+        cx.notify();
+    }
+
+    pub(crate) fn begin_inbox_popout_resize(
+        &mut self,
+        edge: ResizeEdge,
+        ev: &MouseDownEvent,
+        cx: &mut Context<Self>,
+    ) {
+        if ev.button != MouseButton::Left {
+            return;
+        }
+        if ev.click_count >= 2 {
+            self.active_resize = None;
+            self.inbox_popout_width = crate::ui::channel_popouts::INBOX_POPOUT_WIDTH_DEFAULT;
+            self.inbox_popout_height = crate::ui::channel_popouts::INBOX_POPOUT_HEIGHT_DEFAULT;
+            cx.stop_propagation();
+            cx.notify();
+            return;
+        }
+        self.active_resize = Some(ActiveResize::InboxPopout {
+            edge,
+            start_x: f32::from(ev.position.x),
+            start_y: f32::from(ev.position.y),
+            start_w: self.inbox_popout_width,
+            start_h: self.inbox_popout_height,
+        });
+        cx.stop_propagation();
+        cx.notify();
+    }
+
     pub(crate) fn handle_resize_move(&mut self, ev: &MouseMoveEvent, window: &mut Window, cx: &mut Context<Self>) {
         let Some(active) = self.active_resize else {
             return;
@@ -206,6 +262,70 @@ impl ClientView {
                     cx.notify();
                 }
             }
+            ActiveResize::PinsPopout {
+                edge,
+                start_x,
+                start_y,
+                start_w,
+                start_h,
+            } => {
+                let viewport = window.viewport_size();
+                let max_w = (f32::from(viewport.width) - 32.).max(crate::ui::channel_popouts::PINS_POPOUT_WIDTH_MIN);
+                let max_h = (f32::from(viewport.height) - 60.).max(crate::ui::channel_popouts::PINS_POPOUT_HEIGHT_MIN);
+                let next_w = if matches!(edge, ResizeEdge::Left | ResizeEdge::BottomLeft) {
+                    (start_w + (start_x - f32::from(ev.position.x)))
+                        .round()
+                        .clamp(crate::ui::channel_popouts::PINS_POPOUT_WIDTH_MIN, max_w)
+                } else {
+                    self.pins_popout_width
+                };
+                let next_h = if matches!(edge, ResizeEdge::Bottom | ResizeEdge::BottomLeft) {
+                    (start_h + (f32::from(ev.position.y) - start_y))
+                        .round()
+                        .clamp(crate::ui::channel_popouts::PINS_POPOUT_HEIGHT_MIN, max_h)
+                } else {
+                    self.pins_popout_height
+                };
+                if (next_w - self.pins_popout_width).abs() > 0.5
+                    || (next_h - self.pins_popout_height).abs() > 0.5
+                {
+                    self.pins_popout_width = next_w;
+                    self.pins_popout_height = next_h;
+                    cx.notify();
+                }
+            }
+            ActiveResize::InboxPopout {
+                edge,
+                start_x,
+                start_y,
+                start_w,
+                start_h,
+            } => {
+                let viewport = window.viewport_size();
+                let max_w = (f32::from(viewport.width) - 32.).max(crate::ui::channel_popouts::INBOX_POPOUT_WIDTH_MIN);
+                let max_h = (f32::from(viewport.height) - 60.).max(crate::ui::channel_popouts::INBOX_POPOUT_HEIGHT_MIN);
+                let next_w = if matches!(edge, ResizeEdge::Left | ResizeEdge::BottomLeft) {
+                    (start_w + (start_x - f32::from(ev.position.x)))
+                        .round()
+                        .clamp(crate::ui::channel_popouts::INBOX_POPOUT_WIDTH_MIN, max_w)
+                } else {
+                    self.inbox_popout_width
+                };
+                let next_h = if matches!(edge, ResizeEdge::Bottom | ResizeEdge::BottomLeft) {
+                    (start_h + (f32::from(ev.position.y) - start_y))
+                        .round()
+                        .clamp(crate::ui::channel_popouts::INBOX_POPOUT_HEIGHT_MIN, max_h)
+                } else {
+                    self.inbox_popout_height
+                };
+                if (next_w - self.inbox_popout_width).abs() > 0.5
+                    || (next_h - self.inbox_popout_height).abs() > 0.5
+                {
+                    self.inbox_popout_width = next_w;
+                    self.inbox_popout_height = next_h;
+                    cx.notify();
+                }
+            }
         }
     }
 
@@ -226,6 +346,7 @@ impl ClientView {
                     self.emoji_picker_height.round() as u16,
                 );
             }
+            ActiveResize::PinsPopout { .. } | ActiveResize::InboxPopout { .. } => {}
         }
         cx.notify();
     }

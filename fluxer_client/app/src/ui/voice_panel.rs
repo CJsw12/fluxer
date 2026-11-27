@@ -5,8 +5,9 @@
 
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::switch::Switch;
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable as _};
-use gpui_kit::{AnyElement, Context, FontWeight, Hsla, Role, SharedString, div, prelude::*, px};
+use gpui_kit::{Context, Div, FontWeight, Hsla, Role, SharedString, Stateful, div, prelude::*, px};
 
 use super::avatar::{AvatarSpec, render_avatar};
 use super::l10n;
@@ -18,7 +19,7 @@ use crate::settings_model::SettingsEffect;
 use crate::theme::Theme;
 
 /// Renders the 3-bar signal strength indicator (`SignalStrengthIcon.tsx`).
-fn render_signal_strength_icon(color: Hsla) -> AnyElement {
+fn render_signal_strength_icon(color: Hsla) -> Stateful<Div> {
     div()
         .id("voice-signal-icon")
         .debug_selector(|| "voice-signal-icon".to_owned())
@@ -42,7 +43,6 @@ fn render_signal_strength_icon(color: Hsla) -> AnyElement {
                 .child(div().w(px(2.5)).h(px(9.)).rounded(px(1.)).bg(color))
                 .child(div().w(px(2.5)).h(px(13.)).rounded(px(1.)).bg(color)),
         )
-        .into_any_element()
 }
 
 pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> Option<impl IntoElement> {
@@ -127,7 +127,11 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             .justify_between()
                             .gap(px(8.))
                             .flx("voice.voice-connection-status.voice-connection-status-inner.status-row")
-                            .child(render_signal_strength_icon(status_color))
+                            .child(render_signal_strength_icon(status_color).when(is_connected, |d| {
+                                d.tooltip(move |window, cx| {
+                                    Tooltip::new(SharedString::from(l10n::tr("Measuring latency..."))).build(window, cx)
+                                })
+                            }))
                             .child(
                                 div()
                                     .id("voice-panel-open-stage")
@@ -184,33 +188,85 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                                 ),
                                         )
                                     })
+                                    .when(is_failed, |d| {
+                                        d.child(
+                                            div()
+                                                .id("voice-retry-tooltip")
+                                                .flx("voice.voice-connection-status.failed-voice-connection-status.tooltip-retry")
+                                                .tooltip(move |window, cx| {
+                                                    Tooltip::new(SharedString::from(l10n::tr("Try again"))).build(window, cx)
+                                                })
+                                                .child(
+                                                    div()
+                                                        .id("voice-retry-btn")
+                                                        .role(Role::Button)
+                                                        .aria_label(l10n::tr("Try again"))
+                                                        .debug_selector(|| "voice-retry-btn".to_owned())
+                                                        .size(px(32.))
+                                                        .rounded(px(6.))
+                                                        .flex()
+                                                        .items_center()
+                                                        .justify_center()
+                                                        .cursor_pointer()
+                                                        .hover(|s| s.bg(theme.control_hover_bg))
+                                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                                            if let Some(cid) = channel_id {
+                                                                this.join_voice_channel(cid, cx);
+                                                            }
+                                                        }))
+                                                        .flx("voice.voice-connection-status.failed-voice-connection-status.retry-button")
+                                                        .child(
+                                                            Icon::new(AppIcon::ArrowClockwise)
+                                                                .with_size(px(20.))
+                                                                .text_color(theme.muted_foreground),
+                                                        ),
+                                                ),
+                                        )
+                                    })
                                     .child(
                                         div()
-                                            .id("voice-disconnect-btn")
-                                            .role(Role::Button)
-                                            .aria_label(if is_failed {
-                                                l10n::tr("Dismiss")
+                                            .id(if is_failed { "voice-dismiss-tooltip" } else { "voice-disconnect-tooltip" })
+                                            .flx(if is_failed {
+                                                "voice.voice-connection-status.failed-voice-connection-status.tooltip-dismiss"
                                             } else {
-                                                l10n::tr("Disconnect")
+                                                "voice.voice-connection-status.voice-connection-status-inner.tooltip--2"
                                             })
-                                            .debug_selector(|| "voice-disconnect-btn".to_owned())
-                                            .size(px(32.))
-                                            .rounded(px(6.))
-                                            .flex()
-                                            .items_center()
-                                            .justify_center()
-                                            .cursor_pointer()
-                                            .hover(|s| s.bg(theme.control_hover_bg))
-                                            .on_click(cx.listener(|this, _, _, cx| this.leave_voice_channel(cx)))
-                                            .flx("voice.voice-connection-status.voice-connection-status-inner.control-button")
-                                            .child(
-                                                Icon::new(if is_failed {
-                                                    AppIcon::X
+                                            .tooltip(move |window, cx| {
+                                                Tooltip::new(SharedString::from(if is_failed {
+                                                    l10n::tr("Dismiss")
                                                 } else {
-                                                    AppIcon::PhoneX
-                                                })
-                                                .with_size(px(20.))
-                                                .text_color(theme.muted_foreground),
+                                                    l10n::tr("Disconnect")
+                                                }))
+                                                .build(window, cx)
+                                            })
+                                            .child(
+                                                div()
+                                                    .id("voice-disconnect-btn")
+                                                    .role(Role::Button)
+                                                    .aria_label(if is_failed {
+                                                        l10n::tr("Dismiss")
+                                                    } else {
+                                                        l10n::tr("Disconnect")
+                                                    })
+                                                    .debug_selector(|| "voice-disconnect-btn".to_owned())
+                                                    .size(px(32.))
+                                                    .rounded(px(6.))
+                                                    .flex()
+                                                    .items_center()
+                                                    .justify_center()
+                                                    .cursor_pointer()
+                                                    .hover(|s| s.bg(theme.control_hover_bg))
+                                                    .on_click(cx.listener(|this, _, _, cx| this.leave_voice_channel(cx)))
+                                                    .flx("voice.voice-connection-status.voice-connection-status-inner.control-button")
+                                                    .child(
+                                                        Icon::new(if is_failed {
+                                                            AppIcon::X
+                                                        } else {
+                                                            AppIcon::PhoneX
+                                                        })
+                                                        .with_size(px(20.))
+                                                        .text_color(theme.muted_foreground),
+                                                    ),
                                             ),
                                     ),
                             ),
@@ -322,16 +378,26 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                                 .flx("voice.voice-connection-status.voice-connection-status-inner.connection-id-value")
                                                 .child(
                                                     div()
+                                                        .id("voice-connection-id-tooltip")
                                                         .max_w_full()
-                                                        .truncate()
-                                                        .text_size(px(12.))
-                                                        .line_height(px(16.))
-                                                        .text_color(theme.text_secondary)
-                                                        .flx_text(
-                                                            "voice.voice-connection-status.voice-connection-status-inner.connection-id-value-text",
-                                                            conn_text.clone(),
-                                                        )
-                                                        .child(conn_text),
+                                                        .flx("voice.voice-connection-status.voice-connection-status-inner.tooltip--3")
+                                                        .tooltip({
+                                                            let tip = conn_text.clone();
+                                                            move |window, cx| Tooltip::new(SharedString::from(tip.clone())).build(window, cx)
+                                                        })
+                                                        .child(
+                                                            div()
+                                                                .max_w_full()
+                                                                .truncate()
+                                                                .text_size(px(12.))
+                                                                .line_height(px(16.))
+                                                                .text_color(theme.text_secondary)
+                                                                .flx_text(
+                                                                    "voice.voice-connection-status.voice-connection-status-inner.connection-id-value-text",
+                                                                    conn_text.clone(),
+                                                                )
+                                                                .child(conn_text),
+                                                        ),
                                                 ),
                                         ),
                                 )

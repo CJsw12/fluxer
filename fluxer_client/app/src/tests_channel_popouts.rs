@@ -663,3 +663,28 @@ fn right_click_message_row_opens_context_menu_only_for_sent_messages(cx: &mut Te
     assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::None)));
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn hovering_mute_channel_opens_duration_submenu_without_panic(cx: &mut TestAppContext) {
+    let (_rt, backend, view, cx) = open_popouts_client(cx);
+    let bell = cx.debug_bounds("toggle-channel-mute").expect("bell btn").center();
+    cx.simulate_click(bell, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    let trigger = cx.debug_bounds("notif-popout-mute").expect("mute trigger").center();
+    cx.simulate_mouse_move(trigger, None, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    assert!(cx.debug_bounds("mute-channel-submenu").is_some(), "duration submenu rendered");
+    let item = cx.debug_bounds("mute-duration-15m").expect("15m item").center();
+    cx.simulate_mouse_move(item, None, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    cx.simulate_click(item, Modifiers::default());
+    cx.run_until_parked();
+    draw(cx);
+    assert!(view.read_with(cx, |v, _| matches!(v.overlay, Overlay::None)));
+    let sent = lock_sent(&backend.sent_guild_settings);
+    let overrides = sent.last().expect("settings PATCH").1.channel_overrides.clone().flatten().expect("overrides");
+    assert_eq!(overrides[&GENERAL.to_string()].muted, Some(true));
+}

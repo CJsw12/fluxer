@@ -105,6 +105,8 @@ pub enum InboxTab {
 pub enum ChannelPopoutKind {
     NotificationSettings {
         channel_id: Snowflake,
+        /// "Mute channel" duration submenu open (hover on the trigger row).
+        mute_submenu: bool,
     },
     Threads {
         channel_id: Snowflake,
@@ -211,7 +213,7 @@ impl ClientView {
         self.prepare_overlay_replace(cx);
         self.autocomplete = None;
         self.overlay = Overlay::ChannelPopout(ChannelPopout {
-            kind: ChannelPopoutKind::NotificationSettings { channel_id },
+            kind: ChannelPopoutKind::NotificationSettings { channel_id, mute_submenu: false },
             anchor,
         });
         cx.notify();
@@ -386,6 +388,16 @@ impl ClientView {
         cx.notify();
     }
 
+    pub(crate) fn set_notification_mute_submenu(&mut self, open: bool, cx: &mut Context<Self>) {
+        if let Overlay::ChannelPopout(pop) = &mut self.overlay
+            && let ChannelPopoutKind::NotificationSettings { mute_submenu, .. } = &mut pop.kind
+            && *mute_submenu != open
+        {
+            *mute_submenu = open;
+            cx.notify();
+        }
+    }
+
     pub(crate) fn set_message_menu_translate_submenu(&mut self, open: bool, cx: &mut Context<Self>) {
         if let Overlay::ChannelPopout(pop) = &mut self.overlay
             && let ChannelPopoutKind::MessageMenu { translate_submenu, .. } = &mut pop.kind
@@ -531,7 +543,7 @@ pub fn render(
 
     let key = pop.kind.key();
     let (width, height, flx, body): (f32, f32, &'static str, AnyElement) = match &pop.kind {
-        ChannelPopoutKind::NotificationSettings { channel_id } => (
+        ChannelPopoutKind::NotificationSettings { channel_id, .. } => (
             208.,
             207.,
             "ui.action-menu.context-menu.popup",
@@ -676,11 +688,17 @@ pub fn render(
             v.close_overlay(window, cx);
         });
     };
-    let translate_sub_content = match &pop.kind {
+    // Side submenu column: (element, width incl. gap, top offset from the panel top).
+    let side_submenu: Option<(AnyElement, f32, f32)> = match &pop.kind {
         ChannelPopoutKind::MessageMenu { target, translate_submenu: true, .. }
             if !target.content.trim().is_empty() =>
         {
-            Some(target.content.clone())
+            Some((render_translate_submenu(&target.content, theme, bg, border, hover_bg, cx), 190., 64.))
+        }
+        ChannelPopoutKind::NotificationSettings { channel_id, mute_submenu: true }
+            if !channel_notification_state(&view.backend.state(), *channel_id).0 =>
+        {
+            Some((render_mute_submenu(*channel_id, theme, bg, border, hover_bg, cx), 224., 0.))
         }
         _ => None,
     };
@@ -776,13 +794,11 @@ pub fn render(
         panel = panel.child(left_handle).child(bottom_handle).child(corner_handle);
     }
 
-    let (final_anchor, final_left, anchored_child): (Anchor, f32, AnyElement) = match translate_sub_content {
-        Some(content) => {
+    let (final_anchor, final_left, anchored_child): (Anchor, f32, AnyElement) = match side_submenu {
+        Some((sub, sub_width, sub_top)) => {
             let panel_left = if matches!(anchor_corner, Anchor::TopRight) { left - width } else { left };
-            let sub_on_right = panel_left + width + 190. <= vw - 12.;
-            let sub_col = div()
-                .pt(px(64.))
-                .child(render_translate_submenu(&content, theme, bg, border, hover_bg, cx));
+            let sub_on_right = panel_left + width + sub_width <= vw - 12.;
+            let sub_col = div().pt(px(sub_top)).child(sub);
             let wrap = div()
                 .id("channel-popout-submenu-wrap")
                 .flex()
@@ -1103,6 +1119,54 @@ impl ClientView {
     }
 }
 
+/// "Mute channel" duration submenu (official `MuteDurationMenu`), shown beside the popout.
+fn render_mute_submenu(
+    channel_id: Snowflake,
+    theme: &Theme,
+    bg: gpui_kit::Hsla,
+    border: gpui_kit::Hsla,
+    hover_bg: gpui_kit::Hsla,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
+    // Official mute durations (TimeWindowPresets.ts, ms); `None` = "Until I turn it back on".
+    const MIN: i64 = 60_000;
+    let durations: [(&str, &str, Option<i64>, &'static str); 9] = [
+        ("15m", "For 15 minutes", Some(15 * MIN), "mute-duration-15m"),
+        ("30m", "For 30 minutes", Some(30 * MIN), "mute-duration-30m"),
+        ("1h", "For 1 hour", Some(60 * MIN), "mute-duration-1h"),
+        ("3h", "For 3 hours", Some(3 * 60 * MIN), "mute-duration-3h"),
+        ("4h", "For 4 hours", Some(4 * 60 * MIN), "mute-duration-4h"),
+        ("8h", "For 8 hours", Some(8 * 60 * MIN), "mute-duration-8h"),
+        ("24h", "For 24 hours", Some(24 * 60 * MIN), "mute-duration-24h"),
+        ("3d", "For 3 days", Some(3 * 24 * 60 * MIN), "mute-duration-3d"),
+        ("forever", "Until I turn it back on", None, "mute-duration-forever"),
+    ];
+    div()
+        .id("mute-channel-submenu")
+        .debug_selector(|| "mute-channel-submenu".to_owned())
+        .w(px(220.))
+        .p(px(6.))
+        .rounded(px(8.))
+        .border_1()
+        .border_color(border)
+        .bg(bg)
+        .shadow_lg()
+        .occlude()
+        .flex()
+        .flex_col()
+        .flx("mute-channel-submenu")
+        .children(durations.into_iter().map(|(key, label, ms, flx_id)| {
+            context_menu_item(format!("mute-duration-{key}"), hover_bg)
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.mute_channel_for(channel_id, ms, cx);
+                    this.close_overlay(window, cx);
+                }))
+                .flx(flx_id)
+                .child(div().h(px(18.)).text_size(px(13.)).text_color(theme.foreground).child(l10n::tr(label)))
+        }))
+        .into_any_element()
+}
+
 fn channel_notification_state(state: &ClientState, channel_id: Snowflake) -> (bool, u8, i8) {
     let guild_id = state.channels.get(&channel_id).and_then(|c| c.guild_id);
     let now_ms = i64::try_from(crate::accounts::now_ms()).unwrap_or(i64::MAX);
@@ -1157,6 +1221,7 @@ fn render_notification_settings(
         let selected = level == opt_val;
         let radio_border = if selected { theme.brand } else { gpui_kit::Hsla::from(rgba(0xc9c5d326)) };
         context_menu_item(format!("notif-level-{opt_val}"), hover_bg)
+            .on_mouse_move(cx.listener(|this, _, _, cx| this.set_notification_mute_submenu(false, cx)))
             .aria_selected(selected)
             .flx_text("ui.action-menu.context-menu.selectable-menu-item.radio-item", label.clone())
             .on_click(cx.listener(move |this, _, window, cx| {
@@ -1217,19 +1282,6 @@ fn render_notification_settings(
         div().mx(px(2.)).my(px(4.)).h(px(1.)).w(px(190.)).flex_none().bg(gpui_kit::Hsla::from(rgba(0xc9c5d326))).flx("ui.action-menu.context-menu.separator")
     };
 
-    // Official mute durations (TimeWindowPresets.ts, ms); `None` = "Until I turn it back on".
-    const MIN: i64 = 60_000;
-    let durations: [(&str, &str, Option<i64>, &'static str); 9] = [
-        ("15m", "For 15 minutes", Some(15 * MIN), "mute-duration-15m"),
-        ("30m", "For 30 minutes", Some(30 * MIN), "mute-duration-30m"),
-        ("1h", "For 1 hour", Some(60 * MIN), "mute-duration-1h"),
-        ("3h", "For 3 hours", Some(3 * 60 * MIN), "mute-duration-3h"),
-        ("4h", "For 4 hours", Some(4 * 60 * MIN), "mute-duration-4h"),
-        ("8h", "For 8 hours", Some(8 * 60 * MIN), "mute-duration-8h"),
-        ("24h", "For 24 hours", Some(24 * 60 * MIN), "mute-duration-24h"),
-        ("3d", "For 3 days", Some(3 * 24 * 60 * MIN), "mute-duration-3d"),
-        ("forever", "Until I turn it back on", None, "mute-duration-forever"),
-    ];
     let mute_trigger = context_menu_item("notif-popout-mute".to_owned(), hover_bg)
         .flx("ui.action-menu.context-menu.sub-menu.trigger")
         .child(
@@ -1252,44 +1304,14 @@ fn render_notification_settings(
             }))
             .into_any_element()
     } else {
-        let submenu_items = durations.into_iter().map(|(key, label, ms, flx_id)| {
-            context_menu_item(format!("mute-duration-{key}"), hover_bg)
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.mute_channel_for(channel_id, ms, cx);
-                    this.close_overlay(window, cx);
-                }))
-                .flx(flx_id)
-                .child(div().h(px(18.)).text_size(px(13.)).text_color(theme.foreground).child(l10n::tr(label)))
-        });
-        div()
-            .group("mute-channel-trigger")
-            .relative()
-            .child(
-                mute_trigger.child(
-                    div()
-                        .size(px(14.))
-                        .flex_none()
-                        .flx("ui.action-menu.context-menu.sub-menu.submenu-caret")
-                        .child(Icon::new(AppIcon::CaretRight).with_size(px(14.)).text_color(theme.muted_foreground)),
-                ),
-            )
+        mute_trigger
+            .on_mouse_move(cx.listener(|this, _, _, cx| this.set_notification_mute_submenu(true, cx)))
             .child(
                 div()
-                    .absolute()
-                    .top(px(-6.))
-                    .left_full()
-                    .ml(px(4.))
-                    .hidden()
-                    .group_hover("mute-channel-trigger", |s| s.flex())
-                    .flex_col()
-                    .w(px(220.))
-                    .p(px(6.))
-                    .rounded(px(8.))
-                    .bg(theme.background)
-                    .border_1()
-                    .border_color(theme.border)
-                    .flx("mute-channel-submenu")
-                    .children(submenu_items),
+                    .size(px(14.))
+                    .flex_none()
+                    .flx("ui.action-menu.context-menu.sub-menu.submenu-caret")
+                    .child(Icon::new(AppIcon::CaretRight).with_size(px(14.)).text_color(theme.muted_foreground)),
             )
             .into_any_element()
     };

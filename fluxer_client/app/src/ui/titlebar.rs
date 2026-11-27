@@ -103,6 +103,7 @@ pub fn render(_title: SharedString, theme: &Theme) -> AnyElement {
                 .flex_row()
                 .flex_none()
                 .h_full()
+                .flx("app.native-titlebar.controls")
                 .child(control_button(
                     "titlebar-minimize",
                     IconName::WindowMinimize,

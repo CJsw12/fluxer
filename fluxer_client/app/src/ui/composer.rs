@@ -225,11 +225,17 @@ pub fn render_with(
                 div()
                     .absolute()
                     .bottom(px(0.))
-                    .left(px(0.))
-                    .w_full()
+                    .left(px(16.))
+                    .right(px(16.))
+                    .h(px(24.))
+                    .flex()
+                    .flex_col()
+                    .justify_end()
+                    .flx("channel.lexical-channel-textarea-content.flx-channel-textarea-status-rail")
+                    .child(div().absolute().left(px(-1.)).top(px(11.5)).size(px(1.)).overflow_hidden().flx("channel.typing-users.announcer"))
                     .child(typing_row)
                     .when(view.gateway_status != crate::backend::GatewayStatus::Ready, |d| {
-                        d.child(div().px_4().pb_1().text_xs().text_color(theme.muted_foreground).child(view.status.clone()))
+                        d.child(div().pb_1().text_xs().text_color(theme.muted_foreground).child(view.status.clone()))
                     }),
             ),
         )

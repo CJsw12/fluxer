@@ -688,6 +688,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                     .min_w_0()
                     .truncate()
                     .flx_text("app.channel-item-content.category-name", c.name.to_string())
+                    .flx("app.channel-item-content.category-content")
                     .flx("app.channel-item-content.tooltip--2")
                     .flx("app.channel-item-content.tooltip--3")
                     .tooltip({
@@ -751,6 +752,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                     .flex_none()
                     .size(px(12.))
                     .flx("app.channel-item.category-icon")
+                    .flx("app.channel-item-content.channel-item-actions")
                     .child(Icon::new(AppIcon::CaretDown).with_size(px(12.)).text_color(muted_fg)),
             )
             .into_any_element();

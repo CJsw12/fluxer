@@ -607,6 +607,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 .flex_row()
                                 .items_center()
                                 .gap_2()
+                                .relative()
                                 .on_click(cx.listener(|this, _, window, cx| this.toggle_search(window, cx)))
                                 .flx("channel.message-search-bar.message-search-bar.anchor")
                                 .flx("channel.message-search-bar.message-search-bar.input-container")
@@ -668,7 +669,34 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                         .text_color(theme.foreground)
                                         .flx("channel.message-search-bar.message-search-bar.input.text")
                                         .child(l10n::tr("Search messages")),
-                                ),
+                                )
+                                .child(
+                                    div()
+                                        .absolute()
+                                        .left(px(-1.))
+                                        .top(px(18.5))
+                                        .size(px(1.))
+                                        .overflow_hidden()
+                                        .flx("channel.message-search-bar.message-search-bar.shortcuts-hint"),
+                                )
+                                .child(
+                                    div()
+                                        .absolute()
+                                        .left(px(-1.))
+                                        .top(px(18.5))
+                                        .size(px(1.))
+                                        .overflow_hidden()
+                                        .flx("channel.message-search-bar.message-search-bar.suggestions-status"),
+                                )
+                                .child(
+                                    div()
+                                        .absolute()
+                                        .left(px(-1.))
+                                        .top(px(18.5))
+                                        .size(px(1.))
+                                        .overflow_hidden()
+                                        .flx("channel.message-search-bar.message-search-bar.active-suggestion-status"),
+                                )
                         )
                 })
                 .when_some(

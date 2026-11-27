@@ -78,7 +78,6 @@ pub fn channel_typing_text(state: &ClientState, channel_id: Snowflake) -> Option
 pub fn typing_indicator(text: Option<SharedString>, theme: &Theme) -> AnyElement {
     div()
         .h(px(ROW_HEIGHT))
-        .px_4()
         .flex()
         .flex_row()
         .items_center()

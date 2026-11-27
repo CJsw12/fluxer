@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="900" height="620" viewBox="0 0 900 620" role="img" aria-label="Fluxer Rust 클라이언트 진행 지도">
   <rect width="900" height="620" fill="#0d1117"/>
   <text x="24" y="38" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="18" font-weight="600">Fluxer Rust 클라이언트 진행 지도</text>
-  <text x="876" y="38" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">기준일 2026-11-28 · 실기 55 · 구현 0 · 미검증 38 · 부분 0 · 미착수 0</text>
+  <text x="876" y="38" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">기준일 2026-11-28 · 실기 58 · 구현 0 · 미검증 35 · 부분 0 · 미착수 0</text>
   <line x1="24" y1="54" x2="876" y2="54" stroke="#21262d" stroke-width="1"/>
   <text x="24" y="92.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">코어(게이트웨이·상태·REST·세션)</text>
   <rect x="270" y="81.0" width="190" height="10" rx="5" fill="#21262d"/>
@@ -97,12 +97,12 @@
   <g><title>글꼴·밀도·확대 : 실기 완료</title><rect x="580" y="319.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <text x="24" y="364.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">소셜(친구·DM·프로필)</text>
   <rect x="270" y="353.0" width="190" height="10" rx="5" fill="#21262d"/>
-  <rect x="270" y="353.0" width="110.8" height="10" rx="5" fill="#58a6ff"/>
-  <text x="474" y="363.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">58%</text>
+  <rect x="270" y="353.0" width="126.7" height="10" rx="5" fill="#58a6ff"/>
+  <text x="474" y="363.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">67%</text>
   <g><title>DM 목록·대화 : 실기 완료</title><rect x="510" y="353.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <g><title>DM 열기·생성 : 미검증</title><rect x="524" y="353.0" width="10" height="10" rx="2" fill="#a371f7"/></g>
   <g><title>친구 목록 : 미검증</title><rect x="538" y="353.0" width="10" height="10" rx="2" fill="#a371f7"/></g>
-  <g><title>프로필 팝업 : 미검증</title><rect x="552" y="353.0" width="10" height="10" rx="2" fill="#a371f7"/></g>
+  <g><title>프로필 팝업 : 실기 완료</title><rect x="552" y="353.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <g><title>차단·관계 관리 : 미검증</title><rect x="566" y="353.0" width="10" height="10" rx="2" fill="#a371f7"/></g>
   <g><title>그룹 DM : 미검증</title><rect x="580" y="353.0" width="10" height="10" rx="2" fill="#a371f7"/></g>
   <text x="24" y="398.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">서버 관리</text>
@@ -145,11 +145,11 @@
   <g><title>자동 업데이트 : 미검증</title><rect x="594" y="489.0" width="10" height="10" rx="2" fill="#a371f7"/></g>
   <text x="24" y="534.0" fill="#e6edf3" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="13">음성·화면 공유</text>
   <rect x="270" y="523.0" width="190" height="10" rx="5" fill="#21262d"/>
-  <rect x="270" y="523.0" width="95.0" height="10" rx="5" fill="#58a6ff"/>
-  <text x="474" y="533.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">50%</text>
+  <rect x="270" y="523.0" width="133.0" height="10" rx="5" fill="#58a6ff"/>
+  <text x="474" y="533.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12" text-anchor="end">70%</text>
   <g><title>음성 채널 참가 : 미검증</title><rect x="510" y="523.0" width="10" height="10" rx="2" fill="#a371f7"/></g>
-  <g><title>화면 공유 송신 : 미검증</title><rect x="524" y="523.0" width="10" height="10" rx="2" fill="#a371f7"/></g>
-  <g><title>화면 공유 수신 : 미검증</title><rect x="538" y="523.0" width="10" height="10" rx="2" fill="#a371f7"/></g>
+  <g><title>화면 공유 송신 : 실기 완료</title><rect x="524" y="523.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
+  <g><title>화면 공유 수신 : 실기 완료</title><rect x="538" y="523.0" width="10" height="10" rx="2" fill="#3fb950"/></g>
   <g><title>오디오 장치·볼륨 : 미검증</title><rect x="552" y="523.0" width="10" height="10" rx="2" fill="#a371f7"/></g>
   <g><title>음성 UI : 미검증</title><rect x="566" y="523.0" width="10" height="10" rx="2" fill="#a371f7"/></g>
   <text x="24" y="590.0" fill="#8b949e" font-family="Segoe UI, Malgun Gothic, Apple SD Gothic Neo, Noto Sans KR, Noto Sans CJK KR, sans-serif" font-size="12">범례</text>

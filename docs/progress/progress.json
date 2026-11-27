@@ -379,8 +379,8 @@
         },
         {
           "name": "프로필 팝업",
-          "status": "implemented",
-          "verified": false
+          "status": "done",
+          "verified": true
         },
         {
           "name": "차단·관계 관리",
@@ -539,13 +539,13 @@
         },
         {
           "name": "화면 공유 송신",
-          "status": "implemented",
-          "verified": false
+          "status": "done",
+          "verified": true
         },
         {
           "name": "화면 공유 수신",
-          "status": "implemented",
-          "verified": false
+          "status": "done",
+          "verified": true
         },
         {
           "name": "오디오 장치·볼륨",

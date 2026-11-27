@@ -18,6 +18,11 @@ impl ClientView {
         !self.is_recording_keybind() && shortcuts::is_builtin_action_active(&self.prefs.data, action)
     }
 
+    pub(crate) fn is_composer_empty_or_unfocused(&self, window: &Window, cx: &gpui_kit::App) -> bool {
+        let composer_focused = self.composer.read(cx).focus_handle(cx).is_focused(window);
+        !composer_focused || self.composer.read(cx).value().is_empty()
+    }
+
     pub(crate) fn dispatch_keybind_action(
         &mut self,
         action: &str,
@@ -39,13 +44,27 @@ impl ClientView {
             "nav_add_guild" => self.open_join_guild(window, cx),
             "misc_search" => self.open_search(window, cx),
             "nav_quick_switcher" => self.toggle_quick_switcher(window, cx),
+            "chat_focus_textarea" => self.focus_composer(window, cx),
+            "chat_upload" => self.pick_files(cx),
             "chat_toggle_emoji" => self.toggle_emoji_picker(window, cx),
+            "chat_toggle_gif" => self.toggle_gif_picker(window, cx),
+            "chat_toggle_sticker" => self.toggle_sticker_picker(window, cx),
+            "chat_toggle_pins" => self.toggle_pins_shortcut(window, cx),
+            "chat_toggle_inbox" => self.toggle_inbox_shortcut(window, cx),
+            "chat_toggle_member_list" => self.toggle_member_list(cx),
+            "chat_scroll_up" => self.scroll_chat_page(-1, cx),
+            "chat_scroll_down" => self.scroll_chat_page(1, cx),
+            "chat_jump_oldest_unread" => self.jump_to_unread(cx),
+            "chat_mark_channel_read" => self.mark_channel_read(cx),
+            "chat_mark_guild_read" => self.mark_guild_read(cx),
+            "chat_mark_inbox_read" => self.mark_top_inbox_read(cx),
+            "chat_mark_all_inbox_read" => self.mark_all_inbox_read(cx),
+            "chat_new_dm" => self.open_create_group_dm(window, cx),
+            "chat_copy_channel_link" => self.copy_channel_link(cx),
             "system_toggle_settings" => self.open_settings(window, cx),
             "system_zoom_in" => self.step_ui_zoom(10, cx),
             "system_zoom_out" => self.step_ui_zoom(-10, cx),
             "system_zoom_reset" => self.settings_set_zoom(100, cx),
-            "chat_mark_channel_read" => self.mark_channel_read(cx),
-            "chat_mark_guild_read" => self.mark_guild_read(cx),
             "voice_toggle_mute" => self.toggle_voice_mute(cx),
             "voice_toggle_deafen" => self.toggle_voice_deaf(cx),
             _ => return false,

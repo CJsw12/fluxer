@@ -40,7 +40,20 @@ gpui_kit::actions!(
         OpenJoinGuild,
         OpenSearch,
         ToggleQuickSwitcher,
+        FocusTextarea,
+        UploadFile,
         ToggleEmojiPicker,
+        ToggleGifPicker,
+        ToggleStickerPicker,
+        TogglePins,
+        ToggleInbox,
+        ToggleMemberList,
+        ScrollChatUp,
+        ScrollChatDown,
+        JumpOldestUnread,
+        MarkInboxRead,
+        NewDm,
+        CopyChannelLink,
         OpenSettings,
         ZoomIn,
         ZoomOut,
@@ -67,6 +80,25 @@ const IN_INVITE_INPUT: &str = "InviteMembersModal > Input";
 const IN_GUILD_PROFILE_INPUT: &str = "GuildProfileModal > Input";
 const IN_DELETE_GUILD_MESSAGES_INPUT: &str = "DeleteMyGuildMessagesModal > Input";
 
+const MODAL_CONTEXTS: &[&str] = &[
+    search_panel::CONTEXT,
+    account_switcher::CONTEXT,
+    channel_modal::CREATE_CONTEXT,
+    channel_modal::EDIT_CONTEXT,
+    moderation_modal::ACTION_CONTEXT,
+    moderation_modal::BANS_CONTEXT,
+    access::CONTEXT,
+    forward_modal::CONTEXT,
+    create_thread_modal::CONTEXT,
+    invite_modal::CONTEXT,
+    guild_settings_modals::NOTIFICATIONS_CONTEXT,
+    guild_settings_modals::PRIVACY_CONTEXT,
+    guild_settings_modals::PROFILE_CONTEXT,
+    guild_settings_modals::DELETE_MESSAGES_CONTEXT,
+    guild_settings_modals::PURGE_NOTES_CONTEXT,
+    explore::PREVIEW_CONTEXT,
+];
+
 /// Binds `keys` in the layout and inside the composer, and disables them
 /// inside the quick switcher and search panel (whose inputs would otherwise
 /// fall back to the layout's binding).
@@ -74,22 +106,17 @@ fn both<A: Action + Clone>(out: &mut Vec<KeyBinding>, keys: &'static str, action
     out.push(KeyBinding::new(keys, action.clone(), Some(CONTEXT)));
     out.push(KeyBinding::new(keys, action, Some(IN_COMPOSER)));
     out.push(KeyBinding::new(keys, NoAction, Some(quick_switcher::CONTEXT)));
-    out.push(KeyBinding::new(keys, NoAction, Some(search_panel::CONTEXT)));
-    out.push(KeyBinding::new(keys, NoAction, Some(account_switcher::CONTEXT)));
-    out.push(KeyBinding::new(keys, NoAction, Some(channel_modal::CREATE_CONTEXT)));
-    out.push(KeyBinding::new(keys, NoAction, Some(channel_modal::EDIT_CONTEXT)));
-    out.push(KeyBinding::new(keys, NoAction, Some(moderation_modal::ACTION_CONTEXT)));
-    out.push(KeyBinding::new(keys, NoAction, Some(moderation_modal::BANS_CONTEXT)));
-    out.push(KeyBinding::new(keys, NoAction, Some(access::CONTEXT)));
-    out.push(KeyBinding::new(keys, NoAction, Some(forward_modal::CONTEXT)));
-    out.push(KeyBinding::new(keys, NoAction, Some(create_thread_modal::CONTEXT)));
-    out.push(KeyBinding::new(keys, NoAction, Some(invite_modal::CONTEXT)));
-    out.push(KeyBinding::new(keys, NoAction, Some(guild_settings_modals::NOTIFICATIONS_CONTEXT)));
-    out.push(KeyBinding::new(keys, NoAction, Some(guild_settings_modals::PRIVACY_CONTEXT)));
-    out.push(KeyBinding::new(keys, NoAction, Some(guild_settings_modals::PROFILE_CONTEXT)));
-    out.push(KeyBinding::new(keys, NoAction, Some(guild_settings_modals::DELETE_MESSAGES_CONTEXT)));
-    out.push(KeyBinding::new(keys, NoAction, Some(guild_settings_modals::PURGE_NOTES_CONTEXT)));
-    out.push(KeyBinding::new(keys, NoAction, Some(explore::PREVIEW_CONTEXT)));
+    for ctx in MODAL_CONTEXTS {
+        out.push(KeyBinding::new(keys, NoAction, Some(ctx)));
+    }
+}
+
+fn bind_layout_only<A: Action + Clone>(out: &mut Vec<KeyBinding>, keys: &'static str, action: A) {
+    out.push(KeyBinding::new(keys, action, Some(CONTEXT)));
+    out.push(KeyBinding::new(keys, NoAction, Some(quick_switcher::CONTEXT)));
+    for ctx in MODAL_CONTEXTS {
+        out.push(KeyBinding::new(keys, NoAction, Some(ctx)));
+    }
 }
 
 /// Every shortcut binding of the client layout.
@@ -137,6 +164,24 @@ fn bindings() -> Vec<KeyBinding> {
     out.push(KeyBinding::new("ctrl-k", NoAction, Some(guild_settings_modals::PURGE_NOTES_CONTEXT)));
     out.push(KeyBinding::new("ctrl-k", NoAction, Some(explore::PREVIEW_CONTEXT)));
     both(&mut out, "ctrl-e", ToggleEmojiPicker);
+    both(&mut out, "ctrl-g", ToggleGifPicker);
+    both(&mut out, "ctrl-s", ToggleStickerPicker);
+    both(&mut out, "ctrl-i", ToggleInbox);
+    both(&mut out, "ctrl-u", ToggleMemberList);
+    both(&mut out, "ctrl-shift-u", UploadFile);
+    both(&mut out, "pageup", ScrollChatUp);
+    both(&mut out, "pagedown", ScrollChatDown);
+    both(&mut out, "shift-pageup", JumpOldestUnread);
+    both(&mut out, "ctrl-shift-e", MarkInboxRead);
+    both(&mut out, "ctrl-shift-t", NewDm);
+    both(&mut out, "ctrl-shift-l", CopyChannelLink);
+    // Ctrl+P is SwitcherPrev inside quick_switcher::CONTEXT.
+    out.push(KeyBinding::new("ctrl-p", TogglePins, Some(CONTEXT)));
+    out.push(KeyBinding::new("ctrl-p", TogglePins, Some(IN_COMPOSER)));
+    for ctx in MODAL_CONTEXTS {
+        out.push(KeyBinding::new("ctrl-p", NoAction, Some(ctx)));
+    }
+    bind_layout_only(&mut out, "tab", FocusTextarea);
     both(&mut out, "ctrl-,", OpenSettings);
     both(&mut out, "ctrl-=", ZoomIn);
     both(&mut out, "ctrl--", ZoomOut);
@@ -230,6 +275,79 @@ pub fn on_actions(root: Div, cx: &mut Context<ClientView>) -> Div {
         .on_action(cx.listener(|v, _: &ToggleEmojiPicker, window, cx| {
             if v.should_run_builtin_shortcut("chat_toggle_emoji") {
                 v.toggle_emoji_picker(window, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &FocusTextarea, window, cx| {
+            if v.should_run_builtin_shortcut("chat_focus_textarea") && !v.overlay.is_open() {
+                v.focus_composer(window, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &UploadFile, _, cx| {
+            if v.should_run_builtin_shortcut("chat_upload") {
+                v.pick_files(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &ToggleGifPicker, window, cx| {
+            if v.should_run_builtin_shortcut("chat_toggle_gif") {
+                v.toggle_gif_picker(window, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &ToggleStickerPicker, window, cx| {
+            if v.should_run_builtin_shortcut("chat_toggle_sticker") {
+                v.toggle_sticker_picker(window, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &TogglePins, window, cx| {
+            if v.should_run_builtin_shortcut("chat_toggle_pins") {
+                v.toggle_pins_shortcut(window, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &ToggleInbox, window, cx| {
+            if v.should_run_builtin_shortcut("chat_toggle_inbox") && v.is_composer_empty_or_unfocused(window, cx) {
+                v.toggle_inbox_shortcut(window, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &ToggleMemberList, _, cx| {
+            if v.should_run_builtin_shortcut("chat_toggle_member_list") {
+                v.toggle_member_list(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &ScrollChatUp, window, cx| {
+            if v.should_run_builtin_shortcut("chat_scroll_up") && v.is_composer_empty_or_unfocused(window, cx) {
+                v.scroll_chat_page(-1, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &ScrollChatDown, window, cx| {
+            if v.should_run_builtin_shortcut("chat_scroll_down") && v.is_composer_empty_or_unfocused(window, cx) {
+                v.scroll_chat_page(1, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &JumpOldestUnread, _, cx| {
+            if v.should_run_builtin_shortcut("chat_jump_oldest_unread") {
+                v.jump_to_unread(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MarkInboxRead, _, cx| {
+            if v.should_run_builtin_shortcut("chat_mark_inbox_read") {
+                v.mark_top_inbox_read(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &NewDm, window, cx| {
+            if v.should_run_builtin_shortcut("chat_new_dm") {
+                v.open_create_group_dm(window, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &CopyChannelLink, _, cx| {
+            if v.should_run_builtin_shortcut("chat_copy_channel_link") {
+                v.copy_channel_link(cx);
             }
         }))
         .on_action(cx.listener(|v, _: &OpenSettings, window, cx| {
@@ -491,9 +609,9 @@ pub fn default_shortcut_rows(section: KeybindSection) -> Vec<DefaultShortcutRowS
             Single(spec("chat_jump_oldest_unread", "Jump to the oldest unread message", "shift-pageup", S::Chat)),
             Single(spec("chat_mark_channel_read", "Mark channel as read", "escape", S::Chat)),
             Single(spec("chat_mark_guild_read", "Mark community as read", "shift-escape", S::Chat)),
-            Single(spec("chat_mark_top_inbox_read", "Mark top inbox channel as read", "ctrl-shift-e", S::Chat)),
+            Single(spec("chat_mark_inbox_read", "Mark top inbox channel as read", "ctrl-shift-e", S::Chat)),
             Single(spec("chat_mark_all_inbox_read", "Mark all inbox channels as read", "", S::Chat)),
-            Single(spec("chat_start_group_dm", "Start a group DM", "ctrl-shift-t", S::Chat)),
+            Single(spec("chat_new_dm", "Start a group DM", "ctrl-shift-t", S::Chat)),
             Single(spec("chat_copy_channel_link", "Copy channel link", "ctrl-shift-l", S::Chat)),
         ],
         S::VoiceAndVideo => vec![
@@ -549,9 +667,23 @@ pub const ASSIGNABLE_ACTIONS: &[(&str, &str)] = &[
     ("nav_toggle_last_guild_dms", "Toggle last community and DMs"),
     ("nav_add_guild", "Create or join a community"),
     ("misc_search", "Search messages"),
+    ("chat_focus_textarea", "Focus the text area"),
+    ("chat_upload", "Upload a file"),
     ("chat_toggle_emoji", "Toggle the emoji picker"),
+    ("chat_toggle_gif", "Toggle the GIF picker"),
+    ("chat_toggle_sticker", "Toggle the sticker picker"),
+    ("chat_toggle_pins", "Toggle pinned messages"),
+    ("chat_toggle_inbox", "Toggle the inbox"),
+    ("chat_toggle_member_list", "Toggle the member list or voice chat"),
+    ("chat_scroll_up", "Scroll chat up"),
+    ("chat_scroll_down", "Scroll chat down"),
+    ("chat_jump_oldest_unread", "Jump to the oldest unread message"),
     ("chat_mark_channel_read", "Mark channel as read"),
     ("chat_mark_guild_read", "Mark community as read"),
+    ("chat_mark_inbox_read", "Mark top inbox channel as read"),
+    ("chat_mark_all_inbox_read", "Mark all inbox channels as read"),
+    ("chat_new_dm", "Start a group DM"),
+    ("chat_copy_channel_link", "Copy channel link"),
     ("voice_toggle_mute", "Toggle mute"),
     ("voice_toggle_deafen", "Toggle deafen"),
     ("system_toggle_settings", "Open your settings"),
@@ -850,7 +982,7 @@ mod tests {
             let key = (format!("{:?}", b.keystrokes()), b.predicate().map(|p| p.to_string()));
             assert!(seen.insert(key.clone()), "{key:?} bound twice");
         }
-        assert_eq!(seen.len(), 391);
+        assert_eq!(seen.len(), 636);
     }
 
     #[test]

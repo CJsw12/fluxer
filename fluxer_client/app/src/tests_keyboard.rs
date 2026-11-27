@@ -650,3 +650,125 @@ fn channel_mute_toggles_guild_and_dm_and_preserves_siblings(cx: &mut TestAppCont
     assert_eq!(sent[2].0, None);
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn chat_keybinds_popouts_pickers_clipboard_and_focus(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend(&rt);
+    let (view, cx) = open(cx, backend.clone(), events);
+
+    // Ctrl+U toggles member list.
+    let initial_members = view.read_with(cx, |v, _| v.shows_member_list());
+    keys(cx, "ctrl-u");
+    assert_ne!(view.read_with(cx, |v, _| v.shows_member_list()), initial_members);
+    keys(cx, "ctrl-u");
+    assert_eq!(view.read_with(cx, |v, _| v.shows_member_list()), initial_members);
+
+    // Ctrl+P toggles pinned messages popout.
+    keys(cx, "ctrl-p");
+    assert!(view.read_with(cx, |v, _| matches!(
+        &v.overlay,
+        Overlay::ChannelPopout(p) if matches!(p.kind, crate::ui::channel_popouts::ChannelPopoutKind::PinnedMessages { .. })
+    )));
+    keys(cx, "ctrl-p");
+    assert!(!view.read_with(cx, |v, _| v.overlay.is_open()));
+
+    // Ctrl+G opens GIF picker tab, Ctrl+S switches to Stickers, Ctrl+S again closes.
+    keys(cx, "ctrl-g");
+    assert!(view.read_with(cx, |v, _| matches!(
+        &v.overlay,
+        Overlay::EmojiPicker(p) if p.active_tab == crate::ui::emoji_picker::ExpressionTab::Media
+    )));
+    keys(cx, "ctrl-s");
+    assert!(view.read_with(cx, |v, _| matches!(
+        &v.overlay,
+        Overlay::EmojiPicker(p) if p.active_tab == crate::ui::emoji_picker::ExpressionTab::Stickers
+    )));
+    keys(cx, "escape");
+    assert!(!view.read_with(cx, |v, _| v.overlay.is_open()));
+
+    // Ctrl+I opens Inbox only when composer is empty (allow_when_empty).
+    keys(cx, "a");
+    keys(cx, "ctrl-i");
+    assert!(!view.read_with(cx, |v, _| v.overlay.is_open()), "ctrl-i ignored while typing");
+    keys(cx, "backspace");
+    keys(cx, "ctrl-i");
+    assert!(view.read_with(cx, |v, _| matches!(
+        &v.overlay,
+        Overlay::ChannelPopout(p) if matches!(p.kind, crate::ui::channel_popouts::ChannelPopoutKind::Inbox { .. })
+    )));
+    keys(cx, "escape");
+
+    // Ctrl+Shift+T opens Create Group DM modal.
+    keys(cx, "ctrl-shift-t");
+    assert!(view.read_with(cx, |v, _| matches!(&v.overlay, Overlay::CreateGroupDm(_))));
+    keys(cx, "escape");
+
+    // Ctrl+Shift+L copies channel link to clipboard.
+    keys(cx, "ctrl-shift-l");
+    let copied = cx.read_from_clipboard().and_then(|item| item.text());
+    let expected_url = format!("{}/channels/{}/{}", backend.web_origin().trim_end_matches('/'), GUILD.0, GENERAL.0);
+    assert_eq!(copied.as_deref(), Some(expected_url.as_str()));
+
+    // Tab focuses composer when root has focus.
+    view.update_in(cx, |v, window, cx| v.focus_root(window, cx));
+    cx.run_until_parked();
+    assert!(!view.update_in(cx, |v, window, cx| v.composer.read(cx).focus_handle(cx).is_focused(window)));
+    keys(cx, "tab");
+    assert!(view.update_in(cx, |v, window, cx| v.composer.read(cx).focus_handle(cx).is_focused(window)));
+
+    drop(rt);
+}
+
+#[gpui_kit::test]
+fn chat_keybinds_scroll_unread_and_inbox_read(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend(&rt);
+    let (view, cx) = open(cx, backend.clone(), events);
+
+    // Shift+PageUp jumps to oldest unread in GENERAL (msg 1 read -> msg 2 unread).
+    keys(cx, "shift-pageup");
+    assert_eq!(view.read_with(cx, |v, _| v.highlighted_message), Some((GENERAL, msg_id(2))));
+
+    // PageUp / PageDown work when composer is empty (do not panic, keep composer empty).
+    keys(cx, "pageup");
+    keys(cx, "pagedown");
+    let composer = view.read_with(cx, |v, _| v.composer.clone());
+    assert_eq!(composer_text(&composer, cx), "");
+
+    // Ctrl+Shift+E marks top unread inbox channel (GENERAL) as read.
+    assert!(backend.state().channel_unread(GENERAL).unread);
+    assert!(backend.state().channel_unread(ANNOUNCEMENTS).unread);
+    keys(cx, "ctrl-shift-e");
+    assert!(!backend.state().channel_unread(GENERAL).unread);
+    assert!(backend.state().channel_unread(ANNOUNCEMENTS).unread);
+
+    // Custom/dispatch chat_mark_all_inbox_read clears remaining unread channels.
+    let handled = view.update_in(cx, |v, window, cx| v.dispatch_keybind_action("chat_mark_all_inbox_read", window, cx));
+    assert!(handled);
+    cx.run_until_parked();
+    assert!(!backend.state().channel_unread(ANNOUNCEMENTS).unread);
+
+    // All 14 chat_* actions are registered in ASSIGNABLE_ACTIONS and active by default.
+    for action in [
+        "chat_copy_channel_link",
+        "chat_focus_textarea",
+        "chat_jump_oldest_unread",
+        "chat_mark_all_inbox_read",
+        "chat_mark_inbox_read",
+        "chat_new_dm",
+        "chat_scroll_down",
+        "chat_scroll_up",
+        "chat_toggle_gif",
+        "chat_toggle_inbox",
+        "chat_toggle_member_list",
+        "chat_toggle_pins",
+        "chat_toggle_sticker",
+        "chat_upload",
+    ] {
+        assert!(crate::shortcuts::action_label(action).is_some(), "missing label for {action}");
+        assert!(view.read_with(cx, |v, _| v.should_run_builtin_shortcut(action)), "{action} not active");
+    }
+
+    drop(rt);
+}

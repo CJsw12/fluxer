@@ -14,9 +14,9 @@
   "summary": {
     "total": {
       "total": 770,
-      "present": 53,
-      "missing": 643,
-      "differs": 74
+      "present": 66,
+      "missing": 629,
+      "differs": 75
     },
     "by_category": {
       "resize_drag": {
@@ -28,8 +28,8 @@
       "tooltips": {
         "total": 280,
         "present": 1,
-        "missing": 271,
-        "differs": 8
+        "missing": 268,
+        "differs": 11
       },
       "context_menus": {
         "total": 292,
@@ -39,9 +39,9 @@
       },
       "keybinds": {
         "total": 108,
-        "present": 21,
-        "missing": 53,
-        "differs": 34
+        "present": 34,
+        "missing": 42,
+        "differs": 32
       },
       "hover_only": {
         "total": 63,
@@ -390,7 +390,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/settings.rs:2898"
+          "fluxer_client/app/src/ui/settings/connections.rs:137"
         ],
         "reason": "matched data-flx 'user.linked-accounts-tab.connection-card.card'"
       }
@@ -500,7 +500,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/voice_stage.rs:1243"
+          "fluxer_client/app/src/ui/voice_stage.rs:1277"
         ],
         "reason": "matched data-flx 'voice.compact-voice-call-view.compact-voice-call-view-inner.resize-handle.resize-key-down'"
       }
@@ -844,7 +844,7 @@
       "rust": {
         "status": "differs",
         "matches": [
-          "fluxer_client/app/src/ui/channel_list.rs:599"
+          "fluxer_client/app/src/ui/channel_list.rs:684"
         ],
         "reason": "flx 'app.channel-item-content.category-name' exists in Rust without tooltip call"
       }
@@ -956,7 +956,7 @@
       "rust": {
         "status": "differs",
         "matches": [
-          "fluxer_client/app/src/ui/user_panel.rs:283"
+          "fluxer_client/app/src/ui/user_panel.rs:291"
         ],
         "reason": "flx 'app.user-area.user-area-inner.controls-container' exists in Rust without tooltip call"
       }
@@ -1030,7 +1030,7 @@
       "rust": {
         "status": "differs",
         "matches": [
-          "fluxer_client/app/src/ui/channel_list.rs:906"
+          "fluxer_client/app/src/ui/channel_list.rs:1007"
         ],
         "reason": "flx 'app.voice-state-icons.container' exists in Rust without tooltip call"
       }
@@ -1806,8 +1806,8 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/message_row.rs:206",
-          "fluxer_client/app/src/ui/message_row.rs:556"
+          "fluxer_client/app/src/ui/message_row.rs:208",
+          "fluxer_client/app/src/ui/message_row.rs:603"
         ],
         "reason": "flx 'channel.timestamp-with-tooltip.container' has tooltip in Rust"
       }
@@ -1877,11 +1877,13 @@
         "detail": "text={tooltipText} position=\"bottom\" data-flx=\"channel.channel-header-components.channel-header-icon.tooltip\"",
         "flx": "channel.channel-header-components.channel-header-icon.button-icon"
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/ui/friends.rs:277"
+        ],
+        "reason": "flx 'channel.channel-header-components.channel-header-icon.button-icon' exists in Rust without tooltip call"
       }
     },
     {
@@ -1989,7 +1991,7 @@
       "rust": {
         "status": "differs",
         "matches": [
-          "fluxer_client/app/src/ui/channel_list.rs:411"
+          "fluxer_client/app/src/ui/channel_list.rs:453"
         ],
         "reason": "flx 'channel.direct-message.dm-list.dm-section-header-text' exists in Rust without tooltip call"
       }
@@ -2383,11 +2385,13 @@
         "detail": "text={scopeTooltipText} position=\"bottom\" data-flx=\"channel.message-search-bar.message-search-bar.tooltip\"",
         "flx": "channel.message-search-bar.message-search-bar.anchor"
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:396"
+        ],
+        "reason": "flx 'channel.message-search-bar.message-search-bar.anchor' exists in Rust without tooltip call"
       }
     },
     {
@@ -4059,11 +4063,13 @@
         "detail": "text={() =",
         "flx": "user.language-selector.render-language-content.language-details"
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching tooltip in fluxer_client/app/src"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/ui/settings/language.rs:322"
+        ],
+        "reason": "flx 'user.language-selector.render-language-content.language-details' exists in Rust without tooltip call"
       }
     },
     {
@@ -4783,7 +4789,7 @@
       "rust": {
         "status": "differs",
         "matches": [
-          "fluxer_client/app/src/ui/voice_stage.rs:742"
+          "fluxer_client/app/src/ui/voice_stage.rs:764"
         ],
         "reason": "flx 'voice.voice-control-bar.voice-control-bar-inner.container' exists in Rust without tooltip call"
       }
@@ -6713,7 +6719,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_list.rs:867"
+          "fluxer_client/app/src/ui/channel_list.rs:968"
         ],
         "reason": "matched data-flx 'app.voice-participant-item.participant-row.click' with right-click/context-menu handler"
       }
@@ -7189,7 +7195,7 @@
       "rust": {
         "status": "differs",
         "matches": [
-          "fluxer_client/app/src/ui/member_list.rs:371"
+          "fluxer_client/app/src/ui/member_list.rs:370"
         ],
         "reason": "flx 'channel.member-list-item.focus-ring-wrapper' exists in Rust without right-click/context-menu handler"
       }
@@ -8903,7 +8909,7 @@
       "rust": {
         "status": "differs",
         "matches": [
-          "fluxer_client/app/src/ui/voice_panel.rs:142"
+          "fluxer_client/app/src/ui/voice_panel.rs:145"
         ],
         "reason": "flx 'voice.voice-connection-status.voice-connection-status-inner.focus-ring-wrapper' exists in Rust without right-click/context-menu handler"
       }
@@ -10803,11 +10809,13 @@
         "section": "chat",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -10821,13 +10829,13 @@
         "section": "chat",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -10841,11 +10849,13 @@
         "section": "chat",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -10859,11 +10869,13 @@
         "section": "chat",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
       }
     },
     {
@@ -10917,11 +10929,13 @@
         "section": "chat",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -10935,11 +10949,13 @@
         "section": "chat",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -10953,13 +10969,13 @@
         "section": "chat",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -10973,13 +10989,13 @@
         "section": "chat",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -10993,11 +11009,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
       }
     },
     {
@@ -11031,11 +11049,13 @@
         "section": "chat",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11049,11 +11069,13 @@
         "section": "chat",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11067,13 +11089,13 @@
         "section": "chat",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11087,13 +11109,13 @@
         "section": "chat",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11107,11 +11129,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
       }
     },
     {
@@ -11125,11 +11149,13 @@
         "section": "chat",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11143,13 +11169,13 @@
         "section": "chat",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12821,11 +12847,13 @@
         "section": "voice_and_video",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "differs",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "differs",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
       }
     },
     {
@@ -14419,7 +14447,7 @@
       "official_file": "fluxer_app/src/features/app/components/layout/ChannelItemContent.tsx",
       "official_line": 48,
       "rust_matches": [
-        "fluxer_client/app/src/ui/channel_list.rs:599"
+        "fluxer_client/app/src/ui/channel_list.rs:684"
       ]
     },
     {
@@ -14483,7 +14511,7 @@
       "official_file": "fluxer_app/src/features/app/components/layout/UserArea.tsx",
       "official_line": 333,
       "rust_matches": [
-        "fluxer_client/app/src/ui/user_panel.rs:283"
+        "fluxer_client/app/src/ui/user_panel.rs:291"
       ]
     },
     {
@@ -14525,7 +14553,7 @@
       "official_file": "fluxer_app/src/features/app/components/layout/VoiceStateIcons.tsx",
       "official_line": 65,
       "rust_matches": [
-        "fluxer_client/app/src/ui/channel_list.rs:906"
+        "fluxer_client/app/src/ui/channel_list.rs:1007"
       ]
     },
     {
@@ -14982,11 +15010,13 @@
       "id": "action:tooltips:fluxer_app/src/features/channel/components/channel_header_components/ChannelHeaderIcon.tsx:L78:Tooltip:1",
       "item_id": "tooltips:fluxer_app/src/features/channel/components/channel_header_components/ChannelHeaderIcon.tsx:L78:Tooltip:1",
       "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] ChannelHeaderIcon:Tooltip@L78: no matching tooltip in fluxer_client/app/src",
+      "status": "differs",
+      "title": "[tooltips/differs] ChannelHeaderIcon:Tooltip@L78: flx 'channel.channel-header-components.channel-header-icon.button-icon' exists in Rust without tooltip call",
       "official_file": "fluxer_app/src/features/channel/components/channel_header_components/ChannelHeaderIcon.tsx",
       "official_line": 78,
-      "rust_matches": []
+      "rust_matches": [
+        "fluxer_client/app/src/ui/friends.rs:277"
+      ]
     },
     {
       "id": "action:tooltips:fluxer_app/src/features/channel/components/channel_header_components/ChannelHeaderIcon.tsx:L90:Tooltip:2",
@@ -15047,7 +15077,7 @@
       "official_file": "fluxer_app/src/features/channel/components/direct_message/DirectMessageList.tsx",
       "official_line": 691,
       "rust_matches": [
-        "fluxer_client/app/src/ui/channel_list.rs:411"
+        "fluxer_client/app/src/ui/channel_list.rs:453"
       ]
     },
     {
@@ -15264,11 +15294,13 @@
       "id": "action:tooltips:fluxer_app/src/features/channel/components/message_search_bar/MessageSearchBar.tsx:L371:Tooltip:1",
       "item_id": "tooltips:fluxer_app/src/features/channel/components/message_search_bar/MessageSearchBar.tsx:L371:Tooltip:1",
       "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] MessageSearchBar:Tooltip@L371: no matching tooltip in fluxer_client/app/src",
+      "status": "differs",
+      "title": "[tooltips/differs] MessageSearchBar:Tooltip@L371: flx 'channel.message-search-bar.message-search-bar.anchor' exists in Rust without tooltip call",
       "official_file": "fluxer_app/src/features/channel/components/message_search_bar/MessageSearchBar.tsx",
       "official_line": 371,
-      "rust_matches": []
+      "rust_matches": [
+        "fluxer_client/app/src/ui/header.rs:396"
+      ]
     },
     {
       "id": "action:tooltips:fluxer_app/src/features/channel/components/modals/channel_tabs/channel_permissions_tab/LayoutToggleButtons.tsx:L49:Tooltip:1",
@@ -16196,11 +16228,13 @@
       "id": "action:tooltips:fluxer_app/src/features/user/components/modals/tabs/LanguageTab.tsx:L330:Tooltip:1",
       "item_id": "tooltips:fluxer_app/src/features/user/components/modals/tabs/LanguageTab.tsx:L330:Tooltip:1",
       "category": "tooltips",
-      "status": "missing",
-      "title": "[tooltips/missing] LanguageTab:Tooltip@L330: no matching tooltip in fluxer_client/app/src",
+      "status": "differs",
+      "title": "[tooltips/differs] LanguageTab:Tooltip@L330: flx 'user.language-selector.render-language-content.language-details' exists in Rust without tooltip call",
       "official_file": "fluxer_app/src/features/user/components/modals/tabs/LanguageTab.tsx",
       "official_line": 330,
-      "rust_matches": []
+      "rust_matches": [
+        "fluxer_client/app/src/ui/settings/language.rs:322"
+      ]
     },
     {
       "id": "action:tooltips:fluxer_app/src/features/user/components/modals/tabs/LinkedAccountsTab.tsx:L197:Tooltip:1",
@@ -16601,7 +16635,7 @@
       "official_file": "fluxer_app/src/features/voice/components/VoiceControlBar.tsx",
       "official_line": 654,
       "rust_matches": [
-        "fluxer_client/app/src/ui/voice_stage.rs:742"
+        "fluxer_client/app/src/ui/voice_stage.rs:764"
       ]
     },
     {
@@ -17903,7 +17937,7 @@
       "official_file": "fluxer_app/src/features/channel/components/MemberListItem.tsx",
       "official_line": 204,
       "rust_matches": [
-        "fluxer_client/app/src/ui/member_list.rs:371"
+        "fluxer_client/app/src/ui/member_list.rs:370"
       ]
     },
     {
@@ -18857,7 +18891,7 @@
       "official_file": "fluxer_app/src/features/voice/components/voice_connection_status/VoiceConnectionStatusInner.tsx",
       "official_line": 252,
       "rust_matches": [
-        "fluxer_client/app/src/ui/voice_panel.rs:142"
+        "fluxer_client/app/src/ui/voice_panel.rs:145"
       ]
     },
     {
@@ -19853,87 +19887,13 @@
       "rust_matches": []
     },
     {
-      "id": "action:keybinds:chat_copy_channel_link",
-      "item_id": "keybinds:chat_copy_channel_link",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] chat_copy_channel_link: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 727,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:chat_focus_textarea",
-      "item_id": "keybinds:chat_focus_textarea",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] chat_focus_textarea: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 713,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:chat_jump_oldest_unread",
-      "item_id": "keybinds:chat_jump_oldest_unread",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] chat_jump_oldest_unread: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 706,
-      "rust_matches": []
-    },
-    {
       "id": "action:keybinds:chat_mark_all_inbox_read",
       "item_id": "keybinds:chat_mark_all_inbox_read",
       "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] chat_mark_all_inbox_read: action not present in shortcuts.rs",
+      "status": "differs",
+      "title": "[keybinds/differs] chat_mark_all_inbox_read: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
       "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
       "official_line": 660,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:chat_mark_inbox_read",
-      "item_id": "keybinds:chat_mark_inbox_read",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] chat_mark_inbox_read: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 654,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:chat_new_dm",
-      "item_id": "keybinds:chat_new_dm",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] chat_new_dm: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 634,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:chat_scroll_down",
-      "item_id": "keybinds:chat_scroll_down",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] chat_scroll_down: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 699,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:chat_scroll_up",
-      "item_id": "keybinds:chat_scroll_up",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] chat_scroll_up: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 692,
       "rust_matches": [
         "fluxer_client/app/src/shortcuts.rs"
       ]
@@ -19942,52 +19902,10 @@
       "id": "action:keybinds:chat_send_voice_message",
       "item_id": "keybinds:chat_send_voice_message",
       "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] chat_send_voice_message: action not present in shortcuts.rs",
+      "status": "differs",
+      "title": "[keybinds/differs] chat_send_voice_message: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
       "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
       "official_line": 1,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:chat_toggle_gif",
-      "item_id": "keybinds:chat_toggle_gif",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] chat_toggle_gif: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 680,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:chat_toggle_inbox",
-      "item_id": "keybinds:chat_toggle_inbox",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] chat_toggle_inbox: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 646,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:chat_toggle_member_list",
-      "item_id": "keybinds:chat_toggle_member_list",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] chat_toggle_member_list: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 667,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:chat_toggle_pins",
-      "item_id": "keybinds:chat_toggle_pins",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] chat_toggle_pins: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 640,
       "rust_matches": [
         "fluxer_client/app/src/shortcuts.rs"
       ]
@@ -19996,30 +19914,10 @@
       "id": "action:keybinds:chat_toggle_saved_media",
       "item_id": "keybinds:chat_toggle_saved_media",
       "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] chat_toggle_saved_media: action not present in shortcuts.rs",
+      "status": "differs",
+      "title": "[keybinds/differs] chat_toggle_saved_media: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
       "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
       "official_line": 1,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:chat_toggle_sticker",
-      "item_id": "keybinds:chat_toggle_sticker",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] chat_toggle_sticker: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 686,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:chat_upload",
-      "item_id": "keybinds:chat_upload",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] chat_upload: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 720,
       "rust_matches": [
         "fluxer_client/app/src/shortcuts.rs"
       ]
@@ -20774,11 +20672,13 @@
       "id": "action:keybinds:voice_toggle_soundboard",
       "item_id": "keybinds:voice_toggle_soundboard",
       "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] voice_toggle_soundboard: action not present in shortcuts.rs",
+      "status": "differs",
+      "title": "[keybinds/differs] voice_toggle_soundboard: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
       "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
       "official_line": 767,
-      "rust_matches": []
+      "rust_matches": [
+        "fluxer_client/app/src/shortcuts.rs"
+      ]
     },
     {
       "id": "action:keybinds:voice_toggle_vad",

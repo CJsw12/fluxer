@@ -122,6 +122,139 @@ impl ClientView {
         self.refresh(cx);
     }
 
+    /// PageUp (`direction < 0`) / PageDown (`direction > 0`) in the message list.
+    pub(crate) fn scroll_chat_page(&mut self, direction: i32, cx: &mut Context<Self>) {
+        const PAGE_ITEMS: usize = 8;
+        let mut scrolled = false;
+        self.scroller.update(cx, |s, cx| {
+            let count = s.item_count();
+            if count == 0 {
+                return;
+            }
+            let cur = s.logical_scroll_top().item_ix.min(count.saturating_sub(1));
+            if direction < 0 {
+                s.scroll_to_item(cur.saturating_sub(PAGE_ITEMS), cx);
+                scrolled = true;
+            } else {
+                let next = cur.saturating_add(PAGE_ITEMS);
+                if next >= count {
+                    s.scroll_to_end(cx);
+                } else {
+                    s.scroll_to_item(next, cx);
+                }
+                scrolled = true;
+            }
+        });
+        if scrolled {
+            self.refresh(cx);
+        }
+    }
+
+    /// Ctrl+Shift+L: copies the canonical web URL for the open channel.
+    pub(crate) fn copy_channel_link(&self, cx: &mut Context<Self>) {
+        let Some(channel_id) = self.selected_channel else { return };
+        let guild_id = self.backend.state().channels.get(&channel_id).and_then(|c| c.guild_id);
+        let base = self.backend.web_origin().trim_end_matches('/');
+        let guild_seg = guild_id.map_or_else(|| "@me".to_owned(), |g| g.to_string());
+        let url = format!("{base}/channels/{guild_seg}/{channel_id}");
+        cx.write_to_clipboard(gpui_kit::ClipboardItem::new_string(url));
+    }
+
+    /// Ctrl+Shift+E: marks the top unread inbox channel as read.
+    pub(crate) fn mark_top_inbox_read(&mut self, cx: &mut Context<Self>) {
+        let top = {
+            let state = self.backend.state();
+            state
+                .channels
+                .values()
+                .filter(|c| c.kind.has_messages() && state.can_view_channel(c.id))
+                .filter_map(|c| {
+                    let u = state.channel_unread(c.id);
+                    if !u.unread && u.mention_count == 0 {
+                        return None;
+                    }
+                    c.last_message_id.map(|last| (c.id, last))
+                })
+                .min_by_key(|(id, _)| *id)
+        };
+        if let Some((channel_id, last_id)) = top {
+            self.cancel_ack();
+            self.backend.ack(channel_id, last_id);
+            self.refresh(cx);
+        }
+    }
+
+    /// Marks every unread inbox channel as read.
+    pub(crate) fn mark_all_inbox_read(&mut self, cx: &mut Context<Self>) {
+        let acks: Vec<(Snowflake, Snowflake)> = {
+            let state = self.backend.state();
+            state
+                .channels
+                .values()
+                .filter(|c| c.kind.has_messages() && state.can_view_channel(c.id))
+                .filter_map(|c| {
+                    let u = state.channel_unread(c.id);
+                    if !u.unread && u.mention_count == 0 {
+                        return None;
+                    }
+                    c.last_message_id.map(|last| (c.id, last))
+                })
+                .collect()
+        };
+        if acks.is_empty() {
+            return;
+        }
+        self.cancel_ack();
+        self.backend.ack_many(&acks);
+        self.refresh(cx);
+    }
+
+    fn default_top_right_anchor(window: &Window) -> gpui_kit::Point<gpui_kit::Pixels> {
+        let bounds = window.bounds();
+        gpui_kit::point(
+            (bounds.size.width - gpui_kit::px(320.)).max(gpui_kit::px(16.)),
+            gpui_kit::px(48.),
+        )
+    }
+
+    fn default_composer_anchor(window: &Window) -> gpui_kit::Point<gpui_kit::Pixels> {
+        let bounds = window.bounds();
+        gpui_kit::point(
+            (bounds.size.width - gpui_kit::px(270.)).max(gpui_kit::px(416.)),
+            (bounds.size.height - gpui_kit::px(70.)).max(gpui_kit::px(404.)),
+        )
+    }
+
+    pub(crate) fn toggle_gif_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.toggle_expression_tab(
+            crate::ui::emoji_picker::ExpressionTab::Media,
+            Self::default_composer_anchor(window),
+            window,
+            cx,
+        );
+    }
+
+    pub(crate) fn toggle_sticker_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.toggle_expression_tab(
+            crate::ui::emoji_picker::ExpressionTab::Stickers,
+            Self::default_composer_anchor(window),
+            window,
+            cx,
+        );
+    }
+
+    pub(crate) fn toggle_pins_shortcut(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.toggle_pins_popout(Self::default_top_right_anchor(window), window, cx);
+    }
+
+    pub(crate) fn toggle_inbox_shortcut(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let anchor = crate::ui::channel_popouts::header_anchor(
+            "header-inbox-btn",
+            Self::default_top_right_anchor(window),
+        );
+        self.toggle_inbox_popout(anchor, window, cx);
+    }
+
     /// Opens a channel in its place (DMs: Home).
     pub(crate) fn open_channel(&mut self, guild_id: Option<Snowflake>, channel_id: Snowflake, cx: &mut Context<Self>) {
         let place = guild_id.map_or(Place::Home, Place::Guild);

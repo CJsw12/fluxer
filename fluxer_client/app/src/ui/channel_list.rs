@@ -764,6 +764,18 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
     let selected = view.selected_channel == Some(c.id) || voice_active;
     let highlight_unread = c.unread.unread && !c.muted;
     let can_edit_row = view.place != Place::Home && c.can_manage;
+    // Official `canInviteToChannel(channel.id, guildId)`: the row's own channel must be invitable.
+    let invite_guild = match view.place {
+        Place::Guild(guild) => {
+            let state = view.backend.state();
+            (crate::ui::invite_modal::invitable_channel_id(&state, guild, Some(c.id)) == Some(c.id)).then_some(guild)
+        }
+        _ => None,
+    };
+    // Official rows only carry Invite + Gear (permissions live in channel settings). Keep the
+    // permissions shortcut only when the gear is absent (MANAGE_ROLES without MANAGE_CHANNELS),
+    // since the channel editor is then unreachable. TODO(backlog): match the official path.
+    let row_permissions = if can_edit_row { None } else { permissions };
     let channel_aria_label = if is_voice {
         format!("{} ({})", c.name, l10n::tr("Voice channel"))
     } else {
@@ -984,7 +996,7 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
     };
     if is_voice && !voice_members.is_empty() {
         let count_label = format!("{}", voice_members.len());
-        let hover_affordances_active = can_edit_row || matches!(view.place, Place::Guild(_) if c.can_manage_permissions);
+        let hover_affordances_active = can_edit_row || invite_guild.is_some() || row_permissions.is_some();
         row = row.child(
             div()
                 .mr(px(8.))
@@ -1006,8 +1018,9 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                 .child(count_label),
         );
     }
-    if can_edit_row || permissions.is_some() {
+    if can_edit_row || invite_guild.is_some() || row_permissions.is_some() {
         let ch_id = c.id;
+        let invite_sel = format!("invite-channel-{}", ch_id.0);
         let edit_sel = format!("edit-channel-{}", ch_id.0);
         row = row.child(
             div()
@@ -1043,7 +1056,36 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                             ),
                     )
                 })
-                .children(permissions),
+                .when_some(invite_guild, |d, guild| {
+                    // Official `ChannelItemIcon`: a bare 16px icon button (no ghost padding),
+                    // text-primary-muted at rest, text-primary on hover / when selected.
+                    let (rest_fg, hover_fg) = (theme.muted_foreground, theme.foreground);
+                    d.child(
+                        div()
+                            .id(("invite-channel", ch_id.0))
+                            .role(Role::Button)
+                            .aria_label(l10n::tr("Invite members"))
+                            .debug_selector(move || invite_sel.clone())
+                            .size(px(16.))
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded_full()
+                            .cursor_pointer()
+                            .text_color(if selected { hover_fg } else { rest_fg })
+                            .hover(move |s| s.text_color(hover_fg))
+                            .when(selected, |d| d.flx("app.channel-item.hover-affordance"))
+                            .tooltip(|window, cx| Tooltip::new(l10n::tr("Invite members")).build(window, cx))
+                            .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                cx.stop_propagation();
+                                this.open_invite_members_for(guild, Some(ch_id), window, cx);
+                            }))
+                            .child(Icon::new(AppIcon::UserPlusFill).with_size(px(16.))),
+                    )
+                })
+                .children(row_permissions),
         );
     }
     if c.has_messages {

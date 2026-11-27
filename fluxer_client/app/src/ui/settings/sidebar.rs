@@ -377,7 +377,7 @@ pub(super) fn render_sidebar(
             .flex_row()
             .items_center()
             .gap(px(8.))
-            .text_color(theme.danger)
+            .text_color(theme.settings_danger_text)
             .text_size(px(13.))
             .line_height(px(18.))
             .font_weight(FontWeight::MEDIUM)

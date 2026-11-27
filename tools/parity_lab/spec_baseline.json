@@ -4,13 +4,13 @@
   "scenes": {
     "markdown": {
       "spec": "target/parity-tmp/md.1280.spec.json",
-      "max_deltas": 10,
-      "max_missing": 112,
+      "max_deltas": 11,
+      "max_missing": 111,
       "ignore": [
         "app.native-titlebar.wordmark|width",
         "channel.channel-header-components.channel-header-icon.button-icon|x"
       ],
-      "updated": "2026-11-27"
+      "updated": "2026-11-28"
     }
   },
   "scene_sets": {
@@ -71,11 +71,11 @@
           "missing": 0
         },
         "settings-accessibility": {
-          "deltas": 22,
+          "deltas": 13,
           "missing": 23
         },
         "settings-advanced": {
-          "deltas": 14,
+          "deltas": 5,
           "missing": 19
         },
         "settings-appearance": {
@@ -83,7 +83,7 @@
           "missing": 1
         },
         "settings-applications": {
-          "deltas": 36,
+          "deltas": 26,
           "missing": 3
         },
         "settings-chat": {
@@ -91,7 +91,7 @@
           "missing": 14
         },
         "settings-connections": {
-          "deltas": 29,
+          "deltas": 28,
           "missing": 3
         },
         "settings-keybinds": {
@@ -123,7 +123,7 @@
           "missing": 1
         },
         "settings-windows": {
-          "deltas": 27,
+          "deltas": 18,
           "missing": 1
         }
       },
@@ -171,8 +171,8 @@
           "missing": 0
         },
         "light-theme": {
-          "deltas": 11,
-          "missing": 123
+          "deltas": 12,
+          "missing": 122
         },
         "threads-panel": {
           "deltas": 3,

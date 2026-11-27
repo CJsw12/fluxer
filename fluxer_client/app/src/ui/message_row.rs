@@ -102,14 +102,8 @@ pub(crate) fn markdown_style(theme: &Theme) -> MarkdownStyle {
         mention_background: theme.mention_bg,
         mention_foreground: theme.mention_fg,
         spoiler_hidden,
-        // `--bg-code-block`: the secondary background darkened 16%.
-        // `--code-block-bg`: dark mixes primary 92% with 5% lightness 8%; light mixes
-        // 98.5% 88% with 92.84% 12%.
-        code_background: Hsla {
-            l: if theme.background.l < 0.5 { theme.background.l * 0.92 + 0.05 * 0.08 } else { 0.985 * 0.88 + 0.9284 * 0.12 },
-            ..theme.background
-        },
-        code_border: theme.border,
+        code_background: theme.code_block_bg,
+        code_border: theme.code_block_border,
         quote_text: theme.muted_foreground,
         list_marker: theme.text_chat,
         ..default_style
@@ -863,6 +857,24 @@ mod tests {
 
     use super::*;
     use crate::view_model::message_pane_at;
+
+    #[test]
+    fn code_block_uses_official_code_block_tokens() {
+        use crate::theme::ThemeKind;
+        let rgb = |c: Hsla| {
+            let c = c.to_rgb();
+            ((c.r * 255.).round() as u8, (c.g * 255.).round() as u8, (c.b * 255.).round() as u8)
+        };
+        // Official 1124 dark: rich code block background rgb(33,31,38), 1px border.
+        let dark = Theme::preview(ThemeKind::Dark);
+        let style = markdown_style(&dark);
+        assert_eq!(rgb(style.code_background), (0x21, 0x1F, 0x26));
+        assert_ne!(rgb(style.code_background), rgb(dark.background));
+        assert_eq!(style.code_border, dark.code_block_border);
+        // Light uses `--code-block-bg` from the generated light tokens (not yet measured live).
+        let light = Theme::preview(ThemeKind::Light);
+        assert_eq!(rgb(markdown_style(&light).code_background), (0xF9, 0xF9, 0xFA));
+    }
 
     const CONTENT: &str = "hey <@200> in <#11>\n||secret|| end\n```rs\nfn main() {}\n```";
 

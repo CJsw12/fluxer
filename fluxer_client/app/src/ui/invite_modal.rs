@@ -126,9 +126,21 @@ fn age_summary(max_age: u32) -> &'static str {
 
 impl ClientView {
     pub(crate) fn open_invite_members(&mut self, guild_id: Snowflake, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_invite_members_for(guild_id, self.selected_channel, window, cx);
+    }
+
+    /// Opens the invite modal targeting `preferred` when it is invitable
+    /// (channel row `UserPlusIcon`: `<InviteModal channelId={channel.id} />`).
+    pub(crate) fn open_invite_members_for(
+        &mut self,
+        guild_id: Snowflake,
+        preferred: Option<Snowflake>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         let (channel_id, guild_name, ch_name) = {
             let state = self.backend.state();
-            let Some(cid) = invitable_channel_id(&state, guild_id, self.selected_channel) else {
+            let Some(cid) = invitable_channel_id(&state, guild_id, preferred) else {
                 return;
             };
             let guild_name: SharedString = state

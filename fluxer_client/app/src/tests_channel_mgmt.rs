@@ -1042,3 +1042,20 @@ fn role_editor_ui_create_edit_and_delete_submissions(cx: &mut TestAppContext) {
     draw(cx);
     assert!(view.read_with(cx, |v, _| v.access_pending.is_none()));
 }
+
+#[gpui_kit::test]
+fn channel_row_affordances_match_official_invite_and_gear(cx: &mut TestAppContext) {
+    // Official `ChannelItem.tsx`: rows carry UserPlus (canInvite) + Gear (canEditChannel) only;
+    // the selected row shows them at rest, other rows on hover.
+    let (_rt, _backend, view, cx) = open_guild(cx, ME, 0, 0);
+    assert!(cx.debug_bounds("invite-channel-11").is_some());
+    assert!(cx.debug_bounds("edit-channel-11").is_some());
+    assert!(cx.debug_bounds("channel-permissions-11").is_none());
+    let invite = cx.debug_bounds("invite-channel-12").expect("unselected row invite").center();
+    cx.simulate_click(invite, Modifiers::default());
+    cx.run_until_parked();
+    assert!(view.read_with(cx, |v, _| {
+        matches!(&v.overlay, Overlay::InviteMembers(m) if m.channel_id == ANNOUNCE && m.guild_id == GUILD)
+    }));
+    assert!(view.read_with(cx, |v, _| v.selected_channel != Some(ANNOUNCE)));
+}

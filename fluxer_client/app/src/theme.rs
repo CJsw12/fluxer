@@ -259,6 +259,12 @@ pub struct Theme {
     pub mention_bg: Hsla,
     /// `--markup-mention-text`.
     pub mention_fg: Hsla,
+    /// `--code-block-bg` (fenced code block panel).
+    pub code_block_bg: Hsla,
+    /// `--code-block-border`.
+    pub code_block_border: Hsla,
+    /// `--settings-danger-text`: status danger 78% mixed with text primary 22%.
+    pub settings_danger_text: Hsla,
     /// User panel status dot.
     pub status_online: Hsla,
     /// `--status-idle`.
@@ -703,6 +709,10 @@ impl Theme {
             image_placeholder: hsla(0., 0., 0.5, 0.15),
             mention_bg: p.link.alpha(0.2).color(),
             mention_fg: p.link.color(),
+            // Darker/Black have no generated tokens: keep the panel a step off the chat background.
+            code_block_bg: mix_srgb(primary_color, 0.92, hsla(0., 0., 0.05, 1.)),
+            code_block_border: hsla(0., 0., 0.5, 0.2),
+            settings_danger_text: STATUS_DANGER.color(),
             status_online: p.online.color(),
             status_connecting: p.idle.color(),
             status_idle: p.idle.color(),
@@ -748,6 +758,8 @@ impl Theme {
                 theme.danger = rgba_u32(t::STATUS_DANGER_RGBA);
                 theme.mention_bg = rgba_u32(t::MARKUP_MENTION_FILL_RGBA);
                 theme.mention_fg = rgba_u32(t::MARKUP_MENTION_TEXT_RGBA);
+                theme.code_block_bg = rgba_u32(t::CODE_BLOCK_BG_RGBA);
+                theme.code_block_border = rgba_u32(t::CODE_BLOCK_BORDER_RGBA);
                 theme.status_online = rgba_u32(t::STATUS_ONLINE_RGBA);
                 theme.status_connecting = rgba_u32(t::STATUS_IDLE_RGBA);
                 theme.status_idle = rgba_u32(t::STATUS_IDLE_RGBA);
@@ -768,6 +780,7 @@ impl Theme {
             }
             ThemeKind::Darker | ThemeKind::Black => {}
         }
+        theme.settings_danger_text = mix_srgb(theme.danger, 0.78, theme.foreground);
 
         theme
     }

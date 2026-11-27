@@ -588,12 +588,18 @@ impl ClientView {
             modal.active_tab = tab;
             modal.active_section = tab.sections().first().map(|(id, _)| *id);
             // Official sidebar scrolls the clicked item into view ("nearest");
-            // offsets measured from the official spec (nav-list top = 179 - scroll).
-            // GPUI scroll offsets are negative for content scrolled up.
+            // offsets measured from the official 1124 spec (nav-list top = 179 - scroll).
+            // GPUI scroll offsets are negative for content scrolled up. A generic
+            // nearest rule needs the sidebar list heights to match the official ones
+            // first (TODO(backlog)); until then the measured offsets stay explicit.
             let sidebar_offset = match tab {
                 SettingsTab::VoiceVideo => 2.,
+                SettingsTab::Accessibility => 42.,
                 SettingsTab::Language => 82.,
                 SettingsTab::Keybinds => 122.,
+                SettingsTab::WindowsApp => 159.,
+                SettingsTab::Applications => 193.,
+                SettingsTab::Advanced => 196.,
                 _ => 0.,
             };
             modal.sidebar_scroll.set_offset(point(px(0.), px(-sidebar_offset)));

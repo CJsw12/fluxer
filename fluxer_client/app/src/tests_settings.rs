@@ -1318,3 +1318,14 @@ fn settings_modal_theme_tokens_and_rendering_across_dark_and_light(cx: &mut Test
 
     drop(rt);
 }
+
+#[test]
+fn settings_logout_uses_settings_danger_text_mix() {
+    // Official 1124 dark: `--settings-danger-text` (status danger 78% + text primary 22%) = #e8605f.
+    let c = Theme::preview(ThemeKind::Dark).settings_danger_text.to_rgb();
+    let rgb = [(c.r * 255.).round() as u8, (c.g * 255.).round() as u8, (c.b * 255.).round() as u8];
+    // sRGB mixing rounds to within one step of the browser's result.
+    for (got, want) in rgb.iter().zip([0xE8_u8, 0x60, 0x5F]) {
+        assert!(got.abs_diff(want) <= 1, "{rgb:?}");
+    }
+}

@@ -132,8 +132,8 @@ pub(super) fn render_sidebar_tab(
                 .flex_col()
                 .gap(px(2.))
                 .flx("app.settings-modal-layout.settings-modal-sidebar-sub-items.sidebar-sub-items");
-            for (idx, &(sec_id, sec_label)) in sections.iter().enumerate() {
-                let is_active_sec = active_section == Some(sec_id) || (active_section.is_none() && idx == 0);
+            for &(sec_id, sec_label) in sections.iter() {
+                let is_active_sec = active_section == Some(sec_id);
                 let sub_sel = format!("settings-subitem-{sec_id}");
                 let sub_id = SharedString::from(format!("settings-subitem-{}-{sec_id}", tab.debug_selector()));
                 let label_el = div()

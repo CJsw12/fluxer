@@ -75,8 +75,8 @@
           "missing": 11
         },
         "settings-keybinds": {
-          "deltas": 310,
-          "missing": 12
+          "deltas": 299,
+          "missing": 11
         },
         "settings-language": {
           "deltas": 15,
@@ -91,7 +91,7 @@
           "missing": 11
         },
         "settings-voice-video": {
-          "deltas": 19,
+          "deltas": 17,
           "missing": 11
         }
       },

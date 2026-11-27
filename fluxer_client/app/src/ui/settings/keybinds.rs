@@ -823,21 +823,46 @@ pub(super) fn render_keybinds_tab(
                 })
                 .child(
                     div()
-                        .h(px(34.))
-                        .flex()
-                        .items_center()
+                        .id("settings-keybinds-add")
                         .debug_selector(|| "settings-keybinds-add".to_owned())
+                        .h(px(34.))
+                        .px(px(10.))
+                        .py(px(6.))
+                        .rounded(px(8.))
+                        .border_1()
+                        .border_color(theme.brand_button_border)
+                        .bg(theme.brand)
+                        .hover(|s| s.opacity(0.9))
+                        .cursor_pointer()
+                        .flex()
+                        .flex_row()
+                        .items_center()
+                        .justify_center()
+                        .gap(px(6.))
                         .flx("user.keybinds-tab.custom-keybinds-list.button.add")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.settings_add_custom_keybind(None, cx);
+                        }))
                         .child(
-                            Button::new("settings-keybinds-add")
-                                .primary()
-                                .small()
-                                .h(px(34.))
-                                .icon(AppIcon::Plus)
-                                .label(l10n::tr("Add keybind"))
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.settings_add_custom_keybind(None, cx);
-                                })),
+                            div()
+                                .size(px(16.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .flx("user.keybinds-tab.custom-keybinds-list.plus-icon")
+                                .child(
+                                    Icon::new(AppIcon::Plus)
+                                        .size(px(14.))
+                                        .text_color(theme.on_fill),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(13.))
+                                .line_height(px(18.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(theme.on_fill)
+                                .child(l10n::tr("Add keybind")),
                         ),
                 ),
         );
@@ -918,6 +943,7 @@ pub(super) fn render_keybinds_tab(
         .flx("user.keybinds-tab.custom-keybinds-list.shortcut-options")
         .child(
             div()
+                .h(px(24.))
                 .flex()
                 .flex_row()
                 .items_center()
@@ -927,7 +953,8 @@ pub(super) fn render_keybinds_tab(
                 .flx("user.keybinds-tab.custom-keybinds-list.switch.set-disable-builtin-keybinds")
                 .child(
                     div()
-                        .text_size(px(13.))
+                        .text_size(px(14.))
+                        .line_height(px(20.))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(theme.foreground)
                         .child(l10n::tr("Disable built-ins")),
@@ -937,6 +964,32 @@ pub(super) fn render_keybinds_tab(
                         .checked(view.prefs.data.disable_builtin_keybinds)
                         .on_change(cx.listener(|this, checked: &bool, _, cx| {
                             this.settings_set_disable_builtin_keybinds(*checked, cx);
+                        })),
+                ),
+        )
+        .child(
+            div()
+                .h(px(24.))
+                .flex()
+                .flex_row()
+                .items_center()
+                .justify_between()
+                .gap(px(12.))
+                .debug_selector(|| "settings-keybinds-sync".to_owned())
+                .flx("user.keybinds-tab.custom-keybinds-list.switch.set-sync-across-devices")
+                .child(
+                    div()
+                        .text_size(px(14.))
+                        .line_height(px(20.))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(theme.foreground)
+                        .child(l10n::tr("Sync keybinds")),
+                )
+                .child(
+                    Switch::new("settings-keybinds-sync")
+                        .checked(modal.keybinds_sync_across_devices)
+                        .on_change(cx.listener(|this, checked: &bool, _, cx| {
+                            this.settings_set_sync_keybinds(*checked, cx);
                         })),
                 ),
         );
@@ -952,6 +1005,7 @@ pub(super) fn render_keybinds_tab(
                     .py(px(8.))
                     .text_center()
                     .text_size(px(13.))
+                    .line_height(px(19.5))
                     .text_color(theme.muted_foreground)
                     .debug_selector(|| "settings-keybinds-custom-empty".to_owned())
                     .flx("user.keybinds-tab.custom-keybinds-list.empty-state")
@@ -964,6 +1018,7 @@ pub(super) fn render_keybinds_tab(
                     .py(px(8.))
                     .text_center()
                     .text_size(px(13.))
+                    .line_height(px(19.5))
                     .text_color(theme.muted_foreground)
                     .debug_selector(|| "settings-keybinds-custom-no-match".to_owned())
                     .flx("user.keybinds-tab.custom-keybinds-list.empty-state--2")

@@ -156,16 +156,17 @@ fn settings_modal_updates_voice_devices_and_volumes(cx: &mut TestAppContext) {
         assert_eq!(v.prefs.data.voice_output_volume, 100);
     });
 
-    // Verify all voice volume controls are drawn
+    // Verify voice volume controls are drawn (reset buttons hidden at default 100)
     for selector in [
         "voice-input-vol-dec",
         "voice-input-vol-inc",
-        "voice-input-vol-reset",
         "voice-output-vol-dec",
         "voice-output-vol-inc",
-        "voice-output-vol-reset",
     ] {
         assert!(cx.debug_bounds(selector).is_some(), "{selector} should be drawn");
+    }
+    for selector in ["voice-input-vol-reset", "voice-output-vol-reset"] {
+        assert!(cx.debug_bounds(selector).is_none(), "{selector} should be hidden at 100");
     }
 
     // Step input/output volumes and verify clamping (0..=200) and reset (100)
@@ -175,6 +176,9 @@ fn settings_modal_updates_voice_devices_and_volumes(cx: &mut TestAppContext) {
     });
     cx.run_until_parked();
     draw(cx);
+    for selector in ["voice-input-vol-reset", "voice-output-vol-reset"] {
+        assert!(cx.debug_bounds(selector).is_some(), "{selector} should be drawn when not 100");
+    }
     view.read_with(cx, |v, _| {
         assert_eq!(v.prefs.data.voice_input_volume, 90);
         assert_eq!(v.prefs.data.voice_output_volume, 110);

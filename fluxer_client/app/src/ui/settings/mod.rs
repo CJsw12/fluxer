@@ -447,6 +447,7 @@ pub struct SettingsModal {
     pub keybinds_open_action_menu: Option<String>,
     pub keybinds_open_default_menu: Option<String>,
     pub keybinds_confirm_reset: bool,
+    pub keybinds_sync_across_devices: bool,
     pub _keybinds_search_sub: Subscription,
     pub notif_push_timeout_mins: u8,
     pub notif_push_menu_open: bool,
@@ -535,6 +536,7 @@ impl ClientView {
             keybinds_open_action_menu: None,
             keybinds_open_default_menu: None,
             keybinds_confirm_reset: false,
+            keybinds_sync_across_devices: false,
             _keybinds_search_sub: keybinds_search_sub,
             notif_push_timeout_mins: 10,
             notif_push_menu_open: false,
@@ -691,6 +693,14 @@ impl ClientView {
 
     pub(crate) fn settings_set_disable_builtin_keybinds(&mut self, disabled: bool, cx: &mut Context<Self>) {
         self.prefs.set_disable_builtin_keybinds(disabled);
+        cx.notify();
+    }
+
+    pub(crate) fn settings_set_sync_keybinds(&mut self, sync: bool, cx: &mut Context<Self>) {
+        // TODO(backlog): persist keybind sync preference and wire remote sync.
+        if let Overlay::Settings(modal) = &mut self.overlay {
+            modal.keybinds_sync_across_devices = sync;
+        }
         cx.notify();
     }
 

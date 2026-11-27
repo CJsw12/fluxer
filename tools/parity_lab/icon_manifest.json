@@ -3287,7 +3287,7 @@
   {
    "rust_icon": "Plus",
    "file": "fluxer_client/app/src/ui/settings/keybinds.rs",
-   "line": 836,
+   "line": 854,
    "rust_asset": "fluxer_client/app/assets/icons/plus.svg",
    "kind": "phosphor",
    "phosphor": "bold/plus-bold.svg",

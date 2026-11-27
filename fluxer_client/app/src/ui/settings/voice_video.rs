@@ -302,18 +302,19 @@ pub(super) fn voice_volume_row(
                         .flx(label_flx)
                         .child(l10n::tr(label)),
                 )
-                .child(
-                    div().debug_selector(move || reset_id.to_owned()).child(
-                        Button::new(reset_id)
-                            .ghost()
-                            .small()
-                            .disabled(clamped == DEFAULT_VOICE_VOLUME)
-                            .label(l10n::tr("Reset"))
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.apply_settings_effect(make_effect(DEFAULT_VOICE_VOLUME), window, cx);
-                            })),
-                    ),
-                ),
+                .when(clamped != DEFAULT_VOICE_VOLUME, |d| {
+                    d.child(
+                        div().debug_selector(move || reset_id.to_owned()).child(
+                            Button::new(reset_id)
+                                .ghost()
+                                .small()
+                                .label(l10n::tr("Reset"))
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.apply_settings_effect(make_effect(DEFAULT_VOICE_VOLUME), window, cx);
+                                })),
+                        ),
+                    )
+                }),
         )
         .child(
             div()

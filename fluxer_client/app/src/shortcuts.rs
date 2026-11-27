@@ -87,6 +87,37 @@ gpui_kit::actions!(
         MessageMarkUnread,
         MessageCopyText,
         MessageSpeak,
+        MessageBookmark,
+        MessageCopyId,
+        MessageCopyLink,
+        MessageToggleEmbeds,
+        ChatMarkAllInboxRead,
+        ChatToggleSavedMedia,
+        ChatSendVoiceMessage,
+        VoiceToggleMute,
+        VoiceToggleDeafen,
+        VoiceToggleSoundboard,
+        VoiceStartDmCall,
+        VoiceAnswerCall,
+        VoiceToggleCompactCallView,
+        VoiceToggleCamera,
+        VoiceSwitchChannel,
+        VoiceDisconnect,
+        VoicePushToTalk,
+        VoicePushToTalkPriority,
+        VoicePushToMute,
+        VoicePriorityVad,
+        VoiceToggleVad,
+        DndStart,
+        DndMoveUp,
+        DndMoveDown,
+        DndDrop,
+        SystemToggleShortcutsOverlay,
+        MiscHelp,
+        MiscOpenContextMenu,
+        SystemToggleDownloads,
+        SystemOpenThemeStudioPopout,
+        SystemToggleCustomCss,
     ]
 );
 
@@ -243,6 +274,22 @@ fn bindings() -> Vec<KeyBinding> {
     bind_layout_only_no_input(&mut out, "alt-enter", MessageMarkUnread);
     bind_layout_only(&mut out, "ctrl-c", MessageCopyText);
     bind_layout_only_no_input(&mut out, "s", MessageSpeak);
+    both(&mut out, "ctrl-/", SystemToggleShortcutsOverlay);
+    both(&mut out, "ctrl-shift-m", VoiceToggleMute);
+    both(&mut out, "ctrl-shift-d", VoiceToggleDeafen);
+    both(&mut out, "ctrl-shift-b", VoiceToggleSoundboard);
+    both(&mut out, "ctrl-shift-v", VoiceToggleCompactCallView);
+    both(&mut out, "ctrl-enter", VoiceAnswerCall);
+    both(&mut out, "ctrl-shift-g", ChatToggleSavedMedia);
+    both(&mut out, "ctrl-alt-v", ChatSendVoiceMessage);
+    both(&mut out, "ctrl-shift-h", MiscHelp);
+    both(&mut out, "ctrl-alt-shift-t", SystemOpenThemeStudioPopout);
+    both(&mut out, "ctrl-alt-shift-k", SystemToggleCustomCss);
+    bind_layout_only_no_input(&mut out, "shift-f10", MiscOpenContextMenu);
+    bind_layout_only_no_input(&mut out, "ctrl-d", DndStart);
+    bind_layout_only(&mut out, "up", DndMoveUp);
+    bind_layout_only(&mut out, "down", DndMoveDown);
+    bind_layout_only(&mut out, "space", DndDrop);
     out.push(KeyBinding::new("ctrl-p", SwitcherPrev, Some(quick_switcher::CONTEXT)));
     out.push(KeyBinding::new("ctrl-n", SwitcherNext, Some(quick_switcher::CONTEXT)));
     out
@@ -494,6 +541,10 @@ pub fn on_actions(root: Div, cx: &mut Context<ClientView>) -> Div {
                 v.close_overlay(window, cx);
             } else if v.search.is_some() {
                 v.close_search(window, cx);
+            } else if v.is_dnd_active() && v.should_run_builtin_shortcut("dnd_cancel") {
+                v.cancel_dnd(cx);
+            } else if v.has_incoming_call() && v.should_run_builtin_shortcut("voice_decline_call") {
+                v.decline_incoming_call(cx);
             } else if v.keyboard_message.is_some() && v.should_run_builtin_shortcut("message_focus_textarea") {
                 v.focus_textarea_from_message_cursor(window, cx);
             } else if v.should_run_builtin_shortcut("chat_mark_channel_read") {
@@ -611,6 +662,199 @@ pub fn on_actions(root: Div, cx: &mut Context<ClientView>) -> Div {
                 v.trigger_cursor_message_action(MessageAction::Speak, window, cx);
             } else {
                 cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MessageBookmark, window, cx| {
+            if v.should_run_builtin_shortcut("message_bookmark")
+                && !v.overlay.is_open()
+                && !v.composer.read(cx).focus_handle(cx).is_focused(window)
+            {
+                v.trigger_extended_cursor_message_action(MessageAction::Bookmark, window, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MessageCopyId, window, cx| {
+            if v.should_run_builtin_shortcut("message_copy_id")
+                && !v.overlay.is_open()
+                && !v.composer.read(cx).focus_handle(cx).is_focused(window)
+            {
+                v.trigger_extended_cursor_message_action(MessageAction::CopyId, window, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MessageCopyLink, window, cx| {
+            if v.should_run_builtin_shortcut("message_copy_link")
+                && !v.overlay.is_open()
+                && !v.composer.read(cx).focus_handle(cx).is_focused(window)
+            {
+                v.trigger_extended_cursor_message_action(MessageAction::CopyLink, window, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MessageToggleEmbeds, window, cx| {
+            if v.should_run_builtin_shortcut("message_toggle_embeds")
+                && !v.overlay.is_open()
+                && !v.composer.read(cx).focus_handle(cx).is_focused(window)
+            {
+                v.trigger_extended_cursor_message_action(MessageAction::SuppressEmbeds, window, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &ChatMarkAllInboxRead, _, cx| {
+            if v.should_run_builtin_shortcut("chat_mark_all_inbox_read") {
+                v.mark_all_inbox_read(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &ChatToggleSavedMedia, window, cx| {
+            if v.should_run_builtin_shortcut("chat_toggle_saved_media") {
+                v.toggle_saved_media_shortcut(window, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &ChatSendVoiceMessage, _, cx| {
+            if v.should_run_builtin_shortcut("chat_send_voice_message") {
+                v.start_voice_message(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &VoiceToggleMute, _, cx| {
+            if v.should_run_builtin_shortcut("voice_toggle_mute") {
+                v.toggle_voice_mute(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &VoiceToggleDeafen, _, cx| {
+            if v.should_run_builtin_shortcut("voice_toggle_deafen") {
+                v.toggle_voice_deaf(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &VoiceToggleSoundboard, _, cx| {
+            if v.should_run_builtin_shortcut("voice_toggle_soundboard") {
+                v.toggle_soundboard(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &VoiceStartDmCall, _, cx| {
+            if v.should_run_builtin_shortcut("voice_start_dm_call") {
+                v.start_dm_voice_call(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &VoiceAnswerCall, _, cx| {
+            if v.has_incoming_call() && v.should_run_builtin_shortcut("voice_answer_call") {
+                v.answer_incoming_call(cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &VoiceToggleCompactCallView, _, cx| {
+            if v.should_run_builtin_shortcut("voice_toggle_compact_call_view") {
+                v.toggle_compact_call_view(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &VoiceToggleCamera, _, cx| {
+            if v.should_run_builtin_shortcut("voice_toggle_camera") {
+                v.toggle_voice_camera(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &VoiceSwitchChannel, _, cx| {
+            if v.should_run_builtin_shortcut("voice_switch_channel") {
+                v.switch_voice_channel(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &VoiceDisconnect, _, cx| {
+            if v.should_run_builtin_shortcut("voice_disconnect") {
+                v.leave_voice_channel(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &VoicePushToTalk, _, cx| {
+            if v.should_run_builtin_shortcut("voice_push_to_talk") {
+                v.trigger_voice_push_to_talk(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &VoicePushToTalkPriority, _, cx| {
+            if v.should_run_builtin_shortcut("voice_push_to_talk_priority") {
+                v.trigger_voice_push_to_talk_priority(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &VoicePushToMute, _, cx| {
+            if v.should_run_builtin_shortcut("voice_push_to_mute") {
+                v.trigger_voice_push_to_mute(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &VoicePriorityVad, _, cx| {
+            if v.should_run_builtin_shortcut("voice_priority_vad") {
+                v.trigger_voice_priority_vad(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &VoiceToggleVad, _, cx| {
+            if v.should_run_builtin_shortcut("voice_toggle_vad") {
+                v.toggle_voice_vad(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &DndStart, window, cx| {
+            if v.should_run_builtin_shortcut("dnd_start")
+                && !v.overlay.is_open()
+                && !v.composer.read(cx).focus_handle(cx).is_focused(window)
+            {
+                v.start_dnd(cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &DndMoveUp, _, cx| {
+            if v.is_dnd_active() && v.should_run_builtin_shortcut("dnd_move_up") {
+                v.move_dnd(-1, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &DndMoveDown, _, cx| {
+            if v.is_dnd_active() && v.should_run_builtin_shortcut("dnd_move_down") {
+                v.move_dnd(1, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &DndDrop, _, cx| {
+            if v.is_dnd_active() && v.should_run_builtin_shortcut("dnd_drop") {
+                v.drop_dnd(cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &SystemToggleShortcutsOverlay, window, cx| {
+            if v.should_run_builtin_shortcut("system_toggle_shortcuts_overlay") {
+                v.toggle_shortcuts_overlay(window, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MiscHelp, _, cx| {
+            if v.should_run_builtin_shortcut("misc_help") {
+                v.open_help(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MiscOpenContextMenu, window, cx| {
+            if v.should_run_builtin_shortcut("misc_open_context_menu")
+                && !v.overlay.is_open()
+                && !v.composer.read(cx).focus_handle(cx).is_focused(window)
+            {
+                v.open_cursor_context_menu(window, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &SystemToggleDownloads, _, cx| {
+            if v.should_run_builtin_shortcut("system_toggle_downloads") {
+                v.toggle_downloads_panel(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &SystemOpenThemeStudioPopout, _, cx| {
+            if v.should_run_builtin_shortcut("system_open_theme_studio_popout") {
+                v.open_theme_studio_popout(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &SystemToggleCustomCss, _, cx| {
+            if v.should_run_builtin_shortcut("system_toggle_custom_css") {
+                v.toggle_custom_css(cx);
             }
         }))
 }
@@ -804,7 +1048,7 @@ pub fn default_shortcut_rows(section: KeybindSection) -> Vec<DefaultShortcutRowS
             Single(DefaultKeybindSpec {
                 action: "dnd_drop",
                 label: "Drop item",
-                combo: "space",
+                combo: " ",
                 section: S::DragAndDrop,
                 display_kind: DefaultDisplayKind::SpaceOrEnter,
             }),
@@ -843,10 +1087,10 @@ pub fn default_shortcut_rows(section: KeybindSection) -> Vec<DefaultShortcutRowS
             Single(spec("voice_toggle_mute", "Toggle mute", "ctrl-shift-m", S::VoiceAndVideo)),
             Single(spec("voice_toggle_deafen", "Toggle deafen", "ctrl-shift-d", S::VoiceAndVideo)),
             Single(spec("voice_toggle_soundboard", "Toggle the soundboard", "ctrl-shift-b", S::VoiceAndVideo)),
-            Single(spec("voice_start_call", "Start a call in a DM or group", "ctrl-'", S::VoiceAndVideo)),
+            Single(spec("voice_start_dm_call", "Start a call in a DM or group", "ctrl-'", S::VoiceAndVideo)),
             Single(spec("voice_answer_call", "Answer the incoming call", "ctrl-enter", S::VoiceAndVideo)),
             Single(spec("voice_decline_call", "Decline the incoming call", "escape", S::VoiceAndVideo)),
-            Single(spec("voice_toggle_compact_call", "Expand or collapse compact call view", "ctrl-shift-v", S::VoiceAndVideo)),
+            Single(spec("voice_toggle_compact_call_view", "Expand or collapse compact call view", "ctrl-shift-v", S::VoiceAndVideo)),
         ],
         S::Accounts => vec![
             Single(spec("system_open_account_switcher", "Open the account switcher", "ctrl-shift-o", S::Accounts)),
@@ -870,9 +1114,9 @@ pub fn default_shortcut_rows(section: KeybindSection) -> Vec<DefaultShortcutRowS
         S::Misc => vec![
             Single(spec("misc_search", "Search messages", "ctrl-f", S::Misc)),
             Single(spec("misc_open_context_menu", "Open the context menu", "shift-f10", S::Misc)),
-            Single(spec("misc_toggle_downloads", "Toggle the downloads panel", "", S::Misc)),
-            Single(spec("misc_open_quick_css", "Open quick CSS editor", "ctrl-alt-shift-t", S::Misc)),
-            Single(spec("misc_toggle_custom_css", "Turn custom CSS on or off", "ctrl-alt-shift-k", S::Misc)),
+            Single(spec("system_toggle_downloads", "Toggle the downloads panel", "", S::Misc)),
+            Single(spec("system_open_theme_studio_popout", "Open quick CSS editor", "ctrl-alt-shift-t", S::Misc)),
+            Single(spec("system_toggle_custom_css", "Turn custom CSS on or off", "ctrl-alt-shift-k", S::Misc)),
         ],
     }
 }
@@ -919,11 +1163,25 @@ pub const ASSIGNABLE_ACTIONS: &[(&str, &str)] = &[
     ("chat_mark_guild_read", "Mark community as read"),
     ("chat_mark_inbox_read", "Mark top inbox channel as read"),
     ("chat_mark_all_inbox_read", "Mark all inbox channels as read"),
+    ("chat_send_voice_message", "Send voice message"),
     ("chat_new_dm", "Start a group DM"),
     ("chat_copy_channel_link", "Copy channel link"),
     ("voice_toggle_mute", "Toggle mute"),
     ("voice_toggle_deafen", "Toggle deafen"),
+    ("voice_toggle_soundboard", "Toggle the soundboard"),
+    ("voice_toggle_compact_call_view", "Expand or collapse compact call view"),
+    ("voice_toggle_camera", "Toggle camera"),
+    ("voice_switch_channel", "Switch voice channel"),
+    ("voice_disconnect", "Disconnect from voice"),
+    ("voice_push_to_talk", "Push to talk"),
+    ("voice_push_to_talk_priority", "Push to talk (Priority)"),
+    ("voice_push_to_mute", "Push to mute"),
+    ("voice_priority_vad", "Voice activity (Priority)"),
+    ("voice_toggle_vad", "Toggle voice activity"),
     ("system_toggle_settings", "Open your settings"),
+    ("system_toggle_downloads", "Toggle the downloads panel"),
+    ("system_open_theme_studio_popout", "Open quick CSS editor"),
+    ("system_toggle_custom_css", "Turn custom CSS on or off"),
     ("system_zoom_in", "Zoom in"),
     ("system_zoom_out", "Zoom out"),
     ("system_zoom_reset", "Reset zoom"),
@@ -936,6 +1194,10 @@ pub const ASSIGNABLE_ACTIONS: &[(&str, &str)] = &[
     ("message_react", "Add reaction"),
     ("message_forward", "Forward message"),
     ("message_pin", "Pin message"),
+    ("message_bookmark", "Bookmark message"),
+    ("message_toggle_embeds", "Toggle embed suppression"),
+    ("message_copy_link", "Copy message link"),
+    ("message_copy_id", "Copy message ID"),
     ("message_mark_unread", "Mark as unread"),
     ("message_copy_text", "Copy text"),
     ("message_speak", "Read message aloud"),
@@ -955,7 +1217,10 @@ pub fn action_label(action: &str) -> Option<&'static str> {
             }
         }
     }
-    None
+    match action {
+        "misc_help" => Some("Open help"),
+        _ => None,
+    }
 }
 
 fn canonical_key_token(raw: &str) -> Option<String> {
@@ -989,6 +1254,9 @@ fn canonical_key_token(raw: &str) -> Option<String> {
 /// Normalizes a shortcut string such as `"Shift+Ctrl+M"` or `"ctrl-shift-m"`
 /// into canonical modifier order `"ctrl-shift-alt-meta-<key>"`.
 pub fn normalize_combo(raw: &str) -> String {
+    if raw == " " {
+        return "space".to_owned();
+    }
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return String::new();
@@ -1232,7 +1500,7 @@ mod tests {
             let key = (format!("{:?}", b.keystrokes()), b.predicate().map(|p| p.to_string()));
             assert!(seen.insert(key.clone()), "{key:?} bound twice");
         }
-        assert_eq!(seen.len(), 1098);
+        assert_eq!(seen.len(), 1401);
     }
 
     #[test]

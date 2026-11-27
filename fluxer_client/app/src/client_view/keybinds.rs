@@ -79,6 +79,32 @@ impl ClientView {
             "system_zoom_reset" => self.settings_set_zoom(100, cx),
             "voice_toggle_mute" => self.toggle_voice_mute(cx),
             "voice_toggle_deafen" => self.toggle_voice_deaf(cx),
+            "voice_toggle_soundboard" => self.toggle_soundboard(cx),
+            "voice_start_dm_call" => self.start_dm_voice_call(cx),
+            "voice_answer_call" => self.answer_incoming_call(cx),
+            "voice_decline_call" => self.decline_incoming_call(cx),
+            "voice_toggle_compact_call_view" => self.toggle_compact_call_view(cx),
+            "voice_toggle_camera" => self.toggle_voice_camera(cx),
+            "voice_switch_channel" => self.switch_voice_channel(cx),
+            "voice_disconnect" => self.leave_voice_channel(cx),
+            "voice_push_to_talk" => self.trigger_voice_push_to_talk(cx),
+            "voice_push_to_talk_priority" => self.trigger_voice_push_to_talk_priority(cx),
+            "voice_push_to_mute" => self.trigger_voice_push_to_mute(cx),
+            "voice_priority_vad" => self.trigger_voice_priority_vad(cx),
+            "voice_toggle_vad" => self.toggle_voice_vad(cx),
+            "chat_toggle_saved_media" => self.toggle_saved_media_shortcut(window, cx),
+            "chat_send_voice_message" => self.start_voice_message(cx),
+            "system_toggle_shortcuts_overlay" => self.toggle_shortcuts_overlay(window, cx),
+            "system_toggle_downloads" => self.toggle_downloads_panel(cx),
+            "system_open_theme_studio_popout" => self.open_theme_studio_popout(cx),
+            "system_toggle_custom_css" => self.toggle_custom_css(cx),
+            "misc_help" => self.open_help(cx),
+            "misc_open_context_menu" => self.open_cursor_context_menu(window, cx),
+            "dnd_start" => self.start_dnd(cx),
+            "dnd_move_up" => self.move_dnd(-1, cx),
+            "dnd_move_down" => self.move_dnd(1, cx),
+            "dnd_drop" => self.drop_dnd(cx),
+            "dnd_cancel" => self.cancel_dnd(cx),
             "message_reply" => self.trigger_cursor_message_action(MessageAction::Reply, window, cx),
             "message_reply_prev" => self.step_cursor_message_action(false, -1, window, cx),
             "message_reply_next" => self.step_cursor_message_action(false, 1, window, cx),
@@ -88,6 +114,12 @@ impl ClientView {
             "message_react" => self.trigger_cursor_message_action(MessageAction::React, window, cx),
             "message_forward" => self.trigger_cursor_message_action(MessageAction::Forward, window, cx),
             "message_pin" => self.trigger_cursor_message_action(MessageAction::Pin, window, cx),
+            "message_bookmark" => self.trigger_extended_cursor_message_action(MessageAction::Bookmark, window, cx),
+            "message_toggle_embeds" => {
+                self.trigger_extended_cursor_message_action(MessageAction::SuppressEmbeds, window, cx)
+            }
+            "message_copy_link" => self.trigger_extended_cursor_message_action(MessageAction::CopyLink, window, cx),
+            "message_copy_id" => self.trigger_extended_cursor_message_action(MessageAction::CopyId, window, cx),
             "message_mark_unread" => self.trigger_cursor_message_action(MessageAction::MarkUnread, window, cx),
             "message_copy_text" => self.trigger_cursor_message_action(MessageAction::CopyText, window, cx),
             "message_speak" => self.trigger_cursor_message_action(MessageAction::Speak, window, cx),
@@ -95,6 +127,146 @@ impl ClientView {
             _ => return false,
         }
         true
+    }
+
+    pub(crate) fn trigger_extended_cursor_message_action(
+        &mut self,
+        action: MessageAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(target) = self.resolve_keyboard_message_target() else {
+            return;
+        };
+        let allowed = match action {
+            MessageAction::Bookmark | MessageAction::CopyLink | MessageAction::CopyId => target.sent,
+            MessageAction::SuppressEmbeds => target.sent && target.can_suppress_embeds,
+            _ => false,
+        };
+        if !allowed {
+            return;
+        }
+        self.keyboard_message = Some(target.message_id);
+        self.message_action(action, &target, window, cx);
+        self.scroller.update(cx, |_, cx| cx.notify());
+    }
+
+    pub(crate) fn open_cursor_context_menu(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(target) = self.resolve_keyboard_message_target() else {
+            return;
+        };
+        self.keyboard_message = Some(target.message_id);
+        self.open_message_menu(target, window, cx);
+    }
+
+    pub(crate) fn toggle_compact_call_view(&mut self, cx: &mut Context<Self>) {
+        if self.voice.channel_id.is_some() {
+            self.voice_stage_open = !self.voice_stage_open;
+            cx.notify();
+        }
+    }
+
+    pub(crate) fn toggle_voice_vad(&mut self, cx: &mut Context<Self>) {
+        let next = !self.prefs.data.voice_push_to_talk;
+        self.prefs.set_voice_push_to_talk(next);
+        cx.notify();
+    }
+
+    pub(crate) fn toggle_shortcuts_overlay(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if matches!(
+            &self.overlay,
+            Overlay::Settings(modal) if modal.active_tab == ui::settings::SettingsTab::Keybinds
+        ) {
+            self.close_overlay(window, cx);
+        } else {
+            self.open_settings(window, cx);
+            self.select_settings_tab(ui::settings::SettingsTab::Keybinds, cx);
+        }
+    }
+
+    pub(crate) fn toggle_saved_media_shortcut(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        // TODO(backlog): dedicated Saved Media filter tab; currently toggles the Media picker.
+        self.toggle_gif_picker(window, cx);
+    }
+
+    pub(crate) fn is_dnd_active(&self) -> bool {
+        false
+    }
+
+    pub(crate) fn has_incoming_call(&self) -> bool {
+        false
+    }
+
+    pub(crate) fn start_dnd(&mut self, _cx: &mut Context<Self>) {
+        // TODO(backlog): keyboard drag-and-drop mode is not implemented yet.
+    }
+
+    pub(crate) fn move_dnd(&mut self, _delta: i32, _cx: &mut Context<Self>) {
+        // TODO(backlog): keyboard drag-and-drop move is not implemented yet.
+    }
+
+    pub(crate) fn drop_dnd(&mut self, _cx: &mut Context<Self>) {
+        // TODO(backlog): keyboard drag-and-drop drop is not implemented yet.
+    }
+
+    pub(crate) fn cancel_dnd(&mut self, _cx: &mut Context<Self>) {
+        // TODO(backlog): keyboard drag-and-drop cancel is not implemented yet.
+    }
+
+    pub(crate) fn answer_incoming_call(&mut self, _cx: &mut Context<Self>) {
+        // TODO(backlog): incoming call ring/answer state is not implemented yet.
+    }
+
+    pub(crate) fn decline_incoming_call(&mut self, _cx: &mut Context<Self>) {
+        // TODO(backlog): incoming call ring/decline state is not implemented yet.
+    }
+
+    pub(crate) fn toggle_soundboard(&mut self, _cx: &mut Context<Self>) {
+        // TODO(backlog): soundboard popout is not implemented yet.
+    }
+
+    pub(crate) fn toggle_voice_camera(&mut self, _cx: &mut Context<Self>) {
+        // TODO(backlog): local camera capture/publish is not implemented in voice_worker yet.
+    }
+
+    pub(crate) fn switch_voice_channel(&mut self, _cx: &mut Context<Self>) {
+        // TODO(backlog): voice channel switcher shortcut is not implemented yet.
+    }
+
+    pub(crate) fn trigger_voice_push_to_talk(&mut self, _cx: &mut Context<Self>) {
+        // TODO(backlog): global push-to-talk keybind hold is not implemented yet.
+    }
+
+    pub(crate) fn trigger_voice_push_to_talk_priority(&mut self, _cx: &mut Context<Self>) {
+        // TODO(backlog): global priority push-to-talk keybind hold is not implemented yet.
+    }
+
+    pub(crate) fn trigger_voice_push_to_mute(&mut self, _cx: &mut Context<Self>) {
+        // TODO(backlog): global push-to-mute keybind hold is not implemented yet.
+    }
+
+    pub(crate) fn trigger_voice_priority_vad(&mut self, _cx: &mut Context<Self>) {
+        // TODO(backlog): priority speaker VAD is not implemented yet.
+    }
+
+    pub(crate) fn start_voice_message(&mut self, _cx: &mut Context<Self>) {
+        // TODO(backlog): voice message recording in composer is not implemented yet.
+    }
+
+    pub(crate) fn open_help(&mut self, _cx: &mut Context<Self>) {
+        // TODO(backlog): help overlay/documentation shortcut is not implemented yet.
+    }
+
+    pub(crate) fn open_theme_studio_popout(&mut self, _cx: &mut Context<Self>) {
+        // TODO(backlog): theme studio / quick CSS popout is not implemented yet.
+    }
+
+    pub(crate) fn toggle_custom_css(&mut self, _cx: &mut Context<Self>) {
+        // TODO(backlog): custom CSS runtime toggle is not implemented yet.
+    }
+
+    pub(crate) fn toggle_downloads_panel(&mut self, _cx: &mut Context<Self>) {
+        // TODO(backlog): downloads panel is not implemented yet.
     }
 
     pub(crate) fn intercept_keystroke(

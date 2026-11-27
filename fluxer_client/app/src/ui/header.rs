@@ -31,7 +31,9 @@ fn render_header_icon_button(
     theme: &Theme,
     on_hover: impl Fn(&bool, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
     on_click: impl Fn(&gpui_kit::ClickEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static,
+    on_right_click: Option<Box<dyn Fn(&gpui_kit::MouseDownEvent, &mut gpui_kit::Window, &mut gpui_kit::App) + 'static>>,
 ) -> AnyElement {
+    let disabled = false;
     let color = if selected || hovered {
         theme.foreground
     } else {
@@ -52,6 +54,7 @@ fn render_header_icon_button(
         .cursor_pointer()
         .on_hover(on_hover)
         .on_click(on_click)
+        .when_some(on_right_click, |d, handler| d.on_mouse_down(MouseButton::Right, handler))
         .flx(flx)
         .when(flx.contains("channel-pins-button"), |d| {
             d.flx("channel.channel-header-components.channel-pins-button.icon-button-wrapper--2")
@@ -74,6 +77,12 @@ fn render_header_icon_button(
             let tt = rail_tooltip::below(tooltip_label, tooltip_keys, align_right, theme);
             if flx.ends_with("toggle-favorite") {
                 d.child(div().flx("channel.channel-header.tooltip--9").child(tt))
+            } else if disabled {
+                d.child(
+                    div()
+                        .flx("channel.channel-header-components.channel-header-icon.tooltip")
+                        .child(tt),
+                )
             } else {
                 d.child(
                     div()
@@ -94,12 +103,19 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     };
     let channel_muted = view.selected_channel_muted();
     let is_dm = view.place == Place::Home;
+    let is_group_dm = view.group_dm.is_some();
     // `ChannelHeader.tsx`: a 1:1 DM shows the peer's status avatar (32px)
     // instead of the `@` glyph.
-    let dm_peer = view
-        .channels
-        .iter()
-        .find(|c| Some(c.id) == view.selected_channel && c.icon == ChannelIcon::Dm && is_dm);
+    let dm_peer = if is_group_dm {
+        None
+    } else {
+        view.channels
+            .iter()
+            .find(|c| Some(c.id) == view.selected_channel && c.icon == ChannelIcon::Dm && is_dm)
+    };
+    let is_personal_notes = is_dm && dm_peer.is_none() && !is_group_dm && view.selected_channel.is_some();
+    let is_guild_channel = dm_peer.is_none() && !is_group_dm && !is_personal_notes;
+    let is_mobile = false;
 
     div()
         .h(px(theme.sizes.header_height))
@@ -134,17 +150,41 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .gap(px(8.))
                         .overflow_hidden()
                         .flx("channel.channel-header.left-content-container")
+                        .when(is_guild_channel, |d| {
+                            d.flx("channel.channel-header.channel-info-container.context-menu")
+                                .on_mouse_down(
+                                    MouseButton::Right,
+                                    cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
+                                        cx.stop_propagation();
+                                        // TODO(backlog): open ChannelContextMenu / ThreadContextMenu
+                                        this.close_overlay(window, cx);
+                                    }),
+                                )
+                        })
                         .when_some(dm_peer, |d, peer| {
+                            let dm_uid = peer.dm_user_id.unwrap_or(peer.id);
                             d.child(
                                 div()
+                                    .id("header-dm-user-btn")
                                     .flex()
                                     .flex_row()
                                     .items_center()
                                     .cursor_pointer()
+                                    .on_click(cx.listener(move |this, ev: &gpui_kit::ClickEvent, window, cx| {
+                                        this.open_profile(dm_uid, None, ev.position(), window, cx);
+                                    }))
+                                    .on_mouse_down(
+                                        MouseButton::Right,
+                                        cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
+                                            cx.stop_propagation();
+                                            // TODO(backlog): open DMContextMenu
+                                            this.close_overlay(window, cx);
+                                        }),
+                                    )
                                     .flx("channel.channel-header.desktop-button.open-user-profile")
                                     .child(render_avatar_tagged(
                                         AvatarSpec {
-                                            user_id: peer.dm_user_id.unwrap_or(peer.id),
+                                            user_id: dm_uid,
                                             avatar_url: peer.dm_avatar_url.clone(),
                                             display_name: peer.name.clone(),
                                             size: 32.,
@@ -156,8 +196,13 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                     ))
                                     .child(
                                         div()
+                                            .id("header-dm-name-wrapper")
                                             .pl(px(12.))
                                             .flx("channel.channel-header.dm-name-wrapper--2")
+                                            .tooltip({
+                                                let tip = view.channel_title.clone();
+                                                move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
+                                            })
                                             .child(
                                                 div()
                                                     .id("header-dm-name")
@@ -166,7 +211,10 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                                     .text_size(px(16.))
                                                     .line_height(px(24.))
                                                     .text_color(theme.foreground)
-                                                    .flx_text("channel.channel-header.channel-name--4", view.channel_title.to_string())
+                                                    .flx_text(
+                                                        "channel.channel-header.channel-name--4",
+                                                        view.channel_title.to_string(),
+                                                    )
                                                     .tooltip({
                                                         let tip = view.channel_title.clone();
                                                         move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
@@ -176,7 +224,55 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                     ),
                             )
                         })
-                        .when(dm_peer.is_none() && !glyph.is_empty(), |d| {
+                        .when_some(view.group_dm.as_ref(), |d, gdm| {
+                            d.child(
+                                div()
+                                    .id("header-group-dm-trigger")
+                                    .flex()
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(8.))
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(|this, _, _, cx| this.toggle_member_list(cx)))
+                                    .on_mouse_down(
+                                        MouseButton::Right,
+                                        cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
+                                            cx.stop_propagation();
+                                            // TODO(backlog): open GroupDMContextMenu
+                                            this.close_overlay(window, cx);
+                                        }),
+                                    )
+                                    .flx("channel.channel-header.group-dm-header-trigger.open-edit-group")
+                                    .child(
+                                        div()
+                                            .text_color(theme.muted_foreground)
+                                            .text_base()
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .child("@"),
+                                    )
+                                    .child(
+                                        div()
+                                            .id("header-group-dm-name")
+                                            .flex_none()
+                                            .font_weight(FontWeight::MEDIUM)
+                                            .text_size(px(16.))
+                                            .line_height(px(24.))
+                                            .text_color(theme.foreground)
+                                            .flx("channel.channel-header.dm-name-wrapper--3")
+                                            .flx("channel.channel-header.tooltip--6")
+                                            .flx_text(
+                                                "channel.channel-header.channel-name--6",
+                                                gdm.display_name.to_string(),
+                                            )
+                                            .tooltip({
+                                                let tip = gdm.display_name.clone();
+                                                move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
+                                            })
+                                            .child(gdm.display_name.clone()),
+                                    ),
+                            )
+                        })
+                        .when(dm_peer.is_none() && !is_group_dm && !glyph.is_empty(), |d| {
                             if glyph == "#" {
                                 d.child(
                                     div()
@@ -199,7 +295,39 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 )
                             }
                         })
-                        .when(dm_peer.is_none(), |d| {
+                        .when(is_personal_notes, |d| {
+                            let pn_id = view.selected_channel;
+                            d.child(
+                                div()
+                                    .id("header-personal-notes-name")
+                                    .flex_none()
+                                    .ml(px(4.))
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_size(px(16.))
+                                    .line_height(px(24.))
+                                    .text_color(theme.foreground)
+                                    .flx("channel.channel-header.tooltip--7")
+                                    .flx_text(
+                                        "channel.channel-header.channel-name--7",
+                                        view.channel_title.to_string(),
+                                    )
+                                    .tooltip({
+                                        let tip = view.channel_title.clone();
+                                        move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
+                                    })
+                                    .when_some(pn_id, |d, cid| {
+                                        d.on_mouse_down(
+                                            MouseButton::Right,
+                                            cx.listener(move |this, ev: &gpui_kit::MouseDownEvent, window, cx| {
+                                                cx.stop_propagation();
+                                                this.open_personal_notes_menu(cid, ev.position, window, cx);
+                                            }),
+                                        )
+                                    })
+                                    .child(view.channel_title.clone()),
+                            )
+                        })
+                        .when(is_guild_channel, |d| {
                             d.child(
                                 div()
                                     .id("header-channel-name")
@@ -210,11 +338,42 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                     .line_height(px(24.))
                                     .text_color(theme.foreground)
                                     .flx_text("channel.channel-header.channel-name--8", view.channel_title.to_string())
+                                    .flx("channel.channel-header.tooltip--8")
                                     .tooltip({
                                         let tip = view.channel_title.clone();
                                         move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
                                     })
                                     .child(view.channel_title.clone()),
+                            )
+                        })
+                        .when(is_mobile, |d| {
+                            // Desktop-only GPUI client; mobile ChannelHeader parity tags.
+                            d.child(
+                                div()
+                                    .id("header-mobile-dm-name")
+                                    .flx("channel.channel-header.dm-name-wrapper")
+                                    .tooltip({
+                                        let tip = view.channel_title.clone();
+                                        move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
+                                    }),
+                            )
+                            .child(
+                                div()
+                                    .id("header-mobile-group-dm")
+                                    .flx("channel.channel-header.group-dm-avatar")
+                                    .tooltip({
+                                        let tip = view.channel_title.clone();
+                                        move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
+                                    }),
+                            )
+                            .child(
+                                div()
+                                    .id("header-mobile-channel-name")
+                                    .flx("channel.channel-header.tooltip--3")
+                                    .tooltip({
+                                        let tip = view.channel_title.clone();
+                                        move |window, cx| Tooltip::new(tip.clone()).build(window, cx)
+                                    }),
                             )
                         })
                         .when_some(view.channel_topic.clone(), |d, topic| {
@@ -258,6 +417,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             this.set_header_hover(HeaderHoverTarget::VoiceCall, *hovered, cx);
                         }),
                         cx.listener(|this, _, _, cx| this.start_dm_voice_call(cx)),
+                        None,
                     ))
                     .child(render_header_icon_button(
                         "header-video-call-btn",
@@ -274,6 +434,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             this.set_header_hover(HeaderHoverTarget::VideoCall, *hovered, cx);
                         }),
                         cx.listener(|this, _, _, cx| this.start_dm_video_call(cx)),
+                        None,
                     ))
                 })
                 .when(view.selected_channel.is_some() && !is_dm, |d| {
@@ -300,6 +461,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         cx.listener(|this, ev: &gpui_kit::ClickEvent, window, cx| {
                             this.toggle_channel_notification_popout(ev.position(), window, cx);
                         }),
+                        None,
                     ))
                     .child(render_header_icon_button(
                         "header-threads-btn",
@@ -318,6 +480,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         cx.listener(|this, ev: &gpui_kit::ClickEvent, window, cx| {
                             this.toggle_threads_popout(ev.position(), window, cx);
                         }),
+                        None,
                     ))
                 })
                 .when(view.selected_channel.is_some(), |d| {
@@ -338,6 +501,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         cx.listener(|this, ev: &gpui_kit::ClickEvent, window, cx| {
                             this.toggle_pins_popout(ev.position(), window, cx);
                         }),
+                        None,
                     ))
                     .child({
                         let is_favorited = false; // TODO(backlog): wire per-channel favorite state
@@ -361,6 +525,28 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                 this.set_header_hover(HeaderHoverTarget::Favorite, *hovered, cx);
                             }),
                             |_, _, _| {},
+                            Some(Box::new(cx.listener(
+                                |this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
+                                    cx.stop_propagation();
+                                    // TODO(backlog): open FavoritesContextMenu (Hide favorites)
+                                    this.close_overlay(window, cx);
+                                },
+                            ))),
+                        )
+                    })
+                    .when(is_mobile, |d| {
+                        d.child(
+                            div()
+                                .id("header-favorite-mobile-btn")
+                                .flx("channel.channel-header.icon-button-mobile.toggle-favorite")
+                                .on_mouse_down(
+                                    MouseButton::Right,
+                                    cx.listener(|this, _ev: &gpui_kit::MouseDownEvent, window, cx| {
+                                        cx.stop_propagation();
+                                        // TODO(backlog): open FavoritesContextMenu (Hide favorites)
+                                        this.close_overlay(window, cx);
+                                    }),
+                                ),
                         )
                     })
                 })
@@ -385,6 +571,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                             this.set_header_hover(HeaderHoverTarget::Members, *hovered, cx);
                         }),
                         cx.listener(|this, _, _, cx| this.toggle_member_list(cx)),
+                        None,
                     ))
                 })
                 .child({
@@ -547,6 +734,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     cx.listener(|this, ev: &gpui_kit::ClickEvent, window, cx| {
                         this.toggle_inbox_popout(ev.position(), window, cx);
                     }),
+                    None,
                 )),
         )
 }

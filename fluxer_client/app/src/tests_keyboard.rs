@@ -901,3 +901,112 @@ fn nav_and_message_keybinds_and_composer_safety(cx: &mut TestAppContext) {
 
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn m9_1_keybind_parity_batch(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend(&rt);
+    let (view, cx) = open(cx, backend.clone(), events);
+
+    // 1. All 33 non-T3 keybind actions have labels and are active by default.
+    let all_33 = [
+        "message_bookmark",
+        "message_copy_id",
+        "message_copy_link",
+        "message_toggle_embeds",
+        "misc_help",
+        "system_open_theme_studio_popout",
+        "system_toggle_custom_css",
+        "system_toggle_downloads",
+        "system_toggle_shortcuts_overlay",
+        "voice_disconnect",
+        "voice_priority_vad",
+        "voice_push_to_mute",
+        "voice_push_to_talk",
+        "voice_push_to_talk_priority",
+        "voice_start_dm_call",
+        "voice_switch_channel",
+        "voice_toggle_camera",
+        "voice_toggle_compact_call_view",
+        "voice_toggle_vad",
+        "chat_mark_all_inbox_read",
+        "chat_send_voice_message",
+        "chat_toggle_saved_media",
+        "dnd_cancel",
+        "dnd_drop",
+        "dnd_move_down",
+        "dnd_move_up",
+        "dnd_start",
+        "misc_open_context_menu",
+        "voice_answer_call",
+        "voice_decline_call",
+        "voice_toggle_deafen",
+        "voice_toggle_mute",
+        "voice_toggle_soundboard",
+    ];
+    for action in all_33 {
+        assert!(crate::shortcuts::action_label(action).is_some(), "missing label for {action}");
+        assert!(view.read_with(cx, |v, _| v.should_run_builtin_shortcut(action)), "{action} not active");
+    }
+
+    // 2. dnd_drop cheatsheet combo matches official ' '.
+    let dnd_rows = crate::shortcuts::default_shortcut_rows(crate::shortcuts::KeybindSection::DragAndDrop);
+    let drop_spec = dnd_rows
+        .iter()
+        .flat_map(|r| r.specs())
+        .find(|s| s.action == "dnd_drop")
+        .expect("dnd_drop spec");
+    assert_eq!(drop_spec.combo, " ");
+
+    // 3. Voice shortcuts: mute, deafen, compact call view, VAD toggle.
+    let initial_mute = view.read_with(cx, |v, _| v.voice.self_mute);
+    keys(cx, "ctrl-shift-m");
+    assert_ne!(view.read_with(cx, |v, _| v.voice.self_mute), initial_mute);
+
+    let initial_deaf = view.read_with(cx, |v, _| v.voice.self_deaf);
+    keys(cx, "ctrl-shift-d");
+    assert_ne!(view.read_with(cx, |v, _| v.voice.self_deaf), initial_deaf);
+
+    view.update(cx, |v, _| {
+        v.voice.channel_id = Some(Snowflake(13));
+        v.voice_stage_open = false;
+    });
+    keys(cx, "ctrl-shift-v");
+    assert!(view.read_with(cx, |v, _| v.voice_stage_open));
+    keys(cx, "ctrl-shift-v");
+    assert!(!view.read_with(cx, |v, _| v.voice_stage_open));
+    view.update(cx, |v, _| {
+        v.voice.channel_id = None;
+        v.voice_stage_open = false;
+    });
+
+    let initial_ptt = view.read_with(cx, |v, _| v.prefs.data.voice_push_to_talk);
+    assert!(view.update_in(cx, |v, window, cx| v.dispatch_keybind_action("voice_toggle_vad", window, cx)));
+    assert_ne!(view.read_with(cx, |v, _| v.prefs.data.voice_push_to_talk), initial_ptt);
+
+    // 4. Shortcuts overlay (ctrl-/) opens Settings -> Keybinds and toggles closed.
+    keys(cx, "ctrl-/");
+    assert!(view.read_with(cx, |v, _| matches!(
+        &v.overlay,
+        Overlay::Settings(m) if m.active_tab == crate::ui::settings::SettingsTab::Keybinds
+    )));
+    keys(cx, "ctrl-/");
+    assert!(!view.read_with(cx, |v, _| v.overlay.is_open()));
+
+    // 5. Message cursor actions: bookmark, copy_id, copy_link, and shift-f10 context menu.
+    view.update(cx, |v, _| v.keyboard_message = Some(Snowflake(2)));
+    let _ = view.update_in(cx, |v, window, cx| {
+        assert!(v.dispatch_keybind_action("message_copy_id", window, cx));
+        assert!(v.dispatch_keybind_action("message_copy_link", window, cx));
+        assert!(v.dispatch_keybind_action("message_bookmark", window, cx));
+    });
+    view.update_in(cx, |v, window, cx| v.focus_root(window, cx));
+    keys(cx, "shift-f10");
+    assert!(view.read_with(cx, |v, _| matches!(
+        &v.overlay,
+        Overlay::ChannelPopout(p) if matches!(p.kind, crate::ui::channel_popouts::ChannelPopoutKind::MessageMenu { .. })
+    )));
+    keys(cx, "escape");
+
+    drop(rt);
+}

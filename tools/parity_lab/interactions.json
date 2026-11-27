@@ -14,9 +14,9 @@
   "summary": {
     "total": {
       "total": 770,
-      "present": 146,
-      "missing": 567,
-      "differs": 57
+      "present": 219,
+      "missing": 519,
+      "differs": 32
     },
     "by_category": {
       "resize_drag": {
@@ -27,21 +27,21 @@
       },
       "tooltips": {
         "total": 280,
-        "present": 28,
+        "present": 36,
         "missing": 239,
-        "differs": 13
+        "differs": 5
       },
       "context_menus": {
         "total": 292,
-        "present": 30,
-        "missing": 241,
-        "differs": 21
+        "present": 62,
+        "missing": 211,
+        "differs": 19
       },
       "keybinds": {
         "total": 108,
-        "present": 59,
-        "missing": 30,
-        "differs": 19
+        "present": 92,
+        "missing": 12,
+        "differs": 4
       },
       "hover_only": {
         "total": 63,
@@ -1460,7 +1460,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/header.rs:76"
+          "fluxer_client/app/src/ui/header.rs:79"
         ],
         "reason": "flx 'channel.channel-header.tooltip--9' has tooltip in Rust"
       }
@@ -1476,13 +1476,13 @@
         "detail": "text={isDMNameOverflowing && directMessageName ? directMessageName : ''} data-flx=\"channel.channel-header.tooltip\"",
         "flx": "channel.channel-header.dm-name-wrapper"
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/header.rs"
+          "fluxer_client/app/src/ui/header.rs:354"
         ],
-        "reason": "area 'channelheader' has tooltips in Rust, exact element unverified"
+        "reason": "flx 'channel.channel-header.dm-name-wrapper' has tooltip in Rust"
       }
     },
     {
@@ -1496,13 +1496,13 @@
         "detail": "text={isGroupDMNameOverflowing && groupDMName ? groupDMName : ''} data-flx=\"channel.channel-header.tooltip--2\"",
         "flx": "channel.channel-header.group-dm-avatar"
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/header.rs"
+          "fluxer_client/app/src/ui/header.rs:363"
         ],
-        "reason": "area 'channelheader' has tooltips in Rust, exact element unverified"
+        "reason": "flx 'channel.channel-header.group-dm-avatar' has tooltip in Rust"
       }
     },
     {
@@ -1516,13 +1516,13 @@
         "detail": "text={isGuildChannelNameOverflowing && channelName ? channelName : ''} data-flx=\"channel.channel-header.tooltip--3\"",
         "flx": "channel.channel-header.tooltip--3"
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/header.rs"
+          "fluxer_client/app/src/ui/header.rs:372"
         ],
-        "reason": "area 'channelheader' has tooltips in Rust, exact element unverified"
+        "reason": "flx 'channel.channel-header.tooltip--3' has tooltip in Rust"
       }
     },
     {
@@ -1536,13 +1536,13 @@
         "detail": "text={isDMNameOverflowing ? directMessageName : ''} data-flx=\"channel.channel-header.tooltip--4\"",
         "flx": "channel.channel-header.dm-name-wrapper--2"
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/header.rs:160"
+          "fluxer_client/app/src/ui/header.rs:201"
         ],
-        "reason": "flx 'channel.channel-header.dm-name-wrapper--2' exists in Rust without tooltip call"
+        "reason": "flx 'channel.channel-header.dm-name-wrapper--2' has tooltip in Rust"
       }
     },
     {
@@ -1556,13 +1556,13 @@
         "detail": "text={isGroupDMNameOverflowing && groupDMName ? groupDMName : ''} data-flx=\"channel.channel-header.tooltip--6\"",
         "flx": "channel.channel-header.dm-name-wrapper--3"
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/header.rs"
+          "fluxer_client/app/src/ui/header.rs:261"
         ],
-        "reason": "area 'channelheader' has tooltips in Rust, exact element unverified"
+        "reason": "flx 'channel.channel-header.dm-name-wrapper--3' has tooltip in Rust"
       }
     },
     {
@@ -1576,13 +1576,13 @@
         "detail": "text={isGuildChannelNameOverflowing && channelName ? channelName : ''} data-flx=\"channel.channel-header.tooltip--7\"",
         "flx": "channel.channel-header.tooltip--7"
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/header.rs"
+          "fluxer_client/app/src/ui/header.rs:309"
         ],
-        "reason": "area 'channelheader' has tooltips in Rust, exact element unverified"
+        "reason": "flx 'channel.channel-header.tooltip--7' has tooltip in Rust"
       }
     },
     {
@@ -1596,13 +1596,13 @@
         "detail": "text={isGuildChannelNameOverflowing && channelName ? channelName : ''} data-flx=\"channel.channel-header.tooltip--8\"",
         "flx": "channel.channel-header.tooltip--8"
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/header.rs"
+          "fluxer_client/app/src/ui/header.rs:341"
         ],
-        "reason": "area 'channelheader' has tooltips in Rust, exact element unverified"
+        "reason": "flx 'channel.channel-header.tooltip--8' has tooltip in Rust"
       }
     },
     {
@@ -1886,13 +1886,13 @@
         "detail": "text={tooltipText} position=\"bottom\" data-flx=\"channel.channel-header-components.channel-header-icon.tooltip\"",
         "flx": "channel.channel-header-components.channel-header-icon.tooltip"
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/header.rs"
+          "fluxer_client/app/src/ui/header.rs:83"
         ],
-        "reason": "area 'channelheader' has tooltips in Rust, exact element unverified"
+        "reason": "flx 'channel.channel-header-components.channel-header-icon.tooltip' has tooltip in Rust"
       }
     },
     {
@@ -1910,7 +1910,7 @@
       "rust": {
         "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/header.rs:80"
+          "fluxer_client/app/src/ui/header.rs:89"
         ],
         "reason": "flx 'channel.channel-header-components.channel-header-icon.tooltip--2' has tooltip in Rust"
       }
@@ -5705,11 +5705,13 @@
         "kind": "component_definition",
         "flx": null
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for ChannelContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:159"
+        ],
+        "reason": "Rust implements ChannelContextMenu"
       }
     },
     {
@@ -5722,11 +5724,13 @@
         "kind": "component_definition",
         "flx": null
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for ChannelContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:159"
+        ],
+        "reason": "Rust implements ChannelContextMenu"
       }
     },
     {
@@ -5758,11 +5762,13 @@
         "kind": "component_definition",
         "flx": null
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for DMContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:180"
+        ],
+        "reason": "Rust implements DMContextMenu"
       }
     },
     {
@@ -5775,11 +5781,13 @@
         "kind": "component_definition",
         "flx": null
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for DMContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:180"
+        ],
+        "reason": "Rust implements DMContextMenu"
       }
     },
     {
@@ -5964,11 +5972,13 @@
         "kind": "component_definition",
         "flx": null
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for GroupDMContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:241"
+        ],
+        "reason": "Rust implements GroupDMContextMenu"
       }
     },
     {
@@ -5981,11 +5991,13 @@
         "kind": "component_definition",
         "flx": null
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for GroupDMContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:241"
+        ],
+        "reason": "Rust implements GroupDMContextMenu"
       }
     },
     {
@@ -6405,11 +6417,13 @@
         "kind": "component_definition",
         "flx": "threads.thread-context-menu.data-menu-renderer"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for ThreadContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:159"
+        ],
+        "reason": "Rust implements ThreadContextMenu"
       }
     },
     {
@@ -7138,13 +7152,13 @@
         "handler": "handleUserContextMenu",
         "flx": "channel.channel-header.desktop-button.open-user-profile"
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/header.rs:144"
+          "fluxer_client/app/src/ui/header.rs:184"
         ],
-        "reason": "flx 'channel.channel-header.desktop-button.open-user-profile' exists in Rust without right-click/context-menu handler"
+        "reason": "matched data-flx 'channel.channel-header.desktop-button.open-user-profile' with right-click/context-menu handler"
       }
     },
     {
@@ -7158,11 +7172,13 @@
         "handler": "handleUserContextMenu",
         "flx": "channel.channel-header.group-dm-header-trigger.open-edit-group"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for ChannelHeader.onContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:245"
+        ],
+        "reason": "matched data-flx 'channel.channel-header.group-dm-header-trigger.open-edit-group' with right-click/context-menu handler"
       }
     },
     {
@@ -7176,11 +7192,13 @@
         "handler": "handleContextMenu",
         "flx": "channel.channel-header.channel-info-container.context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for ChannelHeader.onContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:154"
+        ],
+        "reason": "matched data-flx 'channel.channel-header.channel-info-container.context-menu' with right-click/context-menu handler"
       }
     },
     {
@@ -7194,11 +7212,13 @@
         "handler": "handleFavoriteContextMenu",
         "flx": "channel.channel-header.icon-button-mobile.toggle-favorite"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for ChannelHeader.onContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:541"
+        ],
+        "reason": "matched data-flx 'channel.channel-header.icon-button-mobile.toggle-favorite' with right-click/context-menu handler"
       }
     },
     {
@@ -9472,13 +9492,13 @@
         "kind": "component_render",
         "flx": "app.channel-item.handle-context-menu.channel-context-menu"
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
-          "fluxer_client/app/src/ui/channel_list.rs"
+          "fluxer_client/app/src/ui/header.rs:159"
         ],
-        "reason": "partial right-click handler in channel_list.rs"
+        "reason": "Rust implements ChannelContextMenu"
       }
     },
     {
@@ -9491,11 +9511,13 @@
         "kind": "component_render",
         "flx": "channel.channel-header.handle-context-menu.channel-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for ChannelContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:159"
+        ],
+        "reason": "Rust implements ChannelContextMenu"
       }
     },
     {
@@ -9508,11 +9530,13 @@
         "kind": "component_render",
         "flx": "messaging.markdown.renderers.mention-renderer.channel-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for ChannelContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:159"
+        ],
+        "reason": "Rust implements ChannelContextMenu"
       }
     },
     {
@@ -9525,11 +9549,13 @@
         "kind": "component_render",
         "flx": "search.quick-switcher-modal-utils.handle-context-menu.channel-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for ChannelContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:159"
+        ],
+        "reason": "Rust implements ChannelContextMenu"
       }
     },
     {
@@ -9561,11 +9587,13 @@
         "kind": "component_render",
         "flx": "app.sidebar-nav.guild-list-dm-item.handle-context-menu.dm-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for DMContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:180"
+        ],
+        "reason": "Rust implements DMContextMenu"
       }
     },
     {
@@ -9578,11 +9606,13 @@
         "kind": "component_render",
         "flx": "channel.channel-header.handle-user-context-menu.dm-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for DMContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:180"
+        ],
+        "reason": "Rust implements DMContextMenu"
       }
     },
     {
@@ -9595,11 +9625,13 @@
         "kind": "component_render",
         "flx": "channel.direct-message.dm-list-item.handle-context-menu.dm-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for DMContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:180"
+        ],
+        "reason": "Rust implements DMContextMenu"
       }
     },
     {
@@ -9612,11 +9644,13 @@
         "kind": "component_render",
         "flx": "channel.direct-message.dm-welcome-section.handle-user-context-menu.dm-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for DMContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:180"
+        ],
+        "reason": "Rust implements DMContextMenu"
       }
     },
     {
@@ -9629,11 +9663,13 @@
         "kind": "component_render",
         "flx": "search.quick-switcher-modal-utils.handle-context-menu.dm-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for DMContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:180"
+        ],
+        "reason": "Rust implements DMContextMenu"
       }
     },
     {
@@ -9805,11 +9841,13 @@
         "kind": "component_render",
         "flx": "app.sidebar-nav.guild-list-dm-item.handle-context-menu.group-dm-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for GroupDMContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:241"
+        ],
+        "reason": "Rust implements GroupDMContextMenu"
       }
     },
     {
@@ -9822,11 +9860,13 @@
         "kind": "component_render",
         "flx": "channel.channel-header.handle-user-context-menu.group-dm-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for GroupDMContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:241"
+        ],
+        "reason": "Rust implements GroupDMContextMenu"
       }
     },
     {
@@ -9839,11 +9879,13 @@
         "kind": "component_render",
         "flx": "channel.direct-message.dm-list-item.handle-context-menu.group-dm-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for GroupDMContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:241"
+        ],
+        "reason": "Rust implements GroupDMContextMenu"
       }
     },
     {
@@ -9856,11 +9898,13 @@
         "kind": "component_render",
         "flx": "channel.direct-message.group-dm-welcome-section.handle-group-context-menu.group-dm-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for GroupDMContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:241"
+        ],
+        "reason": "Rust implements GroupDMContextMenu"
       }
     },
     {
@@ -9873,11 +9917,13 @@
         "kind": "component_render",
         "flx": "search.quick-switcher-modal-utils.handle-context-menu.group-dm-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for GroupDMContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:241"
+        ],
+        "reason": "Rust implements GroupDMContextMenu"
       }
     },
     {
@@ -9890,11 +9936,13 @@
         "kind": "component_render",
         "flx": "user.user-profile-modal.handle-group-context-menu.group-dm-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for GroupDMContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:241"
+        ],
+        "reason": "Rust implements GroupDMContextMenu"
       }
     },
     {
@@ -10688,11 +10736,13 @@
         "kind": "component_render",
         "flx": "channel.channel-header.handle-context-menu.thread-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for ThreadContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:159"
+        ],
+        "reason": "Rust implements ThreadContextMenu"
       }
     },
     {
@@ -10705,11 +10755,13 @@
         "kind": "component_render",
         "flx": "messaging.markdown.renderers.mention-renderer.thread-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for ThreadContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:159"
+        ],
+        "reason": "Rust implements ThreadContextMenu"
       }
     },
     {
@@ -10722,11 +10774,13 @@
         "kind": "component_render",
         "flx": "threads.message-thread-chip.thread-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for ThreadContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:159"
+        ],
+        "reason": "Rust implements ThreadContextMenu"
       }
     },
     {
@@ -10739,11 +10793,13 @@
         "kind": "component_render",
         "flx": "threads.sidebar-thread-list.sidebar-thread-row.thread-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for ThreadContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:159"
+        ],
+        "reason": "Rust implements ThreadContextMenu"
       }
     },
     {
@@ -10756,11 +10812,13 @@
         "kind": "component_render",
         "flx": "threads.thread-browser.thread-browser-item.thread-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for ThreadContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:159"
+        ],
+        "reason": "Rust implements ThreadContextMenu"
       }
     },
     {
@@ -10773,11 +10831,13 @@
         "kind": "component_render",
         "flx": "threads.thread-side-panel.panel-header.thread-context-menu"
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "no matching context menu for ThreadContextMenu"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/ui/header.rs:159"
+        ],
+        "reason": "Rust implements ThreadContextMenu"
       }
     },
     {
@@ -11140,13 +11200,13 @@
         "section": "chat",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11280,13 +11340,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11400,13 +11460,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11460,13 +11520,13 @@
         "section": "drag_and_drop",
         "informational_only": true
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11480,13 +11540,13 @@
         "section": "drag_and_drop",
         "informational_only": true
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11500,13 +11560,13 @@
         "section": "drag_and_drop",
         "informational_only": true
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11520,13 +11580,13 @@
         "section": "drag_and_drop",
         "informational_only": true
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11540,13 +11600,13 @@
         "section": "drag_and_drop",
         "informational_only": true
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11560,11 +11620,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11578,11 +11640,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11596,11 +11660,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11894,11 +11960,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11912,11 +11980,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -11930,13 +12000,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12526,11 +12596,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12764,11 +12836,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12782,11 +12856,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12820,13 +12896,13 @@
         "section": "defaults",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12900,13 +12976,13 @@
         "section": "voice_and_video",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12920,13 +12996,13 @@
         "section": "voice_and_video",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12940,11 +13016,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12958,11 +13036,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12976,11 +13056,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -12994,11 +13076,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -13012,11 +13096,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -13030,11 +13116,13 @@
         "section": "voice_and_video",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -13048,11 +13136,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -13066,11 +13156,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -13084,11 +13176,13 @@
         "section": "voice_and_video",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -13102,13 +13196,13 @@
         "section": "voice_and_video",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -13122,13 +13216,13 @@
         "section": "voice_and_video",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -13142,13 +13236,13 @@
         "section": "voice_and_video",
         "informational_only": false
       },
-      "status": "differs",
+      "status": "present",
       "rust": {
-        "status": "differs",
+        "status": "present",
         "matches": [
           "fluxer_client/app/src/shortcuts.rs"
         ],
-        "reason": "listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut"
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -13162,11 +13256,13 @@
         "section": "custom_or_unbound",
         "informational_only": false
       },
-      "status": "missing",
+      "status": "present",
       "rust": {
-        "status": "missing",
-        "matches": [],
-        "reason": "action not present in shortcuts.rs"
+        "status": "present",
+        "matches": [
+          "fluxer_client/app/src/shortcuts.rs"
+        ],
+        "reason": "bound in shortcuts.rs"
       }
     },
     {
@@ -15040,90 +15136,6 @@
       "rust_matches": []
     },
     {
-      "id": "action:tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L650:Tooltip:1",
-      "item_id": "tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L650:Tooltip:1",
-      "category": "tooltips",
-      "status": "differs",
-      "title": "[tooltips/differs] ChannelHeader:Tooltip@L650: area 'channelheader' has tooltips in Rust, exact element unverified",
-      "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
-      "official_line": 650,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/header.rs"
-      ]
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L681:Tooltip:2",
-      "item_id": "tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L681:Tooltip:2",
-      "category": "tooltips",
-      "status": "differs",
-      "title": "[tooltips/differs] ChannelHeader:Tooltip@L681: area 'channelheader' has tooltips in Rust, exact element unverified",
-      "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
-      "official_line": 681,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/header.rs"
-      ]
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L704:Tooltip:3",
-      "item_id": "tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L704:Tooltip:3",
-      "category": "tooltips",
-      "status": "differs",
-      "title": "[tooltips/differs] ChannelHeader:Tooltip@L704: area 'channelheader' has tooltips in Rust, exact element unverified",
-      "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
-      "official_line": 704,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/header.rs"
-      ]
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L756:Tooltip:4",
-      "item_id": "tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L756:Tooltip:4",
-      "category": "tooltips",
-      "status": "differs",
-      "title": "[tooltips/differs] ChannelHeader:Tooltip@L756: flx 'channel.channel-header.dm-name-wrapper--2' exists in Rust without tooltip call",
-      "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
-      "official_line": 756,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/header.rs:160"
-      ]
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L804:Tooltip:5",
-      "item_id": "tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L804:Tooltip:5",
-      "category": "tooltips",
-      "status": "differs",
-      "title": "[tooltips/differs] ChannelHeader:Tooltip@L804: area 'channelheader' has tooltips in Rust, exact element unverified",
-      "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
-      "official_line": 804,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/header.rs"
-      ]
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L831:Tooltip:6",
-      "item_id": "tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L831:Tooltip:6",
-      "category": "tooltips",
-      "status": "differs",
-      "title": "[tooltips/differs] ChannelHeader:Tooltip@L831: area 'channelheader' has tooltips in Rust, exact element unverified",
-      "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
-      "official_line": 831,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/header.rs"
-      ]
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L861:Tooltip:7",
-      "item_id": "tooltips:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L861:Tooltip:7",
-      "category": "tooltips",
-      "status": "differs",
-      "title": "[tooltips/differs] ChannelHeader:Tooltip@L861: area 'channelheader' has tooltips in Rust, exact element unverified",
-      "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
-      "official_line": 861,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/header.rs"
-      ]
-    },
-    {
       "id": "action:tooltips:fluxer_app/src/features/channel/components/ChannelReplyBar.tsx:L163:Tooltip:1",
       "item_id": "tooltips:fluxer_app/src/features/channel/components/ChannelReplyBar.tsx:L163:Tooltip:1",
       "category": "tooltips",
@@ -15272,18 +15284,6 @@
       "official_file": "fluxer_app/src/features/channel/components/bottomsheets/channel_details_bottom_sheet/DMMembersList.tsx",
       "official_line": 134,
       "rust_matches": []
-    },
-    {
-      "id": "action:tooltips:fluxer_app/src/features/channel/components/channel_header_components/ChannelHeaderIcon.tsx:L78:Tooltip:1",
-      "item_id": "tooltips:fluxer_app/src/features/channel/components/channel_header_components/ChannelHeaderIcon.tsx:L78:Tooltip:1",
-      "category": "tooltips",
-      "status": "differs",
-      "title": "[tooltips/differs] ChannelHeaderIcon:Tooltip@L78: area 'channelheader' has tooltips in Rust, exact element unverified",
-      "official_file": "fluxer_app/src/features/channel/components/channel_header_components/ChannelHeaderIcon.tsx",
-      "official_line": 78,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/header.rs"
-      ]
     },
     {
       "id": "action:tooltips:fluxer_app/src/features/channel/components/channel_header_components/UpdaterIcon.tsx:L87:Tooltip:1",
@@ -17112,26 +17112,6 @@
       "rust_matches": []
     },
     {
-      "id": "action:context_menus:component:ChannelContextMenu:fluxer_app/src/app/desktop/DesktopDeferredComponents.tsx",
-      "item_id": "context_menus:component:ChannelContextMenu:fluxer_app/src/app/desktop/DesktopDeferredComponents.tsx",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] ChannelContextMenu: no matching context menu for ChannelContextMenu",
-      "official_file": "fluxer_app/src/app/desktop/DesktopDeferredComponents.tsx",
-      "official_line": 65,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:component:ChannelContextMenu:fluxer_app/src/features/ui/action_menu/ChannelContextMenu.tsx",
-      "item_id": "context_menus:component:ChannelContextMenu:fluxer_app/src/features/ui/action_menu/ChannelContextMenu.tsx",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] ChannelContextMenu: no matching context menu for ChannelContextMenu",
-      "official_file": "fluxer_app/src/features/ui/action_menu/ChannelContextMenu.tsx",
-      "official_line": 26,
-      "rust_matches": []
-    },
-    {
       "id": "action:context_menus:component:ChannelListContextMenu:fluxer_app/src/features/ui/action_menu/ChannelListContextMenu.tsx",
       "item_id": "context_menus:component:ChannelListContextMenu:fluxer_app/src/features/ui/action_menu/ChannelListContextMenu.tsx",
       "category": "context_menus",
@@ -17142,26 +17122,6 @@
       "rust_matches": [
         "fluxer_client/app/src/ui/channel_list.rs"
       ]
-    },
-    {
-      "id": "action:context_menus:component:DMContextMenu:fluxer_app/src/app/desktop/DesktopDeferredComponents.tsx",
-      "item_id": "context_menus:component:DMContextMenu:fluxer_app/src/app/desktop/DesktopDeferredComponents.tsx",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] DMContextMenu: no matching context menu for DMContextMenu",
-      "official_file": "fluxer_app/src/app/desktop/DesktopDeferredComponents.tsx",
-      "official_line": 115,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:component:DMContextMenu:fluxer_app/src/features/ui/action_menu/DMContextMenu.tsx",
-      "item_id": "context_menus:component:DMContextMenu:fluxer_app/src/features/ui/action_menu/DMContextMenu.tsx",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] DMContextMenu: no matching context menu for DMContextMenu",
-      "official_file": "fluxer_app/src/features/ui/action_menu/DMContextMenu.tsx",
-      "official_line": 24,
-      "rust_matches": []
     },
     {
       "id": "action:context_menus:component:DeveloperToolsContextMenu:fluxer_app/src/features/channel/components/channel_header_components/DeveloperToolsContextMenu.tsx",
@@ -17263,26 +17223,6 @@
       "title": "[context_menus/missing] FluxerButtonContextMenu: no matching context menu for FluxerButtonContextMenu",
       "official_file": "fluxer_app/src/features/ui/action_menu/FluxerButtonContextMenu.tsx",
       "official_line": 53,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:component:GroupDMContextMenu:fluxer_app/src/app/desktop/DesktopDeferredComponents.tsx",
-      "item_id": "context_menus:component:GroupDMContextMenu:fluxer_app/src/app/desktop/DesktopDeferredComponents.tsx",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] GroupDMContextMenu: no matching context menu for GroupDMContextMenu",
-      "official_file": "fluxer_app/src/app/desktop/DesktopDeferredComponents.tsx",
-      "official_line": 119,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:component:GroupDMContextMenu:fluxer_app/src/features/ui/action_menu/GroupDMContextMenu.tsx",
-      "item_id": "context_menus:component:GroupDMContextMenu:fluxer_app/src/features/ui/action_menu/GroupDMContextMenu.tsx",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] GroupDMContextMenu: no matching context menu for GroupDMContextMenu",
-      "official_file": "fluxer_app/src/features/ui/action_menu/GroupDMContextMenu.tsx",
-      "official_line": 108,
       "rust_matches": []
     },
     {
@@ -17443,16 +17383,6 @@
       "title": "[context_menus/missing] TextualPreviewContextMenu: no matching context menu for TextualPreviewContextMenu",
       "official_file": "fluxer_app/src/features/channel/components/embeds/attachments/TextualPreviewContextMenu.tsx",
       "official_line": 18,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:component:ThreadContextMenu:fluxer_app/src/features/threads/components/ThreadContextMenu.tsx",
-      "item_id": "context_menus:component:ThreadContextMenu:fluxer_app/src/features/threads/components/ThreadContextMenu.tsx",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] ThreadContextMenu: no matching context menu for ThreadContextMenu",
-      "official_file": "fluxer_app/src/features/threads/components/ThreadContextMenu.tsx",
-      "official_line": 13,
       "rust_matches": []
     },
     {
@@ -17849,48 +17779,6 @@
       "title": "[context_menus/missing] ChannelHeader.onContextMenu: no matching context menu for ChannelHeader.onContextMenu",
       "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
       "official_line": 1107,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:handler:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L746",
-      "item_id": "context_menus:handler:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L746",
-      "category": "context_menus",
-      "status": "differs",
-      "title": "[context_menus/differs] ChannelHeader.onContextMenu: flx 'channel.channel-header.desktop-button.open-user-profile' exists in Rust without right-click/context-menu handler",
-      "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
-      "official_line": 746,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/header.rs:144"
-      ]
-    },
-    {
-      "id": "action:context_menus:handler:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L788",
-      "item_id": "context_menus:handler:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L788",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] ChannelHeader.onContextMenu: no matching context menu for ChannelHeader.onContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
-      "official_line": 788,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:handler:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L850",
-      "item_id": "context_menus:handler:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L850",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] ChannelHeader.onContextMenu: no matching context menu for ChannelHeader.onContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
-      "official_line": 850,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:handler:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L979",
-      "item_id": "context_menus:handler:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L979",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] ChannelHeader.onContextMenu: no matching context menu for ChannelHeader.onContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
-      "official_line": 979,
       "rust_matches": []
     },
     {
@@ -19065,48 +18953,6 @@
       ]
     },
     {
-      "id": "action:context_menus:render:ChannelContextMenu:fluxer_app/src/features/app/components/layout/ChannelItem.tsx:L450",
-      "item_id": "context_menus:render:ChannelContextMenu:fluxer_app/src/features/app/components/layout/ChannelItem.tsx:L450",
-      "category": "context_menus",
-      "status": "differs",
-      "title": "[context_menus/differs] ChannelContextMenu: partial right-click handler in channel_list.rs",
-      "official_file": "fluxer_app/src/features/app/components/layout/ChannelItem.tsx",
-      "official_line": 450,
-      "rust_matches": [
-        "fluxer_client/app/src/ui/channel_list.rs"
-      ]
-    },
-    {
-      "id": "action:context_menus:render:ChannelContextMenu:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L431",
-      "item_id": "context_menus:render:ChannelContextMenu:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L431",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] ChannelContextMenu: no matching context menu for ChannelContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
-      "official_line": 431,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:ChannelContextMenu:fluxer_app/src/features/messaging/components/markdown/renderers/MentionRenderer.tsx:L113",
-      "item_id": "context_menus:render:ChannelContextMenu:fluxer_app/src/features/messaging/components/markdown/renderers/MentionRenderer.tsx:L113",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] ChannelContextMenu: no matching context menu for ChannelContextMenu",
-      "official_file": "fluxer_app/src/features/messaging/components/markdown/renderers/MentionRenderer.tsx",
-      "official_line": 113,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:ChannelContextMenu:fluxer_app/src/features/search/utils/QuickSwitcherModalUtils.tsx:L391",
-      "item_id": "context_menus:render:ChannelContextMenu:fluxer_app/src/features/search/utils/QuickSwitcherModalUtils.tsx:L391",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] ChannelContextMenu: no matching context menu for ChannelContextMenu",
-      "official_file": "fluxer_app/src/features/search/utils/QuickSwitcherModalUtils.tsx",
-      "official_line": 391,
-      "rust_matches": []
-    },
-    {
       "id": "action:context_menus:render:ChannelListContextMenu:fluxer_app/src/features/app/components/layout/ChannelListContent.tsx:L345",
       "item_id": "context_menus:render:ChannelListContextMenu:fluxer_app/src/features/app/components/layout/ChannelListContent.tsx:L345",
       "category": "context_menus",
@@ -19117,56 +18963,6 @@
       "rust_matches": [
         "fluxer_client/app/src/ui/channel_list.rs"
       ]
-    },
-    {
-      "id": "action:context_menus:render:DMContextMenu:fluxer_app/src/features/app/components/layout/sidebar_nav/GuildListDMItem.tsx:L264",
-      "item_id": "context_menus:render:DMContextMenu:fluxer_app/src/features/app/components/layout/sidebar_nav/GuildListDMItem.tsx:L264",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] DMContextMenu: no matching context menu for DMContextMenu",
-      "official_file": "fluxer_app/src/features/app/components/layout/sidebar_nav/GuildListDMItem.tsx",
-      "official_line": 264,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:DMContextMenu:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L456",
-      "item_id": "context_menus:render:DMContextMenu:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L456",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] DMContextMenu: no matching context menu for DMContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
-      "official_line": 456,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:DMContextMenu:fluxer_app/src/features/channel/components/direct_message/DMListItem.tsx:L317",
-      "item_id": "context_menus:render:DMContextMenu:fluxer_app/src/features/channel/components/direct_message/DMListItem.tsx:L317",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] DMContextMenu: no matching context menu for DMContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/direct_message/DMListItem.tsx",
-      "official_line": 317,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:DMContextMenu:fluxer_app/src/features/channel/components/direct_message/DMWelcomeSection.tsx:L79",
-      "item_id": "context_menus:render:DMContextMenu:fluxer_app/src/features/channel/components/direct_message/DMWelcomeSection.tsx:L79",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] DMContextMenu: no matching context menu for DMContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/direct_message/DMWelcomeSection.tsx",
-      "official_line": 79,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:DMContextMenu:fluxer_app/src/features/search/utils/QuickSwitcherModalUtils.tsx:L382",
-      "item_id": "context_menus:render:DMContextMenu:fluxer_app/src/features/search/utils/QuickSwitcherModalUtils.tsx:L382",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] DMContextMenu: no matching context menu for DMContextMenu",
-      "official_file": "fluxer_app/src/features/search/utils/QuickSwitcherModalUtils.tsx",
-      "official_line": 382,
-      "rust_matches": []
     },
     {
       "id": "action:context_menus:render:DiscoveryGuildContextMenu:fluxer_app/src/features/discovery/discovery/DiscoveryGuildCard.tsx:L90",
@@ -19262,66 +19058,6 @@
       "title": "[context_menus/missing] ForumPostContextMenu: no matching context menu for ForumPostContextMenu",
       "official_file": "fluxer_app/src/features/forum/components/ForumPostContextMenu.tsx",
       "official_line": 128,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:GroupDMContextMenu:fluxer_app/src/features/app/components/layout/sidebar_nav/GuildListDMItem.tsx:L258",
-      "item_id": "context_menus:render:GroupDMContextMenu:fluxer_app/src/features/app/components/layout/sidebar_nav/GuildListDMItem.tsx:L258",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] GroupDMContextMenu: no matching context menu for GroupDMContextMenu",
-      "official_file": "fluxer_app/src/features/app/components/layout/sidebar_nav/GuildListDMItem.tsx",
-      "official_line": 258,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:GroupDMContextMenu:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L448",
-      "item_id": "context_menus:render:GroupDMContextMenu:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L448",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] GroupDMContextMenu: no matching context menu for GroupDMContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
-      "official_line": 448,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:GroupDMContextMenu:fluxer_app/src/features/channel/components/direct_message/DMListItem.tsx:L309",
-      "item_id": "context_menus:render:GroupDMContextMenu:fluxer_app/src/features/channel/components/direct_message/DMListItem.tsx:L309",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] GroupDMContextMenu: no matching context menu for GroupDMContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/direct_message/DMListItem.tsx",
-      "official_line": 309,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:GroupDMContextMenu:fluxer_app/src/features/channel/components/direct_message/GroupDMWelcomeSection.tsx:L57",
-      "item_id": "context_menus:render:GroupDMContextMenu:fluxer_app/src/features/channel/components/direct_message/GroupDMWelcomeSection.tsx:L57",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] GroupDMContextMenu: no matching context menu for GroupDMContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/direct_message/GroupDMWelcomeSection.tsx",
-      "official_line": 57,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:GroupDMContextMenu:fluxer_app/src/features/search/utils/QuickSwitcherModalUtils.tsx:L365",
-      "item_id": "context_menus:render:GroupDMContextMenu:fluxer_app/src/features/search/utils/QuickSwitcherModalUtils.tsx:L365",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] GroupDMContextMenu: no matching context menu for GroupDMContextMenu",
-      "official_file": "fluxer_app/src/features/search/utils/QuickSwitcherModalUtils.tsx",
-      "official_line": 365,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:GroupDMContextMenu:fluxer_app/src/features/user/components/modals/user_profile_modal/ProfileBody.tsx:L250",
-      "item_id": "context_menus:render:GroupDMContextMenu:fluxer_app/src/features/user/components/modals/user_profile_modal/ProfileBody.tsx:L250",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] GroupDMContextMenu: no matching context menu for GroupDMContextMenu",
-      "official_file": "fluxer_app/src/features/user/components/modals/user_profile_modal/ProfileBody.tsx",
-      "official_line": 250,
       "rust_matches": []
     },
     {
@@ -19525,66 +19261,6 @@
       "rust_matches": []
     },
     {
-      "id": "action:context_menus:render:ThreadContextMenu:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L419",
-      "item_id": "context_menus:render:ThreadContextMenu:fluxer_app/src/features/channel/components/ChannelHeader.tsx:L419",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] ThreadContextMenu: no matching context menu for ThreadContextMenu",
-      "official_file": "fluxer_app/src/features/channel/components/ChannelHeader.tsx",
-      "official_line": 419,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:ThreadContextMenu:fluxer_app/src/features/messaging/components/markdown/renderers/MentionRenderer.tsx:L107",
-      "item_id": "context_menus:render:ThreadContextMenu:fluxer_app/src/features/messaging/components/markdown/renderers/MentionRenderer.tsx:L107",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] ThreadContextMenu: no matching context menu for ThreadContextMenu",
-      "official_file": "fluxer_app/src/features/messaging/components/markdown/renderers/MentionRenderer.tsx",
-      "official_line": 107,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:ThreadContextMenu:fluxer_app/src/features/threads/components/MessageThreadChip.tsx:L41",
-      "item_id": "context_menus:render:ThreadContextMenu:fluxer_app/src/features/threads/components/MessageThreadChip.tsx:L41",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] ThreadContextMenu: no matching context menu for ThreadContextMenu",
-      "official_file": "fluxer_app/src/features/threads/components/MessageThreadChip.tsx",
-      "official_line": 41,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:ThreadContextMenu:fluxer_app/src/features/threads/components/SidebarThreadList.tsx:L57",
-      "item_id": "context_menus:render:ThreadContextMenu:fluxer_app/src/features/threads/components/SidebarThreadList.tsx:L57",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] ThreadContextMenu: no matching context menu for ThreadContextMenu",
-      "official_file": "fluxer_app/src/features/threads/components/SidebarThreadList.tsx",
-      "official_line": 57,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:ThreadContextMenu:fluxer_app/src/features/threads/components/ThreadBrowser.tsx:L63",
-      "item_id": "context_menus:render:ThreadContextMenu:fluxer_app/src/features/threads/components/ThreadBrowser.tsx:L63",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] ThreadContextMenu: no matching context menu for ThreadContextMenu",
-      "official_file": "fluxer_app/src/features/threads/components/ThreadBrowser.tsx",
-      "official_line": 63,
-      "rust_matches": []
-    },
-    {
-      "id": "action:context_menus:render:ThreadContextMenu:fluxer_app/src/features/threads/components/ThreadSidePanel.tsx:L98",
-      "item_id": "context_menus:render:ThreadContextMenu:fluxer_app/src/features/threads/components/ThreadSidePanel.tsx:L98",
-      "category": "context_menus",
-      "status": "missing",
-      "title": "[context_menus/missing] ThreadContextMenu: no matching context menu for ThreadContextMenu",
-      "official_file": "fluxer_app/src/features/threads/components/ThreadSidePanel.tsx",
-      "official_line": 98,
-      "rust_matches": []
-    },
-    {
       "id": "action:context_menus:render:UserContextMenu:fluxer_app/src/features/channel/components/PreloadableUserPopout.tsx:L127",
       "item_id": "context_menus:render:UserContextMenu:fluxer_app/src/features/channel/components/PreloadableUserPopout.tsx:L127",
       "category": "context_menus",
@@ -19755,132 +19431,6 @@
       "rust_matches": []
     },
     {
-      "id": "action:keybinds:chat_mark_all_inbox_read",
-      "item_id": "keybinds:chat_mark_all_inbox_read",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] chat_mark_all_inbox_read: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 660,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:chat_send_voice_message",
-      "item_id": "keybinds:chat_send_voice_message",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] chat_send_voice_message: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:chat_toggle_saved_media",
-      "item_id": "keybinds:chat_toggle_saved_media",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] chat_toggle_saved_media: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:dnd_cancel",
-      "item_id": "keybinds:dnd_cancel",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] dnd_cancel: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 614,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:dnd_drop",
-      "item_id": "keybinds:dnd_drop",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] dnd_drop: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 606,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:dnd_move_down",
-      "item_id": "keybinds:dnd_move_down",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] dnd_move_down: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 599,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:dnd_move_up",
-      "item_id": "keybinds:dnd_move_up",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] dnd_move_up: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 592,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:dnd_start",
-      "item_id": "keybinds:dnd_start",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] dnd_start: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 585,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:message_bookmark",
-      "item_id": "keybinds:message_bookmark",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] message_bookmark: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:message_copy_id",
-      "item_id": "keybinds:message_copy_id",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] message_copy_id: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:message_copy_link",
-      "item_id": "keybinds:message_copy_link",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] message_copy_link: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
-      "rust_matches": []
-    },
-    {
       "id": "action:keybinds:message_delete",
       "item_id": "keybinds:message_delete",
       "category": "keybinds",
@@ -19888,38 +19438,6 @@
       "title": "[keybinds/differs] message_delete: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
       "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
       "official_line": 336,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:message_toggle_embeds",
-      "item_id": "keybinds:message_toggle_embeds",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] message_toggle_embeds: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:misc_help",
-      "item_id": "keybinds:misc_help",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] misc_help: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:misc_open_context_menu",
-      "item_id": "keybinds:misc_open_context_menu",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] misc_open_context_menu: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
       "rust_matches": [
         "fluxer_client/app/src/shortcuts.rs"
       ]
@@ -19955,16 +19473,6 @@
       "rust_matches": [
         "fluxer_client/app/src/shortcuts.rs"
       ]
-    },
-    {
-      "id": "action:keybinds:system_open_theme_studio_popout",
-      "item_id": "keybinds:system_open_theme_studio_popout",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] system_open_theme_studio_popout: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
-      "rust_matches": []
     },
     {
       "id": "action:keybinds:system_switch_account_next",
@@ -20086,198 +19594,6 @@
       "category": "keybinds",
       "status": "missing",
       "title": "[keybinds/missing] system_switch_account_slot_9: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:system_toggle_custom_css",
-      "item_id": "keybinds:system_toggle_custom_css",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] system_toggle_custom_css: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:system_toggle_downloads",
-      "item_id": "keybinds:system_toggle_downloads",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] system_toggle_downloads: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:system_toggle_shortcuts_overlay",
-      "item_id": "keybinds:system_toggle_shortcuts_overlay",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] system_toggle_shortcuts_overlay: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 322,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:voice_answer_call",
-      "item_id": "keybinds:voice_answer_call",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] voice_answer_call: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 749,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:voice_decline_call",
-      "item_id": "keybinds:voice_decline_call",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] voice_decline_call: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 755,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:voice_disconnect",
-      "item_id": "keybinds:voice_disconnect",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] voice_disconnect: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:voice_priority_vad",
-      "item_id": "keybinds:voice_priority_vad",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] voice_priority_vad: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:voice_push_to_mute",
-      "item_id": "keybinds:voice_push_to_mute",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] voice_push_to_mute: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:voice_push_to_talk",
-      "item_id": "keybinds:voice_push_to_talk",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] voice_push_to_talk: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:voice_push_to_talk_priority",
-      "item_id": "keybinds:voice_push_to_talk_priority",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] voice_push_to_talk_priority: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:voice_start_dm_call",
-      "item_id": "keybinds:voice_start_dm_call",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] voice_start_dm_call: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 761,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:voice_switch_channel",
-      "item_id": "keybinds:voice_switch_channel",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] voice_switch_channel: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:voice_toggle_camera",
-      "item_id": "keybinds:voice_toggle_camera",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] voice_toggle_camera: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
-      "official_line": 1,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:voice_toggle_compact_call_view",
-      "item_id": "keybinds:voice_toggle_compact_call_view",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] voice_toggle_compact_call_view: action not present in shortcuts.rs",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 774,
-      "rust_matches": []
-    },
-    {
-      "id": "action:keybinds:voice_toggle_deafen",
-      "item_id": "keybinds:voice_toggle_deafen",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] voice_toggle_deafen: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 741,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:voice_toggle_mute",
-      "item_id": "keybinds:voice_toggle_mute",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] voice_toggle_mute: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 733,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:voice_toggle_soundboard",
-      "item_id": "keybinds:voice_toggle_soundboard",
-      "category": "keybinds",
-      "status": "differs",
-      "title": "[keybinds/differs] voice_toggle_soundboard: listed in cheatsheet/assignable only, not bound in should_run_builtin_shortcut",
-      "official_file": "fluxer_app/src/features/input/state/InputKeybind.ts",
-      "official_line": 767,
-      "rust_matches": [
-        "fluxer_client/app/src/shortcuts.rs"
-      ]
-    },
-    {
-      "id": "action:keybinds:voice_toggle_vad",
-      "item_id": "keybinds:voice_toggle_vad",
-      "category": "keybinds",
-      "status": "missing",
-      "title": "[keybinds/missing] voice_toggle_vad: action not present in shortcuts.rs",
       "official_file": "fluxer_app/src/features/input/state/input_keybind/KeybindCommands.ts",
       "official_line": 1,
       "rust_matches": []

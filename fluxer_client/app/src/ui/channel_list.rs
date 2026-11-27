@@ -113,6 +113,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             let menu_open = view.guild_header_popout_open;
             let header_row = div()
                 .relative()
+                .mt(px(-1.))
+                .mb(px(1.))
                 .h(px(theme.sizes.header_height))
                 .flex_none()
                 .flex()
@@ -123,6 +125,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 .px_4()
                 .border_b_1()
                 .border_color(theme.border)
+                .rounded_tl(px(14.))
                 .hover(|s| s.bg(theme.hover_bg))
                 .id("guild-header")
                 .role(Role::Button)
@@ -907,7 +910,8 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                         .id(("channel-name", c.id.0))
                         .flex_1()
                         .min_w_0()
-                        .truncate()
+                        .whitespace_nowrap()
+                        .text_ellipsis()
                         .flx_text("app.channel-item-content.channel-name", c.name.to_string())
                         .flx("app.channel-item-content.tooltip")
                         .tooltip({

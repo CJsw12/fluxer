@@ -1012,6 +1012,7 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
             Some(
                 div()
                     .id("voice-control-popout")
+                    .on_mouse_up_out(MouseButton::Left, cx.listener(ClientView::dismiss_voice_popout_outside))
                     .debug_selector(|| "voice-control-popout".to_owned())
                     .w(px(320.))
                     .p_3()
@@ -1105,6 +1106,7 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
             Some(
                 div()
                     .id("voice-control-popout")
+                    .on_mouse_up_out(MouseButton::Left, cx.listener(ClientView::dismiss_voice_popout_outside))
                     .debug_selector(|| "voice-control-popout".to_owned())
                     .w(px(320.))
                     .p_3()
@@ -1209,6 +1211,7 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
             Some(
                 div()
                     .id("voice-control-popout")
+                    .on_mouse_up_out(MouseButton::Left, cx.listener(ClientView::dismiss_voice_popout_outside))
                     .debug_selector(|| "voice-control-popout".to_owned())
                     .w(px(340.))
                     .p_3()

@@ -138,6 +138,15 @@ fn border_px(style: &StyleRefinement) -> [f32; 4] {
 /// unless the probe is enabled, so Location capture (free, compile-time
 /// constant), serialization and allocation only happen with the probe on.
 pub trait FlxExt: ParentElement + Styled + Sized {
+    /// Records the color of a border supplied by a custom paint layer.
+    #[track_caller]
+    fn flx_painted_border(mut self, id: &'static str, color: gpui_kit::Hsla) -> Self {
+        let native_color = self.style().border_color;
+        self = self.border_color(color).flx(id);
+        self.style().border_color = native_color;
+        self
+    }
+
     #[track_caller]
     fn flx(mut self, id: &'static str) -> Self {
         if !enabled() {

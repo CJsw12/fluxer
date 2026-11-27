@@ -7,7 +7,7 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable as _};
-use gpui_kit::{Context, Div, FontWeight, Hsla, Role, SharedString, Stateful, div, prelude::*, px};
+use gpui_kit::{Context, Div, FontWeight, Hsla, MouseButton, Role, SharedString, Stateful, div, prelude::*, px};
 
 use super::avatar::{AvatarSpec, render_avatar};
 use super::l10n;
@@ -602,6 +602,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 d.child(
                     div()
                         .id("voice-details-popout")
+                        .on_mouse_up_out(MouseButton::Left, cx.listener(ClientView::dismiss_voice_popout_outside))
                         .debug_selector(|| "voice-details-popout".to_owned())
                         .p_2()
                         .rounded(px(6.))

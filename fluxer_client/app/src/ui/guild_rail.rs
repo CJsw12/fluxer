@@ -12,7 +12,7 @@
 use fluxer_client_core::state::Unread;
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
-    AnyElement, App, ClickEvent, Context, Div, Hsla, MouseButton, Window, ElementId, FontWeight, ObjectFit, Role, SharedString, Stateful, div, img, prelude::*, px,
+    AnyElement, App, ClickEvent, Context, Div, Hsla, MouseButton, Window, ElementId, FontWeight, ObjectFit, PathBuilder, Role, SharedString, Stateful, canvas, div, img, point, prelude::*, px,
 };
 
 use super::{badge, l10n, rail_tooltip};
@@ -37,6 +37,33 @@ pub(crate) fn resolve_rail_indicator_height(selected: bool, hovered: bool, unrea
 }
 
 const RAIL_ICON: f32 = 28.;
+
+fn dashed_rail_outline(hovered: bool, color: Hsla) -> impl IntoElement {
+    canvas(|_, _, _| (), move |bounds, (), window, _| {
+        let left = bounds.left() + px(1.);
+        let right = bounds.right() - px(1.);
+        let top = bounds.top() + px(1.);
+        let bottom = bounds.bottom() - px(1.);
+        let width = right - left;
+        let radius = if hovered { px(GUILD_RADIUS - 1.) } else { width / 2. };
+        let perimeter = (width - radius * 2.) * 4. + radius * std::f32::consts::TAU;
+        let period = perimeter / 13.;
+        let mut path = PathBuilder::stroke(px(2.)).dash_array(&[period * 0.65, period * 0.35]);
+        let curve = point(radius, radius);
+        path.move_to(point(left + radius, top));
+        path.line_to(point(right - radius, top));
+        path.arc_to(curve, px(0.), false, true, point(right, top + radius));
+        path.line_to(point(right, bottom - radius));
+        path.arc_to(curve, px(0.), false, true, point(right - radius, bottom));
+        path.line_to(point(left + radius, bottom));
+        path.arc_to(curve, px(0.), false, true, point(left, bottom - radius));
+        path.line_to(point(left, top + radius));
+        path.arc_to(curve, px(0.), false, true, point(left + radius, top));
+        if let Ok(path) = path.build() {
+            window.paint_path(path, color);
+        }
+    }).absolute().top(px(-2.)).right(px(-2.)).bottom(px(-2.)).left(px(-2.))
+}
 /// 30% of the 44px guild icon.
 const GUILD_RADIUS: f32 = 13.2;
 
@@ -266,6 +293,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
     let discover_active = discover_selected || discover_hovered;
     let discover_fg = if discover_selected { theme.on_fill } else { theme.foreground };
     let join_hovered = view.hovered_rail_item == Some(RailHoverTarget::Join);
+    let join_border = if join_hovered { theme.foreground } else { theme.background_modifier_accent };
 
     rail.child(slot(2., 68., 44., "app.sidebar-nav.discovery-button.button.click",
         div()
@@ -274,6 +302,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             .aria_label(l10n::tr("Discover"))
             .aria_selected(discover_selected)
             .debug_selector(|| "rail-discover-btn".to_owned())
+            .relative()
             .size(px(theme.sizes.rail_button))
             .rounded(px(if discover_active {
                 GUILD_RADIUS
@@ -281,8 +310,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 theme.sizes.rail_button / 2.
             }))
             .border_2()
-            .when(!discover_selected, |d| d.border_dashed())
-            .border_color(if discover_active { theme.foreground } else { theme.background_modifier_accent })
+            .border_color(if discover_selected { theme.foreground } else { gpui_kit::transparent_black() })
             .bg(if discover_selected { theme.brand } else { gpui_kit::transparent_black() })
             .text_color(discover_fg)
             .cursor_pointer()
@@ -301,7 +329,12 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     this.close_overlay(window, cx);
                 }),
             )
-            .flx("app.sidebar-nav.discovery-button.div--2")
+            .when(discover_selected, |d| d.flx("app.sidebar-nav.discovery-button.div--2"))
+            .when(!discover_selected, |d| {
+                let color = if discover_hovered { theme.foreground } else { theme.background_modifier_accent };
+                d.flx_painted_border("app.sidebar-nav.discovery-button.div--2", color)
+                    .child(dashed_rail_outline(discover_hovered, color))
+            })
             .child(
                 div()
                     .flex_none()
@@ -322,6 +355,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             .role(Role::Button)
             .aria_label(l10n::tr("Join a community"))
             .debug_selector(|| "join-guild".to_owned())
+            .relative()
             .size(px(theme.sizes.rail_button))
             .rounded(px(if join_hovered {
                 GUILD_RADIUS
@@ -329,8 +363,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                 theme.sizes.rail_button / 2.
             }))
             .border_2()
-            .border_dashed()
-            .border_color(if join_hovered { theme.foreground } else { theme.background_modifier_accent })
+            .border_color(gpui_kit::transparent_black())
             .bg(gpui_kit::transparent_black())
             .cursor_pointer()
             .flex()
@@ -348,7 +381,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                     this.close_overlay(window, cx);
                 }),
             )
-            .flx("app.sidebar-nav.add-guild-button.div--2")
+            .flx_painted_border("app.sidebar-nav.add-guild-button.div--2", join_border)
+            .child(dashed_rail_outline(join_hovered, join_border))
             .child(
                 div()
                     .flex_none()

@@ -28,9 +28,21 @@ impl ClientView {
         } else {
             self.voice_popout = Some(kind);
             self.user_area_popout_open = false;
+            self.guild_header_popout_open = false;
             self.refresh_audio_devices(cx);
         }
         cx.notify();
+    }
+
+    pub(crate) fn dismiss_voice_popout_outside(&mut self, _: &gpui_kit::MouseUpEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let open_kind = self.voice_popout;
+        cx.defer_in(window, move |this, _, cx| {
+            // A control pressed outside the popout can switch to a different popout.
+            if open_kind.is_some() && this.voice_popout == open_kind {
+                this.voice_popout = None;
+                cx.notify();
+            }
+        });
     }
 
     pub(crate) fn open_voice_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {

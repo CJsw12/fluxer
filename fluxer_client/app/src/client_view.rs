@@ -1060,7 +1060,18 @@ impl Render for ClientView {
                     .w(px(theme.sizes.rail_width + 1. + sidebar_w - 12.))
                     .child(ui::user_panel::render(self, &theme, cx)),
             )
-            .children(ui::user_panel::render_popout(self, &theme, cx))
+            .when(self.user_area_popout_open || self.guild_header_popout_open, |d| {
+                d.child(
+                    gpui_kit::deferred(
+                        div().id("floating-popout-backdrop").absolute().inset_0().occlude()
+                            .on_mouse_down(MouseButton::Left, cx.listener(|v, _, window, cx| {
+                                v.close_floating_popouts(window, cx);
+                                cx.stop_propagation();
+                            })),
+                    ).with_priority(1),
+                )
+            })
+            .children(ui::user_panel::render_popout(self, &theme, window.viewport_size(), cx))
             .child(self.render_sidebar_resize_handle(sidebar_w, theme.sizes.rail_width, cx))
             .children(overlay)
     }

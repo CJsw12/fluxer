@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only audit of Antigravity CLI session transcripts.
+"""Read-only audit of Antigravity and Codex session transcripts.
 Usage: python -I tools/agents/agy_audit.py [BRAIN_ID ...] [--latest] [--since ISO8601] [--json] [--top N] [--selftest]
 AGY_BRAIN_DIR overrides the transcript root (used by --selftest)."""
 
@@ -10,6 +10,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BRAIN_DIR = Path(os.environ.get("AGY_BRAIN_DIR") or (Path.home() / ".gemini" / "antigravity-cli" / "brain"))
+CODEX_DIR = Path.home() / ".codex" / "sessions"
 TRANSCRIPT = Path(".system_generated") / "logs" / "transcript_full.jsonl"
 HOME = str(Path.home())
 FLAG_SHORT = {
@@ -187,6 +188,115 @@ def analyze(transcript, brain_dir):
     repeats = Counter(os.path.normcase(os.path.normpath(str(raw).strip().strip("\"'`"))) for raw, _ in s["reads"])
     s["repeats"] = [(raw, n) for raw, n in repeats.items() if n >= 2]
     return s
+
+
+def codex_records(path):
+    with path.open(encoding="utf-8", errors="replace") as stream:
+        for line in stream:
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(row, dict) and isinstance(row.get("payload"), dict):
+                yield row, row["payload"]
+
+
+def analyze_codex(path):
+    s = {
+        "id": path.stem[-36:], "first": None, "last": None, "models": {}, "tools": Counter(),
+        "delegation_calls": 0, "delegation_models": Counter(), "opencode_cmds": 0,
+        "results": [], "reads": [], "unranged": [], "flags": defaultdict(list),
+        "errors": 0, "error_msgs": [],
+    }
+    model, pending, previous = "codex", {}, (0, 0, 0)
+    for step, (row, payload) in enumerate(codex_records(path), 1):
+        ts = parse_ts(row.get("timestamp"))
+        if ts is not None:
+            s["first"] = min(s["first"] or ts, ts)
+            s["last"] = max(s["last"] or ts, ts)
+        kind = payload.get("type")
+        if row.get("type") == "session_meta":
+            s["id"] = payload.get("id") or s["id"]
+        elif row.get("type") == "turn_context":
+            model = payload.get("model") or model
+        elif kind == "token_count":
+            usage = (payload.get("info") or {}).get("total_token_usage")
+            if not usage:
+                continue
+            cached = good_int(usage.get("cached_input_tokens"))
+            current = (good_int(usage.get("input_tokens")) - cached, cached, good_int(usage.get("output_tokens")))
+            delta = [max(0, a - b) for a, b in zip(current, previous)]
+            previous = current
+            if any(delta):
+                slot = s["models"].setdefault(model, [0, 0, 0, 0])
+                slot[0] += 1
+                for index, count in enumerate(delta, 1):
+                    slot[index] += count
+        elif kind in ("function_call", "custom_tool_call"):
+            name = payload.get("name") or "?"
+            s["tools"][name] += 1
+            raw = payload.get("arguments", payload.get("input", ""))
+            try:
+                args = json.loads(raw)
+            except (TypeError, json.JSONDecodeError):
+                args = {}
+            if not isinstance(args, dict):
+                args = {}
+            paths = []
+            if name.endswith(("read_file", "view_file", "view_image")):
+                paths = [args.get("path") or args.get("file_path")]
+            command = args.get("cmd") or (raw if name == "exec" and isinstance(raw, str) else "")
+            if command:
+                check_command(s, command, step)
+                paths.extend(re.findall(
+                    r'''(?i)\b(?:cat|get-content|read_file|view_image)\s+(?:-LiteralPath\s+)?(?:"([^"]+)"|'([^']+)'|([\w./\\:-]+))''',
+                    command,
+                ))
+            for raw_path in paths:
+                path_text = next((part for part in raw_path if part), "") if isinstance(raw_path, tuple) else raw_path
+                if path_text:
+                    s["reads"].append((os.path.normcase(os.path.normpath(path_text)), step))
+            pending[payload.get("call_id")] = name
+        elif kind in ("function_call_output", "custom_tool_call_output"):
+            name = pending.pop(payload.get("call_id"), "?")
+            output = payload.get("output", "")
+            if isinstance(output, list):
+                output = "\n".join(block["text"] for block in output
+                                   if isinstance(block, dict) and isinstance(block.get("text"), str))
+            elif not isinstance(output, str):
+                output = json.dumps(output, ensure_ascii=False)
+            s["results"].append({"step": step, "session": s["id"], "tool": name, "hint": "",
+                                 "size": len(output.encode("utf-8"))})
+            if re.search(r"(?im)^(?:Script error:|Process exited with code [1-9]\d*)|\x22(?:isError|is_error)\x22\s*:\s*true|\x22exit_code\x22\s*:\s*[1-9]\d*", output):
+                s["errors"] += 1
+                s["error_msgs"].append(("tool call failed", s["id"], step))
+        elif kind in ("error", "stream_error"):
+            s["errors"] += 1
+            s["error_msgs"].append((kind, s["id"], step))
+    s["repeats"] = [(name, count) for name, count in Counter(name for name, _ in s["reads"]).items() if count >= 2]
+    return s
+
+
+def select_codex(args):
+    since = parse_ts(args.since) if args.since else None
+    if args.since and since is None:
+        raise SystemExit(f"invalid --since: {args.since}")
+    sessions = []
+    files = sorted(Path(args.codex_dir).rglob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
+    for path in files:
+        if since and path.stat().st_mtime < since.timestamp():
+            break
+        if args.brain_ids and not any(path.stem[-36:].startswith(prefix) for prefix in args.brain_ids):
+            continue
+        session = analyze_codex(path)
+        if session["first"] and (since is None or session["first"] >= since):
+            sessions.append(session)
+            if args.latest or not (since or args.brain_ids):
+                break
+    if not sessions:
+        raise SystemExit(f"no Codex sessions found under {args.codex_dir}")
+    sessions.sort(key=lambda s: s["first"])
+    return sessions, {s["id"] for s in sessions} if args.brain_ids else {sessions[0]["id"]}
 
 def discover(brain_dir):
     return [p for p in brain_dir.iterdir() if (p / TRANSCRIPT).is_file()] if brain_dir.is_dir() else []
@@ -366,6 +476,30 @@ def selftest():
         check(pick_sessions(brain, [], None, True)[0].name == a.name, "latest selection")
         check(pick_sessions(brain, ["bbbb"], None, True)[0].name == b.name, "prefix selection")
         check(len(render([sa, sb], {sa["id"]}, 8)) <= 70 and len(render([sa], {sa["id"]}, 8)) > 5, "render shape")
+        codex = brain / "rollout-12345678-0000-0000-0000-000000000000.jsonl"
+        events = [
+            ("session_meta", {"id": "sample-codex"}),
+            ("turn_context", {"model": "gpt-6.2-sol"}),
+            ("event_msg", {"type": "token_count", "info": {"total_token_usage": {
+                "input_tokens": 100, "cached_input_tokens": 20, "output_tokens": 10}}}),
+            ("response_item", {"type": "function_call", "name": "read_file", "call_id": "a",
+                               "arguments": json.dumps({"path": "example.rs"})}),
+            ("response_item", {"type": "function_call_output", "call_id": "a", "output": "é" * 4500}),
+            ("response_item", {"type": "custom_tool_call", "name": "exec", "call_id": "b",
+                               "input": "cat example.rs"}),
+            ("response_item", {"type": "custom_tool_call_output", "call_id": "b",
+                               "output": [{"type": "text", "text": '{"exit_code":1}'}]}),
+            ("event_msg", {"type": "token_count", "info": {"total_token_usage": {
+                "input_tokens": 200, "cached_input_tokens": 25, "output_tokens": 20}}}),
+        ]
+        codex.write_text("".join(json.dumps({"type": kind, "payload": payload,
+                                            "timestamp": (base + timedelta(seconds=i)).isoformat()}) + "\n"
+                                 for i, (kind, payload) in enumerate(events)), encoding="utf-8")
+        result = to_json([analyze_codex(codex)], {"sample-codex"}, 8)
+        entry = result["sessions"][0]
+        check(result["totals"]["tokens"] == 220 and entry["duration_seconds"] == 7, "Codex tokens/duration")
+        check(entry["errors"] == 1 and entry["top_results"][0]["bytes"] == 9000, "Codex errors/bytes")
+        check(entry["repeated_reads"] == [{"path": "example.rs", "count": 2}], "Codex repeated reads")
     if bad:
         raise SystemExit("SELFTEST FAILED: " + ", ".join(bad))
     print("SELFTEST OK (all checks passed)")
@@ -375,13 +509,15 @@ def main():
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     except (AttributeError, OSError):
         pass
-    parser = argparse.ArgumentParser(description="Audit Antigravity CLI transcripts (read-only)")
+    parser = argparse.ArgumentParser(description="Audit Antigravity or Codex transcripts (read-only)")
     parser.add_argument("brain_ids", nargs="*", help="brain/session id or unique prefix")
     parser.add_argument("--latest", action="store_true", help="most recently modified brain (default)")
     parser.add_argument("--since", help="ISO8601: include brains whose first created_at >= since")
     parser.add_argument("--json", action="store_true", help="machine-readable output")
     parser.add_argument("--top", type=int, default=8, help="largest tool results to show (default 8)")
     parser.add_argument("--brain-dir", default=str(BRAIN_DIR), help="transcript root")
+    parser.add_argument("--codex", action="store_true", help="audit Codex JSONL sessions")
+    parser.add_argument("--codex-dir", default=str(CODEX_DIR), help="Codex session root")
     parser.add_argument("--selftest", action="store_true", help="run synthetic parser tests")
     args = parser.parse_args()
     if args.top < 1:
@@ -389,7 +525,7 @@ def main():
     if args.selftest:
         selftest()
         return
-    sessions, root_ids = select_and_analyze(args)
+    sessions, root_ids = select_codex(args) if args.codex else select_and_analyze(args)
     if args.json:
         print(json.dumps(to_json(sessions, root_ids, args.top), ensure_ascii=True, indent=2))
     else:

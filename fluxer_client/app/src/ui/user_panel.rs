@@ -9,8 +9,8 @@ use fluxer_client_core::state::{Snowflake, Status};
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{
-    AnyElement, ClipboardItem, Context, FontWeight, Hsla, MouseButton, ObjectFit, Role, SharedString, deferred, div, img,
-    prelude::*, px, rgb, rgba,
+    AnyElement, BoxShadow, ClipboardItem, Context, FontWeight, Hsla, MouseButton, ObjectFit, Pixels, Role, SharedString, Size, deferred, div, img, point,
+    prelude::*, px, rgb,
 };
 
 use super::avatar::{AvatarSpec, render_avatar, render_avatar_tagged};
@@ -410,16 +410,12 @@ pub(crate) enum UserAreaSubmenu {
     Accounts,
 }
 
-const CARD_BG: u32 = 0x0c0b0e;
-const GROUP_BG: u32 = 0x232028;
-const GROUP_DIVIDER: u32 = 0x2f2c36;
-const MENU_BG: u32 = 0x2a2730;
-const SECONDARY_TEXT: u32 = 0xb1acbb;
-const ICON_TEXT: u32 = 0xe5e4e9;
-const ACTIVE_GREEN: u32 = 0x1daf6b;
-const BRAND_FILL: u32 = 0x413cdd;
+const CARD_HEIGHT: f32 = 432.;
+const CARD_BOTTOM: f32 = 64.;
+const EXPIRY_ROW_HEIGHT: f32 = 32.;
 
 const EXPIRY_CHOICES: [&str; 9] = [
+    "Until I change it",
     "For 15 minutes",
     "For 30 minutes",
     "For 1 hour",
@@ -428,10 +424,19 @@ const EXPIRY_CHOICES: [&str; 9] = [
     "For 8 hours",
     "For 24 hours",
     "For 3 days",
-    "Until I change it",
 ];
 
-fn menu_frame(id: &'static str, width: f32) -> gpui_kit::Stateful<gpui_kit::Div> {
+fn popover_shadow(theme: &Theme) -> Vec<BoxShadow> {
+    vec![BoxShadow {
+        color: theme.popover_shadow,
+        offset: point(px(0.), px(8.)),
+        blur_radius: px(16.),
+        spread_radius: px(0.),
+        inset: false,
+    }]
+}
+
+fn menu_frame(id: &'static str, width: f32, theme: &Theme) -> gpui_kit::Stateful<gpui_kit::Div> {
     div()
         .id(id)
         .occlude()
@@ -441,9 +446,9 @@ fn menu_frame(id: &'static str, width: f32) -> gpui_kit::Stateful<gpui_kit::Div>
         .flex_col()
         .rounded(px(8.))
         .border_1()
-        .border_color(rgba(0xc9c5d326))
-        .bg(rgb(MENU_BG))
-        .shadow_lg()
+        .border_color(theme.background_modifier_accent)
+        .bg(theme.background_tertiary)
+        .shadow(popover_shadow(theme))
 }
 
 fn hover_submenu(
@@ -458,13 +463,19 @@ fn hover_submenu(
     })
 }
 
-fn hover_fill() -> Hsla {
-    gpui_kit::hsla(0., 0., 1., 0.06)
+fn expiry_top(row_top: f32, top_edge: f32, bottom_edge: f32) -> f32 {
+    let height = EXPIRY_CHOICES.len() as f32 * EXPIRY_ROW_HEIGHT + 14.;
+    let preferred = if row_top + height <= bottom_edge {
+        row_top
+    } else {
+        row_top + EXPIRY_ROW_HEIGHT - height
+    };
+    preferred.clamp(top_edge, (bottom_edge - height).max(top_edge))
 }
 
 /// Official `UserAreaPopout`: profile card (banner, avatar, names, custom status
 /// row, action group, Edit profile) plus the hover submenus on its right.
-pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> Option<AnyElement> {
+pub fn render_popout(view: &ClientView, theme: &Theme, viewport: Size<Pixels>, cx: &mut Context<ClientView>) -> Option<AnyElement> {
     if !view.user_area_popout_open {
         return None;
     }
@@ -487,9 +498,10 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
     }
     let banner_color = rgb(card.banner_color);
     let status = view.own_status;
-    let secondary: Hsla = rgb(SECONDARY_TEXT).into();
+    let secondary = theme.text_secondary;
     let primary = theme.foreground;
-    let icon_color: Hsla = rgb(ICON_TEXT).into();
+    let icon_color = theme.foreground;
+    let hover_fill = theme.hover_bg;
     let username = SharedString::from(card.username_tag.clone());
     let copy_name = card.username_tag.clone();
     let user_id_text = uid.0.to_string();
@@ -517,7 +529,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
         .top(px(55.))
         .size(px(86.))
         .rounded_full()
-        .bg(rgb(CARD_BG))
+        .bg(theme.background)
         .cursor_pointer()
         .flx("user.profile.profile-card.profile-card-banner.avatar-button.avatar-click")
         .on_click(cx.listener(move |this, ev: &gpui_kit::ClickEvent, window, cx| {
@@ -542,7 +554,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                 .bottom(px(0.))
                 .size(px(26.))
                 .rounded_full()
-                .bg(rgb(CARD_BG))
+                .bg(theme.background)
                 .flex()
                 .items_center()
                 .justify_center()
@@ -678,7 +690,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
             .flx("app.floating.user-area-popout.action-button.action-chevron")
             .child(Icon::new(AppIcon::CaretRight).with_size(px(14.)).text_color(color))
     };
-    let divider = |id: &'static str| div().mx(px(12.)).h(px(1.)).flex_none().bg(rgb(GROUP_DIVIDER)).flx(id);
+    let divider = |id: &'static str| div().mx(px(12.)).h(px(1.)).flex_none().bg(theme.background_modifier_accent).flx(id);
     let icon_box =
         |child: AnyElement| div().size(px(22.)).flex_none().flex().items_center().justify_center().child(child);
 
@@ -689,7 +701,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
         .flex_col()
         .rounded(px(12.))
         .overflow_hidden()
-        .bg(rgb(GROUP_BG))
+        .bg(theme.background_secondary_alt)
         .flx("app.floating.user-area-popout.action-group")
         .child(
             action_row("user-area-status-row", "app.floating.user-area-popout.action-button")
@@ -753,7 +765,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
         .border_1()
         .border_color(theme.brand_button_border)
         .flx("app.floating.user-area-popout.edit-profile-button.open-edit-profile")
-        .bg(rgb(BRAND_FILL))
+        .bg(theme.brand)
         .cursor_pointer()
         .hover(|s| s.bg(theme.brand))
         .on_hover(hover_submenu(None, cx))
@@ -804,7 +816,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
         .debug_selector(|| "user-area-popout".to_owned())
         .occlude()
         .w(px(305.))
-        .h(px(432.))
+        .h(px(CARD_HEIGHT))
         .relative()
         .flex()
         .flex_col()
@@ -812,7 +824,9 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
         .border_2()
         .border_color(banner_color)
         .flx("app.floating.user-area-popout.container")
-        .bg(rgb(CARD_BG))
+        .bg(theme.background)
+        .shadow(popover_shadow(theme))
+        .overflow_hidden()
         .child(banner)
         .child(content)
         .child(footer)
@@ -825,7 +839,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
             (Status::Dnd, "dnd", Some("You won't receive notifications on desktop"), 63.),
             (Status::Invisible, "invisible", Some("You'll appear offline"), 47.),
         ];
-        menu_frame("user-area-status-menu", 280.)
+        menu_frame("user-area-status-menu", 280., theme)
             .absolute()
             .left(px(315.))
             .top(px(242.))
@@ -850,8 +864,8 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                     .items_start()
                     .gap(px(8.))
                     .cursor_pointer()
-                    .when(active, |d| d.bg(hover_fill()))
-                    .hover(|s| s.bg(hover_fill()))
+                    .when(active, |d| d.bg(hover_fill))
+                    .hover(move |s| s.bg(hover_fill))
                     .on_hover(hover_submenu(Some(target), cx))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.own_status = st;
@@ -907,22 +921,26 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                 _ => 128.,
             };
             Some(
-                menu_frame("user-area-expiry-menu", 220.)
+                menu_frame("user-area-expiry-menu", 220., theme)
                     .absolute()
-                    .left(px(607.))
-                    .top(px(242. + 7. + item_top))
+                    .left(px(602.).min((viewport.width - px(232.)).max(px(0.))))
+                    .top(px(expiry_top(
+                        242. + 8.5 + item_top,
+                        (CARD_HEIGHT + CARD_BOTTOM - f32::from(viewport.height)).min(0.),
+                        CARD_HEIGHT + CARD_BOTTOM - 8.,
+                    )))
                     .flx("app.floating.user-area-popout.status-menu.expiry-popup")
                     .children(EXPIRY_CHOICES.into_iter().enumerate().map(|(i, text)| {
                         div()
                             .id(("user-area-expiry", i))
-                            .h(px(32.))
+                            .h(px(EXPIRY_ROW_HEIGHT))
                             .w_full()
                             .px(px(8.))
                             .rounded(px(6.))
                             .flex()
                             .items_center()
                             .cursor_pointer()
-                            .hover(|s| s.bg(hover_fill()))
+                            .hover(move |s| s.bg(hover_fill))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 // The backend has no status-expiry timer; the status applies indefinitely.
                                 this.own_status = st;
@@ -968,7 +986,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                 true,
             ));
         }
-        menu_frame("user-area-account-menu", 280.)
+        menu_frame("user-area-account-menu", 280., theme)
             .absolute()
             .left(px(315.))
             .top(px(285.))
@@ -986,7 +1004,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                     .items_center()
                     .gap(px(10.))
                     .cursor_pointer()
-                    .hover(|s| s.bg(hover_fill()))
+                    .hover(move |s| s.bg(hover_fill))
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.user_area_popout_open = false;
                         if !active && !key.is_empty() {
@@ -1026,7 +1044,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                                         .text_size(px(11.))
                                         .line_height(px(14.))
                                         .font_weight(FontWeight::MEDIUM)
-                                        .text_color(rgb(ACTIVE_GREEN))
+                                        .text_color(theme.status_online)
                                         .child(l10n::tr("Active account")),
                                 )
                             }),
@@ -1037,7 +1055,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                                 .size(px(20.))
                                 .flex_none()
                                 .rounded_full()
-                                .bg(rgb(BRAND_FILL))
+                                .bg(theme.brand)
                                 .flex()
                                 .items_center()
                                 .justify_center()
@@ -1045,7 +1063,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                         )
                     })
             }))
-            .child(div().my(px(4.)).h(px(1.)).w_full().flex_none().bg(rgba(0xc9c5d326)))
+            .child(div().my(px(4.)).h(px(1.)).w_full().flex_none().bg(theme.background_modifier_accent))
             .child(
                 div()
                     .id("user-area-manage-accounts")
@@ -1059,7 +1077,7 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
                     .items_center()
                     .gap(px(8.))
                     .cursor_pointer()
-                    .hover(|s| s.bg(hover_fill()))
+                    .hover(move |s| s.bg(hover_fill))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.user_area_popout_open = false;
                         this.open_account_switcher(window, cx);
@@ -1082,9 +1100,9 @@ pub fn render_popout(view: &ClientView, theme: &Theme, cx: &mut Context<ClientVi
             div()
                 .absolute()
                 .left(px(12.))
-                .bottom(px(64.))
+                .bottom(px(CARD_BOTTOM))
                 .w(px(305.))
-                .h(px(432.))
+                .h(px(CARD_HEIGHT))
                 .child(card_el)
                 .children(status_menu)
                 .children(expiry_menu)

@@ -189,6 +189,9 @@ pub struct Theme {
     pub background: Hsla,
     /// `--background-secondary` (channel list, user panel).
     pub background_secondary: Hsla,
+    /// `--background-secondary-alt` (profile card action group).
+    pub background_secondary_alt: Hsla,
+    pub popover_shadow: Hsla,
     /// `--background-secondary-lighter` (`OutlineFrame` main content frame:
     /// channel header, chat area, member list, right panels).
     pub background_secondary_lighter: Hsla,
@@ -634,6 +637,8 @@ impl Theme {
         let mut theme = Self {
             background: primary_color,
             background_secondary: secondary.color(),
+            background_secondary_alt: p.surface(if light { 0.78 } else { 0.26 }).color(),
+            popover_shadow: hsla(0., 0., 0., 0.24),
             background_secondary_lighter: lighter.color(),
             background_tertiary: p.surface(p.stops.2).color(),
             background_textarea: p.surface(if light { 0.88 } else { 0.3 }).color(),
@@ -714,6 +719,7 @@ impl Theme {
                 use generated_tokens::$tokens as t;
                 theme.background = rgba_u32(t::BACKGROUND_PRIMARY_RGBA);
                 theme.background_secondary = rgba_u32(t::BACKGROUND_SECONDARY_RGBA);
+                theme.background_secondary_alt = rgba_u32(t::BACKGROUND_SECONDARY_ALT_RGBA);
                 theme.background_secondary_lighter = rgba_u32(t::BACKGROUND_SECONDARY_LIGHTER_RGBA);
                 theme.background_tertiary = rgba_u32(t::BACKGROUND_TERTIARY_RGBA);
                 theme.background_textarea = rgba_u32(t::BACKGROUND_TEXTAREA_RGBA);

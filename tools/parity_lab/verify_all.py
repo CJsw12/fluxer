@@ -47,8 +47,8 @@ PRECHECK_CHANNEL = "1572284491404148743"
 PRECHECK_POLL_TIMEOUT_S = 18.0
 PRECHECK_POLL_INTERVAL_S = 0.35
 ORCA_WAKE_TIMEOUT_S = 10
-STEPS = ("build", "precheck", "icons", "colors", "ratchet", "resize", "surface", "state")
-LIVE_STEPS = ("ratchet", "resize", "surface", "state")
+STEPS = ("build", "precheck", "icons", "colors", "ratchet", "resize", "surface", "state", "user-area")
+LIVE_STEPS = ("ratchet", "resize", "surface", "state", "user-area")
 TIMEOUTS = {
     "build": 2400,
     "precheck": 120,
@@ -59,6 +59,7 @@ TIMEOUTS = {
     "resize": 900,
     "surface": 900,
     "state": 1200,
+    "user-area": 60,
 }
 DETAIL_MAX = 96
 
@@ -112,7 +113,7 @@ def capture(cmd: list[str], timeout: int) -> tuple[int | None, str, bool]:
         return None, f"[verify_all] could not start {cmd[0]}: {exc}\n", False
 
 
-BROKER_GATE_STEPS = ("surface", "state")
+BROKER_GATE_STEPS = ("surface", "state", "user-area")
 BROKER_LOGS: dict[str, int] = {}  # step -> broker exit code, for steps whose log was written by the broker
 STATE_OFFICIAL_CACHE = REPO / "target" / "parity-tmp" / "state_official_cache"
 
@@ -690,6 +691,14 @@ def step_state(args: argparse.Namespace, out_dir: Path) -> Result:
     return Result("PASS", detail, log)
 
 
+def step_user_area(args: argparse.Namespace, out_dir: Path) -> Result:
+    return _step_passed_gate(
+        "user-area",
+        [sys.executable, "-I", str(HERE / "check_user_area.py"), str(out_dir / "user-area")],
+        out_dir,
+    )
+
+
 STEP_FUNCS = {
     "build": step_build,
     "precheck": step_precheck,
@@ -699,6 +708,7 @@ STEP_FUNCS = {
     "resize": step_resize,
     "surface": step_surface,
     "state": step_state,
+    "user-area": step_user_area,
 }
 
 
@@ -818,13 +828,13 @@ def selftest() -> None:
     assert parse_gate_summary(RESIZE_SAMPLE) == (7, 8)
     assert parse_gate_summary("no summary") is None
 
-    assert select_steps(None, False) == ["precheck", "icons", "colors", "ratchet", "resize", "surface", "state"]
+    assert select_steps(None, False) == ["precheck", "icons", "colors", "ratchet", "resize", "surface", "state", "user-area"]
     assert select_steps(None, True)[0] == "build"
     assert select_steps("colors", False) == ["precheck", "colors"]
     assert select_steps("colors,-precheck", False) == ["colors"]
     assert select_steps("!precheck,icons", False) == ["icons"]
     assert select_steps("build", True) == ["build", "precheck"]
-    assert select_steps("-resize", False) == ["precheck", "icons", "colors", "ratchet", "surface", "state"]
+    assert select_steps("-resize", False) == ["precheck", "icons", "colors", "ratchet", "surface", "state", "user-area"]
     for bad in ("nope", "colors,nope"):
         try:
             select_steps(bad, False)

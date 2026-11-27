@@ -38,6 +38,7 @@ SCOPE_RE = re.compile(r"^fluxer_client/app/src/.+\.rs$")
 CALL_RE = re.compile(r"(?<![A-Za-z0-9_])(?P<prefix>gpui_kit::)?(?P<func>rgba?|hsla?)\(")
 NUM_START_RE = re.compile(r"[-+0-9.]")
 HEX_RE = re.compile(r"^[0-9a-fA-F]+$")
+HEX_CONST_RE = re.compile(r"\bconst\s+\w+\s*(?::[^=;]+)?=\s*(0x[\da-fA-F_]+)(?:u32)?\s*;")
 SNIPPET_MAX = 80
 
 
@@ -118,7 +119,7 @@ def find_literals(code: str) -> list[str]:
             raw = args.strip()
             if not raw.lower().startswith("0x"):
                 continue
-            digits = raw[2:]
+            digits = raw[2:].removesuffix("u32").replace("_", "")
             if not HEX_RE.match(digits) or len(digits) not in (3, 4, 6, 8):
                 continue
             if len(digits) in (4, 8) and digits.lower().endswith("00"):
@@ -129,6 +130,10 @@ def find_literals(code: str) -> list[str]:
             if _alpha_zero(func, args):
                 continue
         out.append(literal)
+    for m in HEX_CONST_RE.finditer(code):
+        digits = m[1][2:].replace("_", "")
+        if len(digits) in (6, 8):
+            out.append(m[1])
     return out
 
 
@@ -308,6 +313,9 @@ def selftest() -> None:
     assert find_literals("hsla(0., 0., 0., 0.)") == []
     assert find_literals("rgba(0x00000000)") == []
     assert find_literals("let x = theme.background;") == []
+    assert find_literals("const CARD_BG: u32 = 0x0c_0b_0e;") == ["0x0c_0b_0e"]
+    assert find_literals("rgb(0x0c_0b_0e_u32)") == ["rgb(0x0c_0b_0e_u32)"]
+    assert find_literals("const FLAG: u32 = 0x0800;") == []
     assert find_literals("hsla(198, calc(92% * 1), 70%, .45)") == ["hsla(198, calc(92% * 1), 70%, .45)"]
     assert find_literals('s = "rgb(0x123456)"') == ["rgb(0x123456)"]
     assert strip_comment('a = "http://x"; b = 1; // rgb(0x1)') == 'a = "http://x"; b = 1; '

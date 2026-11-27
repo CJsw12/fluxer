@@ -9,11 +9,12 @@ use fluxer_client_core::voice::DecodedVideoFrame;
 use gpui_kit::component::Sizable as _;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::{
-    Context, FontWeight, ImageSource, ObjectFit, RenderImage, Role, SharedString, StyledImage as _, div, img,
+    Context, FontWeight, ImageSource, MouseButton, ObjectFit, RenderImage, Role, SharedString, StyledImage as _, div, img,
     prelude::*, px,
 };
 
 use super::l10n;
+use super::voice_panel::{VoiceMenuKind, open_context_menu};
 use crate::backend::voice::{TrackSubscriptionKey, VoiceTrackSource, parse_participant_user_id};
 use crate::client_view::ClientView;
 use crate::parity_probe::FlxExt as _;
@@ -49,7 +50,7 @@ pub(crate) fn render(
     theme: &Theme,
     cx: &mut Context<ClientView>,
 ) -> impl IntoElement {
-    render_inner(track, participant_label, frame_image, None, false, theme, cx)
+    render_inner(track, participant_label, frame_image, None, false, true, theme, cx)
 }
 
 /// Expanded video viewer embedded inside `ui::voice_stage`.
@@ -58,10 +59,11 @@ pub(crate) fn render_stage(
     participant_label: SharedString,
     frame_image: Option<(u32, u32, Arc<RenderImage>)>,
     fps: Option<u32>,
+    popouts_enabled: bool,
     theme: &Theme,
     cx: &mut Context<ClientView>,
 ) -> impl IntoElement {
-    render_inner(track, participant_label, frame_image, fps, true, theme, cx)
+    render_inner(track, participant_label, frame_image, fps, true, popouts_enabled, theme, cx)
 }
 
 /// Resolves a LiveKit participant identity (e.g. `"user_201_sess"` or `"201:session"`)
@@ -99,12 +101,21 @@ pub(crate) fn format_stage_header(
     }
 }
 
+fn screen_share_context_menu(source: VoiceTrackSource, expanded: bool, popouts_enabled: bool) -> Option<VoiceMenuKind> {
+    match (source, expanded, popouts_enabled) {
+        (VoiceTrackSource::ScreenShare, false, true) => Some(VoiceMenuKind::DisableScreenSharePopouts),
+        (VoiceTrackSource::ScreenShare, true, false) => Some(VoiceMenuKind::EnableScreenSharePopouts),
+        _ => None,
+    }
+}
+
 fn render_inner(
     track: &TrackSubscriptionKey,
     participant_label: SharedString,
     frame_image: Option<(u32, u32, Arc<RenderImage>)>,
     fps: Option<u32>,
     expanded: bool,
+    popouts_enabled: bool,
     theme: &Theme,
     cx: &mut Context<ClientView>,
 ) -> impl IntoElement {
@@ -112,12 +123,16 @@ fn render_inner(
     let header_text = format_stage_header(track, participant_label.as_ref(), dims, fps);
     let track_for_stop = track.clone();
 
+    let screen_share_menu = screen_share_context_menu(track.source, expanded, popouts_enabled);
+
     div()
         .id("video-viewer")
         .role(Role::Region)
         .aria_label(l10n::tr("Watched video stream"))
         .debug_selector(|| "video-viewer".to_owned())
-        .flx("voice.video-viewer.stage")
+        .when_some(screen_share_menu, |d, kind| {
+            d.on_mouse_down(MouseButton::Right, open_context_menu(kind, cx))
+        })
         .flex()
         .flex_col()
         .when(expanded, |d| d.flex_1().min_h(px(320.)))
@@ -128,6 +143,7 @@ fn render_inner(
         .border_b_1()
         .border_color(theme.border)
         .bg(theme.background_secondary)
+        .flx("voice.video-viewer.stage")
         .child(
             div()
                 .flex()
@@ -194,6 +210,19 @@ fn render_inner(
 mod tests {
     use super::*;
     use fluxer_client_core::voice::VideoCodec;
+
+    #[test]
+    fn popout_menu_can_reverse_a_disable_from_the_stage() {
+        assert!(matches!(
+            screen_share_context_menu(VoiceTrackSource::ScreenShare, false, true),
+            Some(VoiceMenuKind::DisableScreenSharePopouts)
+        ));
+        assert!(matches!(
+            screen_share_context_menu(VoiceTrackSource::ScreenShare, true, false),
+            Some(VoiceMenuKind::EnableScreenSharePopouts)
+        ));
+        assert!(screen_share_context_menu(VoiceTrackSource::Camera, false, true).is_none());
+    }
 
     #[test]
     fn decoded_frame_to_render_image_swaps_rgba_to_bgra() {

@@ -224,7 +224,10 @@ impl ClientView {
                                 .bg(theme.background_secondary_lighter)
                                 .flx("channel.channel-view.channel-view-scaffold.chat-area-slot")
                                 .flx("channel.channel-chat-layout.container")
-                                .when_some(self.voice.watched_video_track.as_ref(), |d, track| {
+                                .when_some(self.voice.watched_video_track.as_ref().filter(|track| {
+                                    self.voice_screen_share_pip_enabled
+                                        || track.source != crate::backend::voice::VoiceTrackSource::ScreenShare
+                                }), |d, track| {
                                     let label = ui::video_viewer::participant_display_name(self, track);
                                     d.child(ui::video_viewer::render(
                                         track,

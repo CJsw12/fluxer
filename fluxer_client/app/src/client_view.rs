@@ -326,6 +326,12 @@ pub struct ClientView {
     pub(crate) voice_stage_open: bool,
     /// When true, `ui::voice_stage` fills the central pane; when false, renders top call stage + bottom text chat split view.
     pub(crate) voice_stage_expanded: bool,
+    pub(crate) voice_context_menu: Option<ui::voice_panel::VoiceContextMenu>,
+    pub(crate) voice_show_call_avatars: bool,
+    pub(crate) voice_focus_participants_expanded: bool,
+    pub(crate) voice_focus_members_visible: bool,
+    pub(crate) voice_show_connection_id: bool,
+    pub(crate) voice_screen_share_pip_enabled: bool,
     /// When true, the dedicated bottom-left `UserAreaPopout` menu (`UserArea.tsx`) is open above the user row.
     pub(crate) user_area_popout_open: bool,
     /// Expression picker tab closed on the current `MouseDown` outside click so repeat clicks toggle instead of reopening.
@@ -592,6 +598,12 @@ impl ClientView {
             voice: crate::backend::voice::VoiceSnapshot::default(),
             voice_stage_open: false,
             voice_stage_expanded: true,
+            voice_context_menu: None,
+            voice_show_call_avatars: true,
+            voice_focus_participants_expanded: false,
+            voice_focus_members_visible: true,
+            voice_show_connection_id: true,
+            voice_screen_share_pip_enabled: true,
             user_area_popout_open: false,
             dismissed_expression_tab: None,
             dismissed_channel_popout: None,
@@ -680,6 +692,7 @@ impl ClientView {
     }
 
     pub(crate) fn prepare_overlay_replace(&mut self, cx: &mut Context<Self>) {
+        self.voice_context_menu = None;
         if matches!(self.overlay, Overlay::Profile(_)) {
             self.save_profile_note(cx);
         }
@@ -1074,6 +1087,7 @@ impl Render for ClientView {
             .children(ui::user_panel::render_popout(self, &theme, window.viewport_size(), cx))
             .child(self.render_sidebar_resize_handle(sidebar_w, theme.sizes.rail_width, cx))
             .children(overlay)
+            .children(ui::voice_panel::render_context_menu(self, window.viewport_size(), &theme, cx))
     }
 }
 

@@ -6,7 +6,7 @@ use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::{AnyElement, Context, FontWeight, deferred, MouseButton, Role, SharedString, div, prelude::*, px, rgb, rgba};
 
-use super::avatar::{AvatarSpec, render_avatar};
+use super::avatar::{AvatarSpec, render_avatar, render_group_dm_avatar};
 use super::{access::Scope, badge};
 use crate::client_view::ClientView;
 use crate::icons::AppIcon;
@@ -827,22 +827,24 @@ fn render_channel(view: &ClientView, c: &ChannelItem, theme: &Theme, cx: &mut Co
                         .flx("app.channel-item.channel-item-core.tooltip--2")
                 })
                 .child(if c.icon == ChannelIcon::Dm {
+                    let avatar = AvatarSpec {
+                        user_id: c.dm_user_id.unwrap_or(c.id),
+                        avatar_url: c.dm_avatar_url.clone(),
+                        display_name: c.name.clone(),
+                        size: 32.,
+                        status: c.dm_status,
+                        status_border_bg: Some(theme.background_secondary),
+                    };
                     div()
                         .debug_selector(|| "dm-row-avatar".to_owned())
                         .flex_none()
                         .size(px(32.))
                         .when(selected, |d| d.flx("channel.direct-message.dm-list-item.dm-item-avatar-wrapper--2"))
-                        .child(render_avatar(
-                            AvatarSpec {
-                                user_id: c.dm_user_id.unwrap_or(c.id),
-                                avatar_url: c.dm_avatar_url.clone(),
-                                display_name: c.name.clone(),
-                                size: 32.,
-                                status: c.dm_status,
-                                status_border_bg: Some(theme.background_secondary),
-                            },
-                            theme,
-                        ))
+                        .child(if c.is_group_dm {
+                            render_group_dm_avatar(avatar, theme)
+                        } else {
+                            render_avatar(avatar, theme)
+                        })
                         .into_any_element()
                 } else {
                     let icon = match c.icon {

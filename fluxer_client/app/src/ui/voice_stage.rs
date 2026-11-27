@@ -20,6 +20,7 @@ use gpui_kit::{
 };
 
 use super::avatar::{AvatarSpec, render_avatar};
+use super::voice_panel::{VoiceMenuKind, open_context_menu};
 use super::{l10n, video_viewer};
 use crate::backend::voice::{
     TrackSubscriptionKey, VoiceConnectionState, VoiceTrackSource, parse_participant_user_id,
@@ -157,6 +158,7 @@ fn render_audio_avatar_slot(
     participant: &StageParticipant,
     connected: bool,
     theme: &Theme,
+    cx: &mut Context<ClientView>,
 ) -> AnyElement {
     let uid = participant.user_id;
     let active_ring = connected && participant.speaking && !participant.muted && !participant.deafened;
@@ -176,6 +178,7 @@ fn render_audio_avatar_slot(
         .id(("voice-stage-tile", uid.0))
         .aria_label(name_label)
         .debug_selector(move || format!("voice-stage-tile-{}", uid.0))
+        .on_mouse_down(MouseButton::Right, open_context_menu(VoiceMenuKind::ParticipantAvatar(uid), cx))
         .flx_text("voice.voice-stage.participant-speaking", speaking_meta)
         .w(px(84.))
         .h(px(72.))
@@ -280,13 +283,14 @@ fn render_participant_tile(
     let mut tile = div()
         .id(("voice-stage-tile", uid.0))
         .debug_selector(move || format!("voice-stage-tile-{}", uid.0))
-        .flx_text("voice.voice-stage.participant-speaking", speaking_meta)
+        .on_mouse_down(MouseButton::Right, open_context_menu(VoiceMenuKind::ParticipantTile(uid), cx))
         .relative()
         .w(px(tile_w))
         .h(px(tile_h))
         .rounded(px(12.))
         .border_2()
         .border_color(border_color)
+        .flx_text("voice.voice-stage.participant-speaking", speaking_meta)
         .bg(theme.background_secondary)
         .flex()
         .flex_col()
@@ -713,7 +717,9 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
                 ),
         );
 
-    let compact_tiles = watched_track.is_some();
+    let focus_has_participants = watched_track.is_some() && !participants.is_empty();
+    let focus_participants_expanded = focus_has_participants && view.voice_focus_participants_expanded;
+    let compact_tiles = watched_track.is_some() && !focus_participants_expanded;
     let mut tiles_grid = div()
         .id("voice-stage-grid")
         .debug_selector(|| "voice-stage-grid".to_owned())
@@ -751,7 +757,7 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
             .gap_y(px(12.))
             .flx("voice.voice-participant-avatar-list.voice-participant-wrapped-avatar-list.wrap-container");
         for p in &participants {
-            avatar_list = avatar_list.child(render_audio_avatar_slot(p, is_connected, theme));
+            avatar_list = avatar_list.child(render_audio_avatar_slot(p, is_connected, theme, cx));
         }
         tiles_grid = tiles_grid.child(avatar_list);
     }
@@ -773,7 +779,8 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
         .flx_text("voice.voice-stage.speaking-state", speaking_summary)
         .flex_1()
         .min_h_0()
-        .when(!compact_tiles, |d| d.overflow_y_scroll().justify_center().gap_3())
+        .when(!compact_tiles, |d| d.overflow_y_scroll().gap_3())
+        .when(!compact_tiles && !focus_participants_expanded, |d| d.justify_center())
         .when(compact_tiles, |d| d.overflow_hidden().justify_between().gap_2())
         .flex()
         .flex_col()
@@ -786,6 +793,7 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
             label,
             view.watched_video_frame.clone(),
             Some(view.watched_video_fps),
+            view.voice_screen_share_pip_enabled,
             theme,
             cx,
         ));
@@ -829,7 +837,67 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
         stage_body = stage_body.child(bar);
     }
 
-    stage_body = stage_body.child(tiles_grid);
+    if !focus_has_participants || focus_participants_expanded || view.voice_focus_members_visible {
+        stage_body = stage_body.child(tiles_grid);
+    }
+
+    let focus_toggle = |id: &'static str, label: &'static str, visible, tooltip_tag, button_tag| {
+        let label = l10n::tr(label);
+        div()
+            .id(id)
+            .role(Role::Button)
+            .aria_label(label.clone())
+            .tooltip(move |window, cx| Tooltip::new(label.clone()).build(window, cx))
+            .px_2()
+            .h(px(30.))
+            .rounded(px(6.))
+            .bg(theme.vc_surface_bg)
+            .border_1()
+            .border_color(theme.vc_separator_bg)
+            .hover(|style| style.border_color(theme.vc_corner_hover_border))
+            .cursor_pointer()
+            .flex()
+            .items_center()
+            .gap_1()
+            .flx(tooltip_tag)
+            .flx(button_tag)
+            .child(Icon::new(AppIcon::Users).with_size(px(16.)).text_color(theme.vc_control_fg))
+            .child({
+                let caret = Icon::new(AppIcon::CaretDown).with_size(px(12.)).text_color(theme.vc_control_fg);
+                if visible { caret } else { caret.rotate(gpui_kit::radians(std::f32::consts::PI)) }
+            })
+    };
+    let focus_toggles = focus_has_participants.then(|| {
+        div()
+            .absolute()
+            .right_3()
+            .bottom(px(52.))
+            .flex()
+            .gap_1()
+            .child(focus_toggle(
+                "voice-focus-participants-toggle",
+                if focus_participants_expanded { "Hide participants" } else { "Show participants" },
+                focus_participants_expanded,
+                "voice.voice-call-layout-content.focus-layout-node.tooltip",
+                "voice.voice-call-layout-content.focus-layout-node.carousel-toggle.toggle-participants-grid.button",
+            ).on_click(cx.listener(|view, _, _, cx| {
+                view.voice_focus_participants_expanded = !view.voice_focus_participants_expanded;
+                cx.notify();
+            })))
+            .when(!focus_participants_expanded, |d| {
+                let visible = view.voice_focus_members_visible;
+                d.child(focus_toggle(
+                    "voice-focus-members-toggle",
+                    if visible { "Hide members" } else { "Show members" },
+                    visible,
+                    "voice.voice-call-layout-content.focus-layout-node.members-toggle-tooltip",
+                    "voice.voice-call-layout-content.focus-layout-node.members-toggle-button",
+                ).on_click(cx.listener(|view, _, _, cx| {
+                    view.voice_focus_members_visible = !view.voice_focus_members_visible;
+                    cx.notify();
+                })))
+            })
+    });
 
     let effective_muted = view.voice.effective_muted();
     let effective_deafened = view.voice.effective_deafened();
@@ -1355,15 +1423,17 @@ pub fn render(view: &ClientView, theme: &Theme, split_height: f32, cx: &mut Cont
         .debug_selector(|| "voice-stage".to_owned())
         .flex()
         .flex_col()
+        .relative()
         .w_full()
         .when(!is_split_view, |d| d.flex_1().h_full().mr(px(-1.)))
-        .when(is_split_view, |d| d.relative().h(px(split_height)).flex_none())
+        .when(is_split_view, |d| d.h(px(split_height)).flex_none())
         .min_w_0()
         .bg(rgb(0x000000))
         .flx("voice.compact-voice-call-view.compact-voice-call-view-inner.section.voice-root-pointer-activity")
         .when(!is_split_view, |d| d.child(header))
         .child(stage_body)
         .child(controls)
+        .children(focus_toggles)
         .when(is_split_view, |d| {
             d.child(
                 div()

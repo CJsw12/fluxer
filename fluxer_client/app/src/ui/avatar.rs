@@ -6,6 +6,7 @@
 use std::sync::{Arc, OnceLock};
 
 use fluxer_client_core::state::{Snowflake, Status};
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::{
     AnyElement, FontWeight, Hsla, Image, ImageFormat, ObjectFit, SharedString, StyledImage as _, div, img,
     prelude::*, px, rgb,
@@ -14,6 +15,7 @@ use gpui_kit::{
 use crate::format::{DEFAULT_AVATAR_COLORS, default_avatar_index, initials};
 use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
+use crate::ui::{l10n, member_list::status_label};
 
 /// Input specification for [`render_avatar`].
 #[derive(Debug, Clone)]
@@ -34,6 +36,24 @@ pub fn render_avatar(spec: AvatarSpec, theme: &Theme) -> AnyElement {
 /// [`render_avatar`] whose picture box (equal to the official `BaseAvatar` image box) carries
 /// the given parity-probe tags.
 pub fn render_avatar_tagged(spec: AvatarSpec, theme: &Theme, flx_tags: &'static [&'static str]) -> AnyElement {
+    render_avatar_inner(spec, theme, flx_tags, false, false)
+}
+
+pub fn render_clickable_avatar_tagged(spec: AvatarSpec, theme: &Theme, flx_tags: &'static [&'static str]) -> AnyElement {
+    render_avatar_inner(spec, theme, flx_tags, true, false)
+}
+
+pub fn render_group_dm_avatar(spec: AvatarSpec, theme: &Theme) -> AnyElement {
+    render_avatar_inner(spec, theme, &[], false, true)
+}
+
+fn render_avatar_inner(
+    spec: AvatarSpec,
+    theme: &Theme,
+    flx_tags: &'static [&'static str],
+    clickable: bool,
+    group_dm: bool,
+) -> AnyElement {
     let tag = |d: gpui_kit::Div| flx_tags.iter().fold(d, |d, f| d.flx(f));
     let size = spec.size.max(12.);
     let default_index = default_avatar_index(spec.user_id);
@@ -92,12 +112,42 @@ pub fn render_avatar_tagged(spec: AvatarSpec, theme: &Theme, flx_tags: &'static 
             .into_any_element(),
     };
 
-    let Some(status) = spec.status else {
+    if spec.status.is_none() && !clickable {
         return picture;
-    };
+    }
 
+    let mut avatar = div()
+        .id(("avatar-container", spec.user_id.0))
+        .relative()
+        .flex_none()
+        .size(px(size))
+        .child(picture);
+    if clickable {
+        let mut shade = theme.popover_shadow;
+        shade.a = 0.4;
+        avatar = avatar
+            .group("clickable-avatar")
+            .cursor_pointer()
+            .hover(|s| s.opacity(0.9))
+            .child(
+                div()
+                    .absolute()
+                    .inset_0()
+                    .rounded_full()
+                    .flx("ui.base-avatar.hover-overlay")
+                    .group_hover("clickable-avatar", |s| s.bg(shade)),
+            );
+    }
+    let Some(status) = spec.status else {
+        return avatar.into_any_element();
+    };
     let (dot_size, cut_r, center) = status_geometry(size);
     let border_bg = spec.status_border_bg.unwrap_or(theme.background);
+    let status_tip = match status {
+        Status::Invisible if group_dm => status_label(Status::Offline),
+        _ => status_label(status),
+    };
+    let status_tip = if status_tip.is_empty() { l10n::tr("Avatar") } else { status_tip };
     // Official masks cut a `cut_r` hole around the indicator; the ring approximates it.
     let dot = div()
         .debug_selector(|| "avatar-status-dot".to_owned())
@@ -112,21 +162,19 @@ pub fn render_avatar_tagged(spec: AvatarSpec, theme: &Theme, flx_tags: &'static 
         .justify_center()
         .child(
             div()
+                .id(("avatar-status-tooltip", spec.user_id.0))
                 .size(px(dot_size))
                 .flex_none()
+                .when(group_dm, |d| d.flx("app.group-dm-avatar.render-group-status-dot.tooltip"))
+                .when(!group_dm, |d| d.flx("ui.base-avatar.tooltip"))
+                .tooltip(move |window, cx| Tooltip::new(status_tip.clone()).build(window, cx))
                 .when(!flx_tags.is_empty(), |d| {
                     d.flx("ui.base-avatar.status-indicator-svg.svg").flx("ui.base-avatar.status-indicator-svg.rect")
                 })
                 .child(super::status_indicator::themed(status, dot_size, theme)),
         );
 
-    div()
-        .relative()
-        .flex_none()
-        .size(px(size))
-        .child(picture)
-        .child(dot)
-        .into_any_element()
+    avatar.child(dot).into_any_element()
 }
 
 /// `(status size, cutout radius, cutout centre)` from `GenerateAvatarMasks.ts` `STATUS_CONFIG`,

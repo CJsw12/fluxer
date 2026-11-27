@@ -15,7 +15,7 @@ use gpui_kit::{
 use crate::client_view::ClientView;
 use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
-use crate::ui::avatar::{AvatarSpec, render_avatar_tagged};
+use crate::ui::avatar::{AvatarSpec, render_clickable_avatar_tagged};
 use crate::ui::media_context_menu::{MediaContextMenuTarget, MediaMenuKind};
 use crate::ui::media_viewer::{self, MediaViewerItem};
 use crate::ui::{embed, l10n, message_actions, reactions, reply};
@@ -605,7 +605,7 @@ pub fn render(
                         });
                     }
                 })
-                .child(render_avatar_tagged(
+                .child(render_clickable_avatar_tagged(
                     AvatarSpec {
                         user_id: row.author_id,
                         avatar_url: row.avatar_url.clone(),

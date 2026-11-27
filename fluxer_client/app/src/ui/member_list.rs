@@ -12,11 +12,12 @@ use std::ops::Range;
 use std::rc::Rc;
 
 use fluxer_client_core::gateway::normalize_member_list_ranges;
-use fluxer_client_core::state::{ClientState, MemberListRow, Snowflake, Status};
+use fluxer_client_core::state::{ClientState, MemberListRow, PartialEmoji, Snowflake, Status};
 use gpui_kit::component::{Icon, Sizable as _};
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::{
     AnyElement, Context, FontWeight, Hsla, SharedString, UniformListScrollHandle, WeakEntity, div, hsla, prelude::*, px,
-    rgb, uniform_list,
+    img, rgb, uniform_list,
 };
 
 use super::avatar::{AvatarSpec, render_avatar_tagged};
@@ -146,6 +147,7 @@ pub struct MemberItem {
     pub avatar_url: Option<SharedString>,
     pub default_avatar: usize,
     pub is_owner: bool,
+    pub custom_status: Option<(SharedString, Option<SharedString>, Option<SharedString>)>,
 }
 
 /// Snapshot of the shown member list.
@@ -207,6 +209,19 @@ pub fn member_panel(state: &ClientState, guild_id: Snowflake, channel_id: Snowfl
                         None => state.presence_status(user.id),
                     };
                     let is_owner = guild.is_some_and(|g| g.owner_id == Some(user.id));
+                    let custom_status = entry.presence.as_ref().and_then(|p| p.custom_status.as_ref())
+                        .or_else(|| state.presences.get(&user.id).and_then(|p| p.custom_status.as_ref()))
+                        .filter(|s| !s.expires_at.as_deref().and_then(|v| chrono::DateTime::parse_from_rfc3339(v).ok())
+                            .is_some_and(|at| at <= chrono::Utc::now()))
+                        .and_then(|s| {
+                            let text = s.text.as_deref().unwrap_or("").replace(['\r', '\n'], " ").trim().to_owned();
+                            let emoji = s.emoji_name.as_deref().filter(|s| !s.is_empty());
+                            let url = media.and_then(|media| super::reactions::emoji_url(media, &PartialEmoji {
+                                id: s.emoji_id, name: emoji.unwrap_or("").to_owned(), animated: false,
+                            }));
+                            (!text.is_empty() || emoji.is_some() || url.is_some())
+                                .then(|| (text.into(), emoji.or(s.emoji_id.map(|_| "emoji")).map(Into::into), url.map(Into::into)))
+                        });
                     MemberRowView::Member(MemberItem {
                         user_id: user.id,
                         name: name.to_owned().into(),
@@ -216,6 +231,7 @@ pub fn member_panel(state: &ClientState, guild_id: Snowflake, channel_id: Snowfl
                         avatar_url: media.and_then(|m| avatar_url(m, user)).map(Into::into),
                         default_avatar: default_avatar_index(user.id),
                         is_owner,
+                        custom_status,
                     })
                 }
             };
@@ -354,6 +370,8 @@ fn render_row(
             );
             let user_id = m.user_id;
             let view = view.clone();
+            let context_view = view.clone();
+            let custom_status = m.custom_status.clone();
             base.child(
                 div()
                     .h(px(40.))
@@ -384,12 +402,17 @@ fn render_row(
                             .flex_1()
                             .min_w_0()
                             .flex()
+                            .flex_col()
+                            .child(div()
+                            .min_w_0()
+                            .flex()
                             .flex_row()
                             .items_center()
                             .gap_1()
                             .flx("channel.member-list-item.name-container")
                             .child(
                                 div()
+                                    .id(("member-name", user_id.0))
                                     .min_w_0()
                                     .truncate()
                                     .text_size(px(16.))
@@ -397,26 +420,60 @@ fn render_row(
                                     .font_weight(FontWeight::MEDIUM)
                                     .text_color(m.color.unwrap_or(theme.text_chat))
                                     .flx_text("channel.member-list-item.name", m.name.to_string())
+                                    .flx("channel.member-list-item.name-tooltip")
+                                    .tooltip({
+                                        let name = m.name.clone();
+                                        move |window, cx| Tooltip::new(name.clone()).build(window, cx)
+                                    })
                                     .child(m.name.clone()),
                             )
                             .when(m.is_owner, |d| {
                                 d.child(
                                     div()
+                                        .id(("member-owner", user_id.0))
                                         .flex_none()
                                         .size(px(14.))
                                         .mt(px(1.4))
                                         .debug_selector(move || format!("member-owner-crown-{}", user_id.0))
+                                        .flx("channel.member-list-item.owner-icon")
                                         .flx("channel.member-list-item.crown-icon")
+                                        .tooltip(move |window, cx| {
+                                            Tooltip::new(l10n::tr("Community owner")).build(window, cx)
+                                        })
                                         .child(
                                             Icon::new(AppIcon::CrownFill)
                                                 .with_size(px(14.))
                                                 .text_color(hsla(39. / 360., 0.57, 0.64, 1.)),
                                         ),
                                 )
+                            }))
+                            .when_some(custom_status, |d, (text, emoji, url)| {
+                                let tooltip = text.clone();
+                                d.child(div().id(("member-status", user_id.0)).min_w_0().h(px(14.))
+                                    .flex().flex_row().items_center().text_size(px(11.)).line_height(px(14.))
+                                    .text_color(theme.text_tertiary.opacity(0.85))
+                                    .when_some(emoji, |d, emoji| {
+                                        let label = emoji.clone();
+                                        d.child(div().id(("member-status-emoji", user_id.0)).flex_none().mr(px(3.))
+                                            .flx("app.custom-status-display.custom-status-display.status-emoji-with-tooltip.tooltip")
+                                            .tooltip(move |window, cx| Tooltip::new(label.clone()).build(window, cx))
+                                            .child(match url {
+                                                Some(url) => img(url).size(px(12.)).into_any_element(),
+                                                None => div().child(emoji).into_any_element(),
+                                            }))
+                                    })
+                                    .flx("channel.compact-member-custom-status.tooltip")
+                                    .when(!text.is_empty(), |d| d.tooltip(move |window, cx| Tooltip::new(tooltip.clone()).build(window, cx)))
+                                    .child(div().min_w_0().truncate().child(text)))
                             }),
                             ),
                     ),
             )
+            .flx("channel.member-list-item.button.context-menu")
+            .on_mouse_down(gpui_kit::MouseButton::Right, move |ev, _, cx| {
+                cx.stop_propagation();
+                let _ = context_view.update(cx, |v, cx| v.open_member_context_menu(user_id, ev.position, cx));
+            })
             .on_click(move |ev, window, cx| {
                 if !ev.modifiers().shift {
                     let pos = ev.position();
@@ -529,7 +586,7 @@ mod tests {
         });
         let member = |id: u64, name: &str, roles: Value, status: &str| {
             json!({"member": {"user": {"id": id.to_string(), "username": name}, "roles": roles,
-                              "presence": {"status": status}}})
+                              "presence": {"status": status, "custom_status": {"text": " working\nnow ", "emoji_name": "🔥"}}}})
         };
         state.apply(&Dispatch {
             t: "GUILD_MEMBER_LIST_UPDATE".to_owned(),
@@ -556,6 +613,7 @@ mod tests {
         let MemberRowView::Member(alice) = &panel.rows[&1] else { panic!("alice row") };
         assert_eq!(alice.color, Some(rgb(0xff0000).into()), "highest positioned colored role");
         assert_eq!(alice.status, Status::Dnd);
+        assert_eq!(alice.custom_status.as_ref().map(|(text, emoji, _)| (text.as_ref(), emoji.as_deref())), Some(("working now", Some("🔥"))));
         let MemberRowView::Member(bob) = &panel.rows[&3] else { panic!("bob row") };
         assert_eq!(bob.color, None);
         assert_eq!(page_ranges(250, 260, &MemberPanel { loaded: true, total: 1000, rows: BTreeMap::new() }),

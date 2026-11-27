@@ -308,11 +308,16 @@ impl ClientView {
             || self.user_area_popout_open
             || self.guild_header_popout_open
             || self.voice_popout.is_some()
+            || self.voice_context_menu.is_some()
     }
 
     /// Closes the non-overlay popouts (user area, guild header, voice) and returns
     /// focus to the composer; false when none was open.
     pub(super) fn close_floating_popouts(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        if self.voice_context_menu.take().is_some() {
+            cx.notify();
+            return true;
+        }
         if !(self.user_area_popout_open || self.guild_header_popout_open || self.voice_popout.is_some()) {
             return false;
         }

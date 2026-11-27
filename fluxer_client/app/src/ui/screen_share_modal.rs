@@ -186,12 +186,15 @@ pub fn render(
             let src_id = src.id;
             let src_kind = src.kind.clone();
             let title = src.title.clone();
+            let preview_group = SharedString::from(format!("screen-share-source-preview-{idx}"));
             source_list = source_list.child(
                 div()
                     .id(("screen-share-source-item", idx))
                     .role(Role::Button)
                     .aria_label(title.clone())
                     .debug_selector(move || format!("screen-share-source-{idx}"))
+                    .group(preview_group.clone())
+                    .relative()
                     .px_3()
                     .py_2()
                     .rounded(px(6.))
@@ -219,6 +222,24 @@ pub fn render(
                             })
                             .text_color(theme.foreground)
                             .child(title),
+                    )
+                    .child(
+                        div()
+                            .absolute()
+                            .inset_0()
+                            .flex()
+                            .items_center()
+                            .justify_end()
+                            .px_2()
+                            .opacity(0.)
+                            .group_hover(preview_group, |style| style.opacity(1.))
+                            .flx("voice.screen-share-picker-modal.picker-card-button.picker-card-preview.preview-overlay")
+                            .child(div().rounded(px(4.)).px_2().py_0p5()
+                                .bg(theme.background_tertiary)
+                                .text_xs()
+                                .text_color(theme.foreground)
+                                .flx("voice.screen-share-picker-modal.picker-card-button.picker-card-preview.preview-action")
+                                .child(l10n::tr("Select source"))),
                     ),
             );
         }

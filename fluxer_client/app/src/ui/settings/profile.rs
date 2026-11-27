@@ -1,4 +1,5 @@
 use super::*;
+use gpui_kit::component::tooltip::Tooltip;
 
 pub(super) fn render_profile_tab(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
     let (avatar_el, display_name, user_id_str, banner_rgb, banner_url) = match &view.user {
@@ -100,22 +101,46 @@ pub(super) fn render_profile_tab(view: &ClientView, theme: &Theme, cx: &mut Cont
                                 .child(
                                     div()
                                         .flex()
-                                        .flex_col()
-                                        .gap_1()
+                                        .items_center()
+                                        .justify_between()
+                                        .gap_2()
                                         .min_w_0()
                                         .child(
                                             div()
-                                                .text_base()
-                                                .font_weight(FontWeight::BOLD)
-                                                .truncate()
-                                                .child(display_name),
+                                                .flex()
+                                                .flex_col()
+                                                .gap_1()
+                                                .min_w_0()
+                                                .child(
+                                                    div()
+                                                        .text_base()
+                                                        .font_weight(FontWeight::BOLD)
+                                                        .truncate()
+                                                        .child(display_name),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .text_xs()
+                                                        .text_color(theme.muted_foreground)
+                                                        .child(format!("ID: {user_id_str}")),
+                                                ),
                                         )
-                                        .child(
+                                        .when(view.user.is_some(), |el| el.child(
                                             div()
-                                                .text_xs()
-                                                .text_color(theme.muted_foreground)
-                                                .child(format!("ID: {user_id_str}")),
-                                        ),
+                                                .id("settings-profile-preview-message-tooltip")
+                                                .flex_none()
+                                                .flx("user.profile.profile-preview.tooltip")
+                                                .tooltip(|window, cx| {
+                                                    Tooltip::new(l10n::tr("You can't message yourself")).build(window, cx)
+                                                })
+                                                .child(
+                                                    Button::new("settings-profile-preview-message")
+                                                        .primary()
+                                                        .small()
+                                                        .label(l10n::tr("Message"))
+                                                        .disabled(true),
+                                                ),
+                                        )),
                                 )
                                 .child(
                                     div()

@@ -109,7 +109,8 @@ pub struct ChannelItem {
     pub dm_user_id: Option<Snowflake>,
     /// Primary DM recipient avatar URL when `media` endpoint and avatar hash exist.
     pub dm_avatar_url: Option<SharedString>,
-    /// Primary DM recipient presence status (1:1 DM only).
+    pub is_group_dm: bool,
+    /// Peer presence for a 1:1 DM, or the highest visible presence in a group DM.
     pub dm_status: Option<Status>,
 }
 
@@ -420,6 +421,9 @@ fn channel_item(
         .map(Into::into);
     let dm_status = match channel.kind {
         ChannelKind::Dm => dm_recipient.map(|u| state.presence_status(u.id)),
+        ChannelKind::GroupDm => group_dm_status(
+            channel.recipients.iter().map(|user| state.presence_status(user.id)),
+        ),
         _ => None,
     };
     ChannelItem {
@@ -435,8 +439,22 @@ fn channel_item(
         muted: state.is_channel_muted(channel.guild_id, channel.id, now_ms),
         dm_user_id,
         dm_avatar_url,
+        is_group_dm: channel.kind == ChannelKind::GroupDm,
         dm_status,
     }
+}
+
+fn group_dm_status(statuses: impl IntoIterator<Item = Status>) -> Option<Status> {
+    statuses
+        .into_iter()
+        .filter_map(|status| match status {
+            Status::Online => Some((3, status)),
+            Status::Idle => Some((2, status)),
+            Status::Dnd => Some((1, status)),
+            Status::Invisible | Status::Offline => None,
+        })
+        .max_by_key(|(priority, _)| *priority)
+        .map(|(_, status)| status)
 }
 
 /// Channel name; DMs without a name use their recipients' display names.
@@ -819,6 +837,14 @@ pub fn avatar_url(media: &str, user: &User) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn group_dm_presence_prefers_visible_active_members() {
+        use super::{Status, group_dm_status};
+
+        assert_eq!(group_dm_status([Status::Invisible, Status::Offline]), None);
+        assert_eq!(group_dm_status([Status::Dnd, Status::Idle]), Some(Status::Idle));
+        assert_eq!(group_dm_status([Status::Idle, Status::Online]), Some(Status::Online));
+    }
     use chrono::FixedOffset;
     use fluxer_client_core::Dispatch;
     use fluxer_client_core::state::LoadMode;

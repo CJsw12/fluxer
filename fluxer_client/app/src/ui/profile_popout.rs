@@ -3,19 +3,22 @@
 
 use fluxer_client_core::rest::UserProfileFull;
 use fluxer_client_core::state::{ChannelKind, ClientState, RelationshipKind, Snowflake};
-use gpui_kit::component::Sizable as _;
+use gpui_kit::component::{Icon, Sizable as _};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::{Escape, Input, InputEvent, InputState};
+use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::{
-    AnyElement, AppContext as _, Context, Entity, FontWeight, ObjectFit, Pixels, Point, SharedString, Subscription,
-    Window, div, img, prelude::*, px, rgb,
+    AnyElement, AppContext as _, ClipboardItem, Context, Entity, FontWeight, MouseButton, MouseDownEvent, ObjectFit,
+    Pixels, Point, SharedString, Subscription, Window, div, img, prelude::*, px, rgb,
 };
 
 use crate::client_view::ClientView;
+use crate::icons::AppIcon;
 use crate::parity_probe::FlxExt as _;
 use crate::profile::{ProfileCard, build_profile_card};
 use crate::theme::Theme;
 use crate::ui::avatar::{AvatarSpec, render_avatar};
+use crate::ui::media_context_menu::{MediaContextMenuTarget, MediaMenuKind};
 use crate::ui::moderation_modal::ModerationKind;
 use crate::ui::overlay::Overlay;
 use crate::ui::{l10n, overlay};
@@ -41,6 +44,7 @@ pub struct ProfilePopout {
     pub can_kick: bool,
     pub can_ban: bool,
     pub is_timed_out: bool,
+    mutual_guild_menu: Option<(Snowflake, Point<Pixels>)>,
     pub _subscription: Subscription,
 }
 
@@ -132,6 +136,7 @@ impl ClientView {
             can_kick,
             can_ban,
             is_timed_out,
+            mutual_guild_menu: None,
             _subscription: subscription,
         });
         if self.profile_in_flight.insert((user_id, guild_id)) {
@@ -250,17 +255,39 @@ impl ClientView {
         self.close_overlay(window, cx);
         self.select_place(Place::Guild(guild_id), cx);
     }
+
+    fn close_profile_guild_menu(&mut self, cx: &mut Context<Self>) -> bool {
+        if let Overlay::Profile(pop) = &mut self.overlay
+            && pop.mutual_guild_menu.take().is_some()
+        {
+            cx.notify();
+            return true;
+        }
+        false
+    }
 }
 
 pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) -> AnyElement {
     let card = &pop.card;
     let banner = div()
+        .id("profile-banner")
         .relative()
         .w_full()
         .h(px(BANNER_HEIGHT))
         .rounded_t(px(8.))
         .overflow_hidden()
         .bg(rgb(card.banner_color))
+        .flx("user.profile.profile-card.profile-card-banner.banner-wrapper.banner-context-menu")
+        .when_some(card.banner_url.clone(), |el, url| {
+            el.on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, ev: &MouseDownEvent, window, cx| {
+                    cx.stop_propagation();
+                    let target = MediaContextMenuTarget::new(MediaMenuKind::Image, url.clone());
+                    this.open_media_context_menu_at(target, ev.position, window, cx);
+                }),
+            )
+        })
         .children(card.banner_url.clone().map(|url| {
             img(url)
                 .id(SharedString::from(format!("profile-banner-{}", card.user_id.0)))
@@ -294,6 +321,8 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
         .child(banner)
         .child(avatar_el);
 
+    let display_name_tip = card.display_name.clone();
+    let user_id_text = card.user_id.to_string();
     let mut body = div()
         .px_4()
         .pb_4()
@@ -311,7 +340,17 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
                         .flex_row()
                         .items_center()
                         .gap_2()
-                        .child(div().text_base().font_weight(FontWeight::BOLD).child(card.display_name.clone()))
+                        .child(
+                            div()
+                                .id("profile-display-name")
+                                .min_w_0()
+                                .truncate()
+                                .text_base()
+                                .font_weight(FontWeight::BOLD)
+                                .flx("user.profile.profile-card.profile-card-user-info.display-name-tooltip")
+                                .tooltip(move |window, cx| Tooltip::new(display_name_tip.clone()).build(window, cx))
+                                .child(card.display_name.clone()),
+                        )
                         .when(card.bot, |d| {
                             d.child(
                                 div()
@@ -324,7 +363,27 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
                             )
                         }),
                 )
-                .child(div().text_xs().text_color(theme.muted_foreground).child(card.username_tag.clone()))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .child(div().text_xs().text_color(theme.muted_foreground).child(card.username_tag.clone()))
+                        .child(
+                            div()
+                                .id("profile-copy-user-id")
+                                .size(px(16.))
+                                .flex_none()
+                                .cursor_pointer()
+                                .aria_label(l10n::tr("Copy user ID"))
+                                .flx("user.profile.profile-card.profile-card-actions.tooltip--2")
+                                .tooltip(|window, cx| Tooltip::new(l10n::tr("Copy user ID")).build(window, cx))
+                                .on_click(move |_, _, cx| {
+                                    cx.write_to_clipboard(ClipboardItem::new_string(user_id_text.clone()));
+                                })
+                                .child(Icon::new(AppIcon::Snowflake).with_size(px(16.)).text_color(theme.muted_foreground)),
+                        ),
+                )
                 .children(
                     card.pronouns
                         .as_ref()
@@ -682,6 +741,18 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
                         .rounded(px(4.))
                         .cursor_pointer()
                         .hover(|s| s.bg(theme.muted))
+                        .flx("user.user-profile-modal.render-mutual-communities-groups-list.mutual-guild-item.guild-click")
+                        .flx("user.user-profile-modal.mutual-guild-item.button.click")
+                        .on_mouse_down(
+                            MouseButton::Right,
+                            cx.listener(move |this, ev: &MouseDownEvent, _, cx| {
+                                cx.stop_propagation();
+                                if let Overlay::Profile(pop) = &mut this.overlay {
+                                    pop.mutual_guild_menu = Some((guild_id, ev.position));
+                                    cx.notify();
+                                }
+                            }),
+                        )
                         .on_click(cx.listener(move |this, _, window, cx| this.profile_open_guild(guild_id, window, cx)))
                         .child(
                             div()
@@ -699,6 +770,7 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
         );
     }
 
+    let note_tip = if pop.saved_note.is_empty() { l10n::tr("Add note") } else { pop.saved_note.clone() };
     body = body.child(
         div()
             .flex()
@@ -706,9 +778,13 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
             .gap_1()
             .child(
                 div()
+                    .id("profile-note-tooltip")
                     .text_xs()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(theme.muted_foreground)
+                    .flx("user.profile.profile-card.profile-card-actions.focus-ring")
+                    .flx("user.profile.profile-card.profile-card-actions.tooltip")
+                    .tooltip(move |window, cx| Tooltip::new(note_tip.clone()).build(window, cx))
                     .child(l10n::tr("Note")),
             )
             .child(Input::new(&pop.note_input)),
@@ -730,13 +806,48 @@ pub fn render(pop: &ProfilePopout, theme: &Theme, cx: &mut Context<ClientView>) 
         .flex_col()
         .capture_action(cx.listener(|this, _: &Escape, window, cx| {
             cx.stop_propagation();
-            this.close_overlay(window, cx);
+            if !this.close_profile_guild_menu(cx) {
+                this.close_overlay(window, cx);
+            }
         }))
         .child(header_block)
         .child(body);
 
     let view = cx.weak_entity();
-    overlay::popover(content, pop.anchor, theme, move |window, cx| {
+    let profile = overlay::popover(content, pop.anchor, theme, move |window, cx| {
         let _ = view.update(cx, |v, cx| v.close_overlay(window, cx));
-    })
+    });
+    if let Some((guild_id, anchor)) = pop.mutual_guild_menu {
+        let view = cx.weak_entity();
+        let menu = div()
+            .id("profile-mutual-guild-menu")
+            .w(px(208.))
+            .p_1()
+            .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
+            .on_mouse_down_out(cx.listener(|this, ev: &MouseDownEvent, _, cx| {
+                if ev.button == MouseButton::Right {
+                    this.close_profile_guild_menu(cx);
+                }
+            }))
+            .flx("ui.action-menu.guild-context-menu.data-menu-renderer")
+            .child(
+                Button::new("profile-copy-community-id")
+                    .ghost()
+                    .small()
+                    .label(l10n::tr("Copy community ID"))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        cx.write_to_clipboard(ClipboardItem::new_string(guild_id.to_string()));
+                        this.close_profile_guild_menu(cx);
+                    })),
+            );
+        return div()
+            .absolute()
+            .inset_0()
+            .child(profile)
+            .child(overlay::popover(menu, anchor, theme, move |_, cx| {
+                let _ = view.update(cx, |v, cx| v.close_profile_guild_menu(cx));
+            }))
+            .into_any_element();
+    }
+    profile
 }

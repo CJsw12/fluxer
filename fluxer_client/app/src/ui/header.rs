@@ -11,7 +11,7 @@ use crate::client_view::{ClientView, HeaderHoverTarget};
 use crate::icons::AppIcon;
 use crate::parity_probe::FlxExt as _;
 use crate::theme::Theme;
-use crate::ui::avatar::{AvatarSpec, render_avatar_tagged};
+use crate::ui::avatar::{AvatarSpec, render_clickable_avatar_tagged};
 use crate::ui::search_panel::SearchScopeChoice;
 use crate::ui::{l10n, rail_tooltip};
 use crate::updater::UpdateStatus;
@@ -182,7 +182,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                         }),
                                     )
                                     .flx("channel.channel-header.desktop-button.open-user-profile")
-                                    .child(render_avatar_tagged(
+                                    .child(render_clickable_avatar_tagged(
                                         AvatarSpec {
                                             user_id: dm_uid,
                                             avatar_url: peer.dm_avatar_url.clone(),

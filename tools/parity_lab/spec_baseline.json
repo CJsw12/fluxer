@@ -5,7 +5,7 @@
     "markdown": {
       "spec": "target/parity-tmp/md.1280.spec.json",
       "max_deltas": 10,
-      "max_missing": 121,
+      "max_missing": 120,
       "ignore": [
         "app.native-titlebar.wordmark|width",
         "channel.channel-header-components.channel-header-icon.button-icon|x"
@@ -108,14 +108,14 @@
         },
         "light-theme": {
           "deltas": 11,
-          "missing": 132
+          "missing": 131
         },
         "threads-panel": {
           "deltas": 3,
           "missing": 10
         },
         "voice-channel": {
-          "deltas": 4,
+          "deltas": 3,
           "missing": 37
         }
       },

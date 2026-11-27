@@ -40,12 +40,18 @@
     "link": "fluxer://scene/voice/1572284491404148736/1572284491404148740"
    },
    {
-    "wait_ms": 2000
+    "link": "fluxer://scene/voice-mute/on"
+   },
+   {
+    "wait_ms": 4000
    }
   ],
   "rust_restore": [
    {
     "link": "fluxer://scene/voice-leave"
+   },
+   {
+    "link": "fluxer://scene/voice-mute/off"
    },
    {
     "wait_ms": 500

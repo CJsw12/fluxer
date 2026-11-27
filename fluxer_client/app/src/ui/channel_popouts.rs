@@ -139,6 +139,7 @@ pub enum ChannelPopoutKind {
     ExploreLanguage,
     /// Media right-click context menu (`MediaContextMenu`).
     MediaContextMenu(MediaContextMenu),
+    MemberContextMenu(Snowflake),
 }
 
 pub struct ChannelPopout {
@@ -159,11 +160,27 @@ impl ChannelPopoutKind {
             Self::PersonalNotesMenu { .. } => "personal-notes-menu",
             Self::ExploreLanguage => "explore-language",
             Self::MediaContextMenu(_) => "media-context-menu",
+            Self::MemberContextMenu(_) => "member-context-menu",
         }
     }
 }
 
 impl ClientView {
+    pub(crate) fn open_member_context_menu(
+        &mut self,
+        user_id: Snowflake,
+        anchor: Point<Pixels>,
+        cx: &mut Context<Self>,
+    ) {
+        self.prepare_overlay_replace(cx);
+        self.autocomplete = None;
+        self.overlay = Overlay::ChannelPopout(ChannelPopout {
+            kind: ChannelPopoutKind::MemberContextMenu(user_id),
+            anchor,
+        });
+        cx.notify();
+    }
+
     fn toggle_channel_popout_key(
         &mut self,
         key: &'static str,
@@ -594,6 +611,31 @@ pub fn render(
                 ),
             )
         }
+        ChannelPopoutKind::MemberContextMenu(user_id) => {
+            let state = view.backend.state();
+            let is_other = state.current_user_id() != Some(*user_id);
+            let can_message = is_other
+                && state.relationship_kind(*user_id)
+                    != Some(fluxer_client_core::state::RelationshipKind::Blocked);
+            let mention = view
+                .selected_channel
+                .filter(|&id| view.can_send && state.can_send_messages(id))
+                .and_then(|_| {
+                    let member = view.current_guild_id()
+                        .and_then(|guild| state.members.get(&guild)?.get(user_id));
+                    let user = member.map(|member| &member.user).or_else(|| state.users.get(user_id))?;
+                    Some(member.and_then(|member| member.nick.as_deref())
+                        .filter(|name| !name.is_empty())
+                        .unwrap_or_else(|| user.display_name())
+                        .to_owned())
+                });
+            (
+                208.,
+                44. + 32. * (usize::from(can_message) + usize::from(mention.is_some()) + usize::from(is_other)) as f32,
+                "ui.action-menu.context-menu.popup",
+                render_member_menu(*user_id, pop.anchor, mention, can_message, is_other, hover_bg, cx),
+            )
+        }
     };
 
     let vw = f32::from(viewport.width);
@@ -609,6 +651,7 @@ pub fn render(
         // Right-click message / personal-notes / media menus open at cursor clamped within viewport.
         ChannelPopoutKind::MessageMenu { at_cursor: true, .. }
         | ChannelPopoutKind::PersonalNotesMenu { .. }
+        | ChannelPopoutKind::MemberContextMenu(_)
         | ChannelPopoutKind::MediaContextMenu(_) => {
             (Anchor::TopLeft, ax.clamp(12., (vw - width - 12.).max(12.)), ay.clamp(12., (vh - height - 12.).max(12.)))
         }
@@ -764,6 +807,68 @@ pub fn render(
         .top_0()
         .left_0()
         .child(anchored().position(gpui_kit::point(px(final_left), px(top))).anchor(final_anchor).child(anchored_child))
+        .into_any_element()
+}
+
+fn render_member_menu(
+    user_id: Snowflake,
+    anchor: Point<Pixels>,
+    mention: Option<String>,
+    can_message: bool,
+    can_note: bool,
+    hover_bg: gpui_kit::Hsla,
+    cx: &mut Context<ClientView>,
+) -> AnyElement {
+    div()
+        .p(px(5.))
+        .child(
+            context_menu_item("member-menu-profile".to_owned(), hover_bg)
+                .child(l10n::tr("Profile"))
+                .on_click(cx.listener(move |view, _, window, cx| {
+                    view.open_profile(user_id, view.current_guild_id(), anchor, window, cx);
+                })),
+        )
+        .when_some(mention, |menu, name| {
+            menu.child(
+                context_menu_item("member-menu-mention".to_owned(), hover_bg)
+                    .child(l10n::tr("Mention"))
+                    .on_click(cx.listener(move |view, _, window, cx| {
+                        view.close_overlay(window, cx);
+                        let mention = composer_text::Insert::Token {
+                            display: format!("@{name}"),
+                            wire: format!("<@{user_id}>"),
+                        };
+                        composer_text::insert_at_cursor(&view.composer, &mention, window, cx);
+                    })),
+            )
+        })
+        .when(can_message, |menu| {
+            menu.child(
+                context_menu_item("member-menu-message".to_owned(), hover_bg)
+                    .child(l10n::tr("Message"))
+                    .on_click(cx.listener(move |view, _, window, cx| {
+                        view.close_overlay(window, cx);
+                        let existing = crate::ui::profile_popout::find_1on1_dm(&view.backend.state(), user_id);
+                        match existing {
+                            Some(channel_id) => view.open_channel(None, channel_id, cx),
+                            None => view.backend.open_dm(user_id),
+                        }
+                    })),
+            )
+        })
+        .when(can_note, |menu| {
+            menu.child(
+                context_menu_item("member-menu-note".to_owned(), hover_bg)
+                    .child(l10n::tr("Add Note"))
+                    .on_click(cx.listener(move |view, _, window, cx| {
+                        view.open_profile(user_id, view.current_guild_id(), anchor, window, cx);
+                        if let Overlay::Profile(pop) = &view.overlay {
+                            let focus = pop.note_input.read(cx).focus_handle(cx);
+                            window.defer(cx, move |window, cx| focus.focus(window, cx));
+                        }
+                    })),
+            )
+        })
         .into_any_element()
 }
 

@@ -3,20 +3,238 @@
 //! rendered inside the top section (`.voiceConnectionWrapper`) of the unified
 //! bottom-left `UserArea` card whenever a voice session is active or failed.
 
+use fluxer_client_core::state::Snowflake;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::switch::Switch;
 use gpui_kit::component::tooltip::Tooltip;
 use gpui_kit::component::{Icon, Sizable as _};
-use gpui_kit::{Context, Div, FontWeight, Hsla, MouseButton, Role, SharedString, Stateful, div, prelude::*, px};
+use gpui_kit::{
+    AnyElement, App, Context, Div, FontWeight, Hsla, MouseButton, MouseDownEvent, Pixels, Point, Role,
+    SharedString, Size, Stateful, Window, div, prelude::*, px,
+};
 
 use super::avatar::{AvatarSpec, render_avatar};
-use super::l10n;
+use super::{l10n, overlay};
 use crate::backend::voice::{VoiceConnectionState, VoiceTrackSource};
 use crate::client_view::{ClientView, VoicePopoutKind};
 use crate::icons::AppIcon;
 use crate::parity_probe::FlxExt as _;
 use crate::settings_model::SettingsEffect;
 use crate::theme::Theme;
+
+#[derive(Clone, Copy)]
+pub(crate) enum VoiceMenuKind {
+    Connection,
+    Camera,
+    ScreenShare,
+    ParticipantTile(Snowflake),
+    ParticipantAvatar(Snowflake),
+    DisableScreenSharePopouts,
+    EnableScreenSharePopouts,
+    ConfirmDisableScreenSharePopouts,
+}
+
+pub(crate) struct VoiceContextMenu {
+    kind: VoiceMenuKind,
+    anchor: Point<Pixels>,
+}
+
+pub(crate) fn open_context_menu(
+    kind: VoiceMenuKind,
+    cx: &Context<ClientView>,
+) -> impl Fn(&MouseDownEvent, &mut Window, &mut App) + 'static + use<> {
+    let handle = cx.entity().downgrade();
+    move |event: &MouseDownEvent, _: &mut Window, cx: &mut App| {
+        cx.stop_propagation();
+        let _ = handle.update(cx, |view, cx| {
+            view.user_area_popout_open = false;
+            view.user_area_submenu = None;
+            view.guild_header_popout_open = false;
+            view.voice_popout = None;
+            view.voice_context_menu = Some(VoiceContextMenu { kind, anchor: event.position });
+            cx.notify();
+        });
+    }
+}
+
+fn close_context_menu(view: &mut ClientView, cx: &mut Context<ClientView>) {
+    view.voice_context_menu = None;
+    cx.notify();
+}
+
+pub(crate) fn render_context_menu(
+    view: &ClientView,
+    viewport: Size<Pixels>,
+    theme: &Theme,
+    cx: &mut Context<ClientView>,
+) -> Option<AnyElement> {
+    let menu = view.voice_context_menu.as_ref()?;
+    let width = px(280.).min((viewport.width - px(18.)).max(px(1.)));
+    let anchor = menu.anchor;
+    let handle = cx.entity().downgrade();
+    let dismiss = move |_: &mut Window, cx: &mut App| {
+        let _ = handle.update(cx, close_context_menu);
+    };
+    let row = |id: &'static str, tag, label, checked: Option<bool>| {
+        div()
+            .id(id)
+            .role(Role::Button)
+            .aria_label(l10n::tr(label))
+            .min_h(px(30.))
+            .px_2()
+            .py_1()
+            .rounded(px(4.))
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap_2()
+            .cursor_pointer()
+            .hover(|style| style.bg(theme.control_hover_bg))
+            .flx(tag)
+            .child(div().min_w_0().child(l10n::tr(label)))
+            .when_some(checked, |d, checked| {
+                d.child(if checked { "☑" } else { "☐" })
+            })
+    };
+
+    let content = div()
+        .id("voice-context-menu")
+        .w(width)
+        .max_h((viewport.height - px(18.)).max(px(1.)))
+        .overflow_y_scroll()
+        .p_1()
+        .text_sm()
+        .text_color(theme.foreground);
+
+    let content = match menu.kind {
+        VoiceMenuKind::Connection => content
+            .flx("voice.voice-connection-status.handle-voice-connection-status-context-menu.menu-group")
+            .child(row("voice-show-call-avatars", "voice.voice-connection-status.handle-voice-connection-status-context-menu.checkbox-item", "Show call avatars", Some(view.voice_show_call_avatars))
+                .on_click(cx.listener(|view, _, _, cx| {
+                    view.voice_show_call_avatars = !view.voice_show_call_avatars;
+                    close_context_menu(view, cx);
+                })))
+            .child(row("voice-show-connection-id", "voice.voice-connection-status.handle-voice-connection-status-context-menu.checkbox-item--2", "Show connection ID", Some(view.voice_show_connection_id))
+                .on_click(cx.listener(|view, _, _, cx| {
+                    view.voice_show_connection_id = !view.voice_show_connection_id;
+                    close_context_menu(view, cx);
+                }))),
+        VoiceMenuKind::Camera => content
+            .flx("voice.voice-connection-status.open-camera-settings-menu.voice-camera-settings-menu")
+            .child(row("voice-camera-device", "voice.voice-settings-menus.voice-camera-settings-menu.voice-camera-device-submenu", "Camera", None)
+                .on_click(cx.listener(|view, _, _, cx| {
+                    // TODO(backlog): Select an actual capture device when camera publishing is supported.
+                    close_context_menu(view, cx);
+                })))
+            .child(row("voice-mirror-camera", "voice.voice-settings-menus.voice-camera-settings-menu.checkbox-item.mirror-camera", "Mirror camera", Some(view.prefs.data.mirror_camera))
+                .on_click(cx.listener(|view, _, window, cx| {
+                    close_context_menu(view, cx);
+                    view.apply_settings_effect(SettingsEffect::MirrorCameraChanged(!view.prefs.data.mirror_camera), window, cx);
+                })))
+            .child(row("voice-preview-camera", "voice.voice-settings-menus.voice-camera-settings-menu.menu-item.close", "Preview camera", None)
+                .on_click(cx.listener(|view, _, _, cx| {
+                    // TODO(backlog): Display a preview once the camera capture path is available.
+                    close_context_menu(view, cx);
+                })))
+            .child(row("voice-camera-video-settings", "voice.voice-settings-menus.voice-camera-settings-menu.menu-item.close--2", "Video settings", None)
+                .on_click(cx.listener(|view, _, window, cx| {
+                    close_context_menu(view, cx);
+                    view.open_voice_settings(window, cx);
+                }))),
+        VoiceMenuKind::ScreenShare => content
+            .flx("voice.voice-connection-status.open-screen-share-menu.active-screen-share-menu")
+            .child(row("voice-share-stop", "voice.active-screen-share-menu.stop", "Stop streaming", None)
+                .text_color(theme.danger)
+                .on_click(cx.listener(|view, _, _, cx| {
+                    close_context_menu(view, cx);
+                    if view.voice.self_stream {
+                        view.handle_screen_share_button(cx);
+                    }
+                })))
+            .child(row("voice-share-change", "voice.active-screen-share-menu.change", "Change stream", None)
+                .on_click(cx.listener(|view, _, _, cx| {
+                    close_context_menu(view, cx);
+                    view.open_screen_share_picker(cx);
+                }))),
+        VoiceMenuKind::ParticipantTile(user_id) | VoiceMenuKind::ParticipantAvatar(user_id) => {
+            let is_self = view.user.as_ref().is_some_and(|user| user.id == user_id);
+            let guild_id = view.voice.guild_id;
+            content
+                .flx(match menu.kind {
+                    VoiceMenuKind::ParticipantTile(_) => "voice.voice-participant-tile.handle-context-menu.voice-participant-context-menu",
+                    _ => "voice.voice-participant-avatar-list.handle-context-menu.voice-participant-context-menu",
+                })
+                .child(row("voice-participant-profile", "voice.participant-context-menu.view-profile", "View Profile", None)
+                    .on_click(cx.listener(move |view, _, window, cx| {
+                        close_context_menu(view, cx);
+                        view.open_profile(user_id, guild_id, anchor, window, cx);
+                    })))
+                .when(is_self, |content| {
+                    content
+                        .child(row("voice-participant-mic", "voice.participant-context-menu.mute-microphone", "Mute microphone", Some(view.voice.effective_muted()))
+                            .on_click(cx.listener(|view, _, _, cx| {
+                                close_context_menu(view, cx);
+                                view.toggle_voice_mute(cx);
+                            })))
+                        .child(row("voice-participant-deafen", "voice.participant-context-menu.deafen", "Deafen", Some(view.voice.effective_deafened()))
+                            .on_click(cx.listener(|view, _, _, cx| {
+                                close_context_menu(view, cx);
+                                view.toggle_voice_deaf(cx);
+                            })))
+                })
+                .when(!is_self, |content| {
+                    content
+                        .child(row("voice-participant-volume", "voice.participant-context-menu.user-volume", "User volume", None)
+                            .on_click(cx.listener(|view, _, _, cx| {
+                                // TODO(backlog): Connect this control to per-user playback gain.
+                                close_context_menu(view, cx);
+                            })))
+                        .child(row("voice-participant-playback", "voice.participant-context-menu.mute-playback", "Mute playback", None)
+                            .on_click(cx.listener(|view, _, _, cx| {
+                                // TODO(backlog): Connect this control to per-user playback mute.
+                                close_context_menu(view, cx);
+                            })))
+                })
+        }
+        VoiceMenuKind::DisableScreenSharePopouts => content
+            .flx("voice.pi-p-overlay.context-menu.menu-group")
+            .child(row("voice-pip-disable", "voice.pi-p-overlay.context-menu.disable-screen-share-pip.menu-item", "Disable screen share picture-in-picture popouts", None)
+                .on_click(cx.listener(move |view, _, _, cx| {
+                    view.voice_context_menu = Some(VoiceContextMenu {
+                        kind: VoiceMenuKind::ConfirmDisableScreenSharePopouts,
+                        anchor,
+                    });
+                    cx.notify();
+                }))),
+        VoiceMenuKind::EnableScreenSharePopouts => content
+            .child(row("voice-pip-enable", "voice.pi-p-overlay.context-menu.enable-screen-share-pip.menu-item", "Enable screen share picture-in-picture popouts", None)
+                .on_click(cx.listener(|view, _, _, cx| {
+                    view.voice_screen_share_pip_enabled = true;
+                    close_context_menu(view, cx);
+                }))),
+        VoiceMenuKind::ConfirmDisableScreenSharePopouts => {
+            let confirmation = div()
+                .p_4()
+                .flex()
+                .flex_col()
+                .gap_3()
+                .flx("voice.disable-screen-share-pi-p-confirm-modal.modal-root")
+                .child(div().font_weight(FontWeight::SEMIBOLD).child(l10n::tr("Disable screen share picture-in-picture popouts?")))
+                .child(div().text_sm().child(l10n::tr("The stream will move to the call view. You can turn popouts back on from the stream’s context menu.")))
+                .child(div().flex().justify_end().gap_2()
+                    .child(Button::new("voice-pip-cancel").label(l10n::tr("Cancel"))
+                        .on_click(cx.listener(|view, _, _, cx| close_context_menu(view, cx))))
+                    .child(Button::new("voice-pip-confirm").primary().label(l10n::tr("Disable popouts"))
+                        .on_click(cx.listener(|view, _, _, cx| {
+                            view.voice_screen_share_pip_enabled = false;
+                            close_context_menu(view, cx);
+                            view.open_voice_stage(cx);
+                        }))));
+            return Some(overlay::modal(confirmation, theme, dismiss));
+        }
+    };
+    Some(overlay::popover(content, anchor, theme, dismiss))
+}
 
 /// Renders the 3-bar signal strength indicator (`SignalStrengthIcon.tsx`).
 fn render_signal_strength_icon(color: Hsla) -> Stateful<Div> {
@@ -71,11 +289,28 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
         .and_then(|id| view.voice_guild_name(view.voice.guild_id, id));
     let is_connected = view.voice.state == VoiceConnectionState::Connected;
     let is_failed = matches!(view.voice.state, VoiceConnectionState::Failed(_));
-    let share_label = if view.voice.self_stream {
+    let camera_label = if is_connected {
+        l10n::tr("Turn on camera")
+    } else {
+        l10n::tr("Waiting for connection...")
+    };
+    let share_label = if !is_connected {
+        l10n::tr("Waiting for connection...")
+    } else if view.voice.self_stream {
         l10n::tr("Configure or end screen share")
     } else {
-        l10n::tr("Share Screen")
+        l10n::tr("Share your screen")
     };
+    let processing_label = l10n::tr(match (
+        view.prefs.data.voice_processing_mode.as_str(),
+        view.prefs.data.voice_noise_suppression_backend.as_str(),
+    ) {
+        ("studio", _) => "Audio processing (direct input, raw)",
+        ("voice", _) => "Audio processing (focused voice)",
+        (_, "deep_filter" | "gtcrn" | "rnnoise") => "Audio processing (custom, enhanced)",
+        (_, "none") => "Audio processing (custom, no suppression)",
+        _ => "Audio processing (custom)",
+    });
     let share_audio_label = if view.voice.screen_share_audio {
         l10n::tr("Audio On")
     } else {
@@ -106,9 +341,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
             .role(Role::Region)
             .aria_label(l10n::tr("Voice connection"))
             .debug_selector(|| "voice-panel".to_owned())
-            .flx("app.user-area.user-area-inner.voice-connection-wrapper")
             .border_b_1()
             .border_color(theme.border)
+            .flx("app.user-area.user-area-inner.voice-connection-wrapper")
             .child(
                 div()
                     .flex()
@@ -146,6 +381,10 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                     .line_height(px(18.))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(status_color)
+                                    .when(!is_failed, |d| {
+                                        d.on_mouse_down(MouseButton::Right, open_context_menu(VoiceMenuKind::Connection, cx))
+                                            .flx("voice.voice-connection-status.voice-connection-status-inner.status-button.voice-connection-status-context-menu")
+                                    })
                                     .flx("voice.voice-connection-status.voice-connection-status-inner.focus-ring-wrapper")
                                     .child(status_text),
                             )
@@ -163,7 +402,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                             div()
                                                 .id("voice-noise-suppression-btn")
                                                 .role(Role::Button)
-                                                .aria_label(l10n::tr("Voice & audio settings"))
+                                                .aria_label(processing_label.clone())
+                                                .tooltip(move |window, cx| Tooltip::new(processing_label.clone()).build(window, cx))
                                                 .debug_selector(|| "voice-noise-suppression-btn".to_owned())
                                                 .size(px(32.))
                                                 .rounded(px(6.))
@@ -177,6 +417,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                                     this.toggle_voice_popout(VoicePopoutKind::Details, cx);
                                                 }))
                                                 .flx("voice.voice-connection-status.audio-processing-button.control-button.click")
+                                                .flx("voice.voice-connection-status.audio-processing-button.tooltip")
                                                 .child(
                                                     Icon::new(AppIcon::Waveform)
                                                         .with_size(px(20.))
@@ -226,11 +467,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                     .child(
                                         div()
                                             .id(if is_failed { "voice-dismiss-tooltip" } else { "voice-disconnect-tooltip" })
-                                            .flx(if is_failed {
-                                                "voice.voice-connection-status.failed-voice-connection-status.tooltip-dismiss"
-                                            } else {
-                                                "voice.voice-connection-status.voice-connection-status-inner.tooltip--2"
-                                            })
+                                            .when(is_failed, |d| d.flx("voice.voice-connection-status.failed-voice-connection-status.tooltip-dismiss"))
+                                            .when(!is_failed, |d| d.flx("voice.voice-connection-status.voice-connection-status-inner.tooltip--2"))
                                             .tooltip(move |window, cx| {
                                                 Tooltip::new(SharedString::from(if is_failed {
                                                     l10n::tr("Dismiss")
@@ -292,6 +530,9 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                                 .debug_selector(|| "voice-channel-source-link".to_owned())
                                                 .cursor_pointer()
                                                 .on_click(cx.listener(|this, _, _, cx| this.open_voice_stage(cx)))
+                                                .when(!is_failed, |d| {
+                                                    d.on_mouse_down(MouseButton::Right, open_context_menu(VoiceMenuKind::Connection, cx))
+                                                })
                                                 .flex()
                                                 .flex_row()
                                                 .items_center()
@@ -335,7 +576,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                         ),
                                 )
                             })
-                            .when(is_connected, |d| {
+                            .when(is_connected && view.voice_show_connection_id, |d| {
                                 let conn_text = view
                                     .voice
                                     .connection_id
@@ -420,7 +661,7 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                         .child(l10n::tr("Mic muted by permissions")),
                                 )
                             })
-                            .when(is_connected && !participants.is_empty(), |d| {
+                            .when(is_connected && view.voice_show_call_avatars && !participants.is_empty(), |d| {
                                 let mut stack = div()
                                     .id("voice-channel-avatar-stack")
                                     .debug_selector(|| "voice-channel-avatar-stack".to_owned())
@@ -442,8 +683,11 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                         && !member.mute
                                         && !member.self_deaf
                                         && !member.deaf;
+                                    let uid = member.user_id;
                                     stack = stack.child(
                                         div()
+                                            .id(("voice-channel-avatar", uid.0))
+                                            .on_mouse_down(MouseButton::Right, open_context_menu(VoiceMenuKind::ParticipantAvatar(uid), cx))
                                             .rounded_full()
                                             .when(speaking, |b| b.border_2().border_color(theme.status_online))
                                             .flx("voice.voice-participant-avatar-list.render-avatar.stack-avatar")
@@ -478,7 +722,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                     div()
                                         .id("voice-camera-btn")
                                         .role(Role::Button)
-                                        .aria_label(l10n::tr("Turn on camera"))
+                                        .aria_label(camera_label.clone())
+                                        .tooltip(move |window, cx| Tooltip::new(camera_label.clone()).build(window, cx))
                                         .debug_selector(|| "voice-camera-btn".to_owned())
                                         .flex_1()
                                         .h(px(32.))
@@ -491,11 +736,13 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                         .when(is_connected, |b| {
                                             b.cursor_pointer()
                                                 .hover(|s| s.bg(theme.control_hover_bg))
+                                                .on_mouse_down(MouseButton::Right, open_context_menu(VoiceMenuKind::Camera, cx))
                                                 .on_click(cx.listener(|this, _, window, cx| {
                                                     this.open_voice_settings(window, cx);
                                                 }))
                                         })
                                         .flx("voice.voice-connection-status.local-participant-controls.media-button.undefined")
+                                        .flx("voice.voice-connection-status.local-participant-controls.tooltip")
                                         .child(
                                             Icon::new(AppIcon::CameraSlash)
                                                 .with_size(px(20.))
@@ -506,7 +753,8 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                     div()
                                         .id("voice-share-btn")
                                         .role(Role::Button)
-                                        .aria_label(share_label)
+                                        .aria_label(share_label.clone())
+                                        .tooltip(move |window, cx| Tooltip::new(share_label.clone()).build(window, cx))
                                         .debug_selector(|| "voice-share-btn".to_owned())
                                         .flex_1()
                                         .h(px(32.))
@@ -533,8 +781,12 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                     this.handle_screen_share_button(cx);
                                                 }))
+                                                .when(view.voice.self_stream, |b| {
+                                                    b.on_mouse_down(MouseButton::Right, open_context_menu(VoiceMenuKind::ScreenShare, cx))
+                                                })
                                         })
                                         .flx("voice.voice-connection-status.local-participant-controls.media-button.undefined")
+                                        .flx("voice.voice-connection-status.local-participant-controls.tooltip--2")
                                         .child(
                                             Icon::new(AppIcon::MonitorPlay).with_size(px(20.)).text_color(if view.voice.self_stream {
                                                 theme.status_online
@@ -612,6 +864,15 @@ pub fn render(view: &ClientView, theme: &Theme, cx: &mut Context<ClientView>) ->
                         .flex()
                         .flex_col()
                         .gap_1p5()
+                        .when_some(view.voice.connection_id.as_ref().filter(|id| !id.is_empty()), |d, id| {
+                            let id = id.clone();
+                            d.child(div().flex().justify_between().gap_2().text_xs()
+                                .child(l10n::tr("Device"))
+                                .child(div().id("voice-details-device")
+                                    .tooltip(move |window, cx| Tooltip::new(id.clone()).build(window, cx))
+                                    .flx("voice.voice-connection-status.voice-details-popout.tooltip")
+                                    .child(l10n::tr("Desktop"))))
+                        })
                         .child(
                             div()
                                 .flex()

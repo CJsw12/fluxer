@@ -189,6 +189,8 @@ pub struct ClientView {
     pub(crate) reaction_picker: Option<Snowflake>,
     /// Message row under the pointer: only it shows the action bar.
     pub(crate) hovered_message: Option<Snowflake>,
+    /// Message row selected by keyboard message navigation/actions.
+    pub(crate) keyboard_message: Option<Snowflake>,
     /// For composer updates outside a window callback.
     pub(crate) window_handle: AnyWindowHandle,
     /// Own status (user panel dot); `user_settings.status`.
@@ -516,6 +518,7 @@ impl ClientView {
             _typing_timer: None,
             reaction_picker: None,
             hovered_message: None,
+            keyboard_message: None,
             window_handle: window.window_handle(),
             own_status: Status::Online,
             member_list_open: true,

@@ -57,6 +57,41 @@ impl ClientView {
         self.select_place(next.map_or(Place::Home, Place::Guild), cx);
     }
 
+    /// Ctrl+1..9: Home (slot 0) or the 1st..8th guild in rail order.
+    pub(crate) fn select_guild_slot(&mut self, slot: usize, cx: &mut Context<Self>) {
+        if slot == 0 {
+            self.select_place(Place::Home, cx);
+            return;
+        }
+        let guilds = nav::guilds(&self.backend.state());
+        if let Some(&guild_id) = guilds.get(slot - 1) {
+            self.select_place(Place::Guild(guild_id), cx);
+        }
+    }
+
+    /// Ctrl+Alt+Shift+V: jumps to the active voice call's guild/DM and opens the call view.
+    pub(crate) fn jump_to_current_call(&mut self, cx: &mut Context<Self>) {
+        let Some(channel_id) = self.voice.channel_id else { return };
+        let (guild_id, opens_pane) = {
+            let state = self.backend.state();
+            let Some(ch) = state.channels.get(&channel_id) else { return };
+            (ch.guild_id, opens_message_pane(ch.kind))
+        };
+        let place = guild_id.map_or(Place::Home, Place::Guild);
+        if self.place != place {
+            self.place = place;
+            if let Some(id) = guild_id {
+                self.last_guild = Some(id);
+                self.backend.subscribe_guild(id);
+            }
+        }
+        if opens_pane {
+            self.select_channel(channel_id, cx);
+        }
+        self.voice_stage_open = true;
+        self.refresh(cx);
+    }
+
     pub(crate) fn clear_selection(&mut self, cx: &mut Context<Self>) {
         self.cancel_ack();
         let old_channel = self.selected_channel.take();
@@ -64,6 +99,7 @@ impl ClientView {
         self.unread_anchor = None;
         self.pending_jump = None;
         self.highlighted_message = None;
+        self.keyboard_message = None;
         self.group_dm = None;
         self.group_dm_adding = false;
         self.autocomplete = None;

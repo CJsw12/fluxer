@@ -772,3 +772,132 @@ fn chat_keybinds_scroll_unread_and_inbox_read(cx: &mut TestAppContext) {
 
     drop(rt);
 }
+
+#[gpui_kit::test]
+fn nav_and_message_keybinds_and_composer_safety(cx: &mut TestAppContext) {
+    let rt = runtime();
+    let (backend, events) = backend(&rt);
+    let (view, cx) = open(cx, backend.clone(), events);
+
+    // 1. All 25 new actions (12 nav + 13 messages, excluding T3 message_delete) are registered and active.
+    let expected_actions = [
+        "nav_current_call",
+        "nav_guild_slot_1",
+        "nav_guild_slot_2",
+        "nav_guild_slot_3",
+        "nav_guild_slot_4",
+        "nav_guild_slot_5",
+        "nav_guild_slot_6",
+        "nav_guild_slot_7",
+        "nav_guild_slot_8",
+        "nav_guild_slot_9",
+        "nav_guild_tab_next",
+        "nav_guild_tab_prev",
+        "message_reply",
+        "message_reply_prev",
+        "message_reply_next",
+        "message_edit",
+        "message_edit_prev",
+        "message_edit_next",
+        "message_react",
+        "message_forward",
+        "message_pin",
+        "message_mark_unread",
+        "message_copy_text",
+        "message_speak",
+        "message_focus_textarea",
+    ];
+    for action in expected_actions {
+        assert!(crate::shortcuts::action_label(action).is_some(), "missing label for {action}");
+        assert!(view.read_with(cx, |v, _| v.should_run_builtin_shortcut(action)), "{action} not active");
+    }
+
+    // 2. Navigation: Ctrl+1..3 (slots) and Ctrl+Tab / Ctrl+Shift+Tab.
+    keys(cx, "ctrl-1");
+    assert_eq!(view.read_with(cx, |v, _| v.place), Place::Home);
+    keys(cx, "ctrl-2");
+    assert_eq!(view.read_with(cx, |v, _| v.place), Place::Guild(GUILD));
+    keys(cx, "ctrl-3");
+    assert_eq!(view.read_with(cx, |v, _| v.place), Place::Guild(SECOND));
+    keys(cx, "ctrl-shift-tab");
+    assert_eq!(view.read_with(cx, |v, _| v.place), Place::Guild(GUILD));
+    keys(cx, "ctrl-tab");
+    assert_eq!(view.read_with(cx, |v, _| v.place), Place::Guild(SECOND));
+
+    // nav_current_call: jumps to active voice channel's guild/call view.
+    view.update(cx, |v, _| {
+        v.voice.channel_id = Some(Snowflake(13));
+        v.voice_stage_open = false;
+    });
+    keys(cx, "ctrl-alt-shift-v");
+    assert_eq!(view.read_with(cx, |v, _| (v.place, v.voice_stage_open)), (Place::Guild(GUILD), true));
+    view.update(cx, |v, _| {
+        v.voice.channel_id = None;
+        v.voice_stage_open = false;
+    });
+
+    // Return to GENERAL with two known messages (Alice + Me) for message cursor tests.
+    view.update(cx, |v, cx| v.select_channel(GENERAL, cx));
+    draw(cx);
+    for (seq, id, author, content) in [
+        (10u64, msg_id(10), user(201, "alice"), "hello from alice"),
+        (11u64, msg_id(11), user(100, "me"), "my own message"),
+    ] {
+        let ev = Dispatch {
+            t: "MESSAGE_CREATE".to_owned(),
+            s: seq,
+            d: json!({
+                "id": id.to_string(),
+                "channel_id": GENERAL.to_string(),
+                "guild_id": GUILD.to_string(),
+                "author": author,
+                "content": content,
+                "timestamp": "2026-01-01T00:00:00Z",
+                "type": 0,
+                "flags": 0
+            }),
+        };
+        backend.state().apply(&ev);
+    }
+    view.update(cx, |v, cx| v.refresh(cx));
+    draw(cx);
+
+    // 3. Composer non-interference: single-char keys type into composer, not message actions.
+    focus_composer(&view, cx);
+    let composer = view.read_with(cx, |v, _| v.composer.clone());
+    cx.simulate_input("refps+");
+    assert_eq!(composer_text(&composer, cx), "refps+");
+    assert_eq!(view.read_with(cx, |v, _| v.keyboard_message), None);
+    assert!(matches!(view.read_with(cx, |v, _| v.composer_mode.mode().clone()), ComposerMode::Normal));
+    composer.update_in(cx, |s, window, cx| s.set_value("", window, cx));
+
+    // 4. Message cursor navigation: ctrl-up / ctrl-down (reply) and ctrl-shift-up / ctrl-shift-down (edit).
+    keys(cx, "ctrl-up");
+    assert_eq!(view.read_with(cx, |v, _| v.keyboard_message), Some(msg_id(11)));
+    assert!(matches!(view.read_with(cx, |v, _| v.composer_mode.mode().clone()), ComposerMode::Replying(t) if t.message_id == msg_id(11)));
+    keys(cx, "ctrl-up");
+    assert_eq!(view.read_with(cx, |v, _| v.keyboard_message), Some(msg_id(10)));
+    keys(cx, "ctrl-down");
+    assert_eq!(view.read_with(cx, |v, _| v.keyboard_message), Some(msg_id(11)));
+
+    keys(cx, "ctrl-shift-up");
+    assert_eq!(view.read_with(cx, |v, _| v.keyboard_message), Some(msg_id(11)));
+    assert!(matches!(view.read_with(cx, |v, _| v.composer_mode.mode().clone()), ComposerMode::Editing(t) if t.message_id == msg_id(11)));
+    keys(cx, "escape"); // cancels edit in composer
+    composer.update_in(cx, |s, window, cx| s.set_value("", window, cx));
+
+    // 5. Layout-only message actions when composer is NOT focused.
+    view.update_in(cx, |v, window, cx| v.focus_root(window, cx));
+    keys(cx, "+");
+    assert_eq!(view.read_with(cx, |v, _| v.reaction_picker), Some(msg_id(11)));
+    keys(cx, "escape");
+    assert_eq!(view.read_with(cx, |v, _| v.keyboard_message), None);
+    assert!(view.update_in(cx, |v, window, cx| v.composer.read(cx).focus_handle(cx).is_focused(window)));
+
+    // Copy text when root focused copies cursor message without interfering with composer.
+    view.update_in(cx, |v, window, cx| v.focus_root(window, cx));
+    keys(cx, "ctrl-c");
+    assert_eq!(view.read_with(cx, |v, _| v.keyboard_message), Some(msg_id(11)));
+
+    drop(rt);
+}

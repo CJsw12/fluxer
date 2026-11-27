@@ -13,11 +13,12 @@
 
 use std::collections::HashMap;
 
-use gpui_kit::{Action, App, Context, Div, KeyBinding, Keystroke, NoAction, prelude::*};
+use gpui_kit::{Action, App, Context, Div, Focusable as _, KeyBinding, Keystroke, NoAction, prelude::*};
 
 use crate::client_view::ClientView;
 use crate::nav::ChannelFilter;
 use crate::prefs::{CustomKeybindEntry, Prefs};
+use crate::ui::message_actions::MessageAction;
 use crate::ui::{
     access, account_switcher, channel_modal, create_thread_modal, explore, forward_modal, guild_settings_modals,
     invite_modal, moderation_modal, quick_switcher, search_panel,
@@ -34,6 +35,18 @@ gpui_kit::actions!(
         MentionChannelNext,
         GuildPrev,
         GuildNext,
+        GuildTabPrev,
+        GuildTabNext,
+        GuildSlot1,
+        GuildSlot2,
+        GuildSlot3,
+        GuildSlot4,
+        GuildSlot5,
+        GuildSlot6,
+        GuildSlot7,
+        GuildSlot8,
+        GuildSlot9,
+        JumpCurrentCall,
         HistoryBack,
         HistoryForward,
         ToggleLastGuild,
@@ -62,6 +75,18 @@ gpui_kit::actions!(
         MarkGuildRead,
         SwitcherPrev,
         SwitcherNext,
+        MessageReply,
+        MessageReplyPrev,
+        MessageReplyNext,
+        MessageEdit,
+        MessageEditPrev,
+        MessageEditNext,
+        MessageReact,
+        MessageForward,
+        MessagePin,
+        MessageMarkUnread,
+        MessageCopyText,
+        MessageSpeak,
     ]
 );
 
@@ -119,6 +144,12 @@ fn bind_layout_only<A: Action + Clone>(out: &mut Vec<KeyBinding>, keys: &'static
     }
 }
 
+fn bind_layout_only_no_input<A: Action + Clone>(out: &mut Vec<KeyBinding>, keys: &'static str, action: A) {
+    bind_layout_only(out, keys, action);
+    out.push(KeyBinding::new(keys, NoAction, Some(IN_COMPOSER)));
+    out.push(KeyBinding::new(keys, NoAction, Some(IN_INPUT)));
+}
+
 /// Every shortcut binding of the client layout.
 fn bindings() -> Vec<KeyBinding> {
     let mut out = Vec::new();
@@ -130,6 +161,18 @@ fn bindings() -> Vec<KeyBinding> {
     both(&mut out, "ctrl-alt-shift-down", MentionChannelNext);
     both(&mut out, "ctrl-alt-up", GuildPrev);
     both(&mut out, "ctrl-alt-down", GuildNext);
+    both(&mut out, "ctrl-shift-tab", GuildTabPrev);
+    both(&mut out, "ctrl-tab", GuildTabNext);
+    both(&mut out, "ctrl-1", GuildSlot1);
+    both(&mut out, "ctrl-2", GuildSlot2);
+    both(&mut out, "ctrl-3", GuildSlot3);
+    both(&mut out, "ctrl-4", GuildSlot4);
+    both(&mut out, "ctrl-5", GuildSlot5);
+    both(&mut out, "ctrl-6", GuildSlot6);
+    both(&mut out, "ctrl-7", GuildSlot7);
+    both(&mut out, "ctrl-8", GuildSlot8);
+    both(&mut out, "ctrl-9", GuildSlot9);
+    both(&mut out, "ctrl-alt-shift-v", JumpCurrentCall);
     both(&mut out, "alt-left", HistoryBack);
     both(&mut out, "alt-right", HistoryForward);
     both(&mut out, "ctrl-alt-right", ToggleLastGuild);
@@ -188,6 +231,18 @@ fn bindings() -> Vec<KeyBinding> {
     both(&mut out, "ctrl-0", ZoomReset);
     both(&mut out, "shift-escape", MarkGuildRead);
     out.push(KeyBinding::new("escape", MarkChannelRead, Some(CONTEXT)));
+    bind_layout_only_no_input(&mut out, "r", MessageReply);
+    both(&mut out, "ctrl-up", MessageReplyPrev);
+    both(&mut out, "ctrl-down", MessageReplyNext);
+    bind_layout_only_no_input(&mut out, "e", MessageEdit);
+    both(&mut out, "ctrl-shift-up", MessageEditPrev);
+    both(&mut out, "ctrl-shift-down", MessageEditNext);
+    bind_layout_only_no_input(&mut out, "+", MessageReact);
+    bind_layout_only_no_input(&mut out, "f", MessageForward);
+    bind_layout_only_no_input(&mut out, "p", MessagePin);
+    bind_layout_only_no_input(&mut out, "alt-enter", MessageMarkUnread);
+    bind_layout_only(&mut out, "ctrl-c", MessageCopyText);
+    bind_layout_only_no_input(&mut out, "s", MessageSpeak);
     out.push(KeyBinding::new("ctrl-p", SwitcherPrev, Some(quick_switcher::CONTEXT)));
     out.push(KeyBinding::new("ctrl-n", SwitcherNext, Some(quick_switcher::CONTEXT)));
     out
@@ -240,6 +295,66 @@ pub fn on_actions(root: Div, cx: &mut Context<ClientView>) -> Div {
         .on_action(cx.listener(|v, _: &GuildNext, _, cx| {
             if v.should_run_builtin_shortcut("nav_guild_next") {
                 v.cycle_guild(1, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &GuildTabPrev, _, cx| {
+            if v.should_run_builtin_shortcut("nav_guild_tab_prev") {
+                v.cycle_guild(-1, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &GuildTabNext, _, cx| {
+            if v.should_run_builtin_shortcut("nav_guild_tab_next") {
+                v.cycle_guild(1, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &GuildSlot1, _, cx| {
+            if v.should_run_builtin_shortcut("nav_guild_slot_1") {
+                v.select_guild_slot(0, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &GuildSlot2, _, cx| {
+            if v.should_run_builtin_shortcut("nav_guild_slot_2") {
+                v.select_guild_slot(1, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &GuildSlot3, _, cx| {
+            if v.should_run_builtin_shortcut("nav_guild_slot_3") {
+                v.select_guild_slot(2, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &GuildSlot4, _, cx| {
+            if v.should_run_builtin_shortcut("nav_guild_slot_4") {
+                v.select_guild_slot(3, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &GuildSlot5, _, cx| {
+            if v.should_run_builtin_shortcut("nav_guild_slot_5") {
+                v.select_guild_slot(4, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &GuildSlot6, _, cx| {
+            if v.should_run_builtin_shortcut("nav_guild_slot_6") {
+                v.select_guild_slot(5, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &GuildSlot7, _, cx| {
+            if v.should_run_builtin_shortcut("nav_guild_slot_7") {
+                v.select_guild_slot(6, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &GuildSlot8, _, cx| {
+            if v.should_run_builtin_shortcut("nav_guild_slot_8") {
+                v.select_guild_slot(7, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &GuildSlot9, _, cx| {
+            if v.should_run_builtin_shortcut("nav_guild_slot_9") {
+                v.select_guild_slot(8, cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &JumpCurrentCall, _, cx| {
+            if v.should_run_builtin_shortcut("nav_current_call") {
+                v.jump_to_current_call(cx);
             }
         }))
         .on_action(cx.listener(|v, _: &HistoryBack, _, cx| {
@@ -379,6 +494,8 @@ pub fn on_actions(root: Div, cx: &mut Context<ClientView>) -> Div {
                 v.close_overlay(window, cx);
             } else if v.search.is_some() {
                 v.close_search(window, cx);
+            } else if v.keyboard_message.is_some() && v.should_run_builtin_shortcut("message_focus_textarea") {
+                v.focus_textarea_from_message_cursor(window, cx);
             } else if v.should_run_builtin_shortcut("chat_mark_channel_read") {
                 v.mark_channel_read(cx);
             }
@@ -386,6 +503,114 @@ pub fn on_actions(root: Div, cx: &mut Context<ClientView>) -> Div {
         .on_action(cx.listener(|v, _: &MarkGuildRead, _, cx| {
             if v.should_run_builtin_shortcut("chat_mark_guild_read") {
                 v.mark_guild_read(cx);
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MessageReply, window, cx| {
+            if v.should_run_builtin_shortcut("message_reply")
+                && !v.overlay.is_open()
+                && !v.composer.read(cx).focus_handle(cx).is_focused(window)
+            {
+                v.trigger_cursor_message_action(MessageAction::Reply, window, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MessageReplyPrev, window, cx| {
+            if v.should_run_builtin_shortcut("message_reply_prev") && !v.overlay.is_open() {
+                v.step_cursor_message_action(false, -1, window, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MessageReplyNext, window, cx| {
+            if v.should_run_builtin_shortcut("message_reply_next") && !v.overlay.is_open() {
+                v.step_cursor_message_action(false, 1, window, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MessageEdit, window, cx| {
+            if v.should_run_builtin_shortcut("message_edit")
+                && !v.overlay.is_open()
+                && !v.composer.read(cx).focus_handle(cx).is_focused(window)
+            {
+                v.trigger_cursor_message_action(MessageAction::Edit, window, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MessageEditPrev, window, cx| {
+            if v.should_run_builtin_shortcut("message_edit_prev") && !v.overlay.is_open() {
+                v.step_cursor_message_action(true, -1, window, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MessageEditNext, window, cx| {
+            if v.should_run_builtin_shortcut("message_edit_next") && !v.overlay.is_open() {
+                v.step_cursor_message_action(true, 1, window, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MessageReact, window, cx| {
+            if v.should_run_builtin_shortcut("message_react")
+                && !v.overlay.is_open()
+                && !v.composer.read(cx).focus_handle(cx).is_focused(window)
+            {
+                v.trigger_cursor_message_action(MessageAction::React, window, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MessageForward, window, cx| {
+            if v.should_run_builtin_shortcut("message_forward")
+                && !v.overlay.is_open()
+                && !v.composer.read(cx).focus_handle(cx).is_focused(window)
+            {
+                v.trigger_cursor_message_action(MessageAction::Forward, window, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MessagePin, window, cx| {
+            if v.should_run_builtin_shortcut("message_pin")
+                && !v.overlay.is_open()
+                && !v.composer.read(cx).focus_handle(cx).is_focused(window)
+            {
+                v.trigger_cursor_message_action(MessageAction::Pin, window, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MessageMarkUnread, window, cx| {
+            if v.should_run_builtin_shortcut("message_mark_unread")
+                && !v.overlay.is_open()
+                && !v.composer.read(cx).focus_handle(cx).is_focused(window)
+            {
+                v.trigger_cursor_message_action(MessageAction::MarkUnread, window, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MessageCopyText, window, cx| {
+            if v.should_run_builtin_shortcut("message_copy_text")
+                && !v.overlay.is_open()
+                && !v.composer.read(cx).focus_handle(cx).is_focused(window)
+            {
+                v.trigger_cursor_message_action(MessageAction::CopyText, window, cx);
+            } else {
+                cx.propagate();
+            }
+        }))
+        .on_action(cx.listener(|v, _: &MessageSpeak, window, cx| {
+            if v.should_run_builtin_shortcut("message_speak")
+                && !v.overlay.is_open()
+                && !v.composer.read(cx).focus_handle(cx).is_focused(window)
+            {
+                v.trigger_cursor_message_action(MessageAction::Speak, window, cx);
+            } else {
+                cx.propagate();
             }
         }))
 }
@@ -556,19 +781,19 @@ pub fn default_shortcut_rows(section: KeybindSection) -> Vec<DefaultShortcutRowS
                     S::Navigation,
                 ),
             ),
-            Single(spec("nav_jump_current_call", "Jump to the current call", "ctrl-alt-shift-v", S::Navigation)),
+            Single(spec("nav_current_call", "Jump to the current call", "ctrl-alt-shift-v", S::Navigation)),
             Single(spec("nav_add_guild", "Create or join a community", "ctrl-shift-n", S::Navigation)),
-            Single(spec("nav_prev_guild_dms", "Switch to previous community or DMs", "ctrl-shift-tab", S::Navigation)),
-            Single(spec("nav_next_guild_dms", "Switch to next community or DMs", "ctrl-tab", S::Navigation)),
-            Single(spec("nav_goto_dms", "Go to direct messages", "ctrl-1", S::Navigation)),
-            Single(spec("nav_goto_guild_1", "Go to first community", "ctrl-2", S::Navigation)),
-            Single(spec("nav_goto_guild_2", "Go to second community", "ctrl-3", S::Navigation)),
-            Single(spec("nav_goto_guild_3", "Go to third community", "ctrl-4", S::Navigation)),
-            Single(spec("nav_goto_guild_4", "Go to fourth community", "ctrl-5", S::Navigation)),
-            Single(spec("nav_goto_guild_5", "Go to fifth community", "ctrl-6", S::Navigation)),
-            Single(spec("nav_goto_guild_6", "Go to sixth community", "ctrl-7", S::Navigation)),
-            Single(spec("nav_goto_guild_7", "Go to seventh community", "ctrl-8", S::Navigation)),
-            Single(spec("nav_goto_guild_8", "Go to eighth community", "ctrl-9", S::Navigation)),
+            Single(spec("nav_guild_tab_prev", "Switch to previous community or DMs", "ctrl-shift-tab", S::Navigation)),
+            Single(spec("nav_guild_tab_next", "Switch to next community or DMs", "ctrl-tab", S::Navigation)),
+            Single(spec("nav_guild_slot_1", "Go to direct messages", "ctrl-1", S::Navigation)),
+            Single(spec("nav_guild_slot_2", "Go to first community", "ctrl-2", S::Navigation)),
+            Single(spec("nav_guild_slot_3", "Go to second community", "ctrl-3", S::Navigation)),
+            Single(spec("nav_guild_slot_4", "Go to third community", "ctrl-4", S::Navigation)),
+            Single(spec("nav_guild_slot_5", "Go to fourth community", "ctrl-5", S::Navigation)),
+            Single(spec("nav_guild_slot_6", "Go to fifth community", "ctrl-6", S::Navigation)),
+            Single(spec("nav_guild_slot_7", "Go to sixth community", "ctrl-7", S::Navigation)),
+            Single(spec("nav_guild_slot_8", "Go to seventh community", "ctrl-8", S::Navigation)),
+            Single(spec("nav_guild_slot_9", "Go to eighth community", "ctrl-9", S::Navigation)),
         ],
         S::DragAndDrop => vec![
             Single(spec("dnd_start", "Start drag and drop", "ctrl-d", S::DragAndDrop)),
@@ -662,6 +887,18 @@ pub const ASSIGNABLE_ACTIONS: &[(&str, &str)] = &[
     ("nav_mention_next", "Next mention channel"),
     ("nav_guild_prev", "Previous community"),
     ("nav_guild_next", "Next community"),
+    ("nav_guild_tab_prev", "Switch to previous community or DMs"),
+    ("nav_guild_tab_next", "Switch to next community or DMs"),
+    ("nav_guild_slot_1", "Go to direct messages"),
+    ("nav_guild_slot_2", "Go to first community"),
+    ("nav_guild_slot_3", "Go to second community"),
+    ("nav_guild_slot_4", "Go to third community"),
+    ("nav_guild_slot_5", "Go to fourth community"),
+    ("nav_guild_slot_6", "Go to fifth community"),
+    ("nav_guild_slot_7", "Go to sixth community"),
+    ("nav_guild_slot_8", "Go to seventh community"),
+    ("nav_guild_slot_9", "Go to eighth community"),
+    ("nav_current_call", "Jump to the current call"),
     ("nav_history_back", "Channel history back"),
     ("nav_history_forward", "Channel history forward"),
     ("nav_toggle_last_guild_dms", "Toggle last community and DMs"),
@@ -690,6 +927,19 @@ pub const ASSIGNABLE_ACTIONS: &[(&str, &str)] = &[
     ("system_zoom_in", "Zoom in"),
     ("system_zoom_out", "Zoom out"),
     ("system_zoom_reset", "Reset zoom"),
+    ("message_reply", "Reply to message"),
+    ("message_reply_prev", "Reply to previous message"),
+    ("message_reply_next", "Reply to next message"),
+    ("message_edit", "Edit message"),
+    ("message_edit_prev", "Edit previous message"),
+    ("message_edit_next", "Edit next message"),
+    ("message_react", "Add reaction"),
+    ("message_forward", "Forward message"),
+    ("message_pin", "Pin message"),
+    ("message_mark_unread", "Mark as unread"),
+    ("message_copy_text", "Copy text"),
+    ("message_speak", "Read message aloud"),
+    ("message_focus_textarea", "Focus text area"),
 ];
 
 pub fn action_label(action: &str) -> Option<&'static str> {
@@ -982,7 +1232,7 @@ mod tests {
             let key = (format!("{:?}", b.keystrokes()), b.predicate().map(|p| p.to_string()));
             assert!(seen.insert(key.clone()), "{key:?} bound twice");
         }
-        assert_eq!(seen.len(), 636);
+        assert_eq!(seen.len(), 1098);
     }
 
     #[test]

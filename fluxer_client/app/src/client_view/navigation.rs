@@ -239,6 +239,7 @@ impl ClientView {
         self.error = None;
         self.reaction_picker = None;
         self.hovered_message = None;
+        self.keyboard_message = None;
         // Replies and edits belong to the old channel; stash/restore plain + token drafts.
         if old_channel != Some(channel_id) {
             self.manual_unread_channel = None;

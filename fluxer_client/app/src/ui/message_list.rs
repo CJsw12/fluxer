@@ -92,7 +92,8 @@ pub fn render(view: &ClientView, handle: WeakEntity<ClientView>, theme: &Theme) 
     let highlighted_id = view
         .highlighted_message
         .filter(|(ch, _)| Some(*ch) == view.selected_channel)
-        .map(|(_, id)| id);
+        .map(|(_, id)| id)
+        .or(view.keyboard_message);
     let theme = *theme;
     // Only reads the rows and groups: the scroller calls this during layout.
     let list = MessageScroller::new("messages", view.scroller.clone(), move |ix, window, cx| {

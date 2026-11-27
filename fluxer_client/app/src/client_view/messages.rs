@@ -148,6 +148,113 @@ impl ClientView {
         window.focus(&focus, cx);
     }
 
+    pub(crate) fn focus_textarea_from_message_cursor(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.keyboard_message = None;
+        self.focus_composer(window, cx);
+        self.scroller.update(cx, |_, cx| cx.notify());
+        cx.notify();
+    }
+
+    pub(crate) fn resolve_keyboard_message_target(&self) -> Option<ActionTarget> {
+        let rows = self.rows.borrow();
+        let preferred = self.keyboard_message.or(self.hovered_message);
+        if let Some(id) = preferred
+            && let Some(row) = rows.iter().find(|r| r.id == id && r.system.is_none())
+        {
+            return Some(row.actions.clone());
+        }
+        rows.iter()
+            .rev()
+            .find(|r| r.system.is_none() && r.actions.sent)
+            .map(|r| r.actions.clone())
+    }
+
+    pub(crate) fn trigger_cursor_message_action(
+        &mut self,
+        action: MessageAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(target) = self.resolve_keyboard_message_target() else {
+            return;
+        };
+        let allowed = match action {
+            MessageAction::Reply
+            | MessageAction::React
+            | MessageAction::Forward
+            | MessageAction::MarkUnread => target.sent,
+            MessageAction::Edit => target.own && target.sent,
+            MessageAction::Pin => target.sent && target.can_pin,
+            MessageAction::CopyText | MessageAction::Speak => true,
+            _ => false,
+        };
+        if !allowed {
+            return;
+        }
+        self.keyboard_message = Some(target.message_id);
+        self.message_action(action, &target, window, cx);
+        self.scroller.update(cx, |_, cx| cx.notify());
+    }
+
+    pub(crate) fn step_cursor_message_action(
+        &mut self,
+        own_only: bool,
+        delta: i32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let next_target = {
+            let rows = self.rows.borrow();
+            let candidates: Vec<&crate::view_model::MessageRow> = rows
+                .iter()
+                .filter(|r| r.system.is_none() && r.actions.sent && (!own_only || r.actions.own))
+                .collect();
+            if candidates.is_empty() {
+                return;
+            }
+            let current_id = self.keyboard_message.or(self.hovered_message);
+            let next_ix = if let Some(cur) = current_id {
+                if let Some(pos) = candidates.iter().position(|r| r.id == cur) {
+                    if delta < 0 {
+                        pos.saturating_sub(1)
+                    } else {
+                        (pos + 1).min(candidates.len() - 1)
+                    }
+                } else if let Some(raw_pos) = rows.iter().position(|r| r.id == cur) {
+                    if delta < 0 {
+                        rows[..raw_pos]
+                            .iter()
+                            .rev()
+                            .find_map(|r| candidates.iter().position(|c| c.id == r.id))
+                            .unwrap_or(0)
+                    } else {
+                        rows[raw_pos + 1..]
+                            .iter()
+                            .find_map(|r| candidates.iter().position(|c| c.id == r.id))
+                            .unwrap_or(candidates.len() - 1)
+                    }
+                } else if delta < 0 {
+                    candidates.len() - 1
+                } else {
+                    0
+                }
+            } else if delta < 0 {
+                candidates.len() - 1
+            } else {
+                0
+            };
+            candidates[next_ix].actions.clone()
+        };
+        self.keyboard_message = Some(next_target.message_id);
+        let action = if own_only { MessageAction::Edit } else { MessageAction::Reply };
+        self.message_action(action, &next_target, window, cx);
+        self.scroller.update(cx, |_, cx| cx.notify());
+    }
+
     /// The composer text changed: the typing signal.
     pub(super) fn composer_changed(&mut self, cx: &mut Context<Self>) {
         self.pending_composer = None;

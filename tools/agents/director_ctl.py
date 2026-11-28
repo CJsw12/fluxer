@@ -89,6 +89,24 @@ def parse_usage() -> tuple[str, dict]:
         info["codex_week"] = int(m_cw.group(1))
     if m_c5:
         info["codex_5h"] = int(m_c5.group(1))
+    # usage.py reads the newest Codex session snapshot, which stays at the old
+    # (exhausted) value until a new Codex session runs. A window whose reset
+    # time has passed is full again.
+    for key, label in (("codex_5h", "5h"), ("codex_week", "week")):
+        m = re.search(rf"Codex\s*:.*?{label}\s+\d+%\s+left\s+\(reset\s+(\d\d)-(\d\d)\s+(\d\d):(\d\d)\)", out)
+        if not m:
+            continue
+        local_now = dt.datetime.now().astimezone()
+        try:
+            reset = local_now.replace(month=int(m.group(1)), day=int(m.group(2)),
+                                      hour=int(m.group(3)), minute=int(m.group(4)), second=0, microsecond=0)
+        except ValueError:
+            continue
+        if reset - local_now > dt.timedelta(days=200):  # December reset seen in January
+            reset = reset.replace(year=reset.year - 1)
+        info[f"{key}_reset"] = iso_utc(reset.astimezone(dt.timezone.utc))
+        if reset <= local_now and key in info:
+            info[key] = 100
     if m_gw:
         info["gemini_week"] = int(m_gw.group(1))
         if m_gw.group(2) and m_gw.group(2)[:4].isdigit():
@@ -169,7 +187,8 @@ def earliest_reset(u: dict, blocked: dict | None = None) -> str:
     if t:
         times.append(t)
     elif min(u.get("codex_week", -1), u.get("codex_5h", -1)) <= CREDIT_FLOOR:
-        times.append(now_utc() + dt.timedelta(hours=1))  # usage.py has no Codex reset time
+        key = "codex_week_reset" if u.get("codex_week", -1) <= CREDIT_FLOOR else "codex_5h_reset"
+        times.append(parse_iso(u.get(key)) or now_utc() + dt.timedelta(hours=1))
     t = parse_iso(blocked.get("antigravity"))
     if t:
         times.append(t)
@@ -474,6 +493,10 @@ def cmd_finish(args: argparse.Namespace) -> int:
             "duration_min": round(elapsed_min, 1),
             "result": (res_data.get("summary") or "")[:160],
         })
+        if aw.get("dispatch_id"):
+            rc_rel, rel = run_cmd([ORCA_BIN, "orchestration", "worker-release", "--environment", "local",
+                                   "--dispatch", aw["dispatch_id"], "--json"], timeout=30)
+            print(f"worker-release {aw['dispatch_id']}: {'ok' if rc_rel == 0 else rel[:160]}")
         state["active_worker"] = None
         state["batches_since_progress_sync"] = state.get("batches_since_progress_sync", 0) + 1
         save_state(state)
@@ -572,6 +595,59 @@ def close_director(d: dict | None) -> str:
     return f"close failed for {handle}: {out[:160]}"
 
 
+def sweep_idle_tabs(state: dict, keep_handle: str = "") -> list[str]:
+    """Close finished Codex/Gemini terminal tabs in this worktree (old Directors, settled workers).
+
+    Only terminals whose agent session is idle ("done") are closed; working agents,
+    plain shells and chat sessions (not closable from the CLI) are left alone.
+    """
+    wt = (state.get("worktree_id") or "").removeprefix("id:")
+    if not wt:
+        return []
+    rc, out = run_cmd([ORCA_BIN, "agent", "list", "--json"], timeout=30)
+    if rc != 0:
+        return [f"sweep skipped: agent list failed ({out[:120]})"]
+    try:
+        res = json.loads(out)["result"]
+        items = res if isinstance(res, list) else next(v for v in res.values() if isinstance(v, list))
+    except Exception:
+        return ["sweep skipped: agent list unreadable"]
+    idle_panes = {
+        a.get("paneKey") for a in items
+        if a.get("worktreeId") == wt and a.get("kind") == "terminal"
+        and a.get("agent") in ALLOWED_AGENTS and a.get("state") == "done"
+    }
+    if not idle_panes:
+        return []
+    rc, out = run_cmd([ORCA_BIN, "terminal", "list", "--worktree", f"id:{wt}", "--json"], timeout=30)
+    if rc != 0:
+        return [f"sweep skipped: terminal list failed ({out[:120]})"]
+    try:
+        res = json.loads(out)["result"]
+        terms = res if isinstance(res, list) else next(v for v in res.values() if isinstance(v, list))
+    except Exception:
+        return ["sweep skipped: terminal list unreadable"]
+    msgs = []
+    for t in terms:
+        handle = t.get("handle") or ""
+        if not handle or handle == keep_handle:
+            continue
+        rc, shown = run_cmd([ORCA_BIN, "terminal", "show", "--terminal", handle, "--json"], timeout=20)
+        if rc != 0:
+            continue
+        try:
+            info = json.loads(shown)["result"]
+            info = info.get("terminal", info)
+        except Exception:
+            continue
+        if f"{info.get('tabId')}:{info.get('leafId')}" not in idle_panes:
+            continue
+        rc, closed = run_cmd([ORCA_BIN, "terminal", "close", "--terminal", handle, "--tab", "--json"], timeout=30)
+        msgs.append(f"closed idle {info.get('agentIdentity')} tab {handle}" if rc == 0
+                    else f"close failed {handle}: {closed[:120]}")
+    return msgs
+
+
 def take_over_director(state: dict) -> str:
     """Called on boot: record this session, close the previous Director tab, clear pause."""
     me_handle = os.environ.get("ORCA_TERMINAL_HANDLE") or ""
@@ -598,6 +674,7 @@ def take_over_director(state: dict) -> str:
         lines.append(f"RESUMED FROM PAUSE: {state['paused'].get('reason')}")
         state["paused"] = None
     save_state(state)
+    lines.extend(sweep_idle_tabs(state, keep_handle=me_handle))
     agent = cur.get("agent") or "?"
     if agent not in ALLOWED_AGENTS:
         lines.append(f"WARN: director agent {agent!r} is not Codex/Gemini -> finish the current step, then `rotate`.")
@@ -685,6 +762,9 @@ def cmd_resume_check(args: argparse.Namespace) -> int:
     if not paused and (age < STALE_DIRECTOR_MIN or director_alive(state)):
         print(f"skip: director active (state age {age:.0f}m)")
         return 1
+    if paused:
+        for m in sweep_idle_tabs(state):
+            print(m)
     launching = parse_iso(paused.get("launching_utc"))
     if launching and (now_utc() - launching).total_seconds() < LAUNCH_GUARD_MIN * 60:
         print("skip: a resume launch is already in progress")
@@ -754,6 +834,13 @@ def cmd_selftest(_args: argparse.Namespace) -> int:
     later = iso_utc(now_utc() + dt.timedelta(days=3))
     assert earliest_reset({"codex_week": 90, "codex_5h": 90, "gemini_week": 10, "gemini_week_reset": later, "gemini_5h": 90}, {"codex": soon}) == soon
     assert earliest_reset({"codex_week": 90, "codex_5h": 90, "gemini_week": 10, "gemini_week_reset": soon, "gemini_5h": 90}, {"codex": later}) == soon
+    past = (dt.datetime.now().astimezone() - dt.timedelta(hours=2)).strftime("%m-%d %H:%M")
+    fut = (dt.datetime.now().astimezone() + dt.timedelta(days=3)).strftime("%m-%d %H:%M")
+    with patch.object(sys.modules[__name__], "run_cmd",
+                      return_value=(0, f"Codex   : 5h 2% left (reset {past}), week 40% left (reset {fut})")), \
+            patch.object(USAGE_SCRIPT.__class__, "exists", return_value=True):
+        _, cu = parse_usage()
+    assert cu["codex_5h"] == 100 and cu["codex_week"] == 40, cu
     rot3, _ = should_rotate({"batches_in_current_session": 0, "current_director": {"agent": "claude"}}, {})
     assert rot3 is True
     rot, _ = should_rotate({"batches_in_current_session": 4, "rotate_session_after_batches": 4, "current_director": {"agent": "antigravity"}}, {"gemini_5h": 50, "gemini_week": 50})
